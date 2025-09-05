@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon Product Scraper</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 sidebar">
+                <div class="search-panel">
+                    <h2 class="mb-4">Search Options</h2>
+                    <form id="searchForm">
+                        <!-- Main Search Section -->
+                        <div class="mb-4">
+                            <label class="form-label">Search Type</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="searchType" id="keywordSearch" value="keyword" checked>
+                                <label class="btn btn-outline-primary" for="keywordSearch">Keyword</label>
+                                <input type="radio" class="btn-check" name="searchType" id="asinSearch" value="asin">
+                                <label class="btn btn-outline-primary" for="asinSearch">ASIN</label>
+                            </div>
+                        </div>
+
+                        <!-- Search Input -->
+                        <div class="mb-4">
+                            <div id="keywordInput">
+                                <label class="form-label">Primary Search Term</label>
+                                <input type="text" class="form-control" id="searchQuery" placeholder="Enter search term...">
+                                <div class="mt-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enableSecondarySearch">
+                                        <label class="form-check-label" for="enableSecondarySearch">Add Secondary Search Term</label>
+                                    </div>
+                                </div>
+                                <div id="secondarySearchSection" class="mt-3" style="display: none;">
+                                    <div class="boolean-operator-section mb-2">
+                                        <select class="form-select" id="booleanOperator">
+                                            <option value="AND">AND</option>
+                                            <option value="OR">OR</option>
+                                        </select>
+                                    </div>
+                                    <input type="text" class="form-control" id="secondaryQuery" placeholder="Enter second search term...">
+                                </div>
+                            </div>
+                            <div id="asinInput" style="display: none;">
+                                <label class="form-label">ASINs (one per line)</label>
+                                <textarea class="form-control" id="asinList" rows="3" placeholder="Enter ASINs..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Search Parameters -->
+                        <div class="mb-4">
+                            <label class="form-label">Page Selection</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="pageType" id="singlePage" value="single" checked>
+                                <label class="btn btn-outline-primary" for="singlePage">Single</label>
+                                <input type="radio" class="btn-check" name="pageType" id="pageRange" value="range">
+                                <label class="btn btn-outline-primary" for="pageRange">Range</label>
+                            </div>
+                            <div id="singlePageInput" class="mt-2">
+                                <input type="number" class="form-control" id="pageNumber" value="1" min="1" max="100" placeholder="Page number">
+                            </div>
+                            <div id="pageRangeInput" class="mt-2 row" style="display: none;">
+                                <div class="col-6">
+                                    <input type="number" class="form-control" id="startPage" value="1" min="1" max="100" placeholder="Start page">
+                                </div>
+                                <div class="col-6">
+                                    <input type="number" class="form-control" id="endPage" value="5" min="1" max="100" placeholder="End page">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Max Items</label>
+                            <input type="number" class="form-control" id="maxItems" value="50" min="1" max="500">
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="organicOnly" checked>
+                                <label class="form-check-label" for="organicOnly">Hide Sponsored Listings</label>
+                            </div>
+                        </div>
+
+                        <!-- Title Filters -->
+                        <div class="mb-4">
+                            <label class="form-label">Title Must Include</label>
+                            <div class="phrase-input">
+                                <input type="text" class="form-control" id="mustInclude" placeholder="Ex: organic oil">
+                                <div class="match-type">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="includeMatchType" id="includeAll" value="all">
+                                        <label class="form-check-label" for="includeAll">All</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="includeMatchType" id="includeAny" value="any" checked>
+                                        <label class="form-check-label" for="includeAny">Any</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Title Must Exclude</label>
+                            <input type="text" class="form-control" id="mustExclude" placeholder="Ex: synthetic, artificial">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Search</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 main-content">
+                <!-- Results Header -->
+                <div class="results-header">
+                    <h2>Search Results</h2>
+                    <div class="analysis-toggle">
+                        <button class="btn btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#analysisSection">
+                            Show Analysis
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Analysis Section -->
+                <div id="analysisSection" class="collapse mb-4">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="analysis-card">
+                                <h3>Common Words</h3>
+                                <div id="commonWords" class="tag-cloud"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="analysis-card">
+                                <h3>Common Phrases <small class="text-muted">(click to filter)</small></h3>
+                                <div id="commonPhrases" class="tag-cloud"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View Controls -->
+                <div class="view-controls">
+                    <div class="btn-group" role="group" aria-label="View toggle">
+                        <input type="radio" class="btn-check" name="viewType" id="gridView" value="grid" checked>
+                        <label class="btn btn-outline-primary" for="gridView">
+                            <i class="bi bi-grid-3x3-gap"></i> Grid View
+                        </label>
+                        <input type="radio" class="btn-check" name="viewType" id="listView" value="list">
+                        <label class="btn btn-outline-primary" for="listView">
+                            <i class="bi bi-list"></i> List View
+                        </label>
+                    </div>
+                    <select id="sortSelect" class="form-select w-auto">
+                        <option value="default">Sort by...</option>
+                        <option value="price-asc">Price: Low to High</option>
+                        <option value="price-desc">Price: High to Low</option>
+                        <option value="rating-desc">Rating: High to Low</option>
+                        <option value="reviews-desc">Most Reviews</option>
+                    </select>
+                </div>
+
+                <!-- Active Filters -->
+                <div id="activeFilters" class="alert alert-info" style="display: none;">
+                    <h5 class="alert-heading">Active Filters</h5>
+                    <div id="activeFiltersList"></div>
+                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="clearFilters()">Clear All Filters</button>
+                </div>
+
+                <!-- Results Container -->
+                <div id="resultsContainer" class="grid-view">
+                    <div id="resultsGrid" class="row g-4 sortable-grid">
+                        <!-- Results will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Selected ASINs Output -->
+                <div id="selectedAsinsSection" class="selected-asins-section" style="display: none;">
+                    <div class="d-flex align-items-center">
+                        <textarea id="selectedAsins" class="form-control me-2" rows="1" readonly placeholder="Selected ASINs will appear here..."></textarea>
+                        <button id="copyAsins" class="btn btn-outline-primary" data-bs-toggle="tooltip" title="Copy ASINs">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading Spinner -->
+                <div id="loadingSpinner" class="text-center" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Image Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <img src="" class="img-fluid" id="modalImage">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
