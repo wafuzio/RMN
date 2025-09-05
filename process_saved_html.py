@@ -1,8 +1,8 @@
 """
-Process Saved HTML Files for TOA Extraction
+Process Saved HTML Files for Ad Extraction
 
 This script processes HTML files that have already been saved by test_session_persistence.py
-to extract TOA data without needing to use Playwright.
+to extract ad data without needing to use Playwright.
 """
 
 import os
@@ -11,13 +11,13 @@ import glob
 import argparse
 from datetime import datetime
 from bs4 import BeautifulSoup
-from Kroger_TOA import extract_toa_ad, extract_common_words_and_phrases
+from kroger_ad_core import extract_ads_from_html, extract_common_words_and_phrases
 
 # Constants
 DEFAULT_DIR = "output"
 
-def extract_toa_from_html_file(html_file):
-    """Extract TOA data from a saved HTML file"""
+def extract_ads_from_html_file(html_file):
+    """Extract ad data from a saved HTML file"""
     print(f"\n📄 Processing HTML file: {os.path.basename(html_file)}")
     
     try:
@@ -35,25 +35,17 @@ def extract_toa_from_html_file(html_file):
                 # Join all parts except the last one (timestamp) and the file extension
                 keyword = "_".join(parts[:-1]).replace(".html", "")
         
-        # Parse the HTML
-        soup = BeautifulSoup(html, 'html.parser')
-        toa_divs = soup.select('div[data-testid="StandardTOA"]')
+        # Extract all ads from the HTML
+        ads = extract_ads_from_html(html)
         
-        print(f"[TOA Ads Found] {len(toa_divs)}")
-        
-        results = []
-        for div in toa_divs:
-            ad = extract_toa_ad(str(div))
-            if ad:
-                results.append(ad)
-        
-        titles = [ad['message'] for ad in results if ad.get('message')]
+        # Get titles for analysis
+        titles = [ad.get('message', '') for ad in ads if ad.get('message')]
         analysis = extract_common_words_and_phrases(titles)
         
         return {
-            'ads': results,
+            'ads': ads,
             'analysis': analysis,
-            'count': len(results),
+            'count': len(ads),
             'keyword': keyword,
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'source_file': html_file
@@ -99,7 +91,7 @@ def process_latest_html_file(input_dir=None, output_dir=None):
     print(f"📋 Found latest HTML file: {os.path.basename(latest_html)}")
     
     # Process the HTML file
-    results = extract_toa_from_html_file(latest_html)
+    results = extract_ads_from_html_file(latest_html)
     if not results:
         return False
     
@@ -156,7 +148,7 @@ def process_all_html_files(input_dir=None, output_dir=None):
     # Process each HTML file and append to results
     processed_count = 0
     for html_file in html_files:
-        results = extract_toa_from_html_file(html_file)
+        results = extract_ads_from_html_file(html_file)
         if results:
             daily_results["results"].append(results)
             processed_count += 1
