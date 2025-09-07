@@ -10,35 +10,40 @@ import json
 
 app = Flask(__name__)
 
-# Download required NLTK data
-nltk.download('punkt')
-nltk.download('stopwords')
-stop_words = set(stopwords.words('english'))
+# NLTK resources may not be available at runtime; use safe fallbacks
+try:
+    stop_words = set(stopwords.words('english'))
+except Exception:
+    stop_words = {
+        'the','and','a','an','of','in','on','for','to','with','by','from','at','as','is','are','was','were','be','been','this','that','these','those'
+    }
+
+def safe_tokenize(text: str):
+    try:
+        return word_tokenize(text)
+    except Exception:
+        return re.findall(r"[A-Za-z]+", text)
 
 def extract_common_words_and_phrases(titles):
     # Process single words
     words = []
     for title in titles:
-        # Tokenize and convert to lowercase
-        tokens = word_tokenize(title.lower())
-        # Remove stopwords and non-alphabetic tokens
-        words.extend([word for word in tokens if word.isalpha() and word not in stop_words])
-    
-    # Get most common words
+        tokens = [t.lower() for t in safe_tokenize(title)]
+        words.extend([w for w in tokens if w.isalpha() and w not in stop_words])
+
     word_freq = Counter(words).most_common(10)
-    
+
     # Process phrases (2-3 words)
     phrases = []
     for title in titles:
-        tokens = word_tokenize(title.lower())
-        # Generate 2-gram and 3-gram phrases
-        two_grams = list(ngrams(tokens, 2))
-        three_grams = list(ngrams(tokens, 3))
-        phrases.extend([' '.join(gram) for gram in two_grams + three_grams])
-    
-    # Get most common phrases
+        tokens = [t.lower() for t in safe_tokenize(title)]
+        # Generate 2-gram and 3-gram phrases without relying on external datasets
+        two_grams = ['{} {}'.format(tokens[i], tokens[i+1]) for i in range(len(tokens)-1)] if len(tokens) >= 2 else []
+        three_grams = ['{} {} {}'.format(tokens[i], tokens[i+1], tokens[i+2]) for i in range(len(tokens)-2)] if len(tokens) >= 3 else []
+        phrases.extend(two_grams + three_grams)
+
     phrase_freq = Counter(phrases).most_common(10)
-    
+
     return {
         'words': [{'word': word, 'count': count} for word, count in word_freq],
         'phrases': [{'phrase': phrase, 'count': count} for phrase, count in phrase_freq]
