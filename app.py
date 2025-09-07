@@ -2,10 +2,15 @@ from flask import Flask, render_template, request, jsonify
 from collections import Counter
 import re
 from main import AmazonSession
-import nltk
-from nltk.util import ngrams
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
+try:
+    import nltk
+    from nltk.tokenize import word_tokenize
+    from nltk.corpus import stopwords
+    NLTK_AVAILABLE = True
+except Exception:
+    NLTK_AVAILABLE = False
+    word_tokenize = None
+    stopwords = None
 import json
 
 app = Flask(__name__)
