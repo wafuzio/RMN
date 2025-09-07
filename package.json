@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "setup-python": "python3 -m pip install -r requirements.txt",
+    "start-python": "python3 app.py"
   },
   "dependencies": {
     "next": "^13.4.19",
