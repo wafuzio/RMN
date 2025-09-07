@@ -21,7 +21,7 @@ var/
 *.egg
 
 # Virtual Environment
-.venv/
+# Uncommenting .venv/ to allow syncing with Builder.io
 venv/
 ENV/
 
