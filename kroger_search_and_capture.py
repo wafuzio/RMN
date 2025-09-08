@@ -16,13 +16,157 @@ from datetime import datetime
 import json
 import urllib.parse
 import argparse
+from pathlib import Path
 from playwright.sync_api import sync_playwright
+from playwright._impl._errors import Error as PWError
 from Kroger_login import save_cookies  # Removed load_cookies as it's redundant with user_data_dir
+
+# --- Lightweight diagnostics (screenshots + metrics) ---
+PROJECT_ROOT = Path(__file__).resolve().parent
+DIAG_DIR = PROJECT_ROOT / "diagnostics"
+DIAG_DIR.mkdir(parents=True, exist_ok=True)
+
+def dlog(msg: str):
+    from datetime import datetime as _dt
+    ts = _dt.now().strftime("%H:%M:%S")
+    print(f"[scroll] {ts} {msg}")
 
 # Constants
 USER_DATA_DIR = os.path.expanduser("~/ChromeProfiles/kroger_clean_profile")
 DEFAULT_SEARCH_TERM = "black forest ham"
 DEFAULT_OUTPUT_DIR = "output"
+
+def pick_app_frame(page):
+    """Safely pick the best frame to use for DOM operations
+    
+    Args:
+        page: Playwright page object
+        
+    Returns:
+        The best frame to use for DOM operations
+    """
+    # Prefer top frame if it has a real DOM
+    top = page.main_frame
+    try:
+        has_dom = top.evaluate("() => !!document.body && document.body.children.length > 0")
+        if has_dom:
+            print(f"Using main frame: {top.url}")
+            return top
+    except PWError:
+        pass
+
+    # Otherwise look for a frame that actually has Kroger's root/app
+    for f in page.frames:
+        if f is top:
+            continue
+        try:
+            if f.url and "kroger.com" in f.url:
+                ok = f.evaluate("() => !!document.querySelector('#root') || !!document.body")
+                if ok:
+                    print(f"Using Kroger frame: {f.url}")
+                    return f
+        except PWError:
+            continue
+    
+    print(f"Falling back to main frame: {top.url}")
+    return top  # fallback
+
+def eval_safe(page, script, retries=3):
+    """Safely evaluate JavaScript in the best available frame
+    
+    Args:
+        page: Playwright page object
+        script: JavaScript to evaluate
+        retries: Number of retries if frame detaches
+        
+    Returns:
+        Result of the evaluation
+    """
+    for attempt in range(retries):
+        app = pick_app_frame(page)
+        try:
+            return app.evaluate(script)
+        except PWError as e:
+            if "Frame was detached" in str(e) and attempt < retries - 1:
+                print("   Frame detached; re-picking frame and retrying...")
+                page.wait_for_load_state("domcontentloaded")
+                continue
+            raise
+
+def scroll_results(page, max_loops=120, step_ratio=0.85, sleep_ms=600):
+    """
+    Scroll the top-level document in controlled steps, backing off when no progress.
+    Returns a dict with metrics you can save.
+    """
+    return page.evaluate(
+        """
+        async ({ maxLoops, stepRatio, sleepMs }) => {
+          const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+          const scrollEl = document.scrollingElement || document.documentElement || document.body;
+          const step = Math.max(200, Math.floor(window.innerHeight * stepRatio));
+          let stagnant = 0;
+          let lastY = scrollEl.scrollTop;
+          let lastProducts = 0;
+          const metrics = [];
+
+          // Wait for grid to show up (best effort, 10s)
+          const start = Date.now();
+          while (
+            document.querySelectorAll('[data-testid*="product"], [class*="product-card"]').length === 0 &&
+            Date.now() - start < 10000
+          ) {
+            await sleep(250);
+          }
+
+          for (let i = 0; i < maxLoops && stagnant < 5; i++) {
+            // Use absolute target (helps when lazy-load inserts content)
+            const targetY = (i + 1) * step;
+            window.scrollTo(0, targetY);
+            await sleep(sleepMs + Math.floor(Math.random() * 250)); // tiny jitter
+
+            const y = scrollEl.scrollTop;
+            const h = scrollEl.scrollHeight;
+            const products = document.querySelectorAll('[data-testid*="product"], [class*="product-card"]').length;
+            const ads = document.querySelectorAll('[data-testid="monetization/search-page-top"], [data-testid="StandardTOA"]').length;
+
+            metrics.push({ loop: i, y, h, products, ads });
+
+            const moved = Math.abs(y - lastY) >= 2;
+            const grew = products > lastProducts;
+            const atBottom = y + window.innerHeight >= h - 10;
+
+            if (atBottom || (!moved && !grew)) {
+              stagnant++;
+            } else {
+              stagnant = 0;
+            }
+
+            lastY = y;
+            lastProducts = products;
+
+            if (atBottom) break;
+          }
+        
+          // Always scroll back to top before returning
+          console.log('Scrolling back to top...');
+          window.scrollTo(0, 0);
+          await sleep(500); // Wait for scroll to complete
+        
+          // Verify we're at the top
+          const finalY = (document.scrollingElement || document.documentElement || document.body).scrollTop;
+          const finalH = (document.scrollingElement || document.documentElement || document.body).scrollHeight;
+          console.log(`After scrolling back to top: Y=${finalY} of ${finalH}`);
+
+          return {
+            finalY: finalY,
+            finalH: finalH,
+            metrics
+          };
+        }
+        """,
+        {"maxLoops": max_loops, "stepRatio": step_ratio, "sleepMs": sleep_ms},
+    )
 
 def search_and_capture(search_term=None, output_dir=None):
     """Test if the session persists between browser launches"""
@@ -151,8 +295,54 @@ def search_and_capture(search_term=None, output_dir=None):
         search_url = "https://www.kroger.com/search?query={}".format(urllib.parse.quote_plus(search_term))
         
         try:
-            # Use a less strict wait_until parameter
+            # Use simpler wait conditions to avoid timeouts
             page.goto(search_url, wait_until="domcontentloaded")
+            
+            # Wait for the page to stabilize without strict URL matching
+            print("   Waiting for page to stabilize...")
+            try:
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except Exception as e:
+                print(f"   Network idle wait timed out: {e} - continuing anyway")
+                
+            # Check if we're on the right page by looking for product grid
+            print("   Checking for product grid...")
+            try:
+                page.wait_for_selector('[data-testid*="product"], [class*="product-card"]', timeout=10000)
+                print("   Product grid found")
+            except Exception:
+                print("   No product grid found within timeout - continuing anyway")
+            
+            # Log the page and frame information
+            print(f"page.url: {page.url}")
+            print("Frames:\n" + "\n".join([f"  - {f.url or '<no url>'}" for f in page.frames]))
+            
+            # Wait longer for the page to stabilize
+            print("   Waiting for page to stabilize...")
+            page.wait_for_timeout(5000)
+
+            # Product grid check already done above
+
+            # Scroll results before capture and write lightweight diagnostics
+            try:
+                before_png = DIAG_DIR / "before.png"
+                after_png = DIAG_DIR / "after.png"
+                metrics_json = DIAG_DIR / "scroll_metrics.json"
+
+                page.screenshot(path=str(before_png), full_page=False)
+                dlog(f"Saved {before_png}")
+
+                m = scroll_results(page)  # perform body scrolling on current page
+                dlog(f"finalY={m.get('finalY')} finalH={m.get('finalH')} steps={len(m.get('metrics') or [])}")
+
+                with open(metrics_json, "w", encoding="utf-8") as f:
+                    json.dump(m, f, indent=2)
+                dlog(f"Saved {metrics_json}")
+
+                page.screenshot(path=str(after_png), full_page=False)
+                dlog(f"Saved {after_png}")
+            except Exception as e:
+                print(f"   Scroll step skipped due to error: {e}")
             
             # Wait longer for the page to stabilize
             print("   Waiting for page to stabilize...")
@@ -177,6 +367,14 @@ def search_and_capture(search_term=None, output_dir=None):
             toa_dir = os.path.join(output_dir, "TOA")
             os.makedirs(main_dir, exist_ok=True)
             os.makedirs(toa_dir, exist_ok=True)
+            
+            # Use scroll_results to scroll the page before screenshot capture
+            print("   Scrolling page before screenshot...")
+            try:
+                scroll_result = scroll_results(page)
+                print(f"   Scrolling completed. Scrolled to Y={scroll_result['finalY']} of {scroll_result['finalH']}")
+            except Exception as e:
+                print(f"   Warning: Scrolling failed: {e}")
             
             # Take a screenshot of the search results and save in main subfolder
             screenshot_path = os.path.join(main_dir, f"{file_prefix}.png")
