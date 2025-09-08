@@ -4,6 +4,7 @@ TOA (Targeted Onsite Ad) Extractor
 This module extracts TOA ads from Kroger.com search results.
 """
 
+import os
 from bs4 import BeautifulSoup
 from .base_extractor import AdExtractor
 from . import register_extractor
@@ -32,6 +33,9 @@ class TOAExtractor(AdExtractor):
             return None
 
         result = {"type": self.ad_type}
+        
+        # Store the HTML for potential screenshot capture
+        result["html"] = str(toa_div)
 
         # Message (header text)
         result["message"] = self.extract_text(toa_div, ".espot-header")
@@ -50,7 +54,22 @@ class TOAExtractor(AdExtractor):
                 img_url = "https://www.kroger.com" + img_url
                 
             result["image_url"] = img_url
-            result["image_path"] = self.save_image(img_url)
+            
+            # Get client name from context if available
+            client_dir = None
+            if hasattr(self, 'client') and self.client:
+                client_dir = os.path.join("output", self.client)
+            
+            # Save both full and TOA-only images
+            try:
+                # Pass the HTML element to extract precise TOA dimensions
+                image_paths = self.save_image_with_crop(img_url, html_element=toa_div, out_dir=client_dir)
+                if image_paths:
+                    result["image_path"] = image_paths["full"]
+                    result["toa_image_path"] = image_paths.get("toa")
+            except ImportError:
+                # Fall back to regular save if PIL is not available
+                result["image_path"] = self.save_image(img_url, out_dir=client_dir)
             
             # Try to extract brand from alt text
             alt_text = self.extract_attribute(toa_div, "img.espot-image", "alt")

@@ -48,6 +48,26 @@ def extract_common_words_and_phrases(titles):
 def index():
     return render_template('index.html')
 
+@app.route('/nfl')
+def nfl_dashboard():
+    import os, glob
+    brand = request.args.get('brand', default='Land_O_Frost')
+    keywords = []
+    try:
+        base_dir = os.path.join('output', brand)
+        if os.path.isdir(base_dir):
+            files = sorted(glob.glob(os.path.join(base_dir, 'keywords_*.txt')))
+            if files:
+                latest = files[-1]
+                with open(latest, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            keywords.append(line)
+    except Exception as e:
+        print(f"Keyword load error for brand {brand}: {e}")
+    return render_template('nfl_dashboard.html', brand=brand, keywords=keywords)
+
 @app.route('/search', methods=['POST'])
 def search():
     try:

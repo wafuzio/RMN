@@ -13,7 +13,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize view toggle
     document.querySelectorAll('input[name="viewType"]').forEach(radio => {
         radio.addEventListener('change', function() {
-            document.getElementById('resultsContainer').className = this.value + '-view';
+            if (this.value === 'grid' || this.value === 'list') {
+                document.getElementById('resultsContainer').style.display = 'block';
+                document.getElementById('resultsContainer').className = this.value + '-view';
+                document.getElementById('scheduleContainer').style.display = 'none';
+            } else if (this.value === 'schedule') {
+                document.getElementById('resultsContainer').style.display = 'none';
+                document.getElementById('scheduleContainer').style.display = 'block';
+            }
         });
     });
 
@@ -21,6 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('sortSelect').addEventListener('change', function() {
         sortProducts(this.value);
     });
+
 
     // Initialize jQuery UI sortable
     $('#resultsGrid').sortable({
@@ -54,6 +62,153 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     initializeTooltips();
+
+    // Ad Schedule state and handlers
+    const scheduleDataKey = 'adScheduleData';
+    let scheduleData = loadScheduleData();
+
+    document.getElementById('buildScheduleBtn').addEventListener('click', function() {
+        const terms = document.getElementById('termsInput').value
+            .split('\n')
+            .map(t => t.trim())
+            .filter(Boolean);
+        scheduleData = terms.reduce((acc, term) => {
+            acc[term] = acc[term] || { AM: [], PM: [] };
+            return acc;
+        }, scheduleData && typeof scheduleData === 'object' ? scheduleData : {});
+        saveScheduleData();
+        renderSchedule();
+    });
+
+    document.getElementById('exportScheduleBtn').addEventListener('click', function() {
+        const blob = new Blob([JSON.stringify(scheduleData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ad-schedule.json';
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+    });
+
+    document.getElementById('importScheduleInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function() {
+            try {
+                const imported = JSON.parse(reader.result);
+                if (imported && typeof imported === 'object') {
+                    scheduleData = imported;
+                    saveScheduleData();
+                    renderSchedule();
+                    document.getElementById('termsInput').value = Object.keys(scheduleData).join('\n');
+                }
+            } catch (err) {
+                console.error('Failed to import schedule JSON', err);
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    });
+
+    function loadScheduleData() {
+        try {
+            const raw = localStorage.getItem(scheduleDataKey);
+            return raw ? JSON.parse(raw) : {};
+        } catch {
+            return {};
+        }
+    }
+
+    function saveScheduleData() {
+        localStorage.setItem(scheduleDataKey, JSON.stringify(scheduleData));
+    }
+
+    function renderSchedule() {
+        const grid = document.getElementById('scheduleGrid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        // headers
+        grid.insertAdjacentHTML('beforeend', '<div class="schedule-header"></div>');
+        grid.insertAdjacentHTML('beforeend', '<div class="schedule-header">AM</div>');
+        grid.insertAdjacentHTML('beforeend', '<div class="schedule-header">PM</div>');
+
+        Object.keys(scheduleData).forEach(term => {
+            const rowAm = scheduleData[term].AM || [];
+            const rowPm = scheduleData[term].PM || [];
+            const termCell = document.createElement('div');
+            termCell.className = 'schedule-term';
+            termCell.textContent = term;
+            grid.appendChild(termCell);
+
+            ['AM','PM'].forEach(period => {
+                const cell = document.createElement('div');
+                cell.className = 'schedule-cell';
+                const list = document.createElement('div');
+                list.className = 'banner-list';
+                const items = (scheduleData[term][period] || []);
+                if (items.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'schedule-empty';
+                    empty.textContent = 'No banners';
+                    list.appendChild(empty);
+                } else {
+                    items.forEach((url, idx) => {
+                        const wrap = document.createElement('div');
+                        wrap.className = 'banner-item';
+                        const img = document.createElement('img');
+                        img.src = url;
+                        img.alt = term + ' ' + period + ' banner';
+                        img.addEventListener('click', function() {
+                            const modalImg = document.getElementById('modalImage');
+                            if (modalImg) {
+                                modalImg.src = url;
+                                const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+                                modal.show();
+                            }
+                        });
+                        const remove = document.createElement('button');
+                        remove.className = 'banner-remove';
+                        remove.textContent = '×';
+                        remove.addEventListener('click', function() {
+                            scheduleData[term][period].splice(idx, 1);
+                            saveScheduleData();
+                            renderSchedule();
+                        });
+                        wrap.appendChild(img);
+                        wrap.appendChild(remove);
+                        list.appendChild(wrap);
+                    });
+                }
+                const addBtn = document.createElement('button');
+                addBtn.className = 'add-banner-btn';
+                addBtn.type = 'button';
+                addBtn.title = 'Add banner by URL';
+                addBtn.textContent = '+';
+                addBtn.addEventListener('click', function() {
+                    const url = prompt('Enter banner image URL');
+                    if (url) {
+                        if (!scheduleData[term][period]) scheduleData[term][period] = [];
+                        scheduleData[term][period].push(url);
+                        saveScheduleData();
+                        renderSchedule();
+                    }
+                });
+                cell.appendChild(list);
+                cell.appendChild(addBtn);
+                grid.appendChild(cell);
+            });
+        });
+    }
+
+    // Initialize schedule with existing data
+    if (document.getElementById('scheduleContainer')) {
+        document.getElementById('termsInput').value = Object.keys(scheduleData).join('\n');
+        renderSchedule();
+    }
+
     // Handle search type toggle
     document.querySelectorAll('input[name="searchType"]').forEach(radio => {
         radio.addEventListener('change', function() {

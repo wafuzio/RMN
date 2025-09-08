@@ -1,6 +1,6 @@
 # Kroger TOA Monitoring Project
 
-A tool for tracking and analyzing Targeted Onsite Ads (TOAs) and other ad types on Kroger.com search results.
+A tool for tracking and analyzing Targeted Onsite Ads (TOAs) and other ad types on Kroger.com search results, with support for integration with Builder.io.
 
 ## Overview
 
@@ -8,33 +8,62 @@ This project provides a system for monitoring and analyzing sponsored brand pres
 
 - Automated search and capture of Kroger.com search results
 - Extraction of TOA (Targeted Onsite Ad) data from search results
-- Scheduling of regular search runs
-- Analysis of ad content and trends
+- Precise cropping of TOA banner images for use in Builder.io
+- Client-specific organization of results
+- API endpoints for accessing images and data
+
+## Complete Workflow
+
+1. **Keyword Entry** → User enters search keywords and client name via `keyword_input.py`
+2. **Search & Capture** → `kroger_search_and_capture.py` performs the search and captures screenshots/HTML
+3. **TOA Extraction** → `kroger_ad_core.py` with `toa_extractor.py` extracts TOA data from HTML
+4. **Image Processing** → `capture_toa_images.py` creates precisely cropped TOA-only images
+5. **Data Storage** → Results stored in client-specific directories with organized structure
+6. **API Access** → `builder_server.py` provides API endpoints for Builder.io integration
+
+## Directory Structure
+
+```
+output/
+  ├── <client_name>/       # Client-specific directory (e.g., Land_O_Frost)
+  │   ├── main/           # Full page screenshots
+  │   ├── TOA/            # TOA-only images and results
+  │   └── *.html          # Saved HTML files
+```
 
 ## Key Components
 
-- **Kroger_login.py**: Handles authentication with cookie persistence
+- **keyword_input.py**: GUI for entering keywords and managing searches
 - **kroger_search_and_capture.py**: Performs searches and captures HTML/screenshots
 - **kroger_ad_core.py**: Core functionality for ad extraction
-- **process_saved_html.py**: Processes saved HTML files to extract ad data
-- **keyword_input.py**: GUI for entering keywords and managing searches
 - **ad_extractors/**: Modular system for different ad type extractors
+  - **base_extractor.py**: Base class with common extraction methods
+  - **toa_extractor.py**: Specific extractor for TOA banners
+- **process_saved_html.py**: Processes saved HTML files to extract ad data
+- **capture_toa_images.py**: Creates precisely cropped TOA-only images
+- **builder_server.py**: Flask server with API endpoints for Builder.io integration
+
+## API Endpoints
+
+- `/api/images/<client>/<filename>` - Serves full page screenshots
+- `/api/toa/<client>/<filename>` - Serves TOA-only images
 
 ## Features
 
 - **Session Persistence**: Handles Akamai Bot Protection with cookie persistence
 - **Modular Ad Extractors**: Easily add new ad type extractors
-- **Scheduling**: Set up regular search runs on a schedule
-- **Error Recovery**: Retry mechanism for failed searches
-- **Data Analysis**: Extract common words and phrases from ad content
+- **Adaptive TOA Detection**: Uses edge detection to precisely crop TOA banners
+- **Client Organization**: Stores results in client-specific directories
+- **Builder.io Integration**: API endpoints for accessing images
 
 ## Requirements
 
 - Python 3.8+
 - Playwright
 - BeautifulSoup4
-- NLTK
-- Tkinter (for GUI)
+- Pillow (PIL)
+- Flask
+- NumPy
 
 ## Installation
 
@@ -44,14 +73,28 @@ This project provides a system for monitoring and analyzing sponsored brand pres
 
 ## Usage
 
-Run the GUI tool:
-```
+### Running the Main Tool
+
+```bash
 python keyword_input.py
 ```
 
-Or process saved HTML files:
+### Processing Saved HTML
+
+```bash
+python process_saved_html.py --input-dir output/<client_name> --output-dir output/<client_name>
 ```
-python process_saved_html.py
+
+### Creating TOA-Only Images
+
+```bash
+python capture_toa_images.py <client_name>
+```
+
+### Starting the API Server
+
+```bash
+python builder_server.py
 ```
 
 ## Adding New Ad Extractors

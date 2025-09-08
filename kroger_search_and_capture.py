@@ -172,8 +172,14 @@ def search_and_capture(search_term=None, output_dir=None):
             safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in search_term)
             file_prefix = f"search_results_{safe_search_term}_{timestamp}"
             
-            # Take a screenshot of the search results
-            screenshot_path = os.path.join(output_dir, f"{file_prefix}.png")
+            # Create main and TOA subfolders if they don't exist
+            main_dir = os.path.join(output_dir, "main")
+            toa_dir = os.path.join(output_dir, "TOA")
+            os.makedirs(main_dir, exist_ok=True)
+            os.makedirs(toa_dir, exist_ok=True)
+            
+            # Take a screenshot of the search results and save in main subfolder
+            screenshot_path = os.path.join(main_dir, f"{file_prefix}.png")
             page.screenshot(path=screenshot_path, full_page=True)
             print("📷 Screenshot saved to {}".format(screenshot_path))
             
@@ -181,7 +187,7 @@ def search_and_capture(search_term=None, output_dir=None):
             toa_divs = page.query_selector_all('div[data-testid="StandardTOA"]')
             print("🔍 Found {} TOA ads on the page".format(len(toa_divs)))
             
-            # Save HTML for inspection
+            # Save HTML for inspection (keep in root directory for compatibility)
             html_path = os.path.join(output_dir, f"{file_prefix}.html")
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(page.content())

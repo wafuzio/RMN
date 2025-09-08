@@ -45,3 +45,5 @@ playwright_profile/
 output/
 images/
 *.log
+
+.config/

@@ -31,6 +31,8 @@ os.makedirs("images", exist_ok=True)
 
 # Import all extractors to ensure they're registered
 import ad_extractors.toa_extractor
+import ad_extractors.skyscraper_extractor
+import ad_extractors.carousel_extractor
 
 def get_rendered_html(url, wait_ms=5000, user_data_dir=None):
     """
@@ -88,7 +90,9 @@ def get_rendered_html(url, wait_ms=5000, user_data_dir=None):
         
         # Wait longer for the page to stabilize
         print("   Waiting for page to stabilize...")
-        page.wait_for_timeout(wait_ms * 2)  # Double the wait time for better stability
+        page.wait_for_timeout(wait_ms * 4)  # Triple the wait time for better stability
+        print("   Waiting one additional second for complete loading...")
+        page.wait_for_timeout(2000)  # Additional 1 second wait
         
         # Check if we're still logged in
         if "Sign In" in page.content():
@@ -129,12 +133,13 @@ def extract_common_words_and_phrases(titles):
         "common_phrases": phrase_freq
     }
 
-def extract_ads_from_html(html):
+def extract_ads_from_html(html, client=None):
     """
     Extract all ads from HTML content using registered extractors
     
     Args:
         html (str): HTML content to extract ads from
+        client (str, optional): Client name for organizing output
         
     Returns:
         list: List of extracted ad data
@@ -150,17 +155,110 @@ def extract_ads_from_html(html):
         print(f"Looking for {ad_type} ads...")
         extractor = extractor_class()
         
-        # For TOA ads, look for the specific div
+        # Set client name if provided
+        if client:
+            extractor.client = client
+        
+        # For TOA ads, look for the specific div with data-testid="StandardTOA"
         if ad_type == "TOA":
+            # Primary selector using data-testid attribute
             toa_divs = soup.select('div[data-testid="StandardTOA"]')
+            
+            # Fallback selectors if primary selector doesn't find anything
+            if not toa_divs:
+                toa_divs = soup.select('div.Standard-TOA')
+            
+            if not toa_divs:
+                toa_divs = soup.select('div[class*="TOA"]')
+                
             print(f"[{ad_type} Ads Found] {len(toa_divs)}")
             
             for div in toa_divs:
-                ad = extractor.extract(str(div))
+                # Store the raw HTML for image capture
+                raw_html = str(div)
+                ad = extractor.extract(raw_html)
                 if ad:
+                    # Include the raw HTML in the results
+                    ad['html'] = raw_html
                     results.append(ad)
         
-        # Add more ad type extraction logic here as needed
+        # For Skyscraper ads, look for the specific div with data-testid="monetization/search-skyscraper-top"
+        elif ad_type == "Skyscraper":
+            # Look for skyscraper ads
+            skyscraper_divs = soup.select('div[data-testid="monetization/search-skyscraper-top"]')
+            
+            # Fallback selectors
+            if not skyscraper_divs:
+                skyscraper_divs = soup.select('div.amp-container[data-testid*="skyscraper"]')
+                
+            if not skyscraper_divs:
+                skyscraper_divs = soup.select('div.amp-container')
+                
+            print(f"[{ad_type} Ads Found] {len(skyscraper_divs)}")
+            
+            for div in skyscraper_divs:
+                # Store the raw HTML for image capture
+                raw_html = str(div)
+                
+                # Try to use the extractor first
+                ad = extractor.extract(raw_html)
+                
+                # If extractor failed, create a basic ad structure
+                if not ad:
+                    ad = {
+                        'type': 'Skyscraper',
+                        'html': raw_html
+                    }
+                    
+                    # Try to extract image URL
+                    img = div.select_one('img')
+                    if img and img.get('src'):
+                        ad['image_url'] = img.get('src')
+                    
+                    # Try to extract link URL
+                    link = div.select_one('a')
+                    if link and link.get('href'):
+                        ad['href'] = link.get('href')
+                    
+                    # Try to extract message/title
+                    title = div.select_one('h2') or div.select_one('.espot-header')
+                    if title:
+                        ad['message'] = title.get_text(strip=True)
+                    
+                    # Try to extract description
+                    desc = div.select_one('.espot-subText') or div.select_one('span')
+                    if desc:
+                        ad['description'] = desc.get_text(strip=True)
+                    
+                    # Try to extract CTA
+                    cta = div.select_one('.espot-linkText')
+                    if cta:
+                        ad['cta'] = cta.get_text(strip=True)
+                
+                # Include the raw HTML in the results
+                ad['html'] = raw_html
+                results.append(ad)
+                
+        # For CuratedCarousel ads
+        elif ad_type == "CuratedCarousel":
+            # Look for carousel ads with multiple selectors
+            carousel_divs = soup.select('div.CuratedCarousel') or \
+                          soup.select('div[class*="Carousel"]') or \
+                          soup.select('div[data-testid*="carousel"]')
+            
+            print(f"[{ad_type} Ads Found] {len(carousel_divs)}")
+            
+            for div in carousel_divs:
+                # Store the raw HTML for image capture
+                raw_html = str(div)
+                
+                # Try to use the extractor
+                ad = extractor.extract(raw_html)
+                
+                if ad:
+                    # Include the raw HTML in the results
+                    ad['html'] = raw_html
+                    results.append(ad)
         
     return results
 
