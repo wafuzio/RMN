@@ -298,32 +298,64 @@ def search_and_capture(search_term=None, output_dir=None):
             # Use simpler wait conditions to avoid timeouts
             page.goto(search_url, wait_until="domcontentloaded")
             
-            # Wait for the page to stabilize without strict URL matching
-            print("   Waiting for page to stabilize...")
+            # Short, "whichever happens first" readiness wait
+            print("   Waiting for page to be ready...")
             try:
-                page.wait_for_load_state("networkidle", timeout=15000)
+                # Use Promise.race in JavaScript to implement "whichever happens first"
+                page.evaluate("""
+                async () => {
+                    return await Promise.race([
+                        // Option 1: Wait for products to appear (up to 3s)
+                        new Promise(resolve => {
+                            const checkProducts = () => {
+                                const products = document.querySelectorAll('[data-testid*="product"], [class*="product-card"]');
+                                if (products.length > 0) {
+                                    console.log(`Found ${products.length} products`); 
+                                    resolve('products_found');
+                                    return true;
+                                }
+                                return false;
+                            };
+                            
+                            // Check immediately
+                            if (checkProducts()) return;
+                            
+                            // Check every 300ms for 3s
+                            let attempts = 0;
+                            const interval = setInterval(() => {
+                                attempts++;
+                                if (checkProducts() || attempts >= 10) {
+                                    clearInterval(interval);
+                                    if (attempts >= 10) resolve('products_timeout');
+                                }
+                            }, 300);
+                        }),
+                        
+                        // Option 2: DOM is ready enough
+                        new Promise(resolve => {
+                            if (document.readyState === 'complete' || 
+                                document.querySelectorAll('body *').length > 50) {
+                                resolve('dom_ready');
+                            } else {
+                                window.addEventListener('DOMContentLoaded', () => resolve('dom_loaded'));
+                                // Backup timeout
+                                setTimeout(() => resolve('dom_timeout'), 3000);
+                            }
+                        })
+                    ]);
+                }
+                """)
+                print("   Page is ready for scrolling")
             except Exception as e:
-                print(f"   Network idle wait timed out: {e} - continuing anyway")
+                print(f"   Readiness wait error: {e} - continuing anyway")
                 
-            # Check if we're on the right page by looking for product grid
-            print("   Checking for product grid...")
-            try:
-                page.wait_for_selector('[data-testid*="product"], [class*="product-card"]', timeout=10000)
-                print("   Product grid found")
-            except Exception:
-                print("   No product grid found within timeout - continuing anyway")
-            
             # Log the page and frame information
             print(f"page.url: {page.url}")
             print("Frames:\n" + "\n".join([f"  - {f.url or '<no url>'}" for f in page.frames]))
-            
-            # Wait longer for the page to stabilize
-            print("   Waiting for page to stabilize...")
-            page.wait_for_timeout(5000)
 
             # Product grid check already done above
 
-            # Scroll results before capture and write lightweight diagnostics
+            # Take a before screenshot for diagnostics
             try:
                 before_png = DIAG_DIR / "before.png"
                 after_png = DIAG_DIR / "after.png"
@@ -331,18 +363,8 @@ def search_and_capture(search_term=None, output_dir=None):
 
                 page.screenshot(path=str(before_png), full_page=False)
                 dlog(f"Saved {before_png}")
-
-                m = scroll_results(page)  # perform body scrolling on current page
-                dlog(f"finalY={m.get('finalY')} finalH={m.get('finalH')} steps={len(m.get('metrics') or [])}")
-
-                with open(metrics_json, "w", encoding="utf-8") as f:
-                    json.dump(m, f, indent=2)
-                dlog(f"Saved {metrics_json}")
-
-                page.screenshot(path=str(after_png), full_page=False)
-                dlog(f"Saved {after_png}")
             except Exception as e:
-                print(f"   Scroll step skipped due to error: {e}")
+                print(f"   Before screenshot skipped due to error: {e}")
             
             # Wait longer for the page to stabilize
             print("   Waiting for page to stabilize...")
@@ -371,7 +393,19 @@ def search_and_capture(search_term=None, output_dir=None):
             # Use scroll_results to scroll the page before screenshot capture
             print("   Scrolling page before screenshot...")
             try:
+                # Scroll the page to load all content
                 scroll_result = scroll_results(page)
+                dlog(f"finalY={scroll_result['finalY']} finalH={scroll_result['finalH']} steps={len(scroll_result['metrics'])}")
+                
+                # Save metrics to JSON file
+                with open(metrics_json, "w", encoding="utf-8") as f:
+                    json.dump(scroll_result, f, indent=2)
+                dlog(f"Saved {metrics_json}")
+                
+                # Take after screenshot
+                page.screenshot(path=str(after_png), full_page=False)
+                dlog(f"Saved {after_png}")
+                
                 print(f"   Scrolling completed. Scrolled to Y={scroll_result['finalY']} of {scroll_result['finalH']}")
             except Exception as e:
                 print(f"   Warning: Scrolling failed: {e}")
