@@ -44,10 +44,17 @@ log(f"Log file: {LOG_PATH}")
 # Import ad extractors
 from ad_extractors import get_all_extractors, get_extractor
 
-# Setup NLTK
-nltk.download('punkt', quiet=True)
-nltk.download('stopwords', quiet=True)
-stop_words = set(stopwords.words('english'))
+# Setup NLTK - only download if not already downloaded
+try:
+    stop_words = set(stopwords.words('english'))
+except LookupError:
+    nltk.download('stopwords', quiet=True)
+    stop_words = set(stopwords.words('english'))
+
+try:
+    word_tokenize("test")
+except LookupError:
+    nltk.download('punkt', quiet=True)
 
 # Make sure image directory exists
 os.makedirs("images", exist_ok=True)

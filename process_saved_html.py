@@ -42,7 +42,7 @@ def extract_toa_images(json_file, client_name=None):
         import subprocess
         
         # Build command to run screenshot_toa_image.py
-        cmd = ["python", "screenshot_toa_image.py", "--json", json_file]
+        cmd = ["python3", "screenshot_toa_image.py", "--json", json_file]
         
         # Add client name if provided
         if client_name:
@@ -50,32 +50,17 @@ def extract_toa_images(json_file, client_name=None):
             
         print(f"\n📷 Extracting TOA images using screenshot_toa_image.py...")
         
-        # Run the command
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Use subprocess.Popen with non-blocking execution
+        process = subprocess.Popen(cmd, 
+                                  stdout=subprocess.PIPE, 
+                                  stderr=subprocess.PIPE,
+                                  start_new_session=True)  # Run in separate process group
         
-        # Check if successful
-        if result.returncode == 0:
-            print(result.stdout)
-            return True
-        else:
-            # Extract TOA images using screenshot_toa_image.py
-            try:
-                from screenshot_toa_image import process_images
-                process_images(json_file)
-            except Exception as e:
-                print(f"❌ Error extracting TOA images: {e}")
-                return False
-            
-            # Extract carousel images using screenshot_carousel.py
-            try:
-                from screenshot_carousel import process_results_file
-                process_results_file(json_file)
-            except Exception as e:
-                print(f"❌ Error extracting carousel images: {e}")
-                # Don't return False here, as we still want to continue even if carousel extraction fails
-            return True
+        # Don't wait for completion - let it run in background
+        print(f"✅ TOA image extraction started in background")
+        return True
     except Exception as e:
-        print(f"❌ Error extracting TOA images: {e}")
+        print(f"❌ Error starting TOA image extraction: {e}")
         return False
 
 def extract_ads_from_html_file(html_file):
@@ -247,13 +232,9 @@ def process_latest_html_file(input_dir=None, output_dir=None):
     # Automatically extract TOA images using screenshot_toa_image.py
     extract_toa_images(results_path, client_name=os.path.basename(output_dir))
     
-    # Automatically extract carousel images using screenshot_carousel.py
-    try:
-        print("\n🎠 Extracting carousel images using screenshot_carousel.py...")
-        from screenshot_carousel import process_results_file
-        process_results_file(results_path, output_dir)
-    except Exception as e:
-        print(f"❌ Error extracting carousel images: {e}")
+    # NOTE: Carousel images are now captured directly in kroger_search_and_capture.py
+    # No need to extract carousel images here anymore
+    pass
     
     # Print some details about the ads found
     if results['ads']:

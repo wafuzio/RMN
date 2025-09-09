@@ -87,8 +87,9 @@ class CarouselExtractor(AdExtractor):
             if product.get('title'):
                 ad['products'].append(product)
         
-        # Only return ad if we found products
-        if ad['products']:
+        # Process carousel as a whole - outside the product loop
+        # Only continue if we found products or have a valid carousel element
+        if ad['products'] or carousel_element:
             # Save screenshot path for the carousel
             if self.client:
                 try:
@@ -100,9 +101,18 @@ class CarouselExtractor(AdExtractor):
                     carousel_dir = os.path.join(client_dir, "Carousel")
                     os.makedirs(carousel_dir, exist_ok=True)
                     
-                    # Generate filename
+                    # Generate a unique filename for this carousel
                     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    header_text = ad.get('header', '').lower()
+                    
+                    # Get header text for filename
+                    header_text = ad.get('header', '')
+                    if not header_text:
+                        # Try to extract header directly from the carousel element
+                        header_elem = carousel_element.select_one('.CuratedCarousel__header, h2, .header')
+                        if header_elem:
+                            header_text = header_elem.get_text(strip=True)
+                    
+                    header_text = header_text.lower() if header_text else 'unknown_carousel'
                     
                     # Include search term if available
                     search_term_part = ""
@@ -111,14 +121,13 @@ class CarouselExtractor(AdExtractor):
                         safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in self.search_term)
                         search_term_part = f"_{safe_search_term}"
                     
-                    if header_text:
-                        # Clean header for filename
-                        clean_header = re.sub(r'[^a-z0-9]', '_', header_text)
-                        clean_header = re.sub(r'_+', '_', clean_header)  # Replace multiple underscores
-                        clean_header = clean_header[:30]  # Limit length
-                        filename = f"carousel_{clean_header}{search_term_part}_{timestamp}.png"
-                    else:
-                        filename = f"carousel{search_term_part}_{timestamp}.png"
+                    # Clean header for filename
+                    clean_header = re.sub(r'[^a-z0-9]', '_', header_text)
+                    clean_header = re.sub(r'_+', '_', clean_header)  # Replace multiple underscores
+                    clean_header = clean_header[:30]  # Limit length
+                    
+                    # Create a unique filename for this carousel
+                    filename = f"carousel_{clean_header}{search_term_part}_{timestamp}.png"
                     
                     # Full path to save the image
                     image_path = os.path.join(carousel_dir, filename)
@@ -126,23 +135,16 @@ class CarouselExtractor(AdExtractor):
                     # Save image path in ad data
                     ad['carousel_image_path'] = image_path
                     
-                    # Try to save an image if we have a header image
-                    header_img = soup.select_one('.CuratedCarousel__header img') or \
-                               soup.select_one('div[class*="Carousel"] img')
+                    # Note: We're not attempting to save individual images here anymore
+                    # Instead, we rely on the direct screenshot approach in kroger_search_and_capture.py
+                    # which captures the entire carousel as a single image during the initial page capture
                     
-                    if header_img and header_img.get('src'):
-                        img_url = header_img.get('src')
-                        # Add domain if it's a relative URL
-                        if img_url.startswith('/'):
-                            img_url = f"https://www.kroger.com{img_url}"
-                            
-                        try:
-                            # Use the base extractor's save_image method with search_term
-                            saved_path = self.save_image(img_url, out_dir=carousel_dir, filename=filename, search_term=self.search_term)
-                            if saved_path:
-                                ad['carousel_image_saved'] = saved_path
-                        except Exception as e:
-                            print(f"Error saving carousel image: {e}")
+                    # Record that this carousel should be captured during live scraping
+                    ad['capture_entire_carousel'] = True
+                    
+                    # For backwards compatibility, we'll still set the image path
+                    # but the actual image capture happens in kroger_search_and_capture.py
+                    ad['carousel_image_path'] = image_path
                     
                 except Exception as e:
                     print(f"Error preparing carousel image path: {e}")

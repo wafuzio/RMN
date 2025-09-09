@@ -392,12 +392,12 @@ def search_and_capture(search_term=None, output_dir=None):
             toa_divs = page.query_selector_all('div[data-testid="StandardTOA"]')
             print("🔍 Found {} TOA ads on the page".format(len(toa_divs)))
             
-            # Check for carousel elements
+            # Check for carousel elements - focus on structure rather than specific text
             carousel_selectors = [
-                'div.CuratedCarousel.py-32.bg-accent-more-subtle',
-                'div.CuratedCarousel',
-                'div[class*="Carousel"]',
-                'div[data-testid*="carousel"]'
+                'div.CuratedCarousel',  # Main carousel container
+                'div[class*="Carousel"]:has(.kds-Heading)',  # Any carousel with a heading
+                'div[class*="carousel"]:has(h2)',  # Any carousel with an h2 heading
+                'div[data-testid*="carousel"]:has(.headerSection-header)'  # Carousel with header section
             ]
             
             # Create carousel directory
@@ -413,17 +413,43 @@ def search_and_capture(search_term=None, output_dir=None):
                     
                     for i, carousel in enumerate(carousels):
                         try:
+                            # Inject CSS to hide sticky headers/filters before scrolling carousel into view
+                            page.add_style_tag(content="""
+                                header,
+                                .Header,
+                                .kds-Header,
+                                [data-testid="header"],
+                                .kds-StickyHeader,
+                                .SearchFilters,
+                                .search-page-filters,
+                                [class*="sticky"]
+                                {
+                                  display: none !important;
+                                }
+                            """)
                             # Scroll the carousel into view
                             carousel.scroll_into_view_if_needed()
                             
                             # Wait a moment for any animations or lazy-loaded content
                             page.wait_for_timeout(500)
                             
-                            # Get carousel header text if available
-                            header_text = "unknown"
-                            header = carousel.query_selector('.CuratedCarousel__header, h2, .header')
-                            if header:
-                                header_text = header.text_content().strip()
+                            # Get carousel header text if available - expanded selector list
+                            header = carousel.query_selector(
+                                '.CuratedCarousel__header, h2, .header, .kds-Heading, .headerSection-header, [class*="header"], [class*="title"]'
+                            )
+                            
+                            # Skip carousels without headers only if we have multiple carousels
+                            if not header and len(carousels) > 1:
+                                print(f"⚠️ Skipping carousel {i+1} - no header found")
+                                continue
+                                
+                            # If no header found but this is the only carousel, proceed anyway
+                            header_text = header.text_content().strip() if header else "main_carousel"
+                            
+                            # Skip carousels with empty headers only if we have multiple carousels
+                            if not header_text and len(carousels) > 1:
+                                print(f"⚠️ Skipping carousel {i+1} - empty header text")
+                                continue
                                 
                             # Generate filename
                             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
