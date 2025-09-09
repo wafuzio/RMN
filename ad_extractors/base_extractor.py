@@ -10,11 +10,13 @@ import requests
 import re
 
 class AdExtractor:
-    """Base class for all ad extractors"""
+    """Base class for ad extractors"""
     
     def __init__(self):
-        """Initialize the ad extractor"""
-        self.ad_type = "base"  # Override in subclasses
+        """Initialize the extractor"""
+        self.ad_type = "Generic"
+        self.client = None
+        self.search_term = None
     
     def extract(self, html):
         """
@@ -67,7 +69,7 @@ class AdExtractor:
             print(f"[Attribute Extraction Failed] {selector}.{attribute}: {e}")
             return default
     
-    def save_image(self, url, out_dir="images", filename=None):
+    def save_image(self, url, out_dir="images", filename=None, search_term=None):
         """
         Download and save an image from a URL
         
@@ -75,6 +77,7 @@ class AdExtractor:
             url (str): URL of the image to download
             out_dir (str): Directory to save the image in
             filename (str, optional): Filename to save the image as
+            search_term (str, optional): Search term to include in the filename
             
         Returns:
             str or None: Path to the saved image or None if download failed
@@ -85,6 +88,14 @@ class AdExtractor:
             response.raise_for_status()
             if not filename:
                 filename = url.split("/")[-1]
+                
+            # Include search term in filename if provided
+            if search_term:
+                # Sanitize search term for filename
+                safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in search_term)
+                name, ext = os.path.splitext(filename)
+                filename = f"{name}_{safe_search_term}{ext}"
+                
             filepath = os.path.join(out_dir, filename)
             with open(filepath, "wb") as f:
                 f.write(response.content)
@@ -99,7 +110,7 @@ class AdExtractor:
             print(f"[Image URL Invalid] {url} - {e}")
             return None
             
-    def save_image_with_crop(self, url, out_dir="images", filename=None, html_element=None):
+    def save_image_with_crop(self, url, out_dir="images", filename=None, html_element=None, search_term=None):
         """
         Download and save both the full image and an extracted TOA-only version
         
@@ -108,6 +119,7 @@ class AdExtractor:
             out_dir (str): Directory to save the image in
             filename (str, optional): Filename to save the image as
             html_element (BeautifulSoup element, optional): The TOA HTML element for precise extraction
+            search_term (str, optional): Search term to include in the filename
             
         Returns:
             dict: Paths to the saved images {'full': full_path, 'toa': toa_path}
@@ -133,6 +145,13 @@ class AdExtractor:
             
             if not filename:
                 filename = url.split("/")[-1]
+            
+            # Include search term in filename if provided
+            if search_term:
+                # Sanitize search term for filename
+                safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in search_term)
+                name, ext = os.path.splitext(filename)
+                filename = f"{name}_{safe_search_term}{ext}"
                 
             # Save full image in main subfolder
             full_filepath = os.path.join(main_dir, filename)

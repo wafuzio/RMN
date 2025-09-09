@@ -489,13 +489,14 @@ def extract_common_words_and_phrases(titles):
         "common_phrases": phrase_freq
     }
 
-def extract_ads_from_html(html, client=None):
+def extract_ads_from_html(html, client=None, search_term=None):
     """
     Extract all ads from HTML content using registered extractors
     
     Args:
-        html (str): HTML content to extract ads from
-        client (str, optional): Client name for organizing output
+        html (str): HTML content to extract from
+        client (str, optional): Client name for image saving
+        search_term (str, optional): Search term to include in image filenames
         
     Returns:
         list: List of extracted ad data
@@ -514,6 +515,10 @@ def extract_ads_from_html(html, client=None):
         # Set client name if provided
         if client:
             extractor.client = client
+            
+        # Set search term for image filenames
+        if search_term:
+            extractor.search_term = search_term
         
         # For TOA ads, look for the specific div with data-testid="StandardTOA" (confirmed in screenshot)
         if ad_type == "TOA":
@@ -602,7 +607,8 @@ def extract_ads_from_html(html, client=None):
         # For CuratedCarousel ads
         elif ad_type == "CuratedCarousel":
             # Look for carousel ads with multiple selectors
-            carousel_divs = soup.select('div.CuratedCarousel') or \
+            carousel_divs = soup.select('div.CuratedCarousel.py-32.bg-accent-more-subtle') or \
+                          soup.select('div.CuratedCarousel') or \
                           soup.select('div[class*="Carousel"]') or \
                           soup.select('div[data-testid*="carousel"]')
             

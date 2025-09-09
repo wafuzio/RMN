@@ -58,8 +58,22 @@ def extract_toa_images(json_file, client_name=None):
             print(result.stdout)
             return True
         else:
-            print(f"❌ Error running screenshot_toa_image.py: {result.stderr}")
-            return False
+            # Extract TOA images using screenshot_toa_image.py
+            try:
+                from screenshot_toa_image import process_images
+                process_images(json_file)
+            except Exception as e:
+                print(f"❌ Error extracting TOA images: {e}")
+                return False
+            
+            # Extract carousel images using screenshot_carousel.py
+            try:
+                from screenshot_carousel import process_results_file
+                process_results_file(json_file)
+            except Exception as e:
+                print(f"❌ Error extracting carousel images: {e}")
+                # Don't return False here, as we still want to continue even if carousel extraction fails
+            return True
     except Exception as e:
         print(f"❌ Error extracting TOA images: {e}")
         return False
@@ -73,23 +87,30 @@ def extract_ads_from_html_file(html_file):
         with open(html_file, 'r', encoding='utf-8') as f:
             html = f.read()
         
-        # Extract keyword from filename
-        filename = os.path.basename(html_file)
+        # Try to extract keyword from filename
         keyword = None
-        if "search_results_" in filename and ".html" in filename:
-            # Format is typically search_results_keyword_timestamp.html
-            parts = filename.replace("search_results_", "").split("_")
-            if len(parts) > 1:
-                # Extract the actual search term, not the filename
-                # The last part is the timestamp (YYYY-MM-DD_HH-MM-SS)
-                timestamp_pattern = parts[-1].replace(".html", "")
-                
-                # Check if we have a search term in the HTML content
-                with open(html_file, 'r', encoding='utf-8') as f:
-                    html_content = f.read()
+        filename = os.path.basename(html_file)
+        if filename.startswith("search_results_"):
+            # Extract search term from filename
+            # Format is typically search_results_SEARCH_TERM_TIMESTAMP.html
+            # Extract everything between search_results_ and the timestamp
+            timestamp_pattern = r'_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}'
+            match = re.search(timestamp_pattern, filename)
+            
+            if match:
+                # Get everything between 'search_results_' and the timestamp
+                keyword_part = filename[len('search_results_'):match.start()]
+                keyword = keyword_part.replace('_', ' ').strip()
+            else:
+                # Fallback to old method
+                parts = filename.replace("search_results_", "").split("_")
+                if len(parts) > 1:
+                    # Last part is usually the timestamp
+                    keyword = "_".join(parts[:-1])
+                    keyword = keyword.replace("_", " ")
                     
                 # Try to extract search term from page title or search input
-                soup = BeautifulSoup(html_content, 'html.parser')
+                soup = BeautifulSoup(html, 'html.parser')
                 
                 # Method 1: Look for search query in title
                 title = soup.title.text if soup.title else ""
@@ -136,7 +157,7 @@ def extract_ads_from_html_file(html_file):
                     screenshot_path = screenshot_candidates[0]
         
         # Extract all ads from the HTML
-        ads = extract_ads_from_html(html, client=client)
+        ads = extract_ads_from_html(html, client=client, search_term=keyword)
         
         # Create TOA subfolder for images
         if client:
@@ -225,6 +246,14 @@ def process_latest_html_file(input_dir=None, output_dir=None):
     
     # Automatically extract TOA images using screenshot_toa_image.py
     extract_toa_images(results_path, client_name=os.path.basename(output_dir))
+    
+    # Automatically extract carousel images using screenshot_carousel.py
+    try:
+        print("\n🎠 Extracting carousel images using screenshot_carousel.py...")
+        from screenshot_carousel import process_results_file
+        process_results_file(results_path, output_dir)
+    except Exception as e:
+        print(f"❌ Error extracting carousel images: {e}")
     
     # Print some details about the ads found
     if results['ads']:

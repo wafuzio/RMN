@@ -30,7 +30,8 @@ class CarouselExtractor(AdExtractor):
         soup = BeautifulSoup(html, 'html.parser')
         
         # Check if this is a carousel ad - look for multiple selectors
-        carousel_element = soup.select_one('div.CuratedCarousel') or \
+        carousel_element = soup.select_one('div.CuratedCarousel.py-32.bg-accent-more-subtle') or \
+                          soup.select_one('div.CuratedCarousel') or \
                           soup.select_one('div[class*="Carousel"]') or \
                           soup.select_one('div[data-testid*="carousel"]')
         
@@ -103,20 +104,45 @@ class CarouselExtractor(AdExtractor):
                     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                     header_text = ad.get('header', '').lower()
                     
+                    # Include search term if available
+                    search_term_part = ""
+                    if hasattr(self, 'search_term') and self.search_term:
+                        # Sanitize search term for filename
+                        safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in self.search_term)
+                        search_term_part = f"_{safe_search_term}"
+                    
                     if header_text:
                         # Clean header for filename
                         clean_header = re.sub(r'[^a-z0-9]', '_', header_text)
                         clean_header = re.sub(r'_+', '_', clean_header)  # Replace multiple underscores
                         clean_header = clean_header[:30]  # Limit length
-                        filename = f"carousel_{clean_header}_{timestamp}.png"
+                        filename = f"carousel_{clean_header}{search_term_part}_{timestamp}.png"
                     else:
-                        filename = f"carousel_{timestamp}.png"
+                        filename = f"carousel{search_term_part}_{timestamp}.png"
                     
                     # Full path to save the image
                     image_path = os.path.join(carousel_dir, filename)
                     
                     # Save image path in ad data
                     ad['carousel_image_path'] = image_path
+                    
+                    # Try to save an image if we have a header image
+                    header_img = soup.select_one('.CuratedCarousel__header img') or \
+                               soup.select_one('div[class*="Carousel"] img')
+                    
+                    if header_img and header_img.get('src'):
+                        img_url = header_img.get('src')
+                        # Add domain if it's a relative URL
+                        if img_url.startswith('/'):
+                            img_url = f"https://www.kroger.com{img_url}"
+                            
+                        try:
+                            # Use the base extractor's save_image method with search_term
+                            saved_path = self.save_image(img_url, out_dir=carousel_dir, filename=filename, search_term=self.search_term)
+                            if saved_path:
+                                ad['carousel_image_saved'] = saved_path
+                        except Exception as e:
+                            print(f"Error saving carousel image: {e}")
                     
                 except Exception as e:
                     print(f"Error preparing carousel image path: {e}")

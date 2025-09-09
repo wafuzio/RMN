@@ -21,15 +21,8 @@ from playwright.sync_api import sync_playwright
 from playwright._impl._errors import Error as PWError
 from Kroger_login import save_cookies  # Removed load_cookies as it's redundant with user_data_dir
 
-# --- Lightweight diagnostics (screenshots + metrics) ---
+# Constants for file paths
 PROJECT_ROOT = Path(__file__).resolve().parent
-DIAG_DIR = PROJECT_ROOT / "diagnostics"
-DIAG_DIR.mkdir(parents=True, exist_ok=True)
-
-def dlog(msg: str):
-    from datetime import datetime as _dt
-    ts = _dt.now().strftime("%H:%M:%S")
-    print(f"[scroll] {ts} {msg}")
 
 # Constants
 USER_DATA_DIR = os.path.expanduser("~/ChromeProfiles/kroger_clean_profile")
@@ -96,7 +89,7 @@ def eval_safe(page, script, retries=3):
 def scroll_results(page, max_loops=120, step_ratio=0.85, sleep_ms=600):
     """
     Scroll the top-level document in controlled steps, backing off when no progress.
-    Returns a dict with metrics you can save.
+    Returns basic scroll info.
     """
     return page.evaluate(
         """
@@ -108,7 +101,7 @@ def scroll_results(page, max_loops=120, step_ratio=0.85, sleep_ms=600):
           let stagnant = 0;
           let lastY = scrollEl.scrollTop;
           let lastProducts = 0;
-          const metrics = [];
+          let steps = 0;
 
           // Wait for grid to show up (best effort, 10s)
           const start = Date.now();
@@ -128,10 +121,9 @@ def scroll_results(page, max_loops=120, step_ratio=0.85, sleep_ms=600):
             const y = scrollEl.scrollTop;
             const h = scrollEl.scrollHeight;
             const products = document.querySelectorAll('[data-testid*="product"], [class*="product-card"]').length;
-            const ads = document.querySelectorAll('[data-testid="monetization/search-page-top"], [data-testid="StandardTOA"]').length;
 
-            metrics.push({ loop: i, y, h, products, ads });
-
+            steps++;
+            
             const moved = Math.abs(y - lastY) >= 2;
             const grew = products > lastProducts;
             const atBottom = y + window.innerHeight >= h - 10;
@@ -161,7 +153,7 @@ def scroll_results(page, max_loops=120, step_ratio=0.85, sleep_ms=600):
           return {
             finalY: finalY,
             finalH: finalH,
-            metrics
+            steps: steps
           };
         }
         """,
@@ -355,16 +347,8 @@ def search_and_capture(search_term=None, output_dir=None):
 
             # Product grid check already done above
 
-            # Take a before screenshot for diagnostics
-            try:
-                before_png = DIAG_DIR / "before.png"
-                after_png = DIAG_DIR / "after.png"
-                metrics_json = DIAG_DIR / "scroll_metrics.json"
-
-                page.screenshot(path=str(before_png), full_page=False)
-                dlog(f"Saved {before_png}")
-            except Exception as e:
-                print(f"   Before screenshot skipped due to error: {e}")
+            # Create sanitized search term for filenames
+            safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in search_term)
             
             # Wait longer for the page to stabilize
             print("   Waiting for page to stabilize...")
@@ -381,7 +365,7 @@ def search_and_capture(search_term=None, output_dir=None):
                 return False
                 
             # Create search-specific filename with sanitized search term
-            safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in search_term)
+            # Note: We already created safe_search_term above, so we'll reuse it
             file_prefix = f"search_results_{safe_search_term}_{timestamp}"
             
             # Create main and TOA subfolders if they don't exist
@@ -395,17 +379,6 @@ def search_and_capture(search_term=None, output_dir=None):
             try:
                 # Scroll the page to load all content
                 scroll_result = scroll_results(page)
-                dlog(f"finalY={scroll_result['finalY']} finalH={scroll_result['finalH']} steps={len(scroll_result['metrics'])}")
-                
-                # Save metrics to JSON file
-                with open(metrics_json, "w", encoding="utf-8") as f:
-                    json.dump(scroll_result, f, indent=2)
-                dlog(f"Saved {metrics_json}")
-                
-                # Take after screenshot
-                page.screenshot(path=str(after_png), full_page=False)
-                dlog(f"Saved {after_png}")
-                
                 print(f"   Scrolling completed. Scrolled to Y={scroll_result['finalY']} of {scroll_result['finalH']}")
             except Exception as e:
                 print(f"   Warning: Scrolling failed: {e}")
@@ -419,11 +392,100 @@ def search_and_capture(search_term=None, output_dir=None):
             toa_divs = page.query_selector_all('div[data-testid="StandardTOA"]')
             print("🔍 Found {} TOA ads on the page".format(len(toa_divs)))
             
-            # Save HTML for inspection (keep in root directory for compatibility)
+            # Check for carousel elements
+            carousel_selectors = [
+                'div.CuratedCarousel.py-32.bg-accent-more-subtle',
+                'div.CuratedCarousel',
+                'div[class*="Carousel"]',
+                'div[data-testid*="carousel"]'
+            ]
+            
+            # Create carousel directory
+            carousel_dir = os.path.join(output_dir, "Carousel")
+            os.makedirs(carousel_dir, exist_ok=True)
+            
+            # Try each selector
+            carousel_count = 0
+            for selector in carousel_selectors:
+                carousels = page.query_selector_all(selector)
+                if carousels:
+                    print(f"🎠 Found {len(carousels)} carousel elements with selector: {selector}")
+                    
+                    for i, carousel in enumerate(carousels):
+                        try:
+                            # Scroll the carousel into view
+                            carousel.scroll_into_view_if_needed()
+                            
+                            # Wait a moment for any animations or lazy-loaded content
+                            page.wait_for_timeout(500)
+                            
+                            # Get carousel header text if available
+                            header_text = "unknown"
+                            header = carousel.query_selector('.CuratedCarousel__header, h2, .header')
+                            if header:
+                                header_text = header.text_content().strip()
+                                
+                            # Generate filename
+                            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                            safe_header = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in header_text.lower())
+                            safe_header = safe_header[:30]  # Limit length
+                            
+                            # Include search term in filename
+                            safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in search_term.lower())
+                            
+                            filename = f"carousel_{safe_header}_{safe_search_term}_{timestamp}.png"
+                            filepath = os.path.join(carousel_dir, filename)
+                            
+                            # Take screenshot of the entire carousel as a single image
+                            try:
+                                # Get bounding box
+                                box = carousel.bounding_box()
+                                pad = 16  # Add padding around the element
+                                
+                                # Create clip area with padding
+                                clip = {
+                                    "x": max(0, box["x"] - pad),
+                                    "y": max(0, box["y"] - pad),
+                                    "width": min(page.viewport_size()["width"] - box["x"] + pad, box["width"] + 2 * pad),
+                                    "height": box["height"] + 2 * pad
+                                }
+                                
+                                # Take screenshot with clip area - capturing the entire carousel
+                                page.screenshot(path=filepath, clip=clip)
+                                print(f"📸 Carousel screenshot saved to: {filepath}")
+                                carousel_count += 1
+                                
+                            except Exception as e:
+                                print(f"❌ Error taking screenshot with padding: {e}")
+                                
+                                # Fallback: take direct element screenshot
+                                try:
+                                    carousel.screenshot(path=filepath)
+                                    print(f"📸 Carousel screenshot saved to: {filepath} (direct method)")
+                                    carousel_count += 1
+                                except Exception as e2:
+                                    print(f"❌ Error taking direct screenshot: {e2}")
+                        
+                        except Exception as e:
+                            print(f"❌ Error processing carousel {i+1}: {e}")
+            
+            if carousel_count == 0:
+                print("⚠️ No carousels found or captured")
+            else:
+                print(f"✅ Successfully captured {carousel_count} carousel(s)")
+            
+            # Save HTML content to file
             html_path = os.path.join(output_dir, f"{file_prefix}.html")
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(page.content())
             print("💾 HTML saved to {}".format(html_path))
+            
+            # Process the HTML file to extract TOAs with search term
+            try:
+                from process_saved_html import extract_ads_from_html_file
+                extract_ads_from_html_file(html_path)
+            except Exception as e:
+                print(f"   Note: Could not process HTML file immediately: {e}")
             
         except (TimeoutError, ConnectionError) as e:
             print("❌ Network or timeout error during search test: {}".format(e))
