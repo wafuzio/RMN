@@ -555,13 +555,19 @@ def extract_ads_from_html(html, client=None, search_term=None):
             # Look for skyscraper ads using the selector confirmed in screenshot
             skyscraper_divs = soup.select('div[data-testid="monetization/search-page-top"]')
             
-            # Filter out skyscraper divs that are actually just StandardTOA blocks, not real skyscrapers
+            # Filter out skyscraper divs that are actually just StandardTOA blocks or contain them
             filtered_skyscraper_divs = []
             for div in skyscraper_divs:
                 # If the div itself is tagged as StandardTOA, skip it
                 if div.get("data-testid") == "StandardTOA":
                     log("Skipping skyscraper div misclassified as StandardTOA to avoid double-counting")
                     continue
+                    
+                # If the div contains a child with data-testid="StandardTOA", also skip it
+                if div.select_one('div[data-testid="StandardTOA"]'):
+                    log("Skipping skyscraper div that contains StandardTOA children to avoid double-counting")
+                    continue
+                    
                 filtered_skyscraper_divs.append(div)
             
             skyscraper_divs = filtered_skyscraper_divs
@@ -570,7 +576,16 @@ def extract_ads_from_html(html, client=None, search_term=None):
             skyscraper_toa_divs = soup.select('div[data-testid="SkyscraperTOA"]')
             if skyscraper_toa_divs:
                 # Filter these too to avoid double-counting
-                filtered_toa_divs = [div for div in skyscraper_toa_divs if div.get("data-testid") != "StandardTOA"]
+                filtered_toa_divs = []
+                for div in skyscraper_toa_divs:
+                    # Skip if the div itself is a StandardTOA
+                    if div.get("data-testid") == "StandardTOA":
+                        continue
+                    # Skip if the div contains a StandardTOA child
+                    if div.select_one('div[data-testid="StandardTOA"]'):
+                        continue
+                    filtered_toa_divs.append(div)
+                    
                 if filtered_toa_divs:
                     log(f"Found {len(filtered_toa_divs)} hybrid SkyscraperTOA elements, classifying as Skyscraper")
                     skyscraper_divs.extend(filtered_toa_divs)
@@ -579,18 +594,45 @@ def extract_ads_from_html(html, client=None, search_term=None):
             if not skyscraper_divs:
                 fallback_divs = soup.select('div[data-testid="monetization/search-skyscraper-top"]')
                 # Filter these too
-                skyscraper_divs = [div for div in fallback_divs if div.get("data-testid") != "StandardTOA"]
+                filtered_divs = []
+                for div in fallback_divs:
+                    # Skip if the div itself is a StandardTOA
+                    if div.get("data-testid") == "StandardTOA":
+                        continue
+                    # Skip if the div contains a StandardTOA child
+                    if div.select_one('div[data-testid="StandardTOA"]'):
+                        continue
+                    filtered_divs.append(div)
+                skyscraper_divs = filtered_divs
             
             # Additional fallback selectors
             if not skyscraper_divs:
                 fallback_divs = soup.select('div.amp-container[data-testid*="skyscraper"]')
                 # Filter these too
-                skyscraper_divs = [div for div in fallback_divs if div.get("data-testid") != "StandardTOA"]
+                filtered_divs = []
+                for div in fallback_divs:
+                    # Skip if the div itself is a StandardTOA
+                    if div.get("data-testid") == "StandardTOA":
+                        continue
+                    # Skip if the div contains a StandardTOA child
+                    if div.select_one('div[data-testid="StandardTOA"]'):
+                        continue
+                    filtered_divs.append(div)
+                skyscraper_divs = filtered_divs
                 
             if not skyscraper_divs:
                 fallback_divs = soup.select('div.amp-container')
                 # Filter these too
-                skyscraper_divs = [div for div in fallback_divs if div.get("data-testid") != "StandardTOA"]
+                filtered_divs = []
+                for div in fallback_divs:
+                    # Skip if the div itself is a StandardTOA
+                    if div.get("data-testid") == "StandardTOA":
+                        continue
+                    # Skip if the div contains a StandardTOA child
+                    if div.select_one('div[data-testid="StandardTOA"]'):
+                        continue
+                    filtered_divs.append(div)
+                skyscraper_divs = filtered_divs
                 
             log(f"[{ad_type} Ads Found] {len(skyscraper_divs)}")
             
