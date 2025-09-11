@@ -28,6 +28,18 @@ class KeywordInputApp:
         self.root.update()  # Update to ensure it takes effect
         self.root.resizable(True, True)
         
+        print("Building UI...")
+        
+        print("✅ UI built")
+        
+        # Set light mode colors
+        self.bg_color = "#f0f0f0"  # Light gray background
+        self.text_bg_color = "#ffffff"  # White background for text areas
+        self.text_fg_color = "#000000"  # Black text
+        
+        # Apply background color to root window
+        self.root.configure(bg=self.bg_color)
+        
         # Client history file
         self.history_file = os.path.join("output", "client_history.json")
         self.client_history = self.load_client_history()
@@ -383,7 +395,7 @@ class KeywordInputApp:
                     time.sleep(2)  # Brief pause before retry
                 
                 process = subprocess.Popen(
-                    [sys.executable, "process_saved_html.py", "--input-dir", output_dir, "--output-dir", output_dir],
+                    [sys.executable, "process_saved_html.py", "--input-dir", output_dir, "--output-dir", output_dir, "--all-files"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True
@@ -858,9 +870,20 @@ class KeywordInputApp:
             time.sleep(30)
 
 def main():
-    root = tk.Tk()
-    KeywordInputApp(root)
-    root.mainloop()
+    print("Starting Kroger TOA Scraper GUI...")
+    try:
+        print("Creating Tk root window")
+        root = tk.Tk()
+        print("Root window created successfully")
+        print("Initializing KeywordInputApp")
+        app = KeywordInputApp(root)
+        print("KeywordInputApp initialized successfully")
+        print("Starting mainloop")
+        root.mainloop()
+    except Exception as e:
+        print(f"Error in main: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()

@@ -27,12 +27,13 @@ except ImportError:
 # Constants
 DEFAULT_DIR = "output"
 
-def extract_toa_images(json_file, client_name=None):
+def extract_toa_images(json_file, html_file=None, client_name=None):
     """
     Extract TOA images using screenshot_toa_image.py
     
     Args:
         json_file (str): Path to the JSON file with TOA data
+        html_file (str, optional): Path to specific HTML file to process
         client_name (str): Client name for organizing output
         
     Returns:
@@ -44,28 +45,48 @@ def extract_toa_images(json_file, client_name=None):
         # Build command to run screenshot_toa_image.py
         cmd = ["python3", "screenshot_toa_image.py", "--json", json_file]
         
+        # Add HTML file if provided
+        if html_file:
+            cmd.extend(["--html", html_file])  # Using --html flag (short form is -f)
+        
         # Add client name if provided
         if client_name:
             cmd.extend(["--client", client_name])
             
         print(f"\n📷 Extracting TOA images using screenshot_toa_image.py...")
         
-        # Use subprocess.Popen with non-blocking execution
-        process = subprocess.Popen(cmd, 
+        # Use subprocess.run to wait for completion
+        try:
+            # Set a timeout to prevent hanging indefinitely
+            result = subprocess.run(cmd, 
                                   stdout=subprocess.PIPE, 
                                   stderr=subprocess.PIPE,
-                                  start_new_session=True)  # Run in separate process group
-        
-        # Don't wait for completion - let it run in background
-        print(f"✅ TOA image extraction started in background")
-        return True
+                                  text=True,
+                                  timeout=60)  # 60 second timeout
+            
+            if result.returncode == 0:
+                print(f"✅ TOA image extraction completed successfully")
+                return True
+            else:
+                print(f"⚠️ TOA image extraction completed with issues: {result.stderr}")
+                return True  # Still return True to continue processing
+        except subprocess.TimeoutExpired:
+            print(f"⚠️ TOA image extraction timed out after 60 seconds, continuing anyway")
+            return True  # Continue processing even if timeout occurs
     except Exception as e:
         print(f"❌ Error starting TOA image extraction: {e}")
         return False
 
+def remove_html_from_ads(ads):
+    """Remove HTML content from ads to reduce JSON size"""
+    for ad in ads:
+        if 'html' in ad:
+            del ad['html']
+    return ads
+
 def extract_ads_from_html_file(html_file):
     """Extract ad data from a saved HTML file"""
-    print(f"\n📄 Processing HTML file: {os.path.basename(html_file)}")
+    print(f"\n📝 Processing HTML file: {os.path.basename(html_file)}")
     
     try:
         # Read the HTML file
@@ -144,6 +165,9 @@ def extract_ads_from_html_file(html_file):
         # Extract all ads from the HTML
         ads = extract_ads_from_html(html, client=client, search_term=keyword)
         
+        # Remove HTML content from ads to reduce JSON size
+        ads = remove_html_from_ads(ads)
+        
         # Create TOA subfolder for images
         if client:
             toa_dir = os.path.join(os.path.dirname(html_file), "TOA")
@@ -158,6 +182,7 @@ def extract_ads_from_html_file(html_file):
             'analysis': analysis,
             'count': len(ads),
             'keyword': keyword,
+            'search_term': keyword,  # Adding search_term field explicitly
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'source_file': html_file
         }
@@ -230,7 +255,16 @@ def process_latest_html_file(input_dir=None, output_dir=None):
     print(f"💾 Results saved to {results_path}")
     
     # Automatically extract TOA images using screenshot_toa_image.py
-    extract_toa_images(results_path, client_name=os.path.basename(output_dir))
+    # Process the current HTML file
+    extract_toa_images(results_path, html_file=latest_html, client_name=os.path.basename(output_dir))
+    
+    # Also process any other HTML files that might have been processed earlier in this run
+    # This ensures we capture TOA images for all keywords, not just the latest one
+    html_files = glob.glob(os.path.join(input_dir, "search_results_*.html"))
+    for html_file in html_files:
+        if html_file != latest_html:  # Skip the one we just processed
+            print(f"\n📷 Also extracting TOA images from: {os.path.basename(html_file)}")
+            extract_toa_images(results_path, html_file=html_file, client_name=os.path.basename(output_dir))
     
     # NOTE: Carousel images are now captured directly in kroger_search_and_capture.py
     # No need to extract carousel images here anymore
@@ -300,15 +334,15 @@ def process_all_html_files(input_dir=None, output_dir=None):
         # Sort results by timestamp (newest first)
         results_list.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
         
-        # Take the most recent result for this search term
-        latest_result = results_list[0]
-        
-        # Make sure the keyword is set correctly
-        latest_result['keyword'] = search_term
-        
-        # Add to daily results
-        daily_results["results"].append(latest_result)
-        processed_count += 1
+        # Include all results for this search term, not just the latest
+        for result in results_list:
+            # Make sure the keyword is set correctly
+            result['keyword'] = search_term
+            result['search_term'] = search_term  # Ensure search_term is set
+            
+            # Add to daily results
+            daily_results["results"].append(result)
+            processed_count += 1
     
     # Update timestamp
     daily_results["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -319,6 +353,12 @@ def process_all_html_files(input_dir=None, output_dir=None):
     
     print(f"✅ Processed {processed_count} search terms from {len(html_files)} HTML files")
     print(f"💾 Combined results saved to {results_path}")
+    
+    # Process TOA images for each HTML file
+    print("\n📷 Extracting TOA images for each HTML file...")
+    for html_file in html_files:
+        print(f"\n📷 Processing TOA images from: {os.path.basename(html_file)}")
+        extract_toa_images(results_path, html_file=html_file, client_name=os.path.basename(output_dir))
     
     return True
 
@@ -332,10 +372,11 @@ if __name__ == "__main__":
     parser.add_argument("--input-dir", "-i", type=str, help="Directory containing HTML files to process")
     parser.add_argument("--output-dir", "-o", type=str, help="Directory to save extracted TOA data")
     parser.add_argument("--all", "-a", action="store_true", help="Process all HTML files instead of just the latest")
+    parser.add_argument("--all-files", action="store_true", help="Process all HTML files instead of just the latest")
     args = parser.parse_args()
     
     # Process HTML files
-    if args.all:
+    if args.all or args.all_files:
         success = process_all_html_files(args.input_dir, args.output_dir)
     else:
         success = process_latest_html_file(args.input_dir, args.output_dir)

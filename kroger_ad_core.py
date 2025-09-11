@@ -555,16 +555,42 @@ def extract_ads_from_html(html, client=None, search_term=None):
             # Look for skyscraper ads using the selector confirmed in screenshot
             skyscraper_divs = soup.select('div[data-testid="monetization/search-page-top"]')
             
+            # Filter out skyscraper divs that are actually just StandardTOA blocks, not real skyscrapers
+            filtered_skyscraper_divs = []
+            for div in skyscraper_divs:
+                # If the div itself is tagged as StandardTOA, skip it
+                if div.get("data-testid") == "StandardTOA":
+                    log("Skipping skyscraper div misclassified as StandardTOA to avoid double-counting")
+                    continue
+                filtered_skyscraper_divs.append(div)
+            
+            skyscraper_divs = filtered_skyscraper_divs
+            
+            # Handle hybrid SkyscraperTOA elements (classify as Skyscraper by placement)
+            skyscraper_toa_divs = soup.select('div[data-testid="SkyscraperTOA"]')
+            if skyscraper_toa_divs:
+                # Filter these too to avoid double-counting
+                filtered_toa_divs = [div for div in skyscraper_toa_divs if div.get("data-testid") != "StandardTOA"]
+                if filtered_toa_divs:
+                    log(f"Found {len(filtered_toa_divs)} hybrid SkyscraperTOA elements, classifying as Skyscraper")
+                    skyscraper_divs.extend(filtered_toa_divs)
+            
             # Fallback to previous selectors if needed
             if not skyscraper_divs:
-                skyscraper_divs = soup.select('div[data-testid="monetization/search-skyscraper-top"]')
+                fallback_divs = soup.select('div[data-testid="monetization/search-skyscraper-top"]')
+                # Filter these too
+                skyscraper_divs = [div for div in fallback_divs if div.get("data-testid") != "StandardTOA"]
             
             # Additional fallback selectors
             if not skyscraper_divs:
-                skyscraper_divs = soup.select('div.amp-container[data-testid*="skyscraper"]')
+                fallback_divs = soup.select('div.amp-container[data-testid*="skyscraper"]')
+                # Filter these too
+                skyscraper_divs = [div for div in fallback_divs if div.get("data-testid") != "StandardTOA"]
                 
             if not skyscraper_divs:
-                skyscraper_divs = soup.select('div.amp-container')
+                fallback_divs = soup.select('div.amp-container')
+                # Filter these too
+                skyscraper_divs = [div for div in fallback_divs if div.get("data-testid") != "StandardTOA"]
                 
             log(f"[{ad_type} Ads Found] {len(skyscraper_divs)}")
             
@@ -579,7 +605,7 @@ def extract_ads_from_html(html, client=None, search_term=None):
                 if not ad:
                     ad = {
                         'type': 'Skyscraper',
-                        'html': raw_html
+                        # 'html': raw_html  # Removed to reduce JSON size
                     }
                     
                     # Try to extract image URL
@@ -607,8 +633,8 @@ def extract_ads_from_html(html, client=None, search_term=None):
                     if cta:
                         ad['cta'] = cta.get_text(strip=True)
                 
-                # Include the raw HTML in the results
-                ad['html'] = raw_html
+                # Don't include the raw HTML in the results
+                # ad['html'] = raw_html  # Removed to reduce JSON size
                 results.append(ad)
                 
         # For CuratedCarousel ads
