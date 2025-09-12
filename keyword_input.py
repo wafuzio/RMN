@@ -532,8 +532,14 @@ class KeywordInputApp:
             # Load client-specific schedule configuration
             self.schedule_config = self.load_schedule_config(selected_client)
             
-            # Update UI with loaded schedule
-            self.load_saved_times()
+            # Update runs per day if specified in config
+            if "runs" in self.schedule_config:
+                self.runs_var.set(self.schedule_config["runs"])
+                # Recreate time selectors with the correct number
+                self.update_time_selectors()
+            else:
+                # Update UI with loaded schedule
+                self.load_saved_times()
             
             # Update days checkboxes if days are in the config
             if "days" in self.schedule_config:
@@ -618,11 +624,11 @@ class KeywordInputApp:
             
             # Default values based on common run times
             if i == 0:
-                hour_var.set("9")  # 9 AM
+                hour_var.set("8")  # 8 AM
             elif i == 1:
-                hour_var.set("1")  # 1 PM
+                hour_var.set("12")  # 12 PM
             elif i == 2:
-                hour_var.set("5")  # 5 PM
+                hour_var.set("4")  # 4 PM
             else:
                 hour_var.set(f"{(8 + i*4) % 12 or 12}")  # Spaced out times
             
@@ -641,7 +647,15 @@ class KeywordInputApp:
             minute_combo.pack(side=tk.LEFT, padx=(0, 5))
             
             # AM/PM selector
-            ampm_var = tk.StringVar(value="AM" if i == 0 else "PM")
+            if i == 0:
+                ampm_default = "AM"  # 8 AM
+            elif i == 1:
+                ampm_default = "PM"  # 12 PM
+            elif i == 2:
+                ampm_default = "PM"  # 4 PM
+            else:
+                ampm_default = "PM"  # Default to PM for additional times
+            ampm_var = tk.StringVar(value=ampm_default)
             ampm_combo = ttk.Combobox(
                 time_frame,
                 textvariable=ampm_var,
@@ -654,12 +668,18 @@ class KeywordInputApp:
             self.time_vars.append((hour_var, minute_var, ampm_var))
             self.time_entries.append((hour_combo, minute_combo, ampm_combo))
         
-        # Load saved times if available
-        self.load_schedule_config()
+        # Load saved times if available - check if we have a selected client
+        selected_client = self.client_var.get() if hasattr(self, 'client_var') else None
+        if selected_client and selected_client not in ["<choose from menu>", "New client/product"]:
+            self.schedule_config = self.load_schedule_config(selected_client)
+            self.load_saved_times()
+        else:
+            # No client selected, just use defaults (already set above)
+            pass
     
     def load_saved_times(self):
         """Load saved times from schedule configuration"""
-        config = self.load_schedule_config()
+        config = getattr(self, 'schedule_config', {})
         if "times" in config and len(config["times"]) > 0:
             # Update the number of runs
             num_times = min(len(config["times"]), len(self.time_vars))
@@ -678,7 +698,7 @@ class KeywordInputApp:
         """Load schedule configuration from file"""
         default_config = {
             "runs": 3, 
-            "times": [("9", "00", "AM"), ("1", "00", "PM"), ("5", "00", "PM")],
+            "times": [("8", "00", "AM"), ("12", "00", "PM"), ("4", "00", "PM")],
             "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
         }
         
