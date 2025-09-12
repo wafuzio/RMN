@@ -1,5 +1,5 @@
 {
-  "command": "python3 builder_server.py",
+  "command": "python3 -m pip install -r requirements.txt && python3 builder_server.py",
   "setup": "echo 'No setup required'",
   "serverUrl": "http://localhost:5006",
   "authenticateProxy": false,
