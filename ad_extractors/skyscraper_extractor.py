@@ -90,6 +90,13 @@ class SkyscraperExtractor(AdExtractor):
                 # Generate filename
                 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 
+                # Include search term if available
+                search_term_part = ""
+                if hasattr(self, 'search_term') and self.search_term:
+                    # Sanitize search term for filename
+                    safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in self.search_term)
+                    search_term_part = f"_{safe_search_term}"
+                
                 # Try to extract image ID from URL
                 img_id = None
                 if ad['image_url']:
@@ -98,7 +105,7 @@ class SkyscraperExtractor(AdExtractor):
                         img_id = id_match.group(1)
                 
                 if img_id:
-                    filename = f"skyscraper_{img_id}_{timestamp}.jpg"
+                    filename = f"skyscraper_{img_id}{search_term_part}_{timestamp}.jpg"
                 else:
                     # Use message or generic name
                     message = ad.get('message', '').lower()
@@ -107,9 +114,9 @@ class SkyscraperExtractor(AdExtractor):
                         clean_message = re.sub(r'[^a-z0-9]', '_', message)
                         clean_message = re.sub(r'_+', '_', clean_message)  # Replace multiple underscores
                         clean_message = clean_message[:30]  # Limit length
-                        filename = f"skyscraper_{clean_message}_{timestamp}.jpg"
+                        filename = f"skyscraper_{clean_message}{search_term_part}_{timestamp}.jpg"
                     else:
-                        filename = f"skyscraper_ad_{timestamp}.jpg"
+                        filename = f"skyscraper_ad{search_term_part}_{timestamp}.jpg"
                 
                 # Full path to save the image
                 image_path = os.path.join(skyscraper_dir, filename)

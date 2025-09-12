@@ -1,4 +1,4 @@
-#!/Users/dan/Amazon_Scrape/.venv/bin/python3
+#!/Users/dan.maguire/Documents/Amazon_Scrape/.venv/bin/python3.11
 # -*- coding: utf-8 -*-
 import re
 import sys

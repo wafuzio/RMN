@@ -62,8 +62,8 @@ class TOAExtractor(AdExtractor):
             
             # Save both full and TOA-only images
             try:
-                # Pass the HTML element to extract precise TOA dimensions
-                image_paths = self.save_image_with_crop(img_url, html_element=toa_div, out_dir=client_dir)
+                # Pass the HTML element to extract precise TOA dimensions and search term
+                image_paths = self.save_image_with_crop(img_url, html_element=toa_div, out_dir=client_dir, search_term=self.search_term)
                 if image_paths:
                     result["image_path"] = image_paths["full"]
                     result["toa_image_path"] = image_paths.get("toa")

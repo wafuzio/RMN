@@ -202,11 +202,22 @@ def search_and_capture(search_term=None, output_dir=None):
                 headless=False,
                 args=[
                     "--disable-blink-features=AutomationControlled",
-                    "--start-maximized",
                     "--no-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-infobars",
                     "--disable-web-security",
+                    "--no-first-run",
+                    "--disable-default-apps",
+                    "--disable-popup-blocking",
+                    "--disable-translate",
+                    "--disable-background-timer-throttling",
+                    "--disable-renderer-backgrounding",
+                    "--disable-backgrounding-occluded-windows",
+                    "--disable-restore-session-state",
+                    "--disable-ipc-flooding-protection",
+                    "--window-position=10000,10000",  # Position window off-screen
+                    "--window-size=1280,720",         # Set reasonable size
+                    "--disable-focus-on-show",        # Prevent focus stealing
                 ]
             )
         except Exception as e:
@@ -219,11 +230,13 @@ def search_and_capture(search_term=None, output_dir=None):
                 channel="chrome",  # Try using the system Chrome
                 args=[
                     "--disable-blink-features=AutomationControlled",
-                    "--start-maximized",
                     "--no-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-infobars",
                     "--disable-web-security",
+                    "--window-position=10000,10000",  # Position window off-screen
+                    "--window-size=1280,720",         # Set reasonable size
+                    "--disable-focus-on-show",        # Prevent focus stealing
                 ]
             )
         
@@ -392,12 +405,10 @@ def search_and_capture(search_term=None, output_dir=None):
             toa_divs = page.query_selector_all('div[data-testid="StandardTOA"]')
             print("🔍 Found {} TOA ads on the page".format(len(toa_divs)))
             
-            # Check for carousel elements - focus on structure rather than specific text
+            # Use a single, comprehensive selector for the main carousel
+            # This prevents duplicate captures of the same carousel
             carousel_selectors = [
-                'div.CuratedCarousel',  # Main carousel container
-                'div[class*="Carousel"]:has(.kds-Heading)',  # Any carousel with a heading
-                'div[class*="carousel"]:has(h2)',  # Any carousel with an h2 heading
-                'div[data-testid*="carousel"]:has(.headerSection-header)'  # Carousel with header section
+                'div.CuratedCarousel, div[class*="Carousel"]:has(.kds-Heading--xl)'  # Main carousel with heading
             ]
             
             # Create carousel directory
@@ -406,7 +417,12 @@ def search_and_capture(search_term=None, output_dir=None):
             
             # Try each selector
             carousel_count = 0
+            captured_carousel = False  # Flag to track if we've already captured a carousel
             for selector in carousel_selectors:
+                # Skip if we've already captured a carousel
+                if captured_carousel:
+                    break
+                    
                 carousels = page.query_selector_all(selector)
                 if carousels:
                     print(f"🎠 Found {len(carousels)} carousel elements with selector: {selector}")
@@ -480,6 +496,10 @@ def search_and_capture(search_term=None, output_dir=None):
                                 page.screenshot(path=filepath, clip=clip)
                                 print(f"📸 Carousel screenshot saved to: {filepath}")
                                 carousel_count += 1
+                                captured_carousel = True  # Mark that we've captured a carousel
+                                
+                                # Break after capturing the first carousel
+                                break
                                 
                             except Exception as e:
                                 print(f"❌ Error taking screenshot with padding: {e}")
@@ -489,6 +509,8 @@ def search_and_capture(search_term=None, output_dir=None):
                                     carousel.screenshot(path=filepath)
                                     print(f"📸 Carousel screenshot saved to: {filepath} (direct method)")
                                     carousel_count += 1
+                                    captured_carousel = True  # Mark that we've captured a carousel
+                                    break  # Break after capturing the first carousel
                                 except Exception as e2:
                                     print(f"❌ Error taking direct screenshot: {e2}")
                         
