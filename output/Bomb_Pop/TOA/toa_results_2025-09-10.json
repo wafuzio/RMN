@@ -1,0 +1,88 @@
+{
+  "results": [
+    {
+      "ads": [
+        {
+          "type": "TOA",
+          "message": "Find the  Boldy Flavorful",
+          "description": "Kettle Brand\u00ae chips  made with avocado oil.",
+          "cta": "Shop Now",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/3192cf80-b587-4c54-92ce-75af2e265fca.jpg",
+          "image_path": null,
+          "href": "/search?keyword=WishboneSummerBOGO91725&query=WishboneSummerBOGO91725&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance"
+        },
+        {
+          "type": "Skyscraper",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/3192cf80-b587-4c54-92ce-75af2e265fca.jpg",
+          "href": "https://www.kroger.com/search?keyword=WishboneSummerBOGO91725&query=WishboneSummerBOGO91725&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance",
+          "message": "Find the  Boldy Flavorful",
+          "description": "Kettle Brand\u00ae chips  made with avocado oil.",
+          "cta": "Shop Now",
+          "skyscraper_image_path": "output/Bomb_Pop/Skyscraper/skyscraper_3192cf80-b587-4c54-92ce-75af2e265fca_bomb_pop_2025-09-10_12-29-54.jpg"
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [],
+          "carousel_image_path": "output/Bomb_Pop/Carousel/carousel_unknown_carousel_bomb_pop_2025-09-10_12-29-54.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [],
+          "carousel_image_path": "output/Bomb_Pop/Carousel/carousel_unknown_carousel_bomb_pop_2025-09-10_12-29-54.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [],
+          "carousel_image_path": "output/Bomb_Pop/Carousel/carousel_unknown_carousel_bomb_pop_2025-09-10_12-29-54.png",
+          "capture_entire_carousel": true
+        }
+      ],
+      "analysis": {
+        "common_words": [
+          [
+            "find",
+            2
+          ],
+          [
+            "boldy",
+            2
+          ],
+          [
+            "flavorful",
+            2
+          ]
+        ],
+        "common_phrases": [
+          [
+            "find the",
+            2
+          ],
+          [
+            "the boldy",
+            2
+          ],
+          [
+            "boldy flavorful",
+            2
+          ],
+          [
+            "find the boldy",
+            2
+          ],
+          [
+            "the boldy flavorful",
+            2
+          ]
+        ]
+      },
+      "count": 5,
+      "keyword": "bomb pop",
+      "search_term": "bomb pop",
+      "timestamp": "2025-09-10 12:29:54",
+      "source_file": "output/Bomb_Pop/search_results_bomb_pop_2025-09-10_12-29-07.html"
+    }
+  ],
+  "last_updated": "2025-09-10 12:29:54"
+}

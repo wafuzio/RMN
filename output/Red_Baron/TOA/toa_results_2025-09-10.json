@@ -1,0 +1,178 @@
+{
+  "results": [
+    {
+      "ads": [
+        {
+          "type": "TOA",
+          "message": "New Red Baron Deep Dish XL",
+          "description": "For when you\u2019re extra hungry and don\u2019t want to share.",
+          "cta": "Shop Now",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/242922e1-a45d-4e3d-a705-51edf5c3d35e.jpg",
+          "image_path": null,
+          "href": "/search?keyword=SchwansXFY25RedBaronDDXLSCUBA&query=SchwansXFY25RedBaronDDXLSCUBA&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance"
+        },
+        {
+          "type": "Skyscraper",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/242922e1-a45d-4e3d-a705-51edf5c3d35e.jpg",
+          "href": "https://www.kroger.com/search?keyword=SchwansXFY25RedBaronDDXLSCUBA&query=SchwansXFY25RedBaronDDXLSCUBA&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance",
+          "message": "New Red Baron Deep Dish XL",
+          "description": "For when you\u2019re extra hungry and don\u2019t want to share.",
+          "cta": "Shop Now",
+          "skyscraper_image_path": "output/Red_Baron/Skyscraper/skyscraper_242922e1-a45d-4e3d-a705-51edf5c3d35e_frozen_pizza_pepperoni_2025-09-10_14-12-49.jpg"
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/screamin-sicilian-bessie-s-revenge-cheese-frozen-pizza/0007570615100?fulfillment=IN_STORE",
+              "title": "Screamin' Sicilian\u00ae Bessie's Revenge Cheese Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570615100",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-supremus-maximus-supreme-frozen-pizza/0007570615103?fulfillment=IN_STORE",
+              "title": "Screamin' Sicilian\u00ae Supremus Maximus Supreme Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570615103",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-holy-pepperoni-original-crust-frozen-pizza/0007570615101?fulfillment=IN_STORE",
+              "title": "Screamin Sicilian\u00ae Holy Pepperoni Original Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570615101",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-italian-meatball-pizza-bowl/0007570630929?fulfillment=IN_STORE",
+              "title": "Screamin' Sicilian\u00ae Italian Meatball Pizza Bowl",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570630929",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-thin-crispy-crust-pepperoni-frozen-pizza/0007570630318?fulfillment=IN_STORE",
+              "title": "Screamin' Sicilian\u00ae Thin & Crispy Crust Pepperoni Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570630318",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-supreme-thin-crispy-crust-frozen-pizza/0007570630320?fulfillment=IN_STORE",
+              "title": "Screamin' Sicilian\u00ae Supreme Thin & Crispy Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570630320",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-bbq-chicken-thin-crust-frozen-pizza/0007570630848?fulfillment=IN_STORE",
+              "title": "Screamin Sicilian BBQ Chicken Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570630848",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-pepperoni-stuffed-crust-frozen-pizza/0007570630779?fulfillment=IN_STORE",
+              "title": "Screamin Sicilian\u2122 Pepperoni Stuffed Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570630779",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-cheese-stuffed-crust-frozen-pizza/0007570630778?fulfillment=IN_STORE",
+              "title": "Screamin' Sicilian\u2122 Cheese Stuffed Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570630778",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-pepperoni-pizza-bowl/0007570630926?fulfillment=IN_STORE",
+              "title": "Screamin' Sicilian\u00ae Pepperoni Pizza Bowl",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570630926",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-multi-meat-pizza-bowl/0007570630928?fulfillment=IN_STORE",
+              "title": "Screamin' Sicilian\u00ae Multi-Meat Pizza Bowl",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570630928",
+              "price": "$9.99"
+            },
+            {
+              "href": "/p/screamin-sicilian-frozen-supreme-pizza-bowl/0007570630927?fulfillment=IN_STORE",
+              "title": "Screamin' Sicilian\u00ae  Frozen Supreme Pizza Bowl",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007570630927",
+              "price": "$9.99"
+            }
+          ],
+          "header": "Taste What All the Screamin\u2019s About",
+          "carousel_image_path": "output/Red_Baron/Carousel/carousel_taste_what_all_the_screamin_s__frozen_pizza_pepperoni_2025-09-10_14-12-49.png",
+          "capture_entire_carousel": true
+        }
+      ],
+      "analysis": {
+        "common_words": [
+          [
+            "new",
+            2
+          ],
+          [
+            "red",
+            2
+          ],
+          [
+            "baron",
+            2
+          ],
+          [
+            "deep",
+            2
+          ],
+          [
+            "dish",
+            2
+          ],
+          [
+            "xl",
+            2
+          ]
+        ],
+        "common_phrases": [
+          [
+            "new red",
+            2
+          ],
+          [
+            "red baron",
+            2
+          ],
+          [
+            "baron deep",
+            2
+          ],
+          [
+            "deep dish",
+            2
+          ],
+          [
+            "dish xl",
+            2
+          ],
+          [
+            "new red baron",
+            2
+          ],
+          [
+            "red baron deep",
+            2
+          ],
+          [
+            "baron deep dish",
+            2
+          ],
+          [
+            "deep dish xl",
+            2
+          ]
+        ]
+      },
+      "count": 3,
+      "keyword": "frozen pizza pepperoni",
+      "search_term": "frozen pizza pepperoni",
+      "timestamp": "2025-09-10 14:12:49",
+      "source_file": "output/Red_Baron/search_results_frozen_pizza_pepperoni_2025-09-10_14-12-01.html"
+    }
+  ],
+  "last_updated": "2025-09-10 14:12:49"
+}

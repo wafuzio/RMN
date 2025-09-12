@@ -1,0 +1,313 @@
+{
+  "results": [
+    {
+      "ads": [
+        {
+          "type": "TOA",
+          "message": "The Perfect Lunch Lineup",
+          "description": "School the lunchroom with greatness.",
+          "cta": "Shop Now",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/035a64be-0166-4ec0-bb2a-03dea0e41c6b.jpg",
+          "image_path": null,
+          "href": "/search?keyword=MultisupplierBacktoSchool2025&query=MultisupplierBacktoSchool2025&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance"
+        },
+        {
+          "type": "Skyscraper",
+          "image_url": "/content/v2/binary/monetization-v1/c37fc70d-bbca-4e29-a284-c5accf2bb57a.jpg",
+          "href": "/search?keyword=EBShellTOA2025&query=EBShellTOA2025&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance",
+          "message": "Get More From  Your \u200bEggs\u200b",
+          "description": "Our farm fresh eggs support a nutritious \u200b diet.\u200b",
+          "cta": "Shop Now"
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/three-bridges-uncured-bacon-cheese-egg-bites/0074275334729?fulfillment=IN_STORE",
+              "title": "Three Bridges\u2122 Uncured Bacon & Cheese Egg Bites",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0074275334729",
+              "price": "$4.49"
+            },
+            {
+              "href": "/p/three-bridges-spinach-bell-pepper-egg-white-bites/0074275334741?fulfillment=IN_STORE",
+              "title": "Three Bridges\u2122 Spinach & Bell Pepper Egg White Bites",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0074275334741",
+              "price": "$4.49"
+            },
+            {
+              "href": "/p/three-bridges-uncured-ham-gruyere-egg-white-bites/0074275334771?fulfillment=IN_STORE",
+              "title": "Three Bridges\u2122 Uncured Ham & Gruyere Egg White Bites",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0074275334771",
+              "price": "$4.49"
+            },
+            {
+              "href": "/p/three-bridges-country-style-sausage-egg-bites/0074275334727?fulfillment=IN_STORE",
+              "title": "Three Bridges Country Style Sausage Egg Bites",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0074275334727",
+              "price": "$4.49"
+            },
+            {
+              "href": "/p/three-bridges-mushroom-asiago-egg-bites/0074275334725?fulfillment=IN_STORE",
+              "title": "Three Bridges\u2122 Mushroom & Asiago Egg Bites",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0074275334725",
+              "price": "$4.49"
+            }
+          ],
+          "header": "Simple. Honest. Better.",
+          "carousel_image_path": "output/butterball/Carousel/carousel_simple_honest_better__butterball_2025-09-11_09-43-57.png",
+          "capture_entire_carousel": true
+        }
+      ],
+      "analysis": {
+        "common_words": [
+          [
+            "perfect",
+            1
+          ],
+          [
+            "lunch",
+            1
+          ],
+          [
+            "lineup",
+            1
+          ],
+          [
+            "get",
+            1
+          ]
+        ],
+        "common_phrases": [
+          [
+            "the perfect",
+            1
+          ],
+          [
+            "perfect lunch",
+            1
+          ],
+          [
+            "lunch lineup",
+            1
+          ],
+          [
+            "the perfect lunch",
+            1
+          ],
+          [
+            "perfect lunch lineup",
+            1
+          ],
+          [
+            "get more",
+            1
+          ],
+          [
+            "more from",
+            1
+          ],
+          [
+            "from your",
+            1
+          ],
+          [
+            "your \u200beggs\u200b",
+            1
+          ],
+          [
+            "get more from",
+            1
+          ]
+        ]
+      },
+      "count": 3,
+      "keyword": "butterball",
+      "search_term": "butterball",
+      "timestamp": "2025-09-11 09:43:57",
+      "source_file": "output/butterball/search_results_butterball_2025-09-11_09-42-22.html"
+    },
+    {
+      "ads": [
+        {
+          "type": "TOA",
+          "message": "Quick and Crispy BOGO",
+          "description": "Try McCain for delicious dinner savings.",
+          "cta": "Save Big",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/8710e4d6-0632-4ce3-8b69-9dd57a63296f.jpg",
+          "image_path": null,
+          "href": "/search?keyword=McCainSept2025TOA&query=McCainSept2025TOA&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance"
+        },
+        {
+          "type": "Skyscraper",
+          "image_url": "/content/v2/binary/monetization-v1/cc639d0d-3dd5-46e4-8b75-1c5219e8b735.jpg",
+          "href": "/search?keyword=TOAHomeChefQ3FamilyMealMonth2025&query=TOAHomeChefQ3FamilyMealMonth2025&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance",
+          "message": "Gather Around the Table",
+          "description": "Flavors the whole family will love.",
+          "cta": "Shop Now"
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/jimmy-dean-sausage-egg-cheese-croissant-frozen-breakfast-sandwiches/0007790050308?fulfillment=IN_STORE",
+              "title": "Jimmy Dean\u00ae Sausage Egg & Cheese Croissant Frozen Breakfast Sandwiches",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790050308",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-sausage-egg-and-cheese-biscuit-frozen-breakfast-sandwich/0007790050311?fulfillment=IN_STORE",
+              "title": "Jimmy Dean\u00ae Sausage Egg and Cheese Biscuit Frozen Breakfast Sandwich",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790050311",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-pancakes-and-sausage-on-a-stick-frozen-breakfast/0007790033496?fulfillment=IN_STORE",
+              "title": "Jimmy Dean\u00ae Pancakes and Sausage on a Stick Frozen Breakfast",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790033496",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-sausage-egg-and-cheese-maple-griddle-cake-sandwiches/0007790000169?fulfillment=IN_STORE",
+              "title": "Jimmy Dean Sausage Egg and Cheese Maple Griddle Cake Sandwiches",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790000169",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-blueberry-griddle-cake-sausage-egg-and-cheese-sandwiches/0007790000168?fulfillment=IN_STORE",
+              "title": "Jimmy Dean\u00ae Blueberry Griddle Cake Sausage Egg and Cheese Sandwiches",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790000168",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-crispy-chicken-honey-biscuit/0007790000273?fulfillment=IN_STORE",
+              "title": "Jimmy Dean\u00ae Crispy Chicken Honey Biscuit",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790000273",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-buttermilk-chicken-biscuit-sandwiches/0007790050239?fulfillment=IN_STORE",
+              "title": "Jimmy Dean\u00ae Buttermilk Chicken Biscuit Sandwiches",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790050239",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-spicy-chicken-honey-biscuit/0007790000271?fulfillment=IN_STORE",
+              "title": "Jimmy Dean Spicy Chicken Honey Biscuit",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790000271",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-delights-turkey-sausage-egg-white-cheese-english-muffin-frozen-breakfast-sandwiches/0007790050241?fulfillment=IN_STORE",
+              "title": "Jimmy Dean Delights\u00ae Turkey Sausage Egg White & Cheese English Muffin Frozen Breakfast Sandwiches",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790050241",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-delights-turkey-sausage-frozen-breakfast-bowl/0007790047133?fulfillment=IN_STORE",
+              "title": "Jimmy Dean Delights\u00ae Turkey Sausage Frozen Breakfast Bowl",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790047133",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-delights-turkey-sausage-egg-white-cheese-croissant-frozen-breakfast-sandwiches/0007790050257?fulfillment=IN_STORE",
+              "title": "Jimmy Dean Delights\u00ae Turkey Sausage Egg White & Cheese Croissant Frozen Breakfast Sandwiches",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790050257",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-delights-bacon-spinach-onion-frozen-breakfast-egg-wich/0007790047172?fulfillment=IN_STORE",
+              "title": "Jimmy Dean Delights\u00ae Bacon Spinach Onion Frozen Breakfast Egg'wich",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790047172",
+              "price": "$11.49discounted from$12.99"
+            },
+            {
+              "href": "/p/jimmy-dean-delights-turkey-sausage-egg-white-and-cheese-ciabatta-sandwiches/0007790000210?fulfillment=IN_STORE",
+              "title": "Jimmy Dean Delights Turkey Sausage Egg White and Cheese Ciabatta Sandwiches",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007790000210",
+              "price": "$11.49discounted from$12.99"
+            }
+          ],
+          "header": "Start Your Morning in Minutes",
+          "carousel_image_path": "output/butterball/Carousel/carousel_start_your_morning_in_minutes_frozen_turkey_2025-09-11_09-44-07.png",
+          "capture_entire_carousel": true
+        }
+      ],
+      "analysis": {
+        "common_words": [
+          [
+            "quick",
+            1
+          ],
+          [
+            "crispy",
+            1
+          ],
+          [
+            "bogo",
+            1
+          ],
+          [
+            "gather",
+            1
+          ],
+          [
+            "around",
+            1
+          ],
+          [
+            "table",
+            1
+          ]
+        ],
+        "common_phrases": [
+          [
+            "quick and",
+            1
+          ],
+          [
+            "and crispy",
+            1
+          ],
+          [
+            "crispy bogo",
+            1
+          ],
+          [
+            "quick and crispy",
+            1
+          ],
+          [
+            "and crispy bogo",
+            1
+          ],
+          [
+            "gather around",
+            1
+          ],
+          [
+            "around the",
+            1
+          ],
+          [
+            "the table",
+            1
+          ],
+          [
+            "gather around the",
+            1
+          ],
+          [
+            "around the table",
+            1
+          ]
+        ]
+      },
+      "count": 3,
+      "keyword": "frozen turkey",
+      "search_term": "frozen turkey",
+      "timestamp": "2025-09-11 09:44:07",
+      "source_file": "output/butterball/search_results_frozen_turkey_2025-09-11_09-43-05.html"
+    }
+  ],
+  "last_updated": "2025-09-11 09:44:07"
+}

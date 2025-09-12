@@ -157,6 +157,10 @@
                         <label class="btn btn-outline-primary" for="listView">
                             <i class="bi bi-list"></i> List View
                         </label>
+                        <input type="radio" class="btn-check" name="viewType" id="scheduleView" value="schedule">
+                        <label class="btn btn-outline-primary" for="scheduleView">
+                            <i class="bi bi-calendar2-week"></i> Ad Schedule
+                        </label>
                     </div>
                     <select id="sortSelect" class="form-select w-auto">
                         <option value="default">Sort by...</option>
@@ -177,7 +181,188 @@
                 <!-- Results Container -->
                 <div id="resultsContainer" class="grid-view">
                     <div id="resultsGrid" class="row g-4 sortable-grid">
-                        <!-- Results will be populated here -->
+
+                    </div>
+                </div>
+
+                <!-- Schedule Container -->
+                <div id="scheduleContainer" class="ad-schedule" style="display:none;">
+
+                    <!-- Builder Grid Section -->
+                    <div id="scheduleBuilderSection">
+                        <div class="schedule-controls">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-8">
+                                    <label class="form-label">Search Terms (one per line)</label>
+                                    <textarea id="termsInput" class="form-control" rows="3" placeholder="Enter search terms..."></textarea>
+                                </div>
+                                <div class="col-md-4">
+                                    <button id="buildScheduleBtn" class="btn btn-primary w-100">Build Grid</button>
+                                    <div class="d-flex gap-2 mt-2">
+                                        <button id="exportScheduleBtn" class="btn btn-outline-primary w-50">Export JSON</button>
+                                        <label class="btn btn-outline-secondary w-50 mb-0">
+                                            Import JSON
+                                            <input id="importScheduleInput" type="file" accept="application/json" hidden>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="schedule-grid-wrapper">
+                            <div class="schedule-grid" id="scheduleGrid">
+                                <div class="schedule-header"></div>
+                                <div class="schedule-header">AM</div>
+                                <div class="schedule-header">PM</div>
+                                <!-- Rows will be injected here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NFL Style Section -->
+                    <div id="nflScheduleSection" class="nfl-schedule" style="display:none;">
+                        <div class="nfl-schedule-header">
+                            <h3 class="nfl-title mb-0">Ad Flight Schedule</h3>
+                            <small class="text-muted">Visual layout only</small>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-lg-6">
+                                <div class="nfl-column">
+                                    <div class="nfl-row">
+                                        <div class="nfl-date">
+                                            <div class="nfl-date-primary">Sep 12</div>
+                                            <div class="nfl-date-secondary">Week 1</div>
+                                        </div>
+                                        <div class="nfl-games">
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">A</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">B</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">C</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">D</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="nfl-row">
+                                        <div class="nfl-date">
+                                            <div class="nfl-date-primary">Sep 19</div>
+                                            <div class="nfl-date-secondary">Week 2</div>
+                                        </div>
+                                        <div class="nfl-games">
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">E</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">F</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">G</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">H</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="nfl-row">
+                                        <div class="nfl-date">
+                                            <div class="nfl-date-primary">Sep 26</div>
+                                            <div class="nfl-date-secondary">Week 3</div>
+                                        </div>
+                                        <div class="nfl-games">
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">I</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">J</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">K</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">L</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="nfl-row">
+                                        <div class="nfl-date">
+                                            <div class="nfl-date-primary">Oct 3</div>
+                                            <div class="nfl-date-secondary">Week 4</div>
+                                        </div>
+                                        <div class="nfl-games">
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">M</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">N</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">O</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">P</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="nfl-column">
+                                    <div class="nfl-row">
+                                        <div class="nfl-date">
+                                            <div class="nfl-date-primary">Nov 7</div>
+                                            <div class="nfl-date-secondary">Week 9</div>
+                                        </div>
+                                        <div class="nfl-games">
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">Q</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">R</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">S</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">T</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="nfl-row">
+                                        <div class="nfl-date">
+                                            <div class="nfl-date-primary">Nov 14</div>
+                                            <div class="nfl-date-secondary">Week 10</div>
+                                        </div>
+                                        <div class="nfl-games">
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">U</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">V</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">W</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">X</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="nfl-row">
+                                        <div class="nfl-date">
+                                            <div class="nfl-date-primary">Nov 21</div>
+                                            <div class="nfl-date-secondary">Week 11</div>
+                                        </div>
+                                        <div class="nfl-games">
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">Y</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">Z</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">AA</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">BB</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="nfl-row">
+                                        <div class="nfl-date">
+                                            <div class="nfl-date-primary">Nov 28</div>
+                                            <div class="nfl-date-secondary">Week 12</div>
+                                        </div>
+                                        <div class="nfl-games">
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">CC</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">DD</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                            <div class="nfl-matchup">
+                                                <div class="nfl-team"><span class="nfl-badge">EE</span><span class="nfl-team-code">Brand</span></div>
+                                                <div class="nfl-team"><span class="nfl-badge">FF</span><span class="nfl-team-code">Competitor</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

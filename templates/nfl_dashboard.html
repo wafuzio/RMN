@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFL-Style Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/nfl-dashboard.css') }}">
+</head>
+<body class="nfl-page">
+    <main class="nfl-container">
+        <header class="nfl-header text-center">
+            <div class="nfl-shield">
+                <div class="shield-top">ESPN</div>
+                <div class="shield-mid">MONDAY NIGHT</div>
+                <div class="shield-bottom">AD SCHEDULE</div>
+            </div>
+            <h1 class="season-title">TARGETED ONSITE ADS (TOA){% if brand %} — {{ brand.replace('_',' ') }}{% endif %}</h1>
+        </header>
+
+        <section class="schedule-columns">
+            {% if keywords and keywords|length > 0 %}
+            <div class="schedule-col">
+                {% for kw in keywords %}
+                <div class="week-row">
+                    <div class="week-date">
+                        <div class="date-primary">{{ kw }}</div>
+                        <div class="date-secondary">KEYWORD</div>
+                    </div>
+                    <div class="week-games">
+                        <div class="matchup">
+                            <div class="team-flag team-a"><span class="team-code">A</span></div>
+                            <div class="team-flag team-b"><span class="team-code">B</span></div>
+                        </div>
+                        <div class="matchup">
+                            <div class="team-flag team-a"><span class="team-code">C</span></div>
+                            <div class="team-flag team-b"><span class="team-code">D</span></div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <!-- Static fallback if no keywords found -->
+            <div class="schedule-col">
+                <div class="week-row"><div class="week-date"><div class="date-primary">NO KEYWORDS</div><div class="date-secondary">Provide output/&lt;Brand&gt;/keywords_*.txt</div></div><div class="week-games"><div class="matchup"><div class="team-flag team-a"><span class="team-code">A</span></div><div class="team-flag team-b"><span class="team-code">B</span></div></div><div class="matchup"><div class="team-flag team-a"><span class="team-code">C</span></div><div class="team-flag team-b"><span class="team-code">D</span></div></div></div></div>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>
