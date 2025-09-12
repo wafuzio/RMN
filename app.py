@@ -2,10 +2,15 @@ from flask import Flask, render_template, request, jsonify
 from collections import Counter
 import re
 from main import AmazonSession
-import nltk
-from nltk.util import ngrams
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
+try:
+    import nltk
+    from nltk.tokenize import word_tokenize
+    from nltk.corpus import stopwords
+    NLTK_AVAILABLE = True
+except Exception:
+    NLTK_AVAILABLE = False
+    word_tokenize = None
+    stopwords = None
 import json
 import os
 import sys
@@ -18,10 +23,19 @@ from pathlib import Path
 
 app = Flask(__name__)
 
-# Download required NLTK data
-nltk.download('punkt')
-nltk.download('stopwords')
-stop_words = set(stopwords.words('english'))
+# NLTK resources may not be available at runtime; use safe fallbacks
+try:
+    stop_words = set(stopwords.words('english'))
+except Exception:
+    stop_words = {
+        'the','and','a','an','of','in','on','for','to','with','by','from','at','as','is','are','was','were','be','been','this','that','these','those'
+    }
+
+def safe_tokenize(text: str):
+    try:
+        return word_tokenize(text)
+    except Exception:
+        return re.findall(r"[A-Za-z]+", text)
 
 # ---------- Helpers for Scheduler/Clients ----------
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -154,17 +168,18 @@ def extract_common_words_and_phrases(titles):
     # Process single words
     words = []
     for title in titles:
-        tokens = word_tokenize(title.lower())
-        words.extend([word for word in tokens if word.isalpha() and word not in stop_words])
+        tokens = [t.lower() for t in safe_tokenize(title)]
+        words.extend([w for w in tokens if w.isalpha() and w not in stop_words])
     word_freq = Counter(words).most_common(10)
 
     # Process phrases (2-3 words)
     phrases = []
     for title in titles:
-        tokens = word_tokenize(title.lower())
-        two_grams = list(ngrams(tokens, 2))
-        three_grams = list(ngrams(tokens, 3))
-        phrases.extend([' '.join(gram) for gram in two_grams + three_grams])
+        tokens = [t.lower() for t in safe_tokenize(title)]
+        # Generate 2-gram and 3-gram phrases without relying on external datasets
+        two_grams = ['{} {}'.format(tokens[i], tokens[i+1]) for i in range(len(tokens)-1)] if len(tokens) >= 2 else []
+        three_grams = ['{} {} {}'.format(tokens[i], tokens[i+1], tokens[i+2]) for i in range(len(tokens)-2)] if len(tokens) >= 3 else []
+        phrases.extend(two_grams + three_grams)
     phrase_freq = Counter(phrases).most_common(10)
 
     return {
@@ -470,4 +485,4 @@ def api_status(client):
         return jsonify({ 'message': 'Unavailable', 'done': False })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5006)
+    app.run(debug=True, host='0.0.0.0', port=5006)
