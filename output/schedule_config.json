@@ -1,0 +1,29 @@
+{
+  "runs": 3,
+  "times": [
+    [
+      "9",
+      "00",
+      "AM"
+    ],
+    [
+      "9",
+      "45",
+      "AM"
+    ],
+    [
+      "10",
+      "00",
+      "AM"
+    ]
+  ],
+  "days": [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday"
+  ]
+}

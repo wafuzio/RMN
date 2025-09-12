@@ -1,0 +1,3273 @@
+{
+  "results": [
+    {
+      "ads": [
+        {
+          "type": "TOA",
+          "message": "Tasty Flavors On-The-Go!",
+          "description": "It's snack to school time.",
+          "cta": "Shop Now",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/bf85c7c8-8aee-4119-80d2-a1aa1e5b4dbf.jpg",
+          "image_path": null,
+          "href": "/search?keyword=SunbeltBakeryAugOctTOA&query=SunbeltBakeryAugOctTOA&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance"
+        },
+        {
+          "type": "Skyscraper",
+          "image_url": "/content/v2/binary/monetization-v1/27adf3ac-fa47-4ea7-bd4e-e4ca7a07f8b9.jpg",
+          "href": "/search?keyword=F25MarsWrigleyHalloweenTOAaTOA&query=F25MarsWrigleyHalloweenTOAaTOA&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance",
+          "message": "Get in the spirit",
+          "description": "Share spooky movies with your faves",
+          "cta": "Save Now"
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/magic-spoon-fruity-high-protein-grain-free-breakfast-cereal/0085000288744?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Fruity High-Protein Grain-Free Breakfast Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288744",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-cocoa-high-protein-grain-free-breakfast-cereal/0085000288741?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Cocoa High-Protein Grain-Free Breakfast Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288741",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-peanut-butter-high-protein-grain-free-breakfast-cereal/0085000288746?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Peanut Butter High-Protein Grain-Free Breakfast Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288746",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-high-protein-gluten-free-marshmallow-cereal-treat-bars/0081010446027?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae High-Protein Gluten-Free Marshmallow Cereal Treat Bars",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446027",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/blueberry-muffin-magic-spoon-protein-cereal/0085000288742?fulfillment=IN_STORE",
+              "title": "Blueberry Muffin Magic Spoon Protein Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288742",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-high-protein-gluten-free-chocolate-peanut-butter-cereal-treat-bars/0081010446026?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae High-Protein Gluten-Free Chocolate Peanut Butter Cereal Treat Bars",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446026",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-peanut-butter-protien-granola/0081010446142?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Peanut Butter Protien Granola",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446142",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-grain-free-honey-almond-protein-granola/0081010446143?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Grain-Free Honey Almond Protein Granola",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446143",
+              "price": "$10.29"
+            }
+          ],
+          "header": "High Protein Treats You Can Feel Good About",
+          "carousel_image_path": "output/test/Carousel/carousel_high_protein_treats_you_can_fe_protein_cereal_2025-09-12_08-56-49.png",
+          "capture_entire_carousel": true
+        }
+      ],
+      "analysis": {
+        "common_words": [
+          [
+            "tasty",
+            1
+          ],
+          [
+            "flavors",
+            1
+          ],
+          [
+            "get",
+            1
+          ],
+          [
+            "spirit",
+            1
+          ]
+        ],
+        "common_phrases": [
+          [
+            "tasty flavors",
+            1
+          ],
+          [
+            "flavors on-the-go",
+            1
+          ],
+          [
+            "on-the-go !",
+            1
+          ],
+          [
+            "tasty flavors on-the-go",
+            1
+          ],
+          [
+            "flavors on-the-go !",
+            1
+          ],
+          [
+            "get in",
+            1
+          ],
+          [
+            "in the",
+            1
+          ],
+          [
+            "the spirit",
+            1
+          ],
+          [
+            "get in the",
+            1
+          ],
+          [
+            "in the spirit",
+            1
+          ]
+        ]
+      },
+      "count": 3,
+      "keyword": "protein cereal",
+      "search_term": "protein cereal",
+      "timestamp": "2025-09-12 08:56:49",
+      "source_file": "output/test/search_results_protein_cereal_2025-09-12_08-55-20.html"
+    },
+    {
+      "ads": [
+        {
+          "type": "TOA",
+          "message": "Save $2 on Monster 12pks",
+          "description": "Stock up and save!",
+          "cta": "Check Out Savings",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/859ad89e-9aaf-44b3-9a0c-c129624593e4.jpg",
+          "image_path": null,
+          "href": "/search?keyword=MonsterReignBangSaving0525&query=MonsterReignBangSaving0525&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance"
+        },
+        {
+          "type": "Skyscraper",
+          "image_url": "/content/v2/binary/monetization-v1/29ffc644-2269-4864-a12a-46ee945e417c.jpg",
+          "href": "/search?keyword=XCMMetaSnapDispSSEPushNUSA0125JacksSticks&query=XCMMetaSnapDispSSEPushNUSA0125JacksSticks&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance",
+          "message": "Snack More at a Great Price",
+          "description": "Shop Jack's Sticks.",
+          "cta": "Shop Now"
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$4.49discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$4.49discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$4.97discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$4.97discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410010685",
+              "price": "$3.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$3.99discounted from$4.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$2.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$5.80discounted from$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$3.99discounted from$5.79"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$6.00"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$6.99discounted from$7.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$9.99discounted from$11.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$2.49discounted from$2.79"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "about\u200b$1.54discounted from$1.85\u200beach\u200b"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$2.69discounted from$3.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$4.00discounted from$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_08-57-00.png",
+          "capture_entire_carousel": true
+        }
+      ],
+      "analysis": {
+        "common_words": [
+          [
+            "save",
+            1
+          ],
+          [
+            "monster",
+            1
+          ],
+          [
+            "snack",
+            1
+          ],
+          [
+            "great",
+            1
+          ],
+          [
+            "price",
+            1
+          ]
+        ],
+        "common_phrases": [
+          [
+            "save $",
+            1
+          ],
+          [
+            "$ 2",
+            1
+          ],
+          [
+            "2 on",
+            1
+          ],
+          [
+            "on monster",
+            1
+          ],
+          [
+            "monster 12pks",
+            1
+          ],
+          [
+            "save $ 2",
+            1
+          ],
+          [
+            "$ 2 on",
+            1
+          ],
+          [
+            "2 on monster",
+            1
+          ],
+          [
+            "on monster 12pks",
+            1
+          ],
+          [
+            "snack more",
+            1
+          ]
+        ]
+      },
+      "count": 30,
+      "keyword": "red baron pizza",
+      "search_term": "red baron pizza",
+      "timestamp": "2025-09-12 08:57:00",
+      "source_file": "output/test/search_results_red_baron_pizza_2025-09-12_08-56-00.html"
+    },
+    {
+      "ads": [
+        {
+          "type": "TOA",
+          "message": "Zbar Flavors to Fuel Adventure",
+          "description": "Try cinnamon roll and cookies 'n creme zbar.",
+          "cta": "Shop Now",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/44871210-9278-4b16-a9a1-a20c2e499ed6.jpg",
+          "image_path": null,
+          "href": "/search?keyword=ZBARWave2EquitySMG0825&query=ZBARWave2EquitySMG0825&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance"
+        },
+        {
+          "type": "Skyscraper",
+          "image_url": "/content/v2/binary/monetization-v1/ce99fea4-d651-4376-a06f-b45b7d7c9052.jpg",
+          "href": "/search?keyword=FWTOABTS2025Apr&query=FWTOABTS2025Apr&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance",
+          "message": "Make it a KIND Day",
+          "description": "Snacks With 100% Whole Grains",
+          "cta": "Shop Now"
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/magic-spoon-fruity-high-protein-grain-free-breakfast-cereal/0085000288744?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Fruity High-Protein Grain-Free Breakfast Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288744",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-cocoa-high-protein-grain-free-breakfast-cereal/0085000288741?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Cocoa High-Protein Grain-Free Breakfast Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288741",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-peanut-butter-high-protein-grain-free-breakfast-cereal/0085000288746?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Peanut Butter High-Protein Grain-Free Breakfast Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288746",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-high-protein-gluten-free-marshmallow-cereal-treat-bars/0081010446027?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae High-Protein Gluten-Free Marshmallow Cereal Treat Bars",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446027",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/blueberry-muffin-magic-spoon-protein-cereal/0085000288742?fulfillment=IN_STORE",
+              "title": "Blueberry Muffin Magic Spoon Protein Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288742",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-high-protein-gluten-free-chocolate-peanut-butter-cereal-treat-bars/0081010446026?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae High-Protein Gluten-Free Chocolate Peanut Butter Cereal Treat Bars",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446026",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-peanut-butter-protien-granola/0081010446142?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Peanut Butter Protien Granola",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446142",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-grain-free-honey-almond-protein-granola/0081010446143?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Grain-Free Honey Almond Protein Granola",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446143",
+              "price": "$10.29"
+            }
+          ],
+          "header": "High Protein Treats You Can Feel Good About",
+          "carousel_image_path": "output/test/Carousel/carousel_high_protein_treats_you_can_fe_protein_cereal_2025-09-12_09-32-06.png",
+          "capture_entire_carousel": true
+        }
+      ],
+      "analysis": {
+        "common_words": [
+          [
+            "zbar",
+            1
+          ],
+          [
+            "flavors",
+            1
+          ],
+          [
+            "fuel",
+            1
+          ],
+          [
+            "adventure",
+            1
+          ],
+          [
+            "make",
+            1
+          ],
+          [
+            "kind",
+            1
+          ],
+          [
+            "day",
+            1
+          ]
+        ],
+        "common_phrases": [
+          [
+            "zbar flavors",
+            1
+          ],
+          [
+            "flavors to",
+            1
+          ],
+          [
+            "to fuel",
+            1
+          ],
+          [
+            "fuel adventure",
+            1
+          ],
+          [
+            "zbar flavors to",
+            1
+          ],
+          [
+            "flavors to fuel",
+            1
+          ],
+          [
+            "to fuel adventure",
+            1
+          ],
+          [
+            "make it",
+            1
+          ],
+          [
+            "it a",
+            1
+          ],
+          [
+            "a kind",
+            1
+          ]
+        ]
+      },
+      "count": 3,
+      "keyword": "protein cereal",
+      "search_term": "protein cereal",
+      "timestamp": "2025-09-12 09:32:06",
+      "source_file": "/Users/dan.maguire/Documents/Amazon_Scrape/output/test/search_results_protein_cereal_2025-09-12_09-30-03.html"
+    },
+    {
+      "ads": [
+        {
+          "type": "TOA",
+          "message": "Tasty Flavors On-The-Go!",
+          "description": "It's snack to school time.",
+          "cta": "Shop Now",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/bf85c7c8-8aee-4119-80d2-a1aa1e5b4dbf.jpg",
+          "image_path": null,
+          "href": "/search?keyword=SunbeltBakeryAugOctTOA&query=SunbeltBakeryAugOctTOA&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance"
+        },
+        {
+          "type": "Skyscraper",
+          "image_url": "/content/v2/binary/monetization-v1/27adf3ac-fa47-4ea7-bd4e-e4ca7a07f8b9.jpg",
+          "href": "/search?keyword=F25MarsWrigleyHalloweenTOAaTOA&query=F25MarsWrigleyHalloweenTOAaTOA&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance",
+          "message": "Get in the spirit",
+          "description": "Share spooky movies with your faves",
+          "cta": "Save Now"
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/magic-spoon-fruity-high-protein-grain-free-breakfast-cereal/0085000288744?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Fruity High-Protein Grain-Free Breakfast Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288744",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-cocoa-high-protein-grain-free-breakfast-cereal/0085000288741?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Cocoa High-Protein Grain-Free Breakfast Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288741",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-peanut-butter-high-protein-grain-free-breakfast-cereal/0085000288746?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Peanut Butter High-Protein Grain-Free Breakfast Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288746",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-high-protein-gluten-free-marshmallow-cereal-treat-bars/0081010446027?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae High-Protein Gluten-Free Marshmallow Cereal Treat Bars",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446027",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/blueberry-muffin-magic-spoon-protein-cereal/0085000288742?fulfillment=IN_STORE",
+              "title": "Blueberry Muffin Magic Spoon Protein Cereal",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0085000288742",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-high-protein-gluten-free-chocolate-peanut-butter-cereal-treat-bars/0081010446026?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae High-Protein Gluten-Free Chocolate Peanut Butter Cereal Treat Bars",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446026",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-peanut-butter-protien-granola/0081010446142?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Peanut Butter Protien Granola",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446142",
+              "price": "$10.29"
+            },
+            {
+              "href": "/p/magic-spoon-grain-free-honey-almond-protein-granola/0081010446143?fulfillment=IN_STORE",
+              "title": "Magic Spoon\u00ae Grain-Free Honey Almond Protein Granola",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081010446143",
+              "price": "$10.29"
+            }
+          ],
+          "header": "High Protein Treats You Can Feel Good About",
+          "carousel_image_path": "output/test/Carousel/carousel_high_protein_treats_you_can_fe_protein_cereal_2025-09-12_09-31-35.png",
+          "capture_entire_carousel": true
+        }
+      ],
+      "analysis": {
+        "common_words": [
+          [
+            "tasty",
+            1
+          ],
+          [
+            "flavors",
+            1
+          ],
+          [
+            "get",
+            1
+          ],
+          [
+            "spirit",
+            1
+          ]
+        ],
+        "common_phrases": [
+          [
+            "tasty flavors",
+            1
+          ],
+          [
+            "flavors on-the-go",
+            1
+          ],
+          [
+            "on-the-go !",
+            1
+          ],
+          [
+            "tasty flavors on-the-go",
+            1
+          ],
+          [
+            "flavors on-the-go !",
+            1
+          ],
+          [
+            "get in",
+            1
+          ],
+          [
+            "in the",
+            1
+          ],
+          [
+            "the spirit",
+            1
+          ],
+          [
+            "get in the",
+            1
+          ],
+          [
+            "in the spirit",
+            1
+          ]
+        ]
+      },
+      "count": 3,
+      "keyword": "protein cereal",
+      "search_term": "protein cereal",
+      "timestamp": "2025-09-12 09:31:35",
+      "source_file": "/Users/dan.maguire/Documents/Amazon_Scrape/output/test/search_results_protein_cereal_2025-09-12_08-55-20.html"
+    },
+    {
+      "ads": [
+        {
+          "type": "TOA",
+          "message": "Save $2 on Monster 12pks",
+          "description": "Stock up and save!",
+          "cta": "Check Out Savings",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/859ad89e-9aaf-44b3-9a0c-c129624593e4.jpg",
+          "image_path": null,
+          "href": "/search?keyword=MonsterReignBangSaving0525&query=MonsterReignBangSaving0525&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance"
+        },
+        {
+          "type": "Skyscraper",
+          "image_url": "/content/v2/binary/monetization-v1/29ffc644-2269-4864-a12a-46ee945e417c.jpg",
+          "href": "/search?keyword=XCMMetaSnapDispSSEPushNUSA0125JacksSticks&query=XCMMetaSnapDispSSEPushNUSA0125JacksSticks&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance",
+          "message": "Snack More at a Great Price",
+          "description": "Shop Jack's Sticks.",
+          "cta": "Shop Now"
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/oreo-chocolate-sandwich-cookies-family-size/0004400006023?fulfillment=IN_STORE",
+              "title": "OREO Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006023",
+              "price": "$4.49discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$4.49discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$4.97discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$4.97discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410010685?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410010685",
+              "price": "$3.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$3.99discounted from$4.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/kroger-2-reduced-fat-milk-gallon/0001111041700?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae 2% Reduced Fat Milk Gallon",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111041700",
+              "price": "$2.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/freschetta-pepperoni-naturally-rising-crust-frozen-pizza/0007218063979?fulfillment=IN_STORE",
+              "title": "Freschetta Pepperoni Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063979",
+              "price": "$5.80discounted from$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$3.99discounted from$5.79"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$6.00"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$6.99discounted from$7.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$9.99discounted from$11.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$2.49discounted from$2.79"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "about\u200b$1.54discounted from$1.85\u200beach\u200b"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$2.69discounted from$3.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$4.00discounted from$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-56.png",
+          "capture_entire_carousel": true
+        }
+      ],
+      "analysis": {
+        "common_words": [
+          [
+            "save",
+            1
+          ],
+          [
+            "monster",
+            1
+          ],
+          [
+            "snack",
+            1
+          ],
+          [
+            "great",
+            1
+          ],
+          [
+            "price",
+            1
+          ]
+        ],
+        "common_phrases": [
+          [
+            "save $",
+            1
+          ],
+          [
+            "$ 2",
+            1
+          ],
+          [
+            "2 on",
+            1
+          ],
+          [
+            "on monster",
+            1
+          ],
+          [
+            "monster 12pks",
+            1
+          ],
+          [
+            "save $ 2",
+            1
+          ],
+          [
+            "$ 2 on",
+            1
+          ],
+          [
+            "2 on monster",
+            1
+          ],
+          [
+            "on monster 12pks",
+            1
+          ],
+          [
+            "snack more",
+            1
+          ]
+        ]
+      },
+      "count": 30,
+      "keyword": "red baron pizza",
+      "search_term": "red baron pizza",
+      "timestamp": "2025-09-12 09:31:56",
+      "source_file": "/Users/dan.maguire/Documents/Amazon_Scrape/output/test/search_results_red_baron_pizza_2025-09-12_08-56-00.html"
+    },
+    {
+      "ads": [
+        {
+          "type": "TOA",
+          "message": "Quick and Crispy BOGO",
+          "description": "Try McCain for delicious dinner savings.",
+          "cta": "Save Big",
+          "image_url": "https://www.kroger.com/content/v2/binary/monetization-v1/8710e4d6-0632-4ce3-8b69-9dd57a63296f.jpg",
+          "image_path": null,
+          "href": "/search?keyword=McCainSept2025TOA&query=McCainSept2025TOA&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance"
+        },
+        {
+          "type": "Skyscraper",
+          "image_url": "/content/v2/binary/monetization-v1/159c0bce-a9a3-406b-bc53-5d35ed5043a4.jpg",
+          "href": "/search?keyword=SchwansXFY25RedBaronDDXLSCUBA&query=SchwansXFY25RedBaronDDXLSCUBA&searchType=mktg%20attribute&monet=false&fulfillment=all&pzn=relevance",
+          "message": "New Red Baron Deep Dish XL",
+          "description": "For when you\u2019re extra hungry and don\u2019t want to share.",
+          "cta": "Shop Now"
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/tyson-frozen-crispy-chicken-breast-strips/0002370001410?fulfillment=IN_STORE",
+              "title": "Tyson Frozen Crispy Chicken Breast Strips",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002370001410",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/lunchables-extra-cheesy-pizza-pack/0004470002411?fulfillment=IN_STORE",
+              "title": "Lunchables Extra Cheesy Pizza, Pack",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004470002411",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-purified-bottled-water/0001111009855?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Purified Bottled Water",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111009855",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-four-cheese-medley-naturally-rising-crust-frozen-pizza/0007218063983?fulfillment=IN_STORE",
+              "title": "Freschetta Four Cheese Medley Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063983",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/tyson-frozen-crispy-chicken-breast-strips/0002370001410?fulfillment=IN_STORE",
+              "title": "Tyson Frozen Crispy Chicken Breast Strips",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002370001410",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/lunchables-extra-cheesy-pizza-pack/0004470002411?fulfillment=IN_STORE",
+              "title": "Lunchables Extra Cheesy Pizza, Pack",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004470002411",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-purified-bottled-water/0001111009855?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Purified Bottled Water",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111009855",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-four-cheese-medley-naturally-rising-crust-frozen-pizza/0007218063983?fulfillment=IN_STORE",
+              "title": "Freschetta Four Cheese Medley Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063983",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/tyson-frozen-crispy-chicken-breast-strips/0002370001410?fulfillment=IN_STORE",
+              "title": "Tyson Frozen Crispy Chicken Breast Strips",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002370001410",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/lunchables-extra-cheesy-pizza-pack/0004470002411?fulfillment=IN_STORE",
+              "title": "Lunchables Extra Cheesy Pizza, Pack",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004470002411",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-purified-bottled-water/0001111009855?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Purified Bottled Water",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111009855",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-four-cheese-medley-naturally-rising-crust-frozen-pizza/0007218063983?fulfillment=IN_STORE",
+              "title": "Freschetta Four Cheese Medley Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063983",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/tyson-frozen-crispy-chicken-breast-strips/0002370001410?fulfillment=IN_STORE",
+              "title": "Tyson Frozen Crispy Chicken Breast Strips",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002370001410",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/lunchables-extra-cheesy-pizza-pack/0004470002411?fulfillment=IN_STORE",
+              "title": "Lunchables Extra Cheesy Pizza, Pack",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004470002411",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-purified-bottled-water/0001111009855?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Purified Bottled Water",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111009855",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-four-cheese-medley-naturally-rising-crust-frozen-pizza/0007218063983?fulfillment=IN_STORE",
+              "title": "Freschetta Four Cheese Medley Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063983",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/tyson-frozen-crispy-chicken-breast-strips/0002370001410?fulfillment=IN_STORE",
+              "title": "Tyson Frozen Crispy Chicken Breast Strips",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002370001410",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/lunchables-extra-cheesy-pizza-pack/0004470002411?fulfillment=IN_STORE",
+              "title": "Lunchables Extra Cheesy Pizza, Pack",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004470002411",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/kroger-purified-bottled-water/0001111009855?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Purified Bottled Water",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111009855",
+              "price": "$6.49"
+            },
+            {
+              "href": "/p/freschetta-four-cheese-medley-naturally-rising-crust-frozen-pizza/0007218063983?fulfillment=IN_STORE",
+              "title": "Freschetta Four Cheese Medley Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063983",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/cheez-it-original-cheese-crackers/0002410044070?fulfillment=IN_STORE",
+              "title": "Cheez-It\u00ae Original Cheese Crackers",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002410044070",
+              "price": "$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/oreo-double-stuf-chocolate-sandwich-cookies-family-size/0004400006025?fulfillment=IN_STORE",
+              "title": "OREO Double Stuf Chocolate Sandwich Cookies Family Size",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004400006025",
+              "price": "$4.49discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/tyson-frozen-crispy-chicken-breast-strips/0002370001410?fulfillment=IN_STORE",
+              "title": "Tyson Frozen Crispy Chicken Breast Strips",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0002370001410",
+              "price": "$9.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/red-baron-pepperoni-thin-crust-frozen-pizza/0007218063322?fulfillment=IN_STORE",
+              "title": "Red Baron Pepperoni Thin Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063322",
+              "price": "$4.97discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/red-baron-mexican-style-classic-crust-frozen-pizza/0007218074201?fulfillment=IN_STORE",
+              "title": "Red Baron Mexican Style Classic Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218074201",
+              "price": "$4.97discounted from$5.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/lunchables-extra-cheesy-pizza-pack/0004470002411?fulfillment=IN_STORE",
+              "title": "Lunchables Extra Cheesy Pizza, Pack",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004470002411",
+              "price": "$2.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/red-baron-four-cheese-deep-dish-personal-frozen-pizza/0007218056638?fulfillment=IN_STORE",
+              "title": "Red Baron Four Cheese Deep Dish Personal Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218056638",
+              "price": "$3.99discounted from$4.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/kroger-purified-bottled-water/0001111009855?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Purified Bottled Water",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111009855",
+              "price": "$4.99discounted from$5.79"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/freschetta-four-cheese-medley-naturally-rising-crust-frozen-pizza/0007218063983?fulfillment=IN_STORE",
+              "title": "Freschetta Four Cheese Medley Naturally Rising Crust Frozen Pizza",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007218063983",
+              "price": "$5.80discounted from$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$1.99"
+            },
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/candle-lite-pumpkin-nutmeg-pie-scented-wax-cubes/0007600115316?fulfillment=IN_STORE",
+              "title": "Candle-Lite\u00ae Pumpkin Nutmeg Pie Scented Wax Cubes",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007600115316",
+              "price": "$1.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/snickers-original-chocolate-bars-fun-size-halloween-candy-bag/0004000050533?fulfillment=IN_STORE",
+              "title": "Snickers Original Chocolate Bars Fun Size Halloween Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0004000050533",
+              "price": "$3.99discounted from$5.79"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/sunflower-bunch/0066199113392?fulfillment=IN_STORE",
+              "title": "Sunflower Bunch",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0066199113392",
+              "price": "$6.00"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/kroger-fresh-seedless-tri-color-grapes-in-clamshell/0001111061356?fulfillment=IN_STORE",
+              "title": "Kroger\u00ae Fresh Seedless Tri-Color Grapes in Clamshell",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001111061356",
+              "price": "$6.99discounted from$7.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/tootsie-child-s-play-assorted-tootsie-roll-favorites-candy-bag/0007172001752?fulfillment=IN_STORE",
+              "title": "Tootsie\u00ae Child's Play\u00ae Assorted Tootsie Roll\u00ae Favorites Candy Bag",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0007172001752",
+              "price": "$9.99discounted from$11.99"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/kinder-joy-treat-and-toy-sweet-cream-and-cocoa-wafer-bites-halloween-candy-egg/0000980000078?fulfillment=IN_STORE",
+              "title": "Kinder Joy Treat and Toy Sweet Cream and Cocoa Wafer Bites Halloween Candy Egg",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000980000078",
+              "price": "$2.49discounted from$2.79"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/fresh-california-yellow-peach-each/0000000004038?fulfillment=IN_STORE",
+              "title": "Fresh California Yellow Peach \u2013 Each",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0000000004038",
+              "price": "about\u200b$1.54discounted from$1.85\u200beach\u200b"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/brach-s-classic-candy-corn/0001130082070?fulfillment=IN_STORE",
+              "title": "Brach's Classic Candy Corn",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0001130082070",
+              "price": "$2.69discounted from$3.29"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        },
+        {
+          "type": "CuratedCarousel",
+          "products": [
+            {
+              "href": "/p/chobani-pumpkin-spice-coffee-creamer/0081829001952?fulfillment=IN_STORE",
+              "title": "Chobani Pumpkin Spice Coffee Creamer",
+              "image_url": "https://www.kroger.com/product/images/medium/front/0081829001952",
+              "price": "$4.00discounted from$6.49"
+            }
+          ],
+          "carousel_image_path": "output/test/Carousel/carousel_unknown_carousel_red_baron_pizza_2025-09-12_09-31-45.png",
+          "capture_entire_carousel": true
+        }
+      ],
+      "analysis": {
+        "common_words": [
+          [
+            "quick",
+            1
+          ],
+          [
+            "crispy",
+            1
+          ],
+          [
+            "bogo",
+            1
+          ],
+          [
+            "new",
+            1
+          ],
+          [
+            "red",
+            1
+          ],
+          [
+            "baron",
+            1
+          ],
+          [
+            "deep",
+            1
+          ],
+          [
+            "dish",
+            1
+          ],
+          [
+            "xl",
+            1
+          ]
+        ],
+        "common_phrases": [
+          [
+            "quick and",
+            1
+          ],
+          [
+            "and crispy",
+            1
+          ],
+          [
+            "crispy bogo",
+            1
+          ],
+          [
+            "quick and crispy",
+            1
+          ],
+          [
+            "and crispy bogo",
+            1
+          ],
+          [
+            "new red",
+            1
+          ],
+          [
+            "red baron",
+            1
+          ],
+          [
+            "baron deep",
+            1
+          ],
+          [
+            "deep dish",
+            1
+          ],
+          [
+            "dish xl",
+            1
+          ]
+        ]
+      },
+      "count": 30,
+      "keyword": "red baron pizza",
+      "search_term": "red baron pizza",
+      "timestamp": "2025-09-12 09:31:45",
+      "source_file": "/Users/dan.maguire/Documents/Amazon_Scrape/output/test/search_results_red_baron_pizza_2025-09-12_09-30-46.html"
+    }
+  ],
+  "last_updated": "2025-09-12 09:32:06"
+}

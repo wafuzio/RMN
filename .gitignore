@@ -1,64 +1,27 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
-# Uncommenting .venv/ to allow syncing with Builder.io
-venv/
-ENV/
-
-# IDE files
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS specific files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Project specific
-playwright_profile/
-output/
-images/
-*.log
-
-.config/
-# Ignore Python cache
+# Python cache
 __pycache__/
 *.pyc
 
-# Ignore virtual environments
+# Virtual environments
 .venv/
 venv/
 
-# Ignore OS junk
+# OS junk
 .DS_Store
 
-# Ignore build artifacts
+# Build artifacts
 *.egg-info/
 dist/
 build/
+
+# Logs
+*.log
+logs/
+
+# Crash dumps
+*.dmp
+
+# Keep output/ for Builder (don’t ignore!)
+# If you ever want to ignore heavy subfolders inside it, add lines like:
+# output/screenshots/
+# output/tmp/
