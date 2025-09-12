@@ -1,27 +1,4 @@
-# Python cache
+.venv/
 __pycache__/
 *.pyc
-
-# Virtual environments
-.venv/
-venv/
-
-# OS junk
 .DS_Store
-
-# Build artifacts
-*.egg-info/
-dist/
-build/
-
-# Logs
-*.log
-logs/
-
-# Crash dumps
-*.dmp
-
-# Keep output/ for Builder (don’t ignore!)
-# If you ever want to ignore heavy subfolders inside it, add lines like:
-# output/screenshots/
-# output/tmp/
