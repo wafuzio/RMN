@@ -9,6 +9,7 @@ from tkinter import messagebox, simpledialog, ttk, scrolledtext
 import os
 import sys
 import json
+import logging
 from datetime import datetime
 import subprocess
 import time
@@ -22,9 +23,15 @@ class KeywordInputApp:
         """Initialize the application"""
         self.root = root
         self.root.title("Kroger TOA Scraper")
-        self.root.geometry("600x650")
-        self.root.minsize(500, 550)
-        self.root.attributes("-topmost", True)  # Make window stay on top
+        self.root.geometry("600x700")
+        self.root.minsize(600, 700)
+        
+        # Set placeholder text
+        self.placeholder_text = "Enter keywords (one per line)"
+        
+        # Initialize logger
+        self.logger = None
+        
         self.root.update()  # Update to ensure it takes effect
         self.root.resizable(True, True)
         
@@ -315,7 +322,8 @@ class KeywordInputApp:
                 # Update progress
                 progress_var.set(i)
                 keyword_label.config(text=f"Scraping {i+1}/{len(keywords)}: {keyword}")
-                progress_label.config(text=f"Processing keyword {i+1} of {len(keywords)}")
+                if progress_label.winfo_exists():
+                    progress_label.config(text=f"Processing keyword {i+1} of {len(keywords)}")
                 popup.update()
                 
                 # Update main window status
@@ -340,7 +348,8 @@ class KeywordInputApp:
                 while retry_count < max_retries and not success:
                     if retry_count > 0:
                         retry_msg = f"Retry attempt {retry_count}/{max_retries} for '{keyword}'..."
-                        progress_label.config(text=retry_msg)
+                        if progress_label.winfo_exists():
+                            progress_label.config(text=retry_msg)
                         self.status_label.config(text=retry_msg)
                         popup.update()
                         self.root.update()
@@ -363,16 +372,19 @@ class KeywordInputApp:
                         retry_count += 1
                         if retry_count < max_retries:
                             error_msg = f"Failed to scrape '{keyword}' (attempt {retry_count}/{max_retries}): {stderr}"
-                            progress_label.config(text=f"Error: {error_msg}. Retrying...")
+                            if progress_label.winfo_exists():
+                                progress_label.config(text=f"Error: {error_msg}. Retrying...")
                             popup.update()
                         else:
                             error_msg = f"Failed to scrape '{keyword}' after {max_retries} attempts: {stderr}"
-                            progress_label.config(text=f"Error: {error_msg}")
+                            if progress_label.winfo_exists():
+                                progress_label.config(text=f"Error: {error_msg}")
                             popup.update()
                             messagebox.showerror("Error", error_msg)
             
             # Update progress for processing HTML
-            progress_label.config(text="Processing saved HTML files...")
+            if progress_label.winfo_exists():
+                progress_label.config(text="Processing saved HTML files...")
             keyword_label.config(text="")
             popup.update()
             
@@ -388,7 +400,8 @@ class KeywordInputApp:
             while retry_count < max_retries and not success:
                 if retry_count > 0:
                     retry_msg = f"Retry attempt {retry_count}/{max_retries} for HTML processing..."
-                    progress_label.config(text=retry_msg)
+                    if progress_label.winfo_exists():
+                        progress_label.config(text=retry_msg)
                     self.status_label.config(text=retry_msg)
                     popup.update()
                     self.root.update()
@@ -410,11 +423,13 @@ class KeywordInputApp:
                     retry_count += 1
                     if retry_count < max_retries:
                         error_msg = f"Failed to process HTML files (attempt {retry_count}/{max_retries}): {stderr}"
-                        progress_label.config(text=f"Error: {error_msg}. Retrying...")
+                        if progress_label.winfo_exists():
+                            progress_label.config(text=f"Error: {error_msg}. Retrying...")
                         popup.update()
                     else:
                         error_msg = f"Failed to process HTML files after {max_retries} attempts: {stderr}"
-                        progress_label.config(text=f"Error: {error_msg}")
+                        if progress_label.winfo_exists():
+                            progress_label.config(text=f"Error: {error_msg}")
                         popup.update()
                         messagebox.showerror("Error", error_msg)
                         self.status_label.config(text="Error processing HTML files")
@@ -424,7 +439,8 @@ class KeywordInputApp:
             
             if success:
                 result_msg = f"Completed scraping {success_count}/{len(keywords)} keywords successfully"
-                progress_label.config(text=result_msg)
+                if progress_label.winfo_exists():
+                    progress_label.config(text=result_msg)
                 popup.update()
                 messagebox.showinfo("Success", result_msg)
                 self.status_label.config(text="Scraping completed successfully")
@@ -513,8 +529,46 @@ class KeywordInputApp:
             keywords = self.client_history[selected_client]
             self.keyword_input.insert(tk.END, "\n".join(keywords))
             
+            # Load client-specific schedule configuration
+            self.schedule_config = self.load_schedule_config(selected_client)
+            
+            # Update UI with loaded schedule
+            self.load_saved_times()
+            
+            # Update days checkboxes if days are in the config
+            if "days" in self.schedule_config:
+                for day in self.day_vars:
+                    self.day_vars[day].set(day in self.schedule_config["days"])
+            
             self.status_label.config(text=f"Loaded {len(keywords)} keywords for {selected_client}")
+            
+            # Set up logging for this client
+            self.logger = self.setup_logging(selected_client)
     
+    def setup_logging(self, client=None):
+        """Set up logging to file for scheduler events"""
+        if client:
+            # Create client-specific log directory
+            folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client)
+            log_dir = os.path.join("output", folder_name)
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, "scheduler.log")
+            
+            # Configure logger
+            logger = logging.getLogger(f"scheduler_{client}")
+            logger.setLevel(logging.INFO)
+            
+            # Create file handler
+            handler = logging.FileHandler(log_file)
+            handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+            
+            # Clear existing handlers and add new one
+            logger.handlers = []
+            logger.addHandler(handler)
+            
+            return logger
+        return None
+            
     def on_keyword_focus_in(self, event):
         """Handle focus in event for keyword input - clear placeholder"""
         if self.keyword_input.get(1.0, "end-1c") == self.placeholder_text:
@@ -620,7 +674,7 @@ class KeywordInputApp:
                     minute_var.set(saved_minute)
                     ampm_var.set(saved_ampm)
     
-    def load_schedule_config(self):
+    def load_schedule_config(self, client=None):
         """Load schedule configuration from file"""
         default_config = {
             "runs": 3, 
@@ -628,17 +682,43 @@ class KeywordInputApp:
             "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
         }
         
-        if not os.path.exists(self.schedule_file):
-            return default_config
+        # If client is specified, try to load client-specific config
+        if client:
+            folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client)
+            client_schedule_file = os.path.join("output", folder_name, "schedule_config.json")
+            
+            if os.path.exists(client_schedule_file):
+                try:
+                    with open(client_schedule_file, "r", encoding="utf-8") as f:
+                        config = json.load(f)
+                    # Update the schedule file path to use client-specific path
+                    self.schedule_file = client_schedule_file
+                    return config
+                except (json.JSONDecodeError, IOError):
+                    pass  # Fall back to default or global config
         
-        try:
-            with open(self.schedule_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return default_config
+        # Try to load from the current schedule file path
+        if os.path.exists(self.schedule_file):
+            try:
+                with open(self.schedule_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass  # Fall back to default config
+                
+        return default_config
     
     def save_schedule(self):
         """Save schedule configuration to file"""
+        # Get selected client
+        selected_client = self.client_var.get()
+        if not selected_client or selected_client == "<choose from menu>":
+            messagebox.showerror("Error", "Please select a client/product type before saving schedule")
+            return False
+            
+        # Create client-specific schedule file path
+        folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client)
+        client_schedule_file = os.path.join("output", folder_name, "schedule_config.json")
+        
         # Get current times
         times = []
         for hour_var, minute_var, ampm_var in self.time_vars:
@@ -654,41 +734,35 @@ class KeywordInputApp:
         config = {
             "runs": self.runs_var.get(),
             "times": times,
-            "days": selected_days
+            "days": selected_days,
+            "client": selected_client  # Store client name in config
         }
         
         # Save to file
         try:
-            os.makedirs(os.path.dirname(self.schedule_file), exist_ok=True)
-            with open(self.schedule_file, "w", encoding="utf-8") as f:
+            os.makedirs(os.path.dirname(client_schedule_file), exist_ok=True)
+            with open(client_schedule_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2)
             
+            # Update instance variables
+            self.schedule_file = client_schedule_file
             self.schedule_config = config
-            self.status_label.config(text="Schedule saved")
+            self.status_label.config(text=f"Schedule saved for {selected_client}")
+            
+            # Set up logging for this client
+            self.logger = self.setup_logging(selected_client)
+            if self.logger:
+                self.logger.info(f"Schedule configuration saved for {selected_client}")
+                
+            return True
         except (IOError, PermissionError) as e:
             messagebox.showerror("Error", f"Failed to save schedule: {str(e)}")
             self.status_label.config(text=f"Error saving schedule: {str(e)}")
         except json.JSONDecodeError as e:
             messagebox.showerror("Error", f"Failed to encode schedule data: {str(e)}")
             self.status_label.config(text=f"Error encoding schedule data: {str(e)}")
-        return
-            
-        # Check if keywords are entered
-        keywords = self.get_keywords()
-        if not keywords:
-            messagebox.showerror("Error", "Please enter at least one keyword before scheduling")
-            return
-            
-        # Start the scheduler
-        self.save_schedule()  # Save current schedule first
-        self.schedule_running = True
-        self.schedule_button.config(text="Stop Schedule", bg="#F44336")
-        self.status_label.config(text=f"Scheduler started for {selected_client} - waiting for next run time")
-        
-        # Start scheduler thread if not already running
-        if not self.scheduler_thread or not self.scheduler_thread.is_alive():
-            self.scheduler_thread = threading.Thread(target=self.run_scheduler, daemon=True)
-            self.scheduler_thread.start()
+            return False
+        return True
     
     def run_scheduler(self):
         """Run the scheduler in a background thread"""
@@ -777,10 +851,10 @@ class KeywordInputApp:
                 messagebox.showerror("Error", "Please select a client/product type before scheduling")
                 return
                 
-            # Check if keywords are entered
-            keywords = self.get_keywords()
+            # Verify client has saved keywords in history
+            keywords = self.client_history.get(selected_client, [])
             if not keywords:
-                messagebox.showerror("Error", "Please enter at least one keyword before scheduling")
+                messagebox.showerror("Error", f"No saved keywords for {selected_client}. Please add and save keywords first.")
                 return
                 
             # Validate time inputs
@@ -795,8 +869,15 @@ class KeywordInputApp:
                     messagebox.showerror("Error", f"Invalid time format for Run {i+1}")
                     return
             
-            # Start the scheduler
-            self.save_schedule()  # Save current schedule first
+            # Set up client-specific logging
+            self.logger = self.setup_logging(selected_client)
+            if self.logger:
+                self.logger.info(f"Scheduler started for {selected_client}")
+            
+            # Save schedule to client-specific file
+            if not self.save_schedule():  # This will update self.schedule_file to client-specific path
+                return  # If save failed, don't start the scheduler
+                
             self.schedule_running = True
             self.schedule_button.config(text="Stop Schedule", bg="#F44336")
             self.status_label.config(text=f"Scheduler started for {selected_client} - waiting for next run time")
@@ -824,20 +905,22 @@ class KeywordInputApp:
                         # Check if client/product is still selected
                         selected_client = self.client_var.get()
                         if not selected_client or selected_client == "Select client/product":
-                            # Log error in the main thread
-                            self.root.after(0, lambda: self.status_label.config(
-                                text="Scheduled run skipped - No client/product selected")
-                            )
+                            # Log error in the main thread and to file
+                            error_msg = "Scheduled run skipped - No client/product selected"
+                            if self.logger:
+                                self.logger.warning(error_msg)
+                            self.root.after(0, lambda: self.status_label.config(text=error_msg))
                             time.sleep(60)
                             continue
                             
-                        # Check if keywords are entered
-                        keywords = self.get_keywords()
+                        # Use saved keywords from client_history instead of text box
+                        keywords = self.client_history.get(selected_client, [])
                         if not keywords:
-                            # Log error in the main thread
-                            self.root.after(0, lambda: self.status_label.config(
-                                text="Scheduled run skipped - No keywords entered")
-                            )
+                            # Log error in the main thread and to file
+                            error_msg = f"Scheduled run skipped - No saved keywords for {selected_client}"
+                            if self.logger:
+                                self.logger.warning(error_msg)
+                            self.root.after(0, lambda: self.status_label.config(text=error_msg))
                             time.sleep(60)
                             continue
                         

@@ -12,6 +12,27 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk.util import ngrams
 from nltk.corpus import stopwords
+
+def _ensure_nltk():
+    # NLTK >=3.9 needs "punkt" + "punkt_tab"; older needs just "punkt".
+    needed = ["stopwords", "punkt", "punkt_tab"]
+    for pkg in needed:
+        try:
+            if pkg == "stopwords":
+                nltk.data.find("corpora/stopwords")
+            elif pkg == "punkt":
+                nltk.data.find("tokenizers/punkt")
+            elif pkg == "punkt_tab":
+                nltk.data.find("tokenizers/punkt_tab/english")
+        except LookupError:
+            try:
+                nltk.download(pkg, quiet=True)
+            except Exception:
+                # Last-ditch: try the older layout name
+                if pkg == "punkt_tab":
+                    pass  # ignore on older NLTK
+_ensure_nltk()
+
 import requests
 import os
 import re
