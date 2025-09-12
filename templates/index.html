@@ -1,407 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amazon Product Scraper</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kroger TOA Scheduler</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/scheduler.css') }}">
 </head>
 <body>
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-3 sidebar">
-                <div class="search-panel">
-                    <h2 class="mb-4">Search Options</h2>
-                    <form id="searchForm">
-                        <!-- Main Search Section -->
-                        <div class="mb-4">
-                            <label class="form-label">Search Type</label>
-                            <div class="btn-group w-100" role="group">
-                                <input type="radio" class="btn-check" name="searchType" id="keywordSearch" value="keyword" checked>
-                                <label class="btn btn-outline-primary" for="keywordSearch">Keyword</label>
-                                <input type="radio" class="btn-check" name="searchType" id="asinSearch" value="asin">
-                                <label class="btn btn-outline-primary" for="asinSearch">ASIN</label>
-                            </div>
-                        </div>
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Sidebar: Client & Keywords -->
+      <aside class="col-lg-4 col-xl-3 scheduler-sidebar">
+        <div class="sticky-panel">
+          <h2 class="panel-title mb-3">Client & Keywords</h2>
 
-                        <!-- Search Input -->
-                        <div class="mb-4">
-                            <div id="keywordInput">
-                                <label class="form-label">Primary Search Term</label>
-                                <input type="text" class="form-control" id="searchQuery" placeholder="Enter search term...">
-                                <div class="mt-3">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" id="enableSecondarySearch">
-                                        <label class="form-check-label" for="enableSecondarySearch">Add Secondary Search Term</label>
-                                    </div>
-                                </div>
-                                <div id="secondarySearchSection" class="mt-3" style="display: none;">
-                                    <div class="boolean-operator-section mb-2">
-                                        <select class="form-select" id="booleanOperator">
-                                            <option value="AND">AND</option>
-                                            <option value="OR">OR</option>
-                                        </select>
-                                    </div>
-                                    <input type="text" class="form-control" id="secondaryQuery" placeholder="Enter second search term...">
-                                </div>
-                            </div>
-                            <div id="asinInput" style="display: none;">
-                                <label class="form-label">ASINs (one per line)</label>
-                                <textarea class="form-control" id="asinList" rows="3" placeholder="Enter ASINs..."></textarea>
-                            </div>
-                        </div>
-
-                        <!-- Search Parameters -->
-                        <div class="mb-4">
-                            <label class="form-label">Page Selection</label>
-                            <div class="btn-group w-100" role="group">
-                                <input type="radio" class="btn-check" name="pageType" id="singlePage" value="single" checked>
-                                <label class="btn btn-outline-primary" for="singlePage">Single</label>
-                                <input type="radio" class="btn-check" name="pageType" id="pageRange" value="range">
-                                <label class="btn btn-outline-primary" for="pageRange">Range</label>
-                            </div>
-                            <div id="singlePageInput" class="mt-2">
-                                <input type="number" class="form-control" id="pageNumber" value="1" min="1" max="100" placeholder="Page number">
-                            </div>
-                            <div id="pageRangeInput" class="mt-2 row" style="display: none;">
-                                <div class="col-6">
-                                    <input type="number" class="form-control" id="startPage" value="1" min="1" max="100" placeholder="Start page">
-                                </div>
-                                <div class="col-6">
-                                    <input type="number" class="form-control" id="endPage" value="5" min="1" max="100" placeholder="End page">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mb-4">
-                            <label class="form-label">Max Items</label>
-                            <input type="number" class="form-control" id="maxItems" value="50" min="1" max="500">
-                        </div>
-
-                        <div class="mb-4">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="organicOnly" checked>
-                                <label class="form-check-label" for="organicOnly">Hide Sponsored Listings</label>
-                            </div>
-                        </div>
-
-                        <!-- Title Filters -->
-                        <div class="mb-4">
-                            <label class="form-label">Title Must Include</label>
-                            <div class="phrase-input">
-                                <input type="text" class="form-control" id="mustInclude" placeholder="Ex: organic oil">
-                                <div class="match-type">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="includeMatchType" id="includeAll" value="all">
-                                        <label class="form-check-label" for="includeAll">All</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="includeMatchType" id="includeAny" value="any" checked>
-                                        <label class="form-check-label" for="includeAny">Any</label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mb-4">
-                            <label class="form-label">Title Must Exclude</label>
-                            <input type="text" class="form-control" id="mustExclude" placeholder="Ex: synthetic, artificial">
-                        </div>
-
-                        <button type="submit" class="btn btn-primary w-100">Search</button>
-                    </form>
-                </div>
+          <div class="mb-3">
+            <label for="clientSelect" class="form-label">Client/Product</label>
+            <div class="d-flex gap-2">
+              <select id="clientSelect" class="form-select"></select>
+              <button id="newClientBtn" class="btn btn-outline-primary" type="button"><i class="bi bi-plus-lg"></i></button>
             </div>
+            <div class="form-text">Use the menu to pick a client or add a new one.</div>
+          </div>
 
-            <!-- Main Content -->
-            <div class="col-md-9 main-content">
-                <!-- Results Header -->
-                <div class="results-header">
-                    <h2>Search Results</h2>
-                    <div class="analysis-toggle">
-                        <button class="btn btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#analysisSection">
-                            Show Analysis
-                        </button>
-                    </div>
-                </div>
+          <div class="mb-3">
+            <label for="keywordsInput" class="form-label">Keywords (one per line)</label>
+            <textarea id="keywordsInput" class="form-control" rows="10" placeholder="Enter keywords (one per line)"></textarea>
+          </div>
 
-                <!-- Analysis Section -->
-                <div id="analysisSection" class="collapse mb-4">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="analysis-card">
-                                <h3>Common Words</h3>
-                                <div id="commonWords" class="tag-cloud"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="analysis-card">
-                                <h3>Common Phrases <small class="text-muted">(click to filter)</small></h3>
-                                <div id="commonPhrases" class="tag-cloud"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+          <div class="d-flex gap-2">
+            <button id="saveKeywordsBtn" class="btn btn-primary w-100" type="button">Save Keywords</button>
+            <button id="clearKeywordsBtn" class="btn btn-outline-secondary" type="button">Clear</button>
+          </div>
 
-                <!-- View Controls -->
-                <div class="view-controls">
-                    <div class="btn-group" role="group" aria-label="View toggle">
-                        <input type="radio" class="btn-check" name="viewType" id="gridView" value="grid" checked>
-                        <label class="btn btn-outline-primary" for="gridView">
-                            <i class="bi bi-grid-3x3-gap"></i> Grid View
-                        </label>
-                        <input type="radio" class="btn-check" name="viewType" id="listView" value="list">
-                        <label class="btn btn-outline-primary" for="listView">
-                            <i class="bi bi-list"></i> List View
-                        </label>
-                        <input type="radio" class="btn-check" name="viewType" id="scheduleView" value="schedule">
-                        <label class="btn btn-outline-primary" for="scheduleView">
-                            <i class="bi bi-calendar2-week"></i> Ad Schedule
-                        </label>
-                    </div>
-                    <select id="sortSelect" class="form-select w-auto">
-                        <option value="default">Sort by...</option>
-                        <option value="price-asc">Price: Low to High</option>
-                        <option value="price-desc">Price: High to Low</option>
-                        <option value="rating-desc">Rating: High to Low</option>
-                        <option value="reviews-desc">Most Reviews</option>
-                    </select>
-                </div>
+          <div class="mt-3">
+            <button id="runNowBtn" class="btn btn-success w-100" type="button">
+              <i class="bi bi-play-fill me-1"></i> Run Now
+            </button>
+          </div>
 
-                <!-- Active Filters -->
-                <div id="activeFilters" class="alert alert-info" style="display: none;">
-                    <h5 class="alert-heading">Active Filters</h5>
-                    <div id="activeFiltersList"></div>
-                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="clearFilters()">Clear All Filters</button>
-                </div>
-
-                <!-- Results Container -->
-                <div id="resultsContainer" class="grid-view">
-                    <div id="resultsGrid" class="row g-4 sortable-grid">
-
-                    </div>
-                </div>
-
-                <!-- Schedule Container -->
-                <div id="scheduleContainer" class="ad-schedule" style="display:none;">
-
-                    <!-- Builder Grid Section -->
-                    <div id="scheduleBuilderSection">
-                        <div class="schedule-controls">
-                            <div class="row g-2 align-items-end">
-                                <div class="col-md-8">
-                                    <label class="form-label">Search Terms (one per line)</label>
-                                    <textarea id="termsInput" class="form-control" rows="3" placeholder="Enter search terms..."></textarea>
-                                </div>
-                                <div class="col-md-4">
-                                    <button id="buildScheduleBtn" class="btn btn-primary w-100">Build Grid</button>
-                                    <div class="d-flex gap-2 mt-2">
-                                        <button id="exportScheduleBtn" class="btn btn-outline-primary w-50">Export JSON</button>
-                                        <label class="btn btn-outline-secondary w-50 mb-0">
-                                            Import JSON
-                                            <input id="importScheduleInput" type="file" accept="application/json" hidden>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="schedule-grid-wrapper">
-                            <div class="schedule-grid" id="scheduleGrid">
-                                <div class="schedule-header"></div>
-                                <div class="schedule-header">AM</div>
-                                <div class="schedule-header">PM</div>
-                                <!-- Rows will be injected here -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- NFL Style Section -->
-                    <div id="nflScheduleSection" class="nfl-schedule" style="display:none;">
-                        <div class="nfl-schedule-header">
-                            <h3 class="nfl-title mb-0">Ad Flight Schedule</h3>
-                            <small class="text-muted">Visual layout only</small>
-                        </div>
-                        <div class="row g-3">
-                            <div class="col-lg-6">
-                                <div class="nfl-column">
-                                    <div class="nfl-row">
-                                        <div class="nfl-date">
-                                            <div class="nfl-date-primary">Sep 12</div>
-                                            <div class="nfl-date-secondary">Week 1</div>
-                                        </div>
-                                        <div class="nfl-games">
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">A</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">B</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">C</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">D</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="nfl-row">
-                                        <div class="nfl-date">
-                                            <div class="nfl-date-primary">Sep 19</div>
-                                            <div class="nfl-date-secondary">Week 2</div>
-                                        </div>
-                                        <div class="nfl-games">
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">E</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">F</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">G</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">H</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="nfl-row">
-                                        <div class="nfl-date">
-                                            <div class="nfl-date-primary">Sep 26</div>
-                                            <div class="nfl-date-secondary">Week 3</div>
-                                        </div>
-                                        <div class="nfl-games">
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">I</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">J</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">K</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">L</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="nfl-row">
-                                        <div class="nfl-date">
-                                            <div class="nfl-date-primary">Oct 3</div>
-                                            <div class="nfl-date-secondary">Week 4</div>
-                                        </div>
-                                        <div class="nfl-games">
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">M</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">N</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">O</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">P</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-lg-6">
-                                <div class="nfl-column">
-                                    <div class="nfl-row">
-                                        <div class="nfl-date">
-                                            <div class="nfl-date-primary">Nov 7</div>
-                                            <div class="nfl-date-secondary">Week 9</div>
-                                        </div>
-                                        <div class="nfl-games">
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">Q</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">R</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">S</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">T</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="nfl-row">
-                                        <div class="nfl-date">
-                                            <div class="nfl-date-primary">Nov 14</div>
-                                            <div class="nfl-date-secondary">Week 10</div>
-                                        </div>
-                                        <div class="nfl-games">
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">U</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">V</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">W</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">X</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="nfl-row">
-                                        <div class="nfl-date">
-                                            <div class="nfl-date-primary">Nov 21</div>
-                                            <div class="nfl-date-secondary">Week 11</div>
-                                        </div>
-                                        <div class="nfl-games">
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">Y</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">Z</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">AA</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">BB</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="nfl-row">
-                                        <div class="nfl-date">
-                                            <div class="nfl-date-primary">Nov 28</div>
-                                            <div class="nfl-date-secondary">Week 12</div>
-                                        </div>
-                                        <div class="nfl-games">
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">CC</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">DD</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                            <div class="nfl-matchup">
-                                                <div class="nfl-team"><span class="nfl-badge">EE</span><span class="nfl-team-code">Brand</span></div>
-                                                <div class="nfl-team"><span class="nfl-badge">FF</span><span class="nfl-team-code">Competitor</span></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Selected ASINs Output -->
-                <div id="selectedAsinsSection" class="selected-asins-section" style="display: none;">
-                    <div class="d-flex align-items-center">
-                        <textarea id="selectedAsins" class="form-control me-2" rows="1" readonly placeholder="Selected ASINs will appear here..."></textarea>
-                        <button id="copyAsins" class="btn btn-outline-primary" data-bs-toggle="tooltip" title="Copy ASINs">
-                            <i class="bi bi-clipboard"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Loading Spinner -->
-                <div id="loadingSpinner" class="text-center" style="display: none;">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
+          <div class="status-box mt-3" id="statusBox">
+            <div class="status-title">Status</div>
+            <div id="statusMessage" class="status-message">Ready</div>
+          </div>
         </div>
-    </div>
+      </aside>
 
-    <!-- Product Image Modal -->
-    <div class="modal fade" id="imageModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-body">
-                    <img src="" class="img-fluid" id="modalImage">
-                </div>
-            </div>
+      <!-- Main: Schedule Settings -->
+      <main class="col-lg-8 col-xl-9">
+        <div class="page-header d-flex align-items-center justify-content-between">
+          <div>
+            <h1 class="mb-1">Ad Run Schedule</h1>
+            <div class="text-muted small">Configure when to run scraping for each client</div>
+          </div>
+          <div class="d-none d-md-flex align-items-center gap-2">
+            <a href="/" class="btn btn-outline-secondary"><i class="bi bi-search"></i> Product Search</a>
+          </div>
         </div>
-    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
-    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+        <section class="card-section">
+          <div class="row g-4">
+            <div class="col-12 col-xl-7">
+              <div class="card-plain">
+                <div class="row g-3 align-items-end">
+                  <div class="col-6 col-md-4">
+                    <label class="form-label" for="runsPerDay">Runs per day</label>
+                    <input id="runsPerDay" type="number" class="form-control" min="1" max="5" value="3">
+                  </div>
+                  <div class="col-6 col-md-8">
+                    <div class="form-text">Set how many times per day to run. Times auto-suggest around conflicts.</div>
+                  </div>
+                </div>
+
+                <div id="timesList" class="times-list mt-3"></div>
+
+                <div class="mt-3">
+                  <label class="form-label d-block">Days to Run</label>
+                  <div class="days-grid">
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="dayMon" value="Monday" checked>
+                      <label class="form-check-label" for="dayMon">Mon</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="dayTue" value="Tuesday" checked>
+                      <label class="form-check-label" for="dayTue">Tue</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="dayWed" value="Wednesday" checked>
+                      <label class="form-check-label" for="dayWed">Wed</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="dayThu" value="Thursday" checked>
+                      <label class="form-check-label" for="dayThu">Thu</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="dayFri" value="Friday" checked>
+                      <label class="form-check-label" for="dayFri">Fri</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="daySat" value="Saturday">
+                      <label class="form-check-label" for="daySat">Sat</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="daySun" value="Sunday">
+                      <label class="form-check-label" for="daySun">Sun</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-3 d-flex gap-2">
+                  <button id="saveScheduleBtn" class="btn btn-primary" type="button">
+                    <i class="bi bi-save me-1"></i> Save Schedule
+                  </button>
+                  <button id="refreshConflictsBtn" class="btn btn-outline-primary" type="button">Check Conflicts</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12 col-xl-5">
+              <div class="card-plain">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <h5 class="mb-0">Overview</h5>
+                  <button id="refreshOverviewBtn" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-arrow-clockwise"></i></button>
+                </div>
+                <div class="overview-list" id="overviewList">
+                  <div class="text-muted small">No schedules found yet.</div>
+                </div>
+              </div>
+
+              <div class="card-plain mt-3">
+                <h6 class="mb-2">Notes</h6>
+                <ul class="small text-muted mb-0">
+                  <li>Schedules are stored per client in the output folder.</li>
+                  <li>Use "Run Now" to trigger a one-time scrape for the selected client.</li>
+                  <li>To run automatically on schedule, make sure the scheduler daemon is active.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/scheduler.js') }}"></script>
 </body>
 </html>
