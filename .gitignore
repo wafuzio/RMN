@@ -8,3 +8,7 @@ images/
 *.log
 logs/
 diagnostics/
+
+# Prevent Builder from causing merge conflicts
+app.py
+
