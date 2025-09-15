@@ -1,0 +1,366 @@
+/* Modern Schedule Map Styling */
+
+.schedule-map-container {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 32px;
+  margin-bottom: 24px;
+}
+
+.schedule-header {
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.schedule-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.schedule-subtitle {
+  font-size: 14px;
+  color: #666666;
+  margin: 8px 0 0 0;
+  font-weight: 400;
+}
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: 140px repeat(7, 1fr);
+  gap: 2px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 2px;
+  margin-bottom: 24px;
+}
+
+.grid-header {
+  display: contents;
+}
+
+.time-label-header {
+  background: transparent;
+}
+
+.day-header {
+  background: #ffffff;
+  padding: 16px 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #374151;
+  text-align: center;
+  border-radius: 8px 8px 0 0;
+  letter-spacing: 0.5px;
+}
+
+.time-row {
+  display: contents;
+}
+
+.time-label {
+  background: #ffffff;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-radius: 8px 0 0 8px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.time-primary {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1a1a1a;
+  letter-spacing: -0.2px;
+}
+
+.time-secondary {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+.time-slot {
+  background: #ffffff;
+  min-height: 64px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.time-slot:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #e5e7eb;
+}
+
+.time-slot.selected {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: #047857;
+}
+
+.time-slot.selected:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
+}
+
+.time-slot.conflict {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-color: #b91c1c;
+}
+
+.time-slot.conflict:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+}
+
+.time-slot.selected::after {
+  content: '✓';
+  color: white;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.schedule-legend {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+}
+
+.legend-color.selected {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: #047857;
+}
+
+.legend-color.available {
+  background: #ffffff;
+  border-color: #e5e7eb;
+}
+
+.legend-color.conflict {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-color: #b91c1c;
+}
+
+.schedule-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.action-btn {
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.2px;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+}
+
+.action-btn.primary:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+}
+
+.action-btn.secondary {
+  background: #ffffff;
+  color: #374151;
+  border: 2px solid #e5e7eb;
+}
+
+.action-btn.secondary:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Info Panels */
+.info-panel {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid #f1f5f9;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: between;
+  margin-bottom: 16px;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+  flex-grow: 1;
+}
+
+.refresh-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+  color: #374151;
+  background: #f3f4f6;
+}
+
+.overview-content {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.empty-state {
+  color: #9ca3af;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+}
+
+.notes-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.notes-list li {
+  font-size: 14px;
+  color: #6b7280;
+  padding: 6px 0;
+  border-bottom: 1px solid #f1f5f9;
+  position: relative;
+  padding-left: 16px;
+}
+
+.notes-list li:last-child {
+  border-bottom: none;
+}
+
+.notes-list li::before {
+  content: '•';
+  color: #3b82f6;
+  position: absolute;
+  left: 0;
+  font-weight: bold;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .schedule-grid {
+    grid-template-columns: 120px repeat(7, 1fr);
+    gap: 1px;
+  }
+  
+  .time-label {
+    padding: 16px 12px;
+  }
+  
+  .time-primary {
+    font-size: 13px;
+  }
+  
+  .time-secondary {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 768px) {
+  .schedule-map-container {
+    padding: 20px;
+  }
+  
+  .schedule-grid {
+    grid-template-columns: 100px repeat(7, 1fr);
+  }
+  
+  .day-header {
+    padding: 12px 4px;
+    font-size: 12px;
+  }
+  
+  .time-slot {
+    min-height: 48px;
+  }
+  
+  .schedule-actions {
+    flex-direction: column;
+  }
+  
+  .action-btn {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .schedule-grid {
+    grid-template-columns: 80px repeat(7, 1fr);
+  }
+  
+  .time-label {
+    padding: 12px 8px;
+  }
+  
+  .time-primary {
+    font-size: 11px;
+  }
+  
+  .time-secondary {
+    font-size: 10px;
+  }
+  
+  .day-header {
+    font-size: 11px;
+    padding: 10px 2px;
+  }
+  
+  .time-slot {
+    min-height: 40px;
+  }
+}
