@@ -1,14 +1,18 @@
+# Python & OS cruft
 .venv/
 __pycache__/
 *.pyc
+*.pyo
 .DS_Store
+
+# Local runtime/output
+logs/
+diagnostics/
 playwright_profile/
 output/
 images/
 *.log
-logs/
-diagnostics/
 
-# Prevent Builder from causing merge conflicts
-app.py
-
+# Node (if present)
+node_modules/
+.cache/
