@@ -64,74 +64,126 @@
         <section class="card-section">
           <div class="row g-4">
             <div class="col-12 col-xl-7">
-              <div class="card-plain">
-                <div class="row g-3 align-items-end">
-                  <div class="col-6 col-md-4">
-                    <label class="form-label" for="runsPerDay">Runs per day</label>
-                    <input id="runsPerDay" type="number" class="form-control" min="1" max="5" value="3">
+              <div class="schedule-map-container">
+                <div class="schedule-header">
+                  <h4 class="schedule-title">Ad Run Schedule</h4>
+                  <p class="schedule-subtitle">Select time slots for each day</p>
+                </div>
+
+                <div class="schedule-grid">
+                  <!-- Header Row -->
+                  <div class="grid-header">
+                    <div class="time-label-header"></div>
+                    <div class="day-header">Mon</div>
+                    <div class="day-header">Tue</div>
+                    <div class="day-header">Wed</div>
+                    <div class="day-header">Thu</div>
+                    <div class="day-header">Fri</div>
+                    <div class="day-header">Sat</div>
+                    <div class="day-header">Sun</div>
                   </div>
-                  <div class="col-6 col-md-8">
-                    <div class="form-text">Set how many times per day to run. Times auto-suggest around conflicts.</div>
+
+                  <!-- Early Morning Row -->
+                  <div class="time-row">
+                    <div class="time-label">
+                      <span class="time-primary">6-9 AM</span>
+                      <span class="time-secondary">Early Morning</span>
+                    </div>
+                    <div class="time-slot" data-day="monday" data-time="early-morning"></div>
+                    <div class="time-slot" data-day="tuesday" data-time="early-morning"></div>
+                    <div class="time-slot" data-day="wednesday" data-time="early-morning"></div>
+                    <div class="time-slot" data-day="thursday" data-time="early-morning"></div>
+                    <div class="time-slot" data-day="friday" data-time="early-morning"></div>
+                    <div class="time-slot" data-day="saturday" data-time="early-morning"></div>
+                    <div class="time-slot" data-day="sunday" data-time="early-morning"></div>
+                  </div>
+
+                  <!-- Late Morning Row -->
+                  <div class="time-row">
+                    <div class="time-label">
+                      <span class="time-primary">9-12 PM</span>
+                      <span class="time-secondary">Late Morning</span>
+                    </div>
+                    <div class="time-slot selected" data-day="monday" data-time="late-morning"></div>
+                    <div class="time-slot selected" data-day="tuesday" data-time="late-morning"></div>
+                    <div class="time-slot selected" data-day="wednesday" data-time="late-morning"></div>
+                    <div class="time-slot selected" data-day="thursday" data-time="late-morning"></div>
+                    <div class="time-slot selected" data-day="friday" data-time="late-morning"></div>
+                    <div class="time-slot" data-day="saturday" data-time="late-morning"></div>
+                    <div class="time-slot" data-day="sunday" data-time="late-morning"></div>
+                  </div>
+
+                  <!-- Early Afternoon Row -->
+                  <div class="time-row">
+                    <div class="time-label">
+                      <span class="time-primary">12-3 PM</span>
+                      <span class="time-secondary">Early Afternoon</span>
+                    </div>
+                    <div class="time-slot" data-day="monday" data-time="early-afternoon"></div>
+                    <div class="time-slot" data-day="tuesday" data-time="early-afternoon"></div>
+                    <div class="time-slot" data-day="wednesday" data-time="early-afternoon"></div>
+                    <div class="time-slot" data-day="thursday" data-time="early-afternoon"></div>
+                    <div class="time-slot" data-day="friday" data-time="early-afternoon"></div>
+                    <div class="time-slot" data-day="saturday" data-time="early-afternoon"></div>
+                    <div class="time-slot" data-day="sunday" data-time="early-afternoon"></div>
+                  </div>
+
+                  <!-- Late Afternoon Row -->
+                  <div class="time-row">
+                    <div class="time-label">
+                      <span class="time-primary">3-6 PM</span>
+                      <span class="time-secondary">Late Afternoon</span>
+                    </div>
+                    <div class="time-slot selected" data-day="monday" data-time="late-afternoon"></div>
+                    <div class="time-slot selected" data-day="tuesday" data-time="late-afternoon"></div>
+                    <div class="time-slot selected" data-day="wednesday" data-time="late-afternoon"></div>
+                    <div class="time-slot selected" data-day="thursday" data-time="late-afternoon"></div>
+                    <div class="time-slot selected" data-day="friday" data-time="late-afternoon"></div>
+                    <div class="time-slot" data-day="saturday" data-time="late-afternoon"></div>
+                    <div class="time-slot" data-day="sunday" data-time="late-afternoon"></div>
                   </div>
                 </div>
 
-                <div id="timesList" class="times-list mt-3"></div>
-
-                <div class="mt-3">
-                  <label class="form-label d-block">Days to Run</label>
-                  <div class="days-grid">
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="dayMon" value="Monday" checked>
-                      <label class="form-check-label" for="dayMon">Mon</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="dayTue" value="Tuesday" checked>
-                      <label class="form-check-label" for="dayTue">Tue</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="dayWed" value="Wednesday" checked>
-                      <label class="form-check-label" for="dayWed">Wed</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="dayThu" value="Thursday" checked>
-                      <label class="form-check-label" for="dayThu">Thu</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="dayFri" value="Friday" checked>
-                      <label class="form-check-label" for="dayFri">Fri</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="daySat" value="Saturday">
-                      <label class="form-check-label" for="daySat">Sat</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="daySun" value="Sunday">
-                      <label class="form-check-label" for="daySun">Sun</label>
-                    </div>
+                <div class="schedule-legend">
+                  <div class="legend-item">
+                    <div class="legend-color selected"></div>
+                    <span>Selected</span>
+                  </div>
+                  <div class="legend-item">
+                    <div class="legend-color available"></div>
+                    <span>Available</span>
+                  </div>
+                  <div class="legend-item">
+                    <div class="legend-color conflict"></div>
+                    <span>Conflict</span>
                   </div>
                 </div>
 
-                <div class="mt-3 d-flex gap-2">
-                  <button id="saveScheduleBtn" class="btn btn-primary" type="button">
-                    <i class="bi bi-save me-1"></i> Save Schedule
+                <div class="schedule-actions">
+                  <button id="saveScheduleBtn" class="action-btn primary" type="button">
+                    <i class="bi bi-save"></i> Save Schedule
                   </button>
-                  <button id="refreshConflictsBtn" class="btn btn-outline-primary" type="button">Check Conflicts</button>
+                  <button id="refreshConflictsBtn" class="action-btn secondary" type="button">
+                    <i class="bi bi-arrow-clockwise"></i> Check Conflicts
+                  </button>
                 </div>
               </div>
 
-              <div class="card-plain mt-3">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                  <h5 class="mb-0">Overview</h5>
-                  <button id="refreshOverviewBtn" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-arrow-clockwise"></i></button>
+              <div class="info-panel">
+                <div class="panel-header">
+                  <h5 class="panel-title">Overview</h5>
+                  <button id="refreshOverviewBtn" class="refresh-btn" type="button">
+                    <i class="bi bi-arrow-clockwise"></i>
+                  </button>
                 </div>
-                <div class="overview-list" id="overviewList">
-                  <div class="text-muted small">No schedules found yet.</div>
+                <div class="overview-content" id="overviewList">
+                  <div class="empty-state">No schedules found yet.</div>
                 </div>
               </div>
 
-              <div class="card-plain mt-3">
-                <h6 class="mb-2">Notes</h6>
-                <ul class="small text-muted mb-0">
+              <div class="info-panel">
+                <h6 class="panel-title">Notes</h6>
+                <ul class="notes-list">
                   <li>Schedules are stored per client in the output folder.</li>
                   <li>Use "Run Now" to trigger a one-time scrape for the selected client.</li>
                   <li>To run automatically on schedule, make sure the scheduler daemon is active.</li>
