@@ -4,7 +4,7 @@ Simple Flask server for Builder.io integration
 This server provides API endpoints for Builder.io to access ad data
 """
 
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, send_from_directory
 import os
 import json
 import glob
@@ -182,8 +182,6 @@ def get_toa(image_path):
     return send_from_directory('images/TOA', image_path)
 
 if __name__ == '__main__':
-    # Add missing import
-    from flask import send_from_directory
     
     # Create templates directory if it doesn't exist
     os.makedirs('templates', exist_ok=True)
