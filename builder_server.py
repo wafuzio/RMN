@@ -4,6 +4,10 @@ Simple Flask server for Builder.io integration
 This server provides API endpoints for Builder.io to access ad data
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "libs"))
+
 from flask import Flask, jsonify, request, render_template, send_from_directory
 import os
 import json
