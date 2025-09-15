@@ -1,0 +1,24 @@
+#!/bin/bash
+# Kroger TOA Scraper App Launcher Wrapper
+# This shell script launches the Python application directly
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_BUNDLE_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+PROJECT_DIR="$(dirname "$APP_BUNDLE_DIR")"
+
+# Change to project directory
+cd "$PROJECT_DIR"
+
+# Launch the Python application directly without subprocess
+python3 -c "
+import sys
+sys.path.insert(0, '$PROJECT_DIR')
+import keyword_input
+import tkinter as tk
+
+print('Starting Kroger TOA Scraper GUI...')
+root = tk.Tk()
+app = keyword_input.KeywordInputApp(root)
+root.mainloop()
+"

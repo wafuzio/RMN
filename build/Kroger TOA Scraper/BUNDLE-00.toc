@@ -1,0 +1,3 @@
+([('Kroger TOA Scraper',
+   '/Users/dan.maguire/Documents/Amazon_Scrape/dist/Kroger TOA Scraper',
+   'EXECUTABLE')],)

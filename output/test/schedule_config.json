@@ -1,28 +1,12 @@
 {
-  "runs": 3,
+  "runs": 1,
   "times": [
     [
       "9",
       "30",
       "AM"
-    ],
-    [
-      "12",
-      "00",
-      "AM"
-    ],
-    [
-      "4",
-      "00",
-      "AM"
     ]
   ],
-  "days": [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday"
-  ],
+  "days": [],
   "client": "test"
 }

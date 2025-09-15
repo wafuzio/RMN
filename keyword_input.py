@@ -32,14 +32,7 @@ class KeywordInputApp:
         # Initialize logger
         self.logger = None
         
-        self.root.update()  # Update to ensure it takes effect
-        self.root.resizable(True, True)
-        
-        print("Building UI...")
-        
-        print("✅ UI built")
-        
-        # Set light mode colors
+        # Color scheme
         self.bg_color = "#f0f0f0"  # Light gray background
         self.text_bg_color = "#ffffff"  # White background for text areas
         self.text_fg_color = "#000000"  # Black text
@@ -47,16 +40,45 @@ class KeywordInputApp:
         # Apply background color to root window
         self.root.configure(bg=self.bg_color)
         
-        # Client history file
-        self.history_file = os.path.join("output", "client_history.json")
-        self.client_history = self.load_client_history()
+        # Determine the project directory
+        if getattr(sys, 'frozen', False):
+            # Running from PyInstaller bundle - use absolute path to project
+            self.project_dir = "/Users/dan.maguire/Documents/Amazon_Scrape"
+        else:
+            # Running from source
+            self.project_dir = os.path.dirname(__file__)
         
-        # Scheduler variables
-        self.schedule_file = os.path.join("output", "schedule_config.json")
+        # Set application icon
+        try:
+            # Try to find icon2.png in the project directory
+            if getattr(sys, 'frozen', False):
+                # Running from PyInstaller bundle
+                icon_path = os.path.join(self.project_dir, "icon2.png")
+            else:
+                # Running from source
+                icon_path = os.path.join(os.path.dirname(__file__), "icon2.png")
+            
+            if os.path.exists(icon_path):
+                self.root.iconphoto(True, tk.PhotoImage(file=icon_path))
+        except Exception as e:
+            print(f"Could not load icon: {e}")
+        
+        # Set up signal handler for dock icon clicks
+        self.setup_signal_handler()
+        
+        # Initialize variables with correct paths
+        self.history_file = os.path.join(self.project_dir, "output", "client_history.json")
+        self.schedule_file = os.path.join(self.project_dir, "output", "schedule_config.json")
+        self.client_history = self.load_client_history()
         self.schedule_config = self.load_schedule_config()
         self.scheduler_thread = None
         self.schedule_running = False
         self.day_vars = {}  # Will store day checkbox variables
+        
+        # Check and start scheduler daemon if needed
+        self.daemon_status = self.check_daemon_status()
+        if not self.daemon_status:
+            self.start_daemon_automatically()
         
         # Set up the main frame
         main_frame = tk.Frame(root, padx=20, pady=20)
@@ -225,10 +247,11 @@ class KeywordInputApp:
         )
         self.clear_button.pack(side=tk.LEFT)
         
-        # Status label
+        # Status label with daemon status
+        daemon_text = "✅ Daemon running" if self.daemon_status else "⚠️ Daemon stopped"
         self.status_label = tk.Label(
             main_frame, 
-            text="Ready to scrape",
+            text=f"Ready to scrape | {daemon_text}",
             font=("Arial", 10),
             fg="#555"
         )
@@ -253,17 +276,17 @@ class KeywordInputApp:
         # Get keywords from the input area
         keywords_text = self.keyword_input.get(1.0, tk.END).strip()
         if not keywords_text:
-            messagebox.showerror("Error", "Please enter at least one keyword")
+            messagebox.showerror("Error", "Please enter some keywords")
             return
             
-        # Parse keywords
-        keywords = [k.strip() for k in keywords_text.split("\n") if k.strip()]
+        # Split keywords by newlines and clean them
+        keywords = [kw.strip() for kw in keywords_text.split('\n') if kw.strip()]
         
-        # Create output directory for this client/product
-        output_dir = os.path.join("output", folder_name)
+        # Create output directory if it doesn't exist
+        output_dir = os.path.join(self.project_dir, "output", folder_name)
         os.makedirs(output_dir, exist_ok=True)
         
-        # Save keywords to a file in the client directory
+        # Save keywords to file
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         keywords_file = os.path.join(output_dir, f"keywords_{timestamp}.txt")
         
@@ -291,7 +314,7 @@ class KeywordInputApp:
             # Get client/product type for output directory
             client_type = self.client_var.get().strip()
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client_type)
-            output_dir = os.path.join("output", folder_name)
+            output_dir = os.path.join(self.project_dir, "output", folder_name)
             
             # Create a popup window to show progress
             popup = tk.Toplevel(self.root)
@@ -486,12 +509,13 @@ class KeywordInputApp:
         """Get all scheduled times from all clients to detect conflicts"""
         scheduled_times = set()
         
-        if not os.path.exists("output"):
+        output_path = os.path.join(self.project_dir, "output")
+        if not os.path.exists(output_path):
             return scheduled_times
             
         # Scan all client directories for schedule configs
-        for client_dir in os.listdir("output"):
-            client_path = os.path.join("output", client_dir)
+        for client_dir in os.listdir(output_path):
+            client_path = os.path.join(output_path, client_dir)
             if not os.path.isdir(client_path):
                 continue
                 
@@ -601,6 +625,102 @@ class KeywordInputApp:
                     
         # If no available time found, return the original
         return preferred_hour, preferred_minute, preferred_ampm
+    
+    def setup_signal_handler(self):
+        """Set up signal handler for dock icon clicks"""
+        import signal
+        signal.signal(signal.SIGUSR1, self.signal_restore_window)
+    
+    def signal_restore_window(self, signum, frame):
+        """Restore window when signal is received"""
+        self.root.after(0, self.restore_window)
+    
+    def on_closing(self):
+        """Handle window closing - actually quit the application"""
+        # Clean up and quit properly
+        try:
+            os.remove('/tmp/kroger_toa_scraper.pid')
+        except:
+            pass
+        self.root.quit()
+        self.root.destroy()
+    
+    def restore_window(self):
+        """Restore window when dock icon is clicked"""
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+    
+    def check_daemon_status(self):
+        """Check if scheduler daemon is currently running"""
+        try:
+            # Check for running scheduler_daemon process
+            result = subprocess.run(
+                ["ps", "aux"], 
+                capture_output=True, 
+                text=True, 
+                timeout=10
+            )
+            
+            # Look for scheduler_daemon.py in the process list
+            for line in result.stdout.split('\n'):
+                if 'scheduler_daemon.py' in line and 'python' in line:
+                    return True
+            return False
+            
+        except Exception as e:
+            print(f"Error checking daemon status: {e}")
+            return False
+    
+    def start_daemon_automatically(self):
+        """Automatically start the scheduler daemon if it's not running"""
+        try:
+            print("Scheduler daemon not running. Starting automatically...")
+            
+            # Determine the project directory
+            # If running from PyInstaller, we need to find the original project directory
+            if getattr(sys, 'frozen', False):
+                # Running from PyInstaller bundle
+                # Try to find the project directory by looking for start_scheduler.sh
+                possible_paths = [
+                    "/Users/dan.maguire/Documents/Amazon_Scrape",  # Absolute path
+                    os.path.expanduser("~/Documents/Amazon_Scrape"),  # User home relative
+                ]
+                
+                daemon_script = None
+                for path in possible_paths:
+                    test_script = os.path.join(path, "start_scheduler.sh")
+                    if os.path.exists(test_script):
+                        daemon_script = test_script
+                        break
+            else:
+                # Running from source
+                daemon_script = os.path.join(os.path.dirname(__file__), "start_scheduler.sh")
+            
+            if daemon_script and os.path.exists(daemon_script):
+                # Start daemon in background
+                subprocess.Popen(
+                    [daemon_script],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+                print("✅ Scheduler daemon started automatically")
+                self.daemon_status = True
+                
+                # Update status label if it exists
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(text="Ready to scrape | ✅ Daemon running (auto-started)")
+                    
+            else:
+                print("⚠️ Scheduler daemon script not found")
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(text="⚠️ Daemon script not found - manual start required")
+                
+        except Exception as e:
+            print(f"Error starting daemon: {e}")
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text=f"Error starting daemon: {e}")
     
     def check_and_update_conflict_display(self, time_widgets):
         """Check for time conflicts and update the conflict display"""
@@ -773,7 +893,7 @@ class KeywordInputApp:
         if client:
             # Create client-specific log directory
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client)
-            log_dir = os.path.join("output", folder_name)
+            log_dir = os.path.join(self.project_dir, "output", folder_name)
             os.makedirs(log_dir, exist_ok=True)
             log_file = os.path.join(log_dir, "scheduler.log")
             
@@ -981,7 +1101,7 @@ class KeywordInputApp:
         # If client is specified, try to load client-specific config
         if client:
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client)
-            client_schedule_file = os.path.join("output", folder_name, "schedule_config.json")
+            client_schedule_file = os.path.join(self.project_dir, "output", folder_name, "schedule_config.json")
             
             if os.path.exists(client_schedule_file):
                 try:
@@ -1013,7 +1133,7 @@ class KeywordInputApp:
             
         # Create client-specific schedule file path
         folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client)
-        client_schedule_file = os.path.join("output", folder_name, "schedule_config.json")
+        client_schedule_file = os.path.join(self.project_dir, "output", folder_name, "schedule_config.json")
         
         # Get current times
         times = []

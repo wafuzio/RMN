@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Kroger TOA Scraper</string>
+	<key>CFBundleExecutable</key>
+	<string>Kroger TOA Scraper</string>
+	<key>CFBundleIconFile</key>
+	<string>generated-3f31f3aae590d2104295856e9a1ed43bcab34865b2381abf74aec05d36911b97.icns</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.wafuzio.kroger-toa-scraper</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Kroger TOA Scraper</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Kroger TOA Scraper may need access to save files to the Desktop.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Kroger TOA Scraper needs access to the Documents folder to save scraped data, keywords, and configuration files.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Kroger TOA Scraper may need access to save scraped data to the Downloads folder.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSRequiresAquaSystemAppearance</key>
+	<false/>
+</dict>
+</plist>

@@ -1,30 +1,12 @@
 {
-  "runs": 3,
+  "runs": 0,
   "times": [
     [
       "9",
       "00",
       "AM"
-    ],
-    [
-      "12",
-      "45",
-      "AM"
-    ],
-    [
-      "4",
-      "00",
-      "AM"
     ]
   ],
-  "days": [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday"
-  ],
+  "days": [],
   "client": "trolli pop"
 }
