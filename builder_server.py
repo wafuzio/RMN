@@ -8,6 +8,8 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "libs"))
 
+import sys
+sys.path.insert(0, "libs")
 from flask import Flask, jsonify, request, render_template, send_from_directory
 import os
 import json
