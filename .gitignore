@@ -16,3 +16,6 @@ images/
 # Node (if present)
 node_modules/
 .cache/
+
+# Builder conflict prevention
+app.py
