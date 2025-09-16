@@ -6,6 +6,7 @@ A simple popup interface for entering keywords to scrape.
 
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk, scrolledtext
+from tkinter import font as tkfont
 import os
 import sys
 import json
@@ -14,6 +15,7 @@ from datetime import datetime
 import subprocess
 import time
 import threading
+import re
 
 # Import the search and capture functionality
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -22,7 +24,7 @@ class KeywordInputApp:
     def __init__(self, root):
         """Initialize the application"""
         self.root = root
-        self.root.title("Kroger TOA Scraper")
+        self.root.title("Grocery Retail Ad Monitor")
         self.root.geometry("600x700")
         self.root.minsize(600, 700)
         
@@ -32,13 +34,39 @@ class KeywordInputApp:
         # Initialize logger
         self.logger = None
         
-        # Color scheme
-        self.bg_color = "#f0f0f0"  # Light gray background
-        self.text_bg_color = "#ffffff"  # White background for text areas
-        self.text_fg_color = "#000000"  # Black text
-        
+        # Load CSS variables from web stylesheet for consistent theming
+        css_vars = self.load_css_variables(os.path.join(os.path.dirname(__file__), "static", "css", "style.css"))
+        self.primary_color = css_vars.get('--primary-color', '#2962ff')
+        self.secondary_color = css_vars.get('--secondary-color', '#455a64')
+        self.bg_color = css_vars.get('--background-color', '#f5f7fa')
+        self.card_bg_color = css_vars.get('--card-background', '#ffffff')
+        self.text_bg_color = "#ffffff"
+        self.text_fg_color = "#111827"
+
         # Apply background color to root window
         self.root.configure(bg=self.bg_color)
+
+        # Typography similar to web (Inter with sensible fallbacks)
+        try:
+            tkfont.nametofont("TkDefaultFont").configure(family="Inter", size=11)
+            tkfont.nametofont("TkTextFont").configure(family="Inter", size=11)
+            tkfont.nametofont("TkHeadingFont").configure(family="Inter", size=14, weight="bold")
+        except Exception:
+            pass
+
+        # ttk styles matching web look
+        self.style = ttk.Style()
+        try:
+            self.style.theme_use('clam')
+        except Exception:
+            pass
+        self.style.configure('App.TFrame', background=self.bg_color)
+        self.style.configure('Card.TFrame', background=self.card_bg_color)
+        self.style.configure('Card.TLabelframe', background=self.card_bg_color, relief='solid', borderwidth=1)
+        self.style.configure('Card.TLabelframe.Label', background=self.card_bg_color, foreground=self.secondary_color, font=("Inter", 10, "bold"))
+        self.style.configure('TLabel', background=self.card_bg_color, foreground=self.secondary_color)
+        self.style.configure('Body.TLabel', background=self.bg_color, foreground=self.secondary_color)
+        self.style.configure('App.TCombobox', fieldbackground=self.card_bg_color, background=self.card_bg_color, foreground="#111827")
         
         # Determine the project directory
         if getattr(sys, 'frozen', False):
@@ -81,17 +109,17 @@ class KeywordInputApp:
             self.start_daemon_automatically()
         
         # Set up the main frame
-        main_frame = tk.Frame(root, padx=20, pady=20)
+        main_frame = ttk.Frame(root, padding=20, style='App.TFrame')
         main_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         # Client/Product Type field with dropdown
-        client_frame = tk.Frame(main_frame)
+        client_frame = ttk.Frame(main_frame, style='Card.TFrame')
         client_frame.pack(fill=tk.X, pady=(0, 15))
-        
-        client_label = tk.Label(
-            client_frame, 
-            text="Client/Product Type:", 
-            font=("Arial", 12)
+
+        client_label = ttk.Label(
+            client_frame,
+            text="Client/Product:",
+            style='TLabel'
         )
         client_label.pack(side=tk.LEFT)
         
@@ -104,26 +132,28 @@ class KeywordInputApp:
         self.client_var.set(dropdown_options[0])  # Set default text
         
         self.client_dropdown = ttk.Combobox(
-            client_frame, 
+            client_frame,
             textvariable=self.client_var,
             values=dropdown_options,
-            width=30
+            width=30,
+            style='App.TCombobox'
         )
         self.client_dropdown.pack(side=tk.LEFT, padx=(10, 0))
         self.client_dropdown.bind("<<ComboboxSelected>>", self.on_client_selected)
         
         # Instructions
-        instructions = tk.Label(
-            main_frame, 
+        instructions = ttk.Label(
+            main_frame,
             text="Enter keywords to scrape (one per line):",
-            font=("Arial", 12)
+            style='Body.TLabel'
         )
         instructions.pack(anchor="w", pady=(0, 10))
         
         # Keyword input area
         self.keyword_input = scrolledtext.ScrolledText(main_frame, height=10)
         self.keyword_input.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
-        
+        self.keyword_input.configure(background=self.card_bg_color, foreground=self.text_fg_color, insertbackground=self.primary_color, borderwidth=1, relief='solid')
+
         # Add placeholder text
         self.placeholder_text = "<enter keywords here>"
         self.keyword_input.insert(tk.END, self.placeholder_text)
@@ -134,14 +164,14 @@ class KeywordInputApp:
         self.keyword_input.bind("<FocusOut>", self.on_keyword_focus_out)
         
         # Schedule frame
-        schedule_frame = tk.LabelFrame(main_frame, text="Schedule Settings", padx=10, pady=10)
+        schedule_frame = ttk.Labelframe(main_frame, text="Schedule Settings", padding=10, style='Card.TLabelframe')
         schedule_frame.pack(fill=tk.X, pady=(0, 15))
-        
+
         # Number of runs per day
-        runs_frame = tk.Frame(schedule_frame)
+        runs_frame = ttk.Frame(schedule_frame, style='Card.TFrame')
         runs_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        runs_label = tk.Label(runs_frame, text="Runs per day:")
+
+        runs_label = ttk.Label(runs_frame, text="Runs per day:", style='TLabel')
         runs_label.pack(side=tk.LEFT)
         
         self.runs_var = tk.IntVar(value=3)  # Default to 3 runs per day
@@ -156,7 +186,7 @@ class KeywordInputApp:
         runs_spinbox.pack(side=tk.LEFT, padx=(10, 0))
         
         # Time selectors frame
-        self.times_frame = tk.Frame(schedule_frame)
+        self.times_frame = ttk.Frame(schedule_frame, style='Card.TFrame')
         self.times_frame.pack(fill=tk.X)
         
         # Time selector variables
@@ -167,12 +197,12 @@ class KeywordInputApp:
         self.update_time_selectors()
         
         # Days of week selection
-        days_frame = tk.LabelFrame(schedule_frame, text="Days to Run", padx=5, pady=5)
+        days_frame = ttk.Labelframe(schedule_frame, text="Days to Run", padding=5, style='Card.TLabelframe')
         days_frame.pack(fill=tk.X, pady=(10, 0))
-        
+
         # Create day checkboxes
         day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        day_boxes_frame = tk.Frame(days_frame)
+        day_boxes_frame = ttk.Frame(days_frame, style='Card.TFrame')
         day_boxes_frame.pack(fill=tk.X, pady=5)
         
         # Create checkboxes for each day
@@ -180,7 +210,7 @@ class KeywordInputApp:
             var = tk.BooleanVar(value=True)  # Default to selected
             self.day_vars[day] = var
             
-            cb = tk.Checkbutton(day_boxes_frame, text=day[:3], variable=var)
+            cb = ttk.Checkbutton(day_boxes_frame, text=day[:3], variable=var)
             cb.grid(row=0, column=i, padx=5)
             
             # Add event handler to refresh conflict displays when days change
@@ -190,18 +220,20 @@ class KeywordInputApp:
             var.trace('w', on_day_changed)
         
         # Schedule control buttons
-        schedule_buttons_frame = tk.Frame(schedule_frame)
+        schedule_buttons_frame = ttk.Frame(schedule_frame, style='Card.TFrame')
         schedule_buttons_frame.pack(fill=tk.X, pady=(10, 0))
         
         self.schedule_button = tk.Button(
             schedule_buttons_frame,
             text="Start Schedule",
             command=self.toggle_schedule,
-            bg="#2196F3",
+            bg=self.primary_color,
             fg="white",
-            font=("Arial", 10),
-            padx=10,
-            pady=5
+            font=("Inter", 10, "bold"),
+            padx=20,
+            pady=8,
+            relief="flat",
+            borderwidth=0
         )
         self.schedule_button.pack(side=tk.LEFT, padx=(0, 10))
         
@@ -209,16 +241,18 @@ class KeywordInputApp:
             schedule_buttons_frame,
             text="Save Schedule",
             command=self.save_schedule,
-            bg="#9C27B0",
+            bg=self.secondary_color,
             fg="white",
-            font=("Arial", 10),
-            padx=10,
-            pady=5
+            font=("Inter", 10, "bold"),
+            padx=20,
+            pady=8,
+            relief="flat",
+            borderwidth=0
         )
         save_schedule_button.pack(side=tk.LEFT)
         
         # Buttons frame
-        button_frame = tk.Frame(main_frame)
+        button_frame = ttk.Frame(main_frame, style='App.TFrame')
         button_frame.pack(fill=tk.X, pady=(0, 10))
         
         # Start scraping button
@@ -226,11 +260,13 @@ class KeywordInputApp:
             button_frame, 
             text="Start Scraping",
             command=self.start_scraping,
-            bg="#4CAF50",
+            bg=self.primary_color,
             fg="white",
-            font=("Arial", 11, "bold"),
-            padx=15,
-            pady=8
+            font=("Inter", 12, "bold"),
+            padx=30,
+            pady=10,
+            relief="flat",
+            borderwidth=0
         )
         self.scrape_button.pack(side=tk.LEFT, padx=(0, 10))
         
@@ -249,14 +285,34 @@ class KeywordInputApp:
         
         # Status label with daemon status
         daemon_text = "✅ Daemon running" if self.daemon_status else "⚠️ Daemon stopped"
-        self.status_label = tk.Label(
-            main_frame, 
+        self.status_label = ttk.Label(
+            main_frame,
             text=f"Ready to scrape | {daemon_text}",
-            font=("Arial", 10),
-            fg="#555"
+            style='Body.TLabel'
         )
         self.status_label.pack(anchor="w", pady=(10, 0))
         
+    def load_css_variables(self, css_path):
+        """Parse :root CSS variables from a stylesheet for reuse in Tkinter."""
+        vars_map = {}
+        try:
+            with open(css_path, 'r', encoding='utf-8') as f:
+                css = f.read()
+            m = re.search(r":root\s*\{([^}]*)\}", css, re.MULTILINE | re.DOTALL)
+            if not m:
+                return vars_map
+            root_block = m.group(1)
+            for line in root_block.splitlines():
+                line = line.strip()
+                if not line or not line.startswith('--') or ':' not in line:
+                    continue
+                name, value = line.split(':', 1)
+                value = value.strip().rstrip(';')
+                vars_map[name.strip()] = value
+        except Exception:
+            pass
+        return vars_map
+
     def clear_keywords(self):
         """Clear the keyword input area"""
         self.keyword_input.delete(1.0, tk.END)
@@ -639,7 +695,7 @@ class KeywordInputApp:
         """Handle window closing - actually quit the application"""
         # Clean up and quit properly
         try:
-            os.remove('/tmp/kroger_toa_scraper.pid')
+            os.remove('/tmp/grocery_retail_ad_monitor.pid')
         except:
             pass
         self.root.quit()
@@ -943,11 +999,11 @@ class KeywordInputApp:
         # Create time selectors
         for i in range(num_runs):
             # Create frame for this time selector
-            time_frame = tk.Frame(self.times_frame)
+            time_frame = ttk.Frame(self.times_frame, style='Card.TFrame')
             time_frame.pack(fill=tk.X, pady=(0, 5))
-            
+
             # Label
-            label = tk.Label(time_frame, text=f"Run {i+1} at:")
+            label = ttk.Label(time_frame, text=f"Run {i+1} at:", style='TLabel')
             label.pack(side=tk.LEFT)
             
             # Hour selector
@@ -957,7 +1013,8 @@ class KeywordInputApp:
                 time_frame,
                 textvariable=hour_var,
                 values=hour_values,
-                width=3
+                width=3,
+                style='App.TCombobox'
             )
             hour_combo.pack(side=tk.LEFT, padx=(10, 0))
             
@@ -1008,7 +1065,7 @@ class KeywordInputApp:
                 suggested_ampm = default_ampm
             
             # Colon label
-            colon_label = tk.Label(time_frame, text=":")
+            colon_label = ttk.Label(time_frame, text=":", style='TLabel')
             colon_label.pack(side=tk.LEFT)
             
             # Minute selector
@@ -1017,7 +1074,8 @@ class KeywordInputApp:
                 time_frame,
                 textvariable=minute_var,
                 values=[f"{m:02d}" for m in range(0, 60, 5)],  # Every 5 minutes
-                width=3
+                width=3,
+                style='App.TCombobox'
             )
             minute_combo.pack(side=tk.LEFT, padx=(0, 5))
             
@@ -1028,12 +1086,13 @@ class KeywordInputApp:
                 time_frame,
                 textvariable=ampm_var,
                 values=["AM", "PM"],
-                width=3
+                width=3,
+                style='App.TCombobox'
             )
             ampm_combo.pack(side=tk.LEFT, padx=(5, 0))
             
             # Add conflict indicator label
-            conflict_label = tk.Label(time_frame, text="", fg="red", font=("Arial", 8))
+            conflict_label = ttk.Label(time_frame, text="", style='Body.TLabel')
             conflict_label.pack(side=tk.LEFT, padx=(5, 0))
             
             # Store references for conflict checking
@@ -1378,7 +1437,7 @@ class KeywordInputApp:
             time.sleep(30)
 
 def main():
-    print("Starting Kroger TOA Scraper GUI...")
+    print("Starting Grocery Retail Ad Monitor GUI...")
     try:
         print("Creating Tk root window")
         root = tk.Tk()

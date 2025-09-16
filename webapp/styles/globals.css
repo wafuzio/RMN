@@ -1,0 +1,13 @@
+@import '../../static/css/style.css';
+@import '../../static/css/scheduler.css';
+
+:root {
+  --app-padding: 16px;
+}
+
+html, body { height: 100%; }
+body { margin: 0; }
+
+.main { padding: var(--app-padding); }
+.nav { display:flex; gap:12px; margin-bottom:12px; }
+.nav a { text-decoration:none; }

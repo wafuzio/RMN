@@ -1,3 +1,3 @@
-([('Kroger TOA Scraper',
-   '/Users/dan.maguire/Documents/Amazon_Scrape/dist/Kroger TOA Scraper',
+([('Grocery Retail Ad Monitor',
+   '/Users/dan.maguire/Documents/Amazon_Scrape/dist/Grocery Retail Ad Monitor',
    'EXECUTABLE')],)

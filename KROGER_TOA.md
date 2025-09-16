@@ -1,4 +1,4 @@
-# Kroger TOA Monitoring Project – Full Outline & Intent
+# Grocery Retail Ad Monitoring Project – Full Outline & Intent
 
 (TOA = Targeted Onsite Ad)
 
@@ -6,15 +6,15 @@
 
 ## 🎯 Primary Objective
 
-Build a fully automated, repeatable pipeline that captures, logs, and stores Targeted Onsite Ad (TOA) placements from Kroger.com search results — across multiple search terms, three times daily — to track sponsored brand presence and creative variation over time.
+Build a fully automated, repeatable pipeline that captures, logs, and stores Targeted Onsite Ad (TOA) placements from grocery retailer search results — across multiple search terms, three times daily — to track sponsored brand presence and creative variation over time.
 
-This system acts as a passive intelligence-gathering tool, enabling structured observation of Kroger’s onsite retail media placements from a buyer’s POV.
+This system acts as a passive intelligence-gathering tool, enabling structured observation of grocery retailers' onsite retail media placements from a buyer's POV.
 
 ⸻
 
 ## 🧱 Core Use Case
 
-“Which brands are paying to appear at the top of search results on Kroger.com for key terms — and how often do those placements rotate throughout the day?”
+“Which brands are paying to appear at the top of search results on grocery retailer websites for key terms — and how often do those placements rotate throughout the day?”
 
 This system allows you to:
 
@@ -27,7 +27,7 @@ This system allows you to:
 
 ## 🧠 Strategic Rationale
 
-Retailers like Kroger monetize onsite search via programmatic TOA banner units, which are opaque to external observers and not archived in any ad transparency library.
+Grocery retailers monetize onsite search via programmatic TOA banner units, which are opaque to external observers and not archived in any ad transparency library.
 
 This project:
 

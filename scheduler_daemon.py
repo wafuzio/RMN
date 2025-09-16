@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Scheduler Daemon for Kroger TOA Scraper
+Scheduler Daemon for Grocery Retail Ad Monitor
 
 This daemon runs independently and monitors all client schedule configurations,
 executing scraping tasks at the specified times for each client.

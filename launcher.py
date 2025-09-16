@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Kroger TOA Scraper App Launcher
+Grocery Retail Ad Monitor App Launcher
 This Python script serves as the main executable for the app bundle
 """
 
@@ -24,7 +24,7 @@ def main():
         
         # Run the application
         if __name__ == '__main__':
-            print("Starting Kroger TOA Scraper GUI...")
+            print("Starting Grocery Retail Ad Monitor GUI...")
             import tkinter as tk
             
             print("Creating Tk root window")

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kroger TOA Scheduler</title>
+  <title>Grocery Retail Ad Monitor</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -63,7 +63,7 @@
 
         <section class="card-section">
           <div class="row g-4">
-            <div class="col-12 col-xl-7">
+            <div class="col-12">
               <div class="card-plain">
                 <div class="row g-3 align-items-end">
                   <div class="col-6 col-md-4">
@@ -118,10 +118,8 @@
                   <button id="refreshConflictsBtn" class="btn btn-outline-primary" type="button">Check Conflicts</button>
                 </div>
               </div>
-            </div>
 
-            <div class="col-12 col-xl-5">
-              <div class="card-plain">
+              <div class="card-plain mt-3">
                 <div class="d-flex align-items-center justify-content-between mb-2">
                   <h5 class="mb-0">Overview</h5>
                   <button id="refreshOverviewBtn" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-arrow-clockwise"></i></button>

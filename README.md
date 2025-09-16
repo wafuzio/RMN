@@ -1,105 +1,342 @@
-# Kroger TOA Monitoring Project
+# Grocery Retail Ad Monitor
 
-A tool for tracking and analyzing Targeted Onsite Ads (TOAs) and other ad types on Kroger.com search results, with support for integration with Builder.io.
+A comprehensive automation platform for tracking and analyzing sponsored ads across major grocery retailers, featuring a native macOS app, web interface, scheduling system, and Builder.io integration. Currently supports Kroger.com with planned expansion to all major grocery chains.
 
 ## Overview
 
-This project provides a system for monitoring and analyzing sponsored brand presence in Kroger.com search results. It includes tools for:
+The Grocery Retail Ad Monitor is a complete multi-retailer monitoring solution that provides:
 
-- Automated search and capture of Kroger.com search results
-- Extraction of TOA (Targeted Onsite Ad) data from search results
-- Precise cropping of TOA banner images for use in Builder.io
-- Client-specific organization of results
-- API endpoints for accessing images and data
+- **Multi-Retailer Support**: Extensible architecture for major grocery chains (Kroger pilot)
+- **Native macOS App**: PyInstaller-built GUI app with dock integration and custom icon
+- **Web Interface**: Modern Bootstrap-based scheduler and dashboard
+- **Automated Scheduling**: Multi-client conflict-aware scheduling system
+- **Real-time Monitoring**: Background daemon for automated scraping
+- **Builder.io Integration**: Vendored Flask API with CORS support
+- **Advanced Ad Extraction**: Modular system for TOAs, carousels, and sponsored content
+- **Client Management**: Multi-tenant architecture with isolated data
 
-## Complete Workflow
+## Architecture
 
-1. **Keyword Entry** → User enters search keywords and client name via `keyword_input.py`
-2. **Search & Capture** → `kroger_search_and_capture.py` performs the search and captures screenshots/HTML
-3. **TOA Extraction** → `kroger_ad_core.py` with `toa_extractor.py` extracts TOA data from HTML
-4. **Image Processing** → `capture_toa_images.py` creates precisely cropped TOA-only images
-5. **Data Storage** → Results stored in client-specific directories with organized structure
-6. **API Access** → `builder_server.py` provides API endpoints for Builder.io integration
+### Desktop Application
+- **Native macOS App Bundle**: `Grocery Retail Ad Monitor.app` with custom icon and dock integration
+- **PyInstaller Build**: Standalone executable with vendored dependencies
+- **Tkinter GUI**: Modern interface with CSS-synchronized styling
+- **Retailer Selection**: Extensible UI for multiple grocery chains (Kroger pilot)
+- **Signal Handling**: Proper dock icon click restoration
+
+### Web Interface
+- **Flask Server**: `builder_server.py` with vendored dependencies in `libs/`
+- **Bootstrap 5**: Modern responsive UI with custom CSS
+- **Scheduler Dashboard**: Real-time conflict detection and management
+- **API Endpoints**: RESTful interface for Builder.io integration
+
+### Automation System
+- **Background Daemon**: `scheduler_daemon.py` for automated execution
+- **Multi-client Scheduling**: Conflict-aware time slot management
+- **Real-time Monitoring**: 5-minute conflict windows with visual indicators
+- **Cross-platform Compatibility**: macOS and Linux support
 
 ## Directory Structure
 
 ```
-output/
-  ├── <client_name>/       # Client-specific directory (e.g., Land_O_Frost)
-  │   ├── main/           # Full page screenshots
-  │   ├── TOA/            # TOA-only images and results
-  │   └── *.html          # Saved HTML files
+├── dist/
+│   └── Grocery Retail Ad Monitor.app/     # macOS app bundle
+├── libs/                           # Vendored Flask dependencies
+│   ├── flask/
+│   ├── jinja2/
+│   └── ...
+├── static/
+│   ├── css/
+│   │   ├── style.css              # Main styling with CSS variables
+│   │   └── scheduler.css          # Scheduler-specific styles
+│   └── js/
+├── templates/
+│   ├── index.html                 # Main scheduler interface
+│   └── nfl_dashboard.html         # NFL-style dashboard
+├── output/
+│   └── <client_name>/             # Client-specific directories
+│       ├── main/                  # Full page screenshots
+│       ├── TOA/                   # TOA-only images and results
+│       ├── schedule_config.json   # Client scheduling configuration
+│       ├── scheduler.log          # Client-specific logs
+│       └── *.html                 # Saved HTML files
+└── ad_extractors/                 # Modular ad extraction system
+    ├── base_extractor.py
+    ├── toa_extractor.py
+    └── ...
 ```
 
 ## Key Components
 
-- **keyword_input.py**: GUI for entering keywords and managing searches
-- **kroger_search_and_capture.py**: Performs searches and captures HTML/screenshots
-- **kroger_ad_core.py**: Core functionality for ad extraction
-- **ad_extractors/**: Modular system for different ad type extractors
-  - **base_extractor.py**: Base class with common extraction methods
-  - **toa_extractor.py**: Specific extractor for TOA banners
-- **process_saved_html.py**: Processes saved HTML files to extract ad data
-- **capture_toa_images.py**: Creates precisely cropped TOA-only images
-- **builder_server.py**: Flask server with API endpoints for Builder.io integration
+### Desktop Application
+- **keyword_input.py**: Main Tkinter GUI with CSS-synchronized styling
+- **launcher**: macOS app bundle launcher with proper path resolution
+- **kroger_toa_scraper.spec**: PyInstaller configuration with custom icon
+
+### Web Interface & API
+- **builder_server.py**: Flask server with vendored dependencies
+- **templates/**: Bootstrap-based web interface
+- **static/**: CSS/JS assets with CSS variables for theming
+
+### Core Functionality
+- **kroger_search_and_capture.py**: Playwright-based search automation
+- **kroger_ad_core.py**: Core ad extraction with modular extractors
+- **scheduler_daemon.py**: Background automation daemon
+- **ad_extractors/**: Pluggable extraction system
+  - **base_extractor.py**: Common extraction methods
+  - **toa_extractor.py**: TOA-specific extraction
+  - **carousel_extractor.py**: Carousel ad extraction
+  - **skyscraper_extractor.py**: Skyscraper ad extraction
+
+### Utilities
+- **process_saved_html.py**: Batch HTML processing
+- **capture_toa_images.py**: Precise TOA image cropping
+- **test_*.py**: Comprehensive test suite
 
 ## API Endpoints
 
-- `/api/images/<client>/<filename>` - Serves full page screenshots
-- `/api/toa/<client>/<filename>` - Serves TOA-only images
+### Web Interface
+- `GET /` - Main scheduler interface
+- `GET /nfl` - NFL-style dashboard view
+
+### Data API
+- `GET /api/ads` - List all clients
+- `GET /api/ads/<client>` - Get ads for specific client
+- `GET /api/nfl-grid/<client>` - NFL-style grid data
+
+### Asset Serving
+- `GET /api/images/<client>/<filename>` - Full page screenshots
+- `GET /api/toa/<client>/<filename>` - TOA-only images
+
+### CORS Support
+- Full CORS headers for Builder.io integration
+- Vendored Flask dependencies for deployment compatibility
 
 ## Features
 
-- **Session Persistence**: Handles Akamai Bot Protection with cookie persistence
-- **Modular Ad Extractors**: Easily add new ad type extractors
-- **Adaptive TOA Detection**: Uses edge detection to precisely crop TOA banners
-- **Client Organization**: Stores results in client-specific directories
-- **Builder.io Integration**: API endpoints for accessing images
+### Desktop Application
+- **Native macOS Integration**: Proper dock icon, app bundle, Launch Services registration
+- **Custom Icon Support**: Dynamic icon loading with PyInstaller compatibility
+- **CSS Synchronization**: Desktop styling matches web interface variables
+- **Signal Handling**: Proper window restoration on dock icon clicks
+
+### Scheduling & Automation
+- **Multi-client Scheduling**: Independent schedules per client with conflict detection
+- **Real-time Conflict Visualization**: Color-coded time slots with suggestions
+- **Background Daemon**: Automated execution with comprehensive logging
+- **Cross-client Coordination**: 5-minute conflict windows prevent browser conflicts
+
+### Web Interface
+- **Modern Bootstrap UI**: Responsive design with custom theming
+- **Real-time Updates**: Dynamic conflict checking and schedule management
+- **Client Management**: Dropdown selection with history persistence
+- **Visual Feedback**: Status indicators and progress tracking
+
+### Technical Features
+- **Session Persistence**: Akamai Bot Protection handling with cookie management
+- **Modular Architecture**: Pluggable ad extractors for different ad types
+- **Adaptive Detection**: Edge detection for precise TOA banner cropping
+- **Vendor Independence**: Self-contained Flask dependencies for deployment
+- **Cross-platform Support**: macOS and Linux compatibility
 
 ## Requirements
 
-- Python 3.8+
-- Playwright
-- BeautifulSoup4
-- Pillow (PIL)
-- Flask
-- NumPy
+### System Requirements
+- **macOS**: 10.14+ (for native app bundle)
+- **Python**: 3.8+ with tkinter support
+- **Memory**: 4GB+ RAM recommended
+- **Storage**: 2GB+ for dependencies and output data
+
+### Python Dependencies
+- **Playwright**: Browser automation
+- **BeautifulSoup4**: HTML parsing
+- **Pillow (PIL)**: Image processing
+- **Flask**: Web server (vendored in `libs/`)
+- **NumPy**: Numerical operations
+- **Tkinter**: GUI framework (usually included with Python)
 
 ## Installation
 
-1. Clone this repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Install Playwright browsers: `playwright install`
+### Quick Start (macOS)
+1. **Download the App**: Use the pre-built `Kroger TOA Scraper.app` from `dist/`
+2. **Install Playwright**: `pip install playwright && playwright install`
+3. **Launch**: Double-click the app or use `open "Kroger TOA Scraper.app"`
+
+### Development Setup
+1. **Clone Repository**:
+   ```bash
+   git clone <repository-url>
+   cd Amazon_Scrape
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   playwright install
+   ```
+
+3. **Build App Bundle** (optional):
+   ```bash
+   pyinstaller kroger_toa_scraper.spec --noconfirm
+   ```
 
 ## Usage
 
-### Running the Main Tool
+### Desktop Application
 
+#### Launch the Native App
 ```bash
+# Method 1: Direct launch
+open "dist/Kroger TOA Scraper.app"
+
+# Method 2: From source
 python keyword_input.py
 ```
 
-### Processing Saved HTML
+#### Using the GUI
+1. **Select Client**: Choose existing client or create new one
+2. **Enter Keywords**: Add search terms (one per line)
+3. **Configure Schedule**: Set times and days for automated runs
+4. **Run Now**: Execute immediate scraping
+5. **Save Schedule**: Enable automated execution
 
+### Web Interface
+
+#### Start the Web Server
 ```bash
-python process_saved_html.py --input-dir output/<client_name> --output-dir output/<client_name>
-```
-
-### Creating TOA-Only Images
-
-```bash
-python capture_toa_images.py <client_name>
-```
-
-### Starting the API Server
-
-```bash
+# With vendored dependencies
 python builder_server.py
+
+# Access at http://localhost:5006
 ```
 
-## Adding New Ad Extractors
+#### Web Features
+- **Scheduler Dashboard**: Visual schedule management
+- **Client Overview**: Multi-client monitoring
+- **Conflict Detection**: Real-time scheduling conflicts
+- **API Access**: RESTful endpoints for integration
 
-1. Copy `ad_extractors/template_extractor.py` to a new file
-2. Modify the class name, ad type, and extraction logic
-3. Register the extractor in the module
-4. Import the new extractor in `kroger_ad_core.py`
+### Automation & Scheduling
+
+#### Background Daemon
+```bash
+# Start scheduler daemon
+./start_scheduler.sh
+
+# Check daemon status
+ps aux | grep scheduler_daemon
+```
+
+#### Manual Operations
+```bash
+# Process saved HTML files
+python process_saved_html.py --input-dir output/<client> --output-dir output/<client>
+
+# Create TOA-only images
+python capture_toa_images.py <client_name>
+
+# Run diagnostics
+python test_kroger_diagnostics.py
+```
+
+## Configuration
+
+### Client Management
+- **Client History**: Stored in `output/client_history.json`
+- **Schedule Config**: Per-client in `output/<client>/schedule_config.json`
+- **Logs**: Client-specific logs in `output/<client>/scheduler.log`
+
+### Styling Synchronization
+The desktop app automatically syncs with web CSS variables:
+```css
+/* static/css/style.css */
+:root {
+    --primary-color: #2962ff;
+    --secondary-color: #455a64;
+    --background-color: #f5f7fa;
+    --card-background: #ffffff;
+}
+```
+
+### Builder.io Integration
+1. **Start Server**: `python builder_server.py`
+2. **Configure Builder**: Point to `http://localhost:5006`
+3. **Access APIs**: Use `/api/` endpoints for data and images
+
+## Development
+
+### Adding New Ad Extractors
+1. **Create Extractor**:
+   ```bash
+   cp ad_extractors/template_extractor.py ad_extractors/new_extractor.py
+   ```
+
+2. **Implement Logic**:
+   ```python
+   class NewExtractor(BaseExtractor):
+       def extract_ads(self, soup, url):
+           # Custom extraction logic
+           return ads
+   ```
+
+3. **Register Extractor**:
+   ```python
+   # In kroger_ad_core.py
+   from ad_extractors.new_extractor import NewExtractor
+   ```
+
+### Building App Bundle
+```bash
+# Update icon (optional)
+cp new_icon.png icon2.png
+
+# Build with PyInstaller
+pyinstaller kroger_toa_scraper.spec --noconfirm
+
+# Register with macOS
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "dist/Kroger TOA Scraper.app"
+```
+
+### Testing
+```bash
+# Run test suite
+python test_diagnostics.py
+python test_kroger_diagnostics.py
+python test_session_persistence.py
+
+# Test GUI components
+python test_tkinter.py
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**App Won't Launch from Dock**
+- Rebuild app bundle: `pyinstaller kroger_toa_scraper.spec --noconfirm`
+- Re-register with Launch Services: `lsregister -f "dist/Kroger TOA Scraper.app"`
+
+**Scheduler Conflicts**
+- Check daemon status: `ps aux | grep scheduler_daemon`
+- Review logs: `tail -f output/<client>/scheduler.log`
+- Use web interface for visual conflict resolution
+
+**Builder.io Connection Issues**
+- Verify Flask server: `curl http://localhost:5006`
+- Check CORS headers in browser dev tools
+- Ensure vendored dependencies: `ls libs/`
+
+**Styling Issues**
+- Desktop app reads CSS variables from `static/css/style.css`
+- Rebuild app after CSS changes
+- Check font availability: Inter font family
+
+### Logs & Diagnostics
+- **App Logs**: Console output when running from terminal
+- **Scheduler Logs**: `output/<client>/scheduler.log`
+- **Daemon Logs**: Check system logs for `scheduler_daemon.py`
+- **Web Logs**: Flask server console output
+
+## License
+
+Proprietary - Internal use only

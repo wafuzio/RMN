@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NFL-Style Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/nfl-dashboard.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="nfl-page">
     <main class="nfl-container">
@@ -14,38 +17,20 @@
                 <div class="shield-mid">MONDAY NIGHT</div>
                 <div class="shield-bottom">AD SCHEDULE</div>
             </div>
-            <h1 class="season-title">TARGETED ONSITE ADS (TOA){% if brand %} — {{ brand.replace('_',' ') }}{% endif %}</h1>
+            <h1 class="season-title">TARGETED ONSITE ADS (TOA)</h1>
+            <div class="client-picker">
+                <label for="nflClient" class="picker-label">Client</label>
+                <select id="nflClient" class="picker-select"></select>
+                <label for="nflTerm" class="picker-label ms-3">Search Term</label>
+                <input id="nflTerm" class="picker-select" type="text" value="packaged deli meat" placeholder="search term">
+            </div>
         </header>
 
-        <section class="schedule-columns">
-            {% if keywords and keywords|length > 0 %}
-            <div class="schedule-col">
-                {% for kw in keywords %}
-                <div class="week-row">
-                    <div class="week-date">
-                        <div class="date-primary">{{ kw }}</div>
-                        <div class="date-secondary">KEYWORD</div>
-                    </div>
-                    <div class="week-games">
-                        <div class="matchup">
-                            <div class="team-flag team-a"><span class="team-code">A</span></div>
-                            <div class="team-flag team-b"><span class="team-code">B</span></div>
-                        </div>
-                        <div class="matchup">
-                            <div class="team-flag team-a"><span class="team-code">C</span></div>
-                            <div class="team-flag team-b"><span class="team-code">D</span></div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <!-- Static fallback if no keywords found -->
-            <div class="schedule-col">
-                <div class="week-row"><div class="week-date"><div class="date-primary">NO KEYWORDS</div><div class="date-secondary">Provide output/&lt;Brand&gt;/keywords_*.txt</div></div><div class="week-games"><div class="matchup"><div class="team-flag team-a"><span class="team-code">A</span></div><div class="team-flag team-b"><span class="team-code">B</span></div></div><div class="matchup"><div class="team-flag team-a"><span class="team-code">C</span></div><div class="team-flag team-b"><span class="team-code">D</span></div></div></div></div>
-            </div>
-            {% endif %}
+        <section class="schedule-columns" id="nflContent"></section>
+        <section class="templates-section">
+            <div id="templatesDeck" class="templates-deck" aria-label="Template cards"></div>
         </section>
     </main>
+    <script src="{{ url_for('static', filename='js/nfl_dashboard.js') }}"></script>
 </body>
 </html>

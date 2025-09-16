@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Keyword Input Preview</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/scheduler.css') }}">
+</head>
+<body>
+  <div class="container-fluid">
+    <div class="row">
+      <aside class="col-lg-4 col-xl-3 scheduler-sidebar">
+        <div class="sticky-panel">
+          <h2 class="panel-title mb-3">Client & Keywords</h2>
+
+          <div class="mb-3">
+            <label for="clientSelect" class="form-label">Client/Product</label>
+            <div class="d-flex gap-2">
+              <select id="clientSelect" class="form-select"></select>
+              <button id="newClientBtn" class="btn btn-outline-primary" type="button"><i class="bi bi-plus-lg"></i></button>
+            </div>
+            <div class="form-text">Pick a client or add a new one.</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="keywordsInput" class="form-label">Keywords (one per line)</label>
+            <textarea id="keywordsInput" class="form-control" rows="10" placeholder="Enter keywords (one per line)"></textarea>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button id="saveKeywordsBtn" class="btn btn-primary w-100" type="button">Save Keywords</button>
+            <button id="clearKeywordsBtn" class="btn btn-outline-secondary" type="button">Clear</button>
+          </div>
+
+          <!-- Run Now removed for parity with desktop app -->
+
+          <div class="status-box mt-3" id="statusBox">
+            <div class="status-title">Status</div>
+            <div id="statusMessage" class="status-message">Ready</div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="col-lg-8 col-xl-9">
+        <div class="page-header d-flex align-items-center justify-content-between">
+          <div>
+            <h1 class="mb-1">Keyword Input Preview</h1>
+            <div class="text-muted small">Web preview of the desktop GUI with local storage</div>
+          </div>
+          <div class="d-none d-md-flex align-items-center gap-2">
+            <a href="/" class="btn btn-outline-secondary"><i class="bi bi-clock"></i> Scheduler</a>
+          </div>
+        </div>
+
+        <section class="card-section">
+          <div class="row g-4">
+            <div class="col-12">
+              <div class="card-plain spending-panel mb-3">
+                <div class="d-flex align-items-center justify-content-between">
+                  <button class="btn btn-link p-0 spending-label" type="button">
+                    <span class="spending-label-text">Spent in September</span>
+                    <i class="bi bi-caret-right-fill text-muted ms-1"></i>
+                  </button>
+                  <button class="btn btn-outline-secondary btn-sm" type="button" aria-label="Ask AI">
+                    <i class="bi bi-stars me-1"></i> Ask AI
+                  </button>
+                </div>
+                <hr class="spending-sep">
+                <div class="spending-grid" role="grid" aria-label="Monthly spend heatmap">
+                  <button type="button" class="spending-cell level-0" aria-label="Sep 1: $13">1<span>$13</span></button>
+                  <button type="button" class="spending-cell level-3" aria-label="Sep 2: $2.03K">2<span>$2.03K</span></button>
+                  <button type="button" class="spending-cell level-3" aria-label="Sep 3: $2.98K">3<span>$2.98K</span></button>
+                  <button type="button" class="spending-cell level-0" aria-label="Sep 4: $57">4<span>$57</span></button>
+                  <button type="button" class="spending-cell level-1" aria-label="Sep 5: $81">5<span>$81</span></button>
+                  <button type="button" class="spending-cell level-0" aria-label="Sep 6: $21">6<span>$21</span></button>
+                  <button type="button" class="spending-cell level-0" aria-label="Sep 7: $0">7<span>$0</span></button>
+                  <button type="button" class="spending-cell level-2" aria-label="Sep 8: $412">8<span>$412</span></button>
+                  <button type="button" class="spending-cell level-0" aria-label="Sep 9: $78">9<span>$78</span></button>
+                  <button type="button" class="spending-cell level-1" aria-label="Sep 10: $112">10<span>$112</span></button>
+                  <button type="button" class="spending-cell level-2" aria-label="Sep 11: $188">11<span>$188</span></button>
+                  <button type="button" class="spending-cell level-2" aria-label="Sep 12: $334">12<span>$334</span></button>
+                  <button type="button" class="spending-cell level-0" aria-label="Sep 13: $3">13<span>$3</span></button>
+                  <button type="button" class="spending-cell level-1" aria-label="Sep 14: $124">14<span>$124</span></button>
+                  <button type="button" class="spending-cell level-3" aria-label="Sep 15: $616">15<span>$616</span></button>
+                </div>
+              </div>
+
+              <div class="card-plain">
+                <div class="row g-3 align-items-end">
+                  <div class="col-6 col-md-4">
+                    <label class="form-label" for="runsPerDay">Runs per day</label>
+                    <input id="runsPerDay" type="number" class="form-control" min="1" max="5" value="3">
+                  </div>
+                  <div class="col-6 col-md-8">
+                    <div class="form-text">Times update automatically. Conflicts are checked across saved clients.</div>
+                  </div>
+                </div>
+
+                <div id="timesList" class="times-list mt-3"></div>
+
+                <div class="mt-3">
+                  <label class="form-label d-block">Days to Run</label>
+                  <div class="days-grid">
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="dayMon" value="Monday" checked>
+                      <label class="form-check-label" for="dayMon">Mon</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="dayTue" value="Tuesday" checked>
+                      <label class="form-check-label" for="dayTue">Tue</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="dayWed" value="Wednesday" checked>
+                      <label class="form-check-label" for="dayWed">Wed</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="dayThu" value="Thursday" checked>
+                      <label class="form-check-label" for="dayThu">Thu</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="dayFri" value="Friday" checked>
+                      <label class="form-check-label" for="dayFri">Fri</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="daySat" value="Saturday">
+                      <label class="form-check-label" for="daySat">Sat</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="checkbox" id="daySun" value="Sunday">
+                      <label class="form-check-label" for="daySun">Sun</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-3 d-flex gap-2">
+                  <button id="startScheduleBtn" class="btn btn-secondary" type="button" disabled>Start Schedule</button>
+                  <button id="saveScheduleBtn" class="btn btn-primary" type="button" disabled>
+                    <i class="bi bi-save me-1"></i> Save Schedule
+                  </button>
+                  <button id="refreshConflictsBtn" class="btn btn-outline-primary" type="button">Check Conflicts</button>
+                </div>
+              </div>
+
+              <div class="card-plain mt-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <h5 class="mb-0">Overview</h5>
+                  <button id="refreshOverviewBtn" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-arrow-clockwise"></i></button>
+                </div>
+                <div class="overview-list" id="overviewList">
+                  <div class="text-muted small">No schedules found yet.</div>
+                </div>
+              </div>
+
+              <div class="card-plain mt-3 d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="mb-2">Notes</h6>
+                  <ul class="small text-muted mb-0">
+                    <li>All data is stored locally in your browser for preview.</li>
+                    <li>Desktop app styling is matched to the web theme.</li>
+                  </ul>
+                </div>
+                <div class="ms-3 d-flex gap-2">
+                  <button id="startScrapingBtn" class="btn btn-success" type="button" disabled>Start Scraping</button>
+                  <button id="bottomClearBtn" class="btn btn-outline-secondary" type="button" disabled>Clear</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/keyword_preview.js') }}"></script>
+</body>
+</html>

@@ -27,7 +27,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Kroger TOA Scraper',
+    name='Grocery Retail Ad Monitor',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -45,13 +45,13 @@ exe = EXE(
 
 app = BUNDLE(
     exe,
-    name='Kroger TOA Scraper.app',
+    name='Grocery Retail Ad Monitor.app',
     icon='icon2.png',
-    bundle_identifier='com.wafuzio.kroger-toa-scraper',
+    bundle_identifier='com.wafuzio.grocery-retail-ad-monitor',
     info_plist={
-        'NSDocumentsFolderUsageDescription': 'Kroger TOA Scraper needs access to the Documents folder to save scraped data, keywords, and configuration files.',
-        'NSDesktopFolderUsageDescription': 'Kroger TOA Scraper may need access to save files to the Desktop.',
-        'NSDownloadsFolderUsageDescription': 'Kroger TOA Scraper may need access to save scraped data to the Downloads folder.',
+        'NSDocumentsFolderUsageDescription': 'Grocery Retail Ad Monitor needs access to the Documents folder to save scraped data, keywords, and configuration files.',
+        'NSDesktopFolderUsageDescription': 'Grocery Retail Ad Monitor may need access to save files to the Desktop.',
+        'NSDownloadsFolderUsageDescription': 'Grocery Retail Ad Monitor may need access to save scraped data to the Downloads folder.',
         'NSHighResolutionCapable': True,
         'NSRequiresAquaSystemAppearance': False,
         'LSApplicationCategoryType': 'public.app-category.productivity',
