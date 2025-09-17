@@ -36,11 +36,6 @@ def nfl_dashboard():
     """Render the NFL-style dashboard"""
     return render_template('nfl_dashboard.html')
 
-@app.route('/keyword')
-def keyword_preview():
-    """Render the keyword input web preview"""
-    return render_template('keyword_input.html')
-
 @app.route('/api/ads', methods=['GET'])
 def get_ads():
     """Get all ads"""
@@ -95,117 +90,71 @@ def get_client_ads(client):
 
 @app.route('/api/nfl-grid/<client>', methods=['GET'])
 def get_nfl_style_grid(client):
-    """Get ads formatted in NFL-style grid layout, filtered by optional 'term'"""
+    """Get ads formatted in NFL-style grid layout"""
     output_dir = os.path.join("output", client)
-
+    
     if not os.path.exists(output_dir):
         return jsonify({"error": "Client not found"}), 404
-
-    term = (request.args.get('term') or '').strip().lower()
-
+    
     # Find all toa_results files
     result_files = glob.glob(os.path.join(output_dir, "toa_results_*.json"))
-
+    
     # Sort by date (newest first)
     result_files.sort(reverse=True)
-
-    # Limit to most recent 12 files for grid display
-    result_files = result_files[:12]
-
+    
+    # Limit to most recent 10 files for grid display
+    result_files = result_files[:10]
+    
     grid_data = {
         "title": f"{client} TOA Monitoring",
         "schedule": []
     }
-
+    
     for file_path in result_files:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-
+                
                 # Extract date from filename
                 filename = os.path.basename(file_path)
                 date_str = filename.replace("toa_results_", "").replace(".json", "")
-
+                
                 # Format date for display (e.g., SEP 12)
                 try:
                     date_obj = datetime.strptime(date_str.split('_')[0], "%Y-%m-%d")
                     display_date = date_obj.strftime("%b %d").upper()
                 except:
                     display_date = date_str.split('_')[0]
-
-                # Build ads filtered by term (keyword)
+                
+                # Get keyword from data if available
+                keyword = "unknown"
+                if data.get("results") and len(data["results"]) > 0:
+                    keyword = data["results"][0].get("keyword", "unknown")
+                
+                # Format ads for grid display
                 grid_ads = []
-                display_week = None
-                for result in (data.get("results") or []):
-                    kw = str(result.get("keyword", "")).strip()
-                    if term and term not in kw.lower():
-                        continue
-                    display_week = display_week or kw
-                    for ad in (result.get("ads") or []):
-                        # Resolve image URL to API path if file is local
-                        image_url = ad.get("image_url", "")
-                        if image_url and not str(image_url).lower().startswith(('http://','https://','/api/')):
-                            try:
-                                fname = os.path.basename(str(image_url))
-                                toa_path = os.path.join('output', client, 'TOA', fname)
-                                main_path = os.path.join('output', client, 'main', fname)
-                                if os.path.exists(toa_path):
-                                    image_url = f"/api/toa/{client}/{fname}"
-                                elif os.path.exists(main_path):
-                                    image_url = f"/api/images/{client}/{fname}"
-                            except Exception:
-                                pass
-                        # Fallbacks from alternate fields
-                        if (not image_url) and ad.get('filename'):
-                            fname = os.path.basename(str(ad.get('filename')))
-                            if os.path.exists(os.path.join('output', client, 'TOA', fname)):
-                                image_url = f"/api/toa/{client}/{fname}"
-                            elif os.path.exists(os.path.join('output', client, 'main', fname)):
-                                image_url = f"/api/images/{client}/{fname}"
-                        grid_ads.append({
-                            "brand": ad.get("brand", "Unknown"),
-                            "image_url": image_url,
-                            "message": ad.get("message", ""),
-                            "featured": ad.get("featured", False)
-                        })
-
-                if not grid_ads:
-                    # Skip dates with no matching ads when filtering
-                    if term:
-                        continue
-
+                if data.get("results"):
+                    for result in data["results"]:
+                        if result.get("ads"):
+                            for ad in result["ads"]:
+                                # Create NFL-style ad entry
+                                grid_ad = {
+                                    "brand": ad.get("brand", "Unknown"),
+                                    "image_url": ad.get("image_url", ""),
+                                    "message": ad.get("message", ""),
+                                    "featured": ad.get("featured", False)
+                                }
+                                grid_ads.append(grid_ad)
+                
                 # Add to schedule
                 grid_data["schedule"].append({
                     "date": display_date,
-                    "week": display_week or (term if term else "unknown"),
+                    "week": keyword,  # Using keyword as "week" in NFL style
                     "ads": grid_ads
                 })
         except Exception as e:
             print(f"Error loading {file_path}: {e}")
-
-    # Fallback: if filtered produced no entries but term provided, surface recent TOA files
-    if term and not grid_data["schedule"]:
-        toa_dir = os.path.join(output_dir, 'TOA')
-        if os.path.isdir(toa_dir):
-            files = [f for f in glob.glob(os.path.join(toa_dir, '*')) if os.path.isfile(f)]
-            # sort by mtime desc and take recent
-            files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-            files = files[:24]
-            # group by date
-            by_date = {}
-            for p in files:
-                ts = datetime.fromtimestamp(os.path.getmtime(p))
-                key = ts.strftime('%b %d').upper()
-                by_date.setdefault(key, []).append(os.path.basename(p))
-            for display_date, names in by_date.items():
-                ads = [{
-                    'brand': 'Unknown',
-                    'image_url': f"/api/toa/{client}/{n}",
-                    'message': '',
-                    'featured': False
-                } for n in names]
-                grid_data['schedule'].append({ 'date': display_date, 'week': term, 'ads': ads })
-
+    
     return jsonify(grid_data)
 
 @app.route('/api/images/<path:image_path>')

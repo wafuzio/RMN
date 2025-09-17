@@ -1,8 +1,8 @@
-# Grocery Retail Ad Monitor - Automated Scheduler System
+# Kroger TOA Scraper - Automated Scheduler System
 
 ## Overview
 
-The Grocery Retail Ad Monitor now includes a comprehensive automated scheduling system that can monitor and execute scraping tasks for multiple clients at their specified times, running independently of the GUI application.
+The Kroger TOA Scraper now includes a comprehensive automated scheduling system that can monitor and execute scraping tasks for multiple clients at their specified times, running independently of the GUI application.
 
 ## Components
 

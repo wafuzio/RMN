@@ -254,17 +254,8 @@ def process_latest_html_file(input_dir=None, output_dir=None):
     print(f"✅ Found {results['count']} TOAs")
     print(f"💾 Results saved to {results_path}")
     
-    # Automatically extract TOA images using screenshot_toa_image.py
-    # Process the current HTML file
-    extract_toa_images(results_path, html_file=latest_html, client_name=os.path.basename(output_dir))
-    
-    # Also process any other HTML files that might have been processed earlier in this run
-    # This ensures we capture TOA images for all keywords, not just the latest one
-    html_files = glob.glob(os.path.join(input_dir, "search_results_*.html"))
-    for html_file in html_files:
-        if html_file != latest_html:  # Skip the one we just processed
-            print(f"\n📷 Also extracting TOA images from: {os.path.basename(html_file)}")
-            extract_toa_images(results_path, html_file=html_file, client_name=os.path.basename(output_dir))
+    # TOA images are now extracted once from the combined JSON results
+    # This prevents duplicate image generation from multiple HTML files
     
     # NOTE: Carousel images are now captured directly in kroger_search_and_capture.py
     # No need to extract carousel images here anymore
@@ -354,11 +345,9 @@ def process_all_html_files(input_dir=None, output_dir=None):
     print(f"✅ Processed {processed_count} search terms from {len(html_files)} HTML files")
     print(f"💾 Combined results saved to {results_path}")
     
-    # Process TOA images for each HTML file
-    print("\n📷 Extracting TOA images for each HTML file...")
-    for html_file in html_files:
-        print(f"\n📷 Processing TOA images from: {os.path.basename(html_file)}")
-        extract_toa_images(results_path, html_file=html_file, client_name=os.path.basename(output_dir))
+    # Process TOA images ONCE from the combined results
+    print("\n📷 Extracting TOA images from combined results...")
+    extract_toa_images(results_path, client_name=os.path.basename(output_dir))
     
     return True
 

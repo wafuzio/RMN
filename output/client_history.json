@@ -1,7 +1,8 @@
 {
   "Land O Frost": [
     "black forest ham",
-    "packaged deli meat"
+    "packaged deli meat",
+    "honey ham"
   ],
   "MilkPEP": [
     "protein drink",
@@ -47,5 +48,9 @@
   "butterball": [
     "butterball",
     "frozen turkey"
+  ],
+  "testeses": [
+    "apple juice",
+    "cranberry juice"
   ]
 }

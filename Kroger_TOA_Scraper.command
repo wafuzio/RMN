@@ -1,6 +1,6 @@
 #!/bin/bash
-# Grocery Retail Ad Monitor Launcher
-# This script launches the Grocery Retail Ad Monitor GUI
+# Kroger TOA Scraper Launcher
+# This script launches the Kroger TOA Scraper GUI
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

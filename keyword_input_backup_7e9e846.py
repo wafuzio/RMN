@@ -6,7 +6,6 @@ A simple popup interface for entering keywords to scrape.
 
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk, scrolledtext
-from tkinter import font as tkfont
 import os
 import sys
 import json
@@ -15,7 +14,6 @@ from datetime import datetime
 import subprocess
 import time
 import threading
-import re
 
 # Import the search and capture functionality
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -34,39 +32,13 @@ class KeywordInputApp:
         # Initialize logger
         self.logger = None
         
-        # Load CSS variables from web stylesheet for consistent theming
-        css_vars = self.load_css_variables(os.path.join(os.path.dirname(__file__), "static", "css", "style.css"))
-        self.primary_color = css_vars.get('--primary-color', '#2962ff')
-        self.secondary_color = css_vars.get('--secondary-color', '#455a64')
-        self.bg_color = css_vars.get('--background-color', '#f5f7fa')
-        self.card_bg_color = css_vars.get('--card-background', '#ffffff')
-        self.text_bg_color = "#ffffff"
-        self.text_fg_color = "#111827"
-
+        # Color scheme
+        self.bg_color = "#f0f0f0"  # Light gray background
+        self.text_bg_color = "#ffffff"  # White background for text areas
+        self.text_fg_color = "#000000"  # Black text
+        
         # Apply background color to root window
         self.root.configure(bg=self.bg_color)
-
-        # Typography similar to web (Inter with sensible fallbacks)
-        try:
-            tkfont.nametofont("TkDefaultFont").configure(family="Inter", size=11)
-            tkfont.nametofont("TkTextFont").configure(family="Inter", size=11)
-            tkfont.nametofont("TkHeadingFont").configure(family="Inter", size=14, weight="bold")
-        except Exception:
-            pass
-
-        # ttk styles matching web look
-        self.style = ttk.Style()
-        try:
-            self.style.theme_use('clam')
-        except Exception:
-            pass
-        self.style.configure('App.TFrame', background=self.bg_color)
-        self.style.configure('Card.TFrame', background=self.card_bg_color)
-        self.style.configure('Card.TLabelframe', background=self.card_bg_color, relief='solid', borderwidth=1)
-        self.style.configure('Card.TLabelframe.Label', background=self.card_bg_color, foreground=self.secondary_color, font=("Inter", 10, "bold"))
-        self.style.configure('TLabel', background=self.card_bg_color, foreground=self.secondary_color)
-        self.style.configure('Body.TLabel', background=self.bg_color, foreground=self.secondary_color)
-        self.style.configure('App.TCombobox', fieldbackground=self.card_bg_color, background=self.card_bg_color, foreground="#111827")
         
         # Determine the project directory
         if getattr(sys, 'frozen', False):
@@ -99,6 +71,8 @@ class KeywordInputApp:
         self.schedule_file = os.path.join(self.project_dir, "output", "schedule_config.json")
         self.client_history = self.load_client_history()
         self.schedule_config = self.load_schedule_config()
+        self.scheduler_thread = None
+        self.schedule_running = False
         self.day_vars = {}  # Will store day checkbox variables
         
         # Check and start scheduler daemon if needed
@@ -107,17 +81,17 @@ class KeywordInputApp:
             self.start_daemon_automatically()
         
         # Set up the main frame
-        main_frame = ttk.Frame(root, padding=20, style='App.TFrame')
+        main_frame = tk.Frame(root, padx=20, pady=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
-
+        
         # Client/Product Type field with dropdown
-        client_frame = ttk.Frame(main_frame, style='Card.TFrame')
+        client_frame = tk.Frame(main_frame)
         client_frame.pack(fill=tk.X, pady=(0, 15))
-
-        client_label = ttk.Label(
-            client_frame,
-            text="Client/Product:",
-            style='TLabel'
+        
+        client_label = tk.Label(
+            client_frame, 
+            text="Client/Product Type:", 
+            font=("Arial", 12)
         )
         client_label.pack(side=tk.LEFT)
         
@@ -130,28 +104,26 @@ class KeywordInputApp:
         self.client_var.set(dropdown_options[0])  # Set default text
         
         self.client_dropdown = ttk.Combobox(
-            client_frame,
+            client_frame, 
             textvariable=self.client_var,
             values=dropdown_options,
-            width=30,
-            style='App.TCombobox'
+            width=30
         )
         self.client_dropdown.pack(side=tk.LEFT, padx=(10, 0))
         self.client_dropdown.bind("<<ComboboxSelected>>", self.on_client_selected)
         
         # Instructions
-        instructions = ttk.Label(
-            main_frame,
+        instructions = tk.Label(
+            main_frame, 
             text="Enter keywords to scrape (one per line):",
-            style='Body.TLabel'
+            font=("Arial", 12)
         )
         instructions.pack(anchor="w", pady=(0, 10))
         
         # Keyword input area
         self.keyword_input = scrolledtext.ScrolledText(main_frame, height=10)
         self.keyword_input.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
-        self.keyword_input.configure(background=self.card_bg_color, foreground=self.text_fg_color, insertbackground=self.primary_color, borderwidth=1, relief='solid')
-
+        
         # Add placeholder text
         self.placeholder_text = "<enter keywords here>"
         self.keyword_input.insert(tk.END, self.placeholder_text)
@@ -162,14 +134,14 @@ class KeywordInputApp:
         self.keyword_input.bind("<FocusOut>", self.on_keyword_focus_out)
         
         # Schedule frame
-        schedule_frame = ttk.Labelframe(main_frame, text="Schedule Settings", padding=10, style='Card.TLabelframe')
+        schedule_frame = tk.LabelFrame(main_frame, text="Schedule Settings", padx=10, pady=10)
         schedule_frame.pack(fill=tk.X, pady=(0, 15))
-
+        
         # Number of runs per day
-        runs_frame = ttk.Frame(schedule_frame, style='Card.TFrame')
+        runs_frame = tk.Frame(schedule_frame)
         runs_frame.pack(fill=tk.X, pady=(0, 10))
-
-        runs_label = ttk.Label(runs_frame, text="Runs per day:", style='TLabel')
+        
+        runs_label = tk.Label(runs_frame, text="Runs per day:")
         runs_label.pack(side=tk.LEFT)
         
         self.runs_var = tk.IntVar(value=3)  # Default to 3 runs per day
@@ -184,7 +156,7 @@ class KeywordInputApp:
         runs_spinbox.pack(side=tk.LEFT, padx=(10, 0))
         
         # Time selectors frame
-        self.times_frame = ttk.Frame(schedule_frame, style='Card.TFrame')
+        self.times_frame = tk.Frame(schedule_frame)
         self.times_frame.pack(fill=tk.X)
         
         # Time selector variables
@@ -195,12 +167,12 @@ class KeywordInputApp:
         self.update_time_selectors()
         
         # Days of week selection
-        days_frame = ttk.Labelframe(schedule_frame, text="Days to Run", padding=5, style='Card.TLabelframe')
+        days_frame = tk.LabelFrame(schedule_frame, text="Days to Run", padx=5, pady=5)
         days_frame.pack(fill=tk.X, pady=(10, 0))
-
+        
         # Create day checkboxes
         day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        day_boxes_frame = ttk.Frame(days_frame, style='Card.TFrame')
+        day_boxes_frame = tk.Frame(days_frame)
         day_boxes_frame.pack(fill=tk.X, pady=5)
         
         # Create checkboxes for each day
@@ -208,7 +180,7 @@ class KeywordInputApp:
             var = tk.BooleanVar(value=True)  # Default to selected
             self.day_vars[day] = var
             
-            cb = ttk.Checkbutton(day_boxes_frame, text=day[:3], variable=var)
+            cb = tk.Checkbutton(day_boxes_frame, text=day[:3], variable=var)
             cb.grid(row=0, column=i, padx=5)
             
             # Add event handler to refresh conflict displays when days change
@@ -218,26 +190,35 @@ class KeywordInputApp:
             var.trace('w', on_day_changed)
         
         # Schedule control buttons
-        schedule_buttons_frame = ttk.Frame(schedule_frame, style='Card.TFrame')
+        schedule_buttons_frame = tk.Frame(schedule_frame)
         schedule_buttons_frame.pack(fill=tk.X, pady=(10, 0))
         
         self.schedule_button = tk.Button(
             schedule_buttons_frame,
-            text="Save Schedule",
-            command=self.save_schedule,
-            bg=self.primary_color,
+            text="Start Schedule",
+            command=self.toggle_schedule,
+            bg="#2196F3",
             fg="white",
-            font=("Inter", 11, "bold"),
-            padx=20,
-            pady=8,
-            relief="flat",
-            borderwidth=0
+            font=("Arial", 10),
+            padx=10,
+            pady=5
         )
         self.schedule_button.pack(side=tk.LEFT, padx=(0, 10))
         
+        save_schedule_button = tk.Button(
+            schedule_buttons_frame,
+            text="Save Schedule",
+            command=self.save_schedule,
+            bg="#9C27B0",
+            fg="white",
+            font=("Arial", 10),
+            padx=10,
+            pady=5
+        )
+        save_schedule_button.pack(side=tk.LEFT)
         
         # Buttons frame
-        button_frame = ttk.Frame(main_frame, style='App.TFrame')
+        button_frame = tk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=(0, 10))
         
         # Start scraping button
@@ -245,13 +226,11 @@ class KeywordInputApp:
             button_frame, 
             text="Start Scraping",
             command=self.start_scraping,
-            bg=self.primary_color,
+            bg="#4CAF50",
             fg="white",
-            font=("Inter", 12, "bold"),
-            padx=30,
-            pady=10,
-            relief="flat",
-            borderwidth=0
+            font=("Arial", 11, "bold"),
+            padx=15,
+            pady=8
         )
         self.scrape_button.pack(side=tk.LEFT, padx=(0, 10))
         
@@ -270,34 +249,14 @@ class KeywordInputApp:
         
         # Status label with daemon status
         daemon_text = "✅ Daemon running" if self.daemon_status else "⚠️ Daemon stopped"
-        self.status_label = ttk.Label(
-            main_frame,
+        self.status_label = tk.Label(
+            main_frame, 
             text=f"Ready to scrape | {daemon_text}",
-            style='Body.TLabel'
+            font=("Arial", 10),
+            fg="#555"
         )
         self.status_label.pack(anchor="w", pady=(10, 0))
         
-    def load_css_variables(self, css_path):
-        """Parse :root CSS variables from a stylesheet for reuse in Tkinter."""
-        vars_map = {}
-        try:
-            with open(css_path, 'r', encoding='utf-8') as f:
-                css = f.read()
-            m = re.search(r":root\s*\{([^}]*)\}", css, re.MULTILINE | re.DOTALL)
-            if not m:
-                return vars_map
-            root_block = m.group(1)
-            for line in root_block.splitlines():
-                line = line.strip()
-                if not line or not line.startswith('--') or ':' not in line:
-                    continue
-                name, value = line.split(':', 1)
-                value = value.strip().rstrip(';')
-                vars_map[name.strip()] = value
-        except Exception:
-            pass
-        return vars_map
-
     def clear_keywords(self):
         """Clear the keyword input area"""
         self.keyword_input.delete(1.0, tk.END)
@@ -984,11 +943,11 @@ class KeywordInputApp:
         # Create time selectors
         for i in range(num_runs):
             # Create frame for this time selector
-            time_frame = ttk.Frame(self.times_frame, style='Card.TFrame')
+            time_frame = tk.Frame(self.times_frame)
             time_frame.pack(fill=tk.X, pady=(0, 5))
-
+            
             # Label
-            label = ttk.Label(time_frame, text=f"Run {i+1} at:", style='TLabel')
+            label = tk.Label(time_frame, text=f"Run {i+1} at:")
             label.pack(side=tk.LEFT)
             
             # Hour selector
@@ -998,8 +957,7 @@ class KeywordInputApp:
                 time_frame,
                 textvariable=hour_var,
                 values=hour_values,
-                width=3,
-                style='App.TCombobox'
+                width=3
             )
             hour_combo.pack(side=tk.LEFT, padx=(10, 0))
             
@@ -1025,11 +983,6 @@ class KeywordInputApp:
             if hasattr(self, 'day_vars'):
                 selected_days = [day for day, var in self.day_vars.items() if var.get()]
             
-            # Store the final values to use after creating the variables
-            final_hour = default_hour
-            final_minute = default_minute
-            final_ampm = default_ampm
-            
             if selected_days and selected_client and selected_client not in ["<choose from menu>", "New client/product"]:
                 # Convert to 24-hour for conflict checking
                 hour_24 = default_hour
@@ -1039,42 +992,48 @@ class KeywordInputApp:
                     hour_24 = 0
                     
                 if self.is_time_conflicted(hour_24, default_minute, selected_days, selected_client):
-                    # Find next available time and store the values
-                    final_hour, final_minute, final_ampm = self.find_next_available_time(
+                    # Find next available time
+                    alt_hour, alt_minute, alt_ampm = self.find_next_available_time(
                         default_hour, default_minute, default_ampm, selected_days, selected_client
                     )
-            
-            # Set the hour variable now that it exists
-            hour_var.set(str(final_hour))
+                    hour_var.set(str(alt_hour))
+                    minute_var.set(f"{alt_minute:02d}")
+                    # We'll set the AMPM after creating the variable
+                    suggested_ampm = alt_ampm
+                else:
+                    hour_var.set(str(default_hour))
+                    suggested_ampm = default_ampm
+            else:
+                hour_var.set(str(default_hour))
+                suggested_ampm = default_ampm
             
             # Colon label
-            colon_label = ttk.Label(time_frame, text=":", style='TLabel')
+            colon_label = tk.Label(time_frame, text=":")
             colon_label.pack(side=tk.LEFT)
             
             # Minute selector
-            minute_var = tk.StringVar(value=f"{final_minute:02d}")
+            minute_var = tk.StringVar(value="00")
             minute_combo = ttk.Combobox(
                 time_frame,
                 textvariable=minute_var,
                 values=[f"{m:02d}" for m in range(0, 60, 5)],  # Every 5 minutes
-                width=3,
-                style='App.TCombobox'
+                width=3
             )
             minute_combo.pack(side=tk.LEFT, padx=(0, 5))
             
-            # AM/PM selector
-            ampm_var = tk.StringVar(value=final_ampm)
+            # AM/PM selector - create variable first, then set value from conflict checking above
+            ampm_var = tk.StringVar()
+            ampm_var.set(suggested_ampm)
             ampm_combo = ttk.Combobox(
                 time_frame,
                 textvariable=ampm_var,
                 values=["AM", "PM"],
-                width=3,
-                style='App.TCombobox'
+                width=3
             )
             ampm_combo.pack(side=tk.LEFT, padx=(5, 0))
             
             # Add conflict indicator label
-            conflict_label = ttk.Label(time_frame, text="", style='Body.TLabel')
+            conflict_label = tk.Label(time_frame, text="", fg="red", font=("Arial", 8))
             conflict_label.pack(side=tk.LEFT, padx=(5, 0))
             
             # Store references for conflict checking
@@ -1204,8 +1163,10 @@ class KeywordInputApp:
             # Update instance variables
             self.schedule_file = client_schedule_file
             self.schedule_config = config
-            self.status_label.config(text=f"✅ Schedule saved for {selected_client} - daemon will handle execution")
-        
+            self.status_label.config(text=f"Schedule saved for {selected_client}")
+            
+            # Set up logging for this client
+            self.logger = self.setup_logging(selected_client)
             if self.logger:
                 self.logger.info(f"Schedule configuration saved for {selected_client}")
                 
@@ -1219,8 +1180,202 @@ class KeywordInputApp:
             return False
         return True
     
+    def run_scheduler(self):
+        """Run the scheduler in a background thread"""
+        while self.schedule_running:
+            now = datetime.now()
+            current_hour = now.hour
+            current_minute = now.minute
+            current_day = now.strftime("%A")  # Get day name (Monday, Tuesday, etc.)
+            
+            # Check each scheduled time
+            for i, (hour_var, minute_var, ampm_var) in enumerate(self.time_vars):
+                try:
+                    # Get scheduled time in 12-hour format
+                    hour_12 = int(hour_var.get())
+                    minute = int(minute_var.get())
+                    ampm = ampm_var.get()
+                    
+                    # Convert to 24-hour for comparison
+                    scheduled_hour = hour_12
+                    if ampm == "PM" and hour_12 < 12:
+                        scheduled_hour += 12
+                    elif ampm == "AM" and hour_12 == 12:
+                        scheduled_hour = 0
+                    
+                    # If it's time to run (within a 1-minute window)
+                    if current_hour == scheduled_hour and current_minute == minute:
+                        # Check if today is a scheduled day
+                        if current_day not in [day for day, var in self.day_vars.items() if var.get()]:
+                            # Log error in the main thread
+                            self.root.after(0, lambda: self.status_label.config(
+                                text=f"Scheduled run skipped - Today ({current_day}) is not a scheduled day")
+                            )
+                            time.sleep(60)
+                            continue
+                        
+                        # Check if client/product is still selected
+                        selected_client = self.client_var.get()
+                        if not selected_client or selected_client == "<choose from menu>":
+                            # Log error in the main thread
+                            self.root.after(0, lambda: self.status_label.config(
+                                text="Scheduled run skipped - No client/product selected")
+                            )
+                            time.sleep(60)
+                            continue
+                            
+                        # Check if keywords are entered
+                        keywords = self.get_keywords()
+                        if not keywords:
+                            # Log error in the main thread
+                            self.root.after(0, lambda: self.status_label.config(
+                                text="Scheduled run skipped - No keywords entered")
+                            )
+                            time.sleep(60)
+                            continue
+                        
+                        # Update status in the main thread
+                        time_str = f"{hour_12}:{minute:02d} {ampm}"
+                        self.root.after(0, lambda time_str=time_str, client=selected_client: 
+                            self.status_label.config(
+                                text=f"Running scheduled scrape for {client} at {time_str}")
+                        )
+                        
+                        # Run the scraper
+                        self.root.after(0, self.start_scraping)
+                        
+                        # Wait a bit to avoid duplicate runs
+                        time.sleep(60)
+                except ValueError:
+                    # Invalid time format, skip this one
+                    continue
+            
+            # Check every 30 seconds
+            time.sleep(30)
     
+    def toggle_schedule(self):
+        """Toggle the scheduler on/off"""
+        if self.schedule_running:
+            # Stop the scheduler
+            self.schedule_running = False
+            self.schedule_button.config(text="Start Schedule", bg="#2196F3")
+            self.status_label.config(text="Scheduler stopped")
+        else:
+            # Check if client/product is selected
+            selected_client = self.client_var.get()
+            if not selected_client or selected_client == "<choose from menu>":
+                messagebox.showerror("Error", "Please select a client/product type before scheduling")
+                return
+                
+            # Verify client has saved keywords in history
+            keywords = self.client_history.get(selected_client, [])
+            if not keywords:
+                messagebox.showerror("Error", f"No saved keywords for {selected_client}. Please add and save keywords first.")
+                return
+                
+            # Validate time inputs
+            for i, (hour_var, minute_var, ampm_var) in enumerate(self.time_vars):
+                try:
+                    hour = int(hour_var.get())
+                    minute = int(minute_var.get())
+                    if hour < 1 or hour > 12 or minute < 0 or minute > 59:
+                        messagebox.showerror("Error", f"Invalid time format for Run {i+1}")
+                        return
+                except ValueError:
+                    messagebox.showerror("Error", f"Invalid time format for Run {i+1}")
+                    return
+            
+            # Set up client-specific logging
+            self.logger = self.setup_logging(selected_client)
+            if self.logger:
+                self.logger.info(f"Scheduler started for {selected_client}")
+            
+            # Save schedule to client-specific file
+            if not self.save_schedule():  # This will update self.schedule_file to client-specific path
+                return  # If save failed, don't start the scheduler
+                
+            self.schedule_running = True
+            self.schedule_button.config(text="Stop Schedule", bg="#F44336")
+            self.status_label.config(text=f"Scheduler started for {selected_client} - waiting for next run time")
+            
+            # Start scheduler thread if not already running
+            if not self.scheduler_thread or not self.scheduler_thread.is_alive():
+                self.scheduler_thread = threading.Thread(target=self.run_scheduler, daemon=True)
+                self.scheduler_thread.start()
     
+    def run_scheduler(self):
+        """Run the scheduler in a background thread"""
+        while self.schedule_running:
+            now = datetime.now()
+            current_hour = now.hour
+            current_minute = now.minute
+            
+            # Check each scheduled time
+            for i, (hour_var, minute_var, ampm_var) in enumerate(self.time_vars):
+                try:
+                    # Get scheduled time in 12-hour format
+                    hour_12 = int(hour_var.get())
+                    minute = int(minute_var.get())
+                    ampm = ampm_var.get()
+                    
+                    # Convert to 24-hour for comparison
+                    scheduled_hour = hour_12
+                    if ampm == "PM" and hour_12 < 12:
+                        scheduled_hour += 12
+                    elif ampm == "AM" and hour_12 == 12:
+                        scheduled_hour = 0
+                    
+                    # If it's time to run (within a 1-minute window)
+                    if current_hour == scheduled_hour and current_minute == minute:
+                        # Check if client/product is still selected
+                        selected_client = self.client_var.get()
+                        if not selected_client or selected_client == "Select client/product":
+                            # Log error in the main thread and to file
+                            error_msg = "Scheduled run skipped - No client/product selected"
+                            if self.logger:
+                                self.logger.warning(error_msg)
+                            self.root.after(0, lambda: self.status_label.config(text=error_msg))
+                            time.sleep(60)
+                            continue
+                            
+                        # Use saved keywords from client_history instead of text box
+                        keywords = self.client_history.get(selected_client, [])
+                        if not keywords:
+                            # Log error in the main thread and to file
+                            error_msg = f"Scheduled run skipped - No saved keywords for {selected_client}"
+                            if self.logger:
+                                self.logger.warning(error_msg)
+                            self.root.after(0, lambda: self.status_label.config(text=error_msg))
+                            time.sleep(60)
+                            continue
+                        
+                        # Check if today is a scheduled day
+                        if current_day not in [day for day, var in self.day_vars.items() if var.get()]:
+                            # Log error in the main thread
+                            self.root.after(0, lambda: self.status_label.config(
+                                text=f"Scheduled run skipped - Today ({current_day}) is not a scheduled day")
+                            )
+                            time.sleep(60)
+                            continue
+                        
+                        # Update status in the main thread
+                        time_str = f"{scheduled_hour:02d}:{scheduled_minute:02d}"
+                        self.root.after(0, lambda time_str=time_str, client=selected_client: 
+                            self.status_label.config(
+                                text=f"Running scheduled scrape for {client} at {time_str}")
+                        )
+                        
+                        # Run the scraper
+                        self.root.after(0, self.start_scraping)
+                        
+                        # Wait a bit to avoid duplicate runs
+                        time.sleep(60)
+                except ValueError:
+                    # Invalid time format, skip this one
+                    continue
+            
+            # Check every 30 seconds
+            time.sleep(30)
 
 def main():
     print("Starting Kroger TOA Scraper GUI...")

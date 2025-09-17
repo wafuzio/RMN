@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>Kroger TOA Scraper</string>
 	<key>CFBundleIconFile</key>
-	<string>generated-3f31f3aae590d2104295856e9a1ed43bcab34865b2381abf74aec05d36911b97.icns</string>
+	<string>icon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.wafuzio.kroger-toa-scraper</string>
 	<key>CFBundleInfoDictionaryVersion</key>

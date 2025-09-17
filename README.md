@@ -1,27 +1,25 @@
-# Grocery Retail Ad Monitor
+# Kroger TOA Scraper
 
-A comprehensive automation platform for tracking and analyzing sponsored ads across major grocery retailers, featuring a native macOS app, web interface, scheduling system, and Builder.io integration. Currently supports Kroger.com with planned expansion to all major grocery chains.
+A comprehensive automation platform for tracking and analyzing Targeted Onsite Ads (TOAs) on Kroger.com, featuring a native macOS app, web interface, scheduling system, and Builder.io integration.
 
 ## Overview
 
-The Grocery Retail Ad Monitor is a complete multi-retailer monitoring solution that provides:
+The Kroger TOA Scraper is a complete monitoring solution that provides:
 
-- **Multi-Retailer Support**: Extensible architecture for major grocery chains (Kroger pilot)
 - **Native macOS App**: PyInstaller-built GUI app with dock integration and custom icon
 - **Web Interface**: Modern Bootstrap-based scheduler and dashboard
 - **Automated Scheduling**: Multi-client conflict-aware scheduling system
 - **Real-time Monitoring**: Background daemon for automated scraping
 - **Builder.io Integration**: Vendored Flask API with CORS support
-- **Advanced Ad Extraction**: Modular system for TOAs, carousels, and sponsored content
+- **Advanced Ad Extraction**: Modular system for different ad types
 - **Client Management**: Multi-tenant architecture with isolated data
 
 ## Architecture
 
 ### Desktop Application
-- **Native macOS App Bundle**: `Grocery Retail Ad Monitor.app` with custom icon and dock integration
+- **Native macOS App Bundle**: `Kroger TOA Scraper.app` with custom icon and dock integration
 - **PyInstaller Build**: Standalone executable with vendored dependencies
 - **Tkinter GUI**: Modern interface with CSS-synchronized styling
-- **Retailer Selection**: Extensible UI for multiple grocery chains (Kroger pilot)
 - **Signal Handling**: Proper dock icon click restoration
 
 ### Web Interface
@@ -40,7 +38,7 @@ The Grocery Retail Ad Monitor is a complete multi-retailer monitoring solution t
 
 ```
 ├── dist/
-│   └── Grocery Retail Ad Monitor.app/     # macOS app bundle
+│   └── Kroger TOA Scraper.app/     # macOS app bundle
 ├── libs/                           # Vendored Flask dependencies
 │   ├── flask/
 │   ├── jinja2/
