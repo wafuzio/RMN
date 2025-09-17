@@ -36,7 +36,7 @@
 
 /* Team flags mimic half-logo tiles */
 .team-flag { position: relative; height: 46px; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-.team-flag img { max-height: 100%; max-width: 100%; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,.35)); }
+.team-flag img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,.35)); }
 .team-flag.team-a { background: linear-gradient(135deg, #23395d, #1e2a44); }
 .team-flag.team-b { background: linear-gradient(135deg, #7a1c1c, #4e0f0f); }
 .team-code { font-weight: 800; letter-spacing: .5px; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
@@ -45,11 +45,47 @@
 .templates-section { margin-top: 28px; }
 .templates-title { color: var(--nfl-gray); font-weight: 800; letter-spacing: 1px; font-size: 16px; text-transform: uppercase; margin: 0 0 10px; }
 .templates-deck { display: flex; flex-direction: column; gap: 12px; }
+.templates-block { display: grid; grid-template-columns: 110px 1fr; column-gap: 14px; align-items: center; }
+.templates-right { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; width: 100%; }
 .templates-row { display: flex; flex-wrap: nowrap; gap: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
+.templates-group { min-width: 0; }
+.templates-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.week-row .templates-grid .team-flag { height: 46px; }
 .template-card { background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; flex: 0 0 160px; }
 .template-thumb { background: linear-gradient(135deg, #23395d, #1e2a44); display:flex; align-items:center; justify-content:center; border-radius:6px; height: 84px; overflow:hidden; }
 .template-thumb img { width:100%; height:100%; object-fit: contain; }
 .template-meta { font-size: 12px; color: var(--nfl-gray); display:flex; justify-content: space-between; align-items:center; }
+
+/* Date range popover */
+.date-range-trigger { cursor: pointer; }
+.date-range-popover { position: absolute; z-index: 1000; background: #111; border: 1px solid #333; border-radius: 8px; padding: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.5); width: 280px; }
+/* Calendar UI */
+.cal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px; }
+.cal-title { font-weight: 700; font-size: 13px; letter-spacing: .4px; }
+.cal-nav { background:#1a1a1a; color:#fff; border:1px solid #333; border-radius:6px; padding:2px 8px; cursor:pointer; }
+.cal-weekdays { display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; margin-bottom: 6px; font-size: 11px; color: var(--nfl-gray); text-align:center; }
+.cal-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; }
+.cal-day { background:#0f0f0f; color:#fff; border:1px solid #2a2a2a; border-radius:6px; padding:6px 0; text-align:center; cursor:pointer; }
+.cal-day:hover { background:#151515; }
+.cal-empty { visibility:hidden; }
+.cal-day.is-today { outline: 1px solid #444; }
+.cal-day.is-selected { background: #2b2b2b; border-color: #555; box-shadow: inset 0 0 0 2px var(--nfl-gold); }
+.cal-day.in-range { background:#1a1a1a; border-color:#3a3a3a; }
+.date-popover-actions { display:flex; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.date-btn { background:#1a1a1a; color:#fff; border:1px solid #333; border-radius:6px; padding:6px 10px; cursor:pointer; }
+.date-btn.primary { background:#222; border-color:#444; }
+
+/* Time groups & headers */
+.templates-group { display: grid; grid-template-rows: auto 1fr; gap: 6px; }
+.templates-right > .templates-group { min-width: 0; }
+.time-header { text-align: center; font-weight: 800; font-size: 12px; color: var(--nfl-gray); letter-spacing: .8px; text-transform: uppercase; opacity: .9; }
+
+/* Date separator */
+.date-divider { height: 1px; background: linear-gradient(to right, transparent 0, #333 10%, #333 90%, transparent 100%); border: 0; margin: 10px 0; }
+
+/* Enforce two side-by-side AM/PM columns in schedule and deck */
+.week-row > .templates-right,
+.templates-block > .templates-right { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; width: 100%; }
 
 /* Responsive */
 @media (max-width: 992px) {

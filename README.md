@@ -335,6 +335,11 @@ python test_tkinter.py
 - **Daemon Logs**: Check system logs for `scheduler_daemon.py`
 - **Web Logs**: Flask server console output
 
-## License
+## Known Issues
+- **TOA and Skyscraper pulling too many times**: In some runs, the TOA and skyscraper extractors may over-collect, resulting in duplicate/extra captures beyond the intended single pass per page/keyword. This is under investigation.
+  - Symptom: Repeated detections or multiple images/log entries for the same ad position.
+  - Temporary mitigation: Limit concurrent runs, review `output/<client>/scheduler.log` for repetition, and deduplicate outputs by timestamp or filename when aggregating.
+  - Planned fix: Add per-keyword/per-page debouncing and stricter deduplication by creative selector/ID and viewport region.
 
+## License
 Proprietary - Internal use only

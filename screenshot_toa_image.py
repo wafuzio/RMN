@@ -15,13 +15,15 @@ import time
 from datetime import datetime
 from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
 
-def extract_image_urls_from_json(json_file, html_file=None):
+def extract_image_urls_from_json(json_file, html_file=None, time_window_minutes=10):
     """
     Extract image URLs from an ad JSON file for all ad types (TOA, Skyscraper, Carousel)
+    Only processes results from the last 10 minutes to avoid duplicates
     
     Args:
         json_file (str): Path to the JSON file with TOA data
         html_file (str, optional): Path to specific HTML file to filter by
+        time_window_minutes (int): Only process results within this many minutes (default: 10)
         
     Returns:
         list: List of image URLs with metadata
@@ -35,9 +37,31 @@ def extract_image_urls_from_json(json_file, html_file=None):
         # Track seen URLs to avoid duplicates within the same search term
         seen_urls_by_search_term = {}
         
+        # Calculate cutoff time (current time minus time_window_minutes)
+        from datetime import datetime, timedelta
+        current_time = datetime.now()
+        cutoff_time = current_time - timedelta(minutes=time_window_minutes)
+        
+        print(f"🕒 Only processing results newer than {cutoff_time.strftime('%Y-%m-%d %H:%M:%S')} (within {time_window_minutes} minutes)")
+        
         # Extract image URLs from the JSON structure
         if "results" in data:
             for result in data["results"]:
+                # Skip time window check when html_file is specified - we only want results from that specific file
+                if not html_file:
+                    # Only apply time window filtering when processing entire JSON without specific HTML file
+                    result_timestamp_str = result.get("timestamp", "")
+                    if result_timestamp_str:
+                        try:
+                            result_timestamp = datetime.strptime(result_timestamp_str, "%Y-%m-%d %H:%M:%S")
+                            if result_timestamp < cutoff_time:
+                                print(f"⏭️ Skipping old result from {result_timestamp_str} (outside {time_window_minutes}-minute window)")
+                                continue
+                            else:
+                                print(f"✅ Processing recent result from {result_timestamp_str}")
+                        except ValueError:
+                            print(f"⚠️ Could not parse timestamp '{result_timestamp_str}', processing anyway")
+                
                 # If html_file is specified, only process results from that HTML file
                 # Otherwise, process all results regardless of source file
                 if html_file:
@@ -229,10 +253,11 @@ def main():
     parser.add_argument("--client", "-c", help="Client name for organizing output")
     parser.add_argument("--output", "-o", default="output", help="Output directory (default: output)")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode (no browser UI)")
+    parser.add_argument("--time-window", "-t", type=int, default=10, help="Only process results within this many minutes (default: 10)")
     args = parser.parse_args()
     
-    # Extract image URLs from JSON, filtering by HTML file if specified
-    image_urls = extract_image_urls_from_json(args.json, args.html)
+    # Extract image URLs from JSON, filtering by HTML file and time window
+    image_urls = extract_image_urls_from_json(args.json, args.html, args.time_window)
     
     if not image_urls:
         if args.html:

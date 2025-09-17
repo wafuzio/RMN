@@ -20,6 +20,18 @@ import re
 # Import the search and capture functionality
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+def get_base_dir():
+    """
+    Return the base directory for user data (output/, configs, etc.)
+    Works for both source runs and PyInstaller bundles.
+    """
+    if getattr(sys, 'frozen', False):
+        # Packaged app (Finder/Dock/Dist)
+        return os.path.expanduser("~/Documents/Amazon_Scrape")
+    else:
+        # Running from source
+        return os.path.dirname(os.path.abspath(__file__))
+
 class KeywordInputApp:
     def __init__(self, root):
         """Initialize the application"""
@@ -68,24 +80,12 @@ class KeywordInputApp:
         self.style.configure('Body.TLabel', background=self.bg_color, foreground=self.secondary_color)
         self.style.configure('App.TCombobox', fieldbackground=self.card_bg_color, background=self.card_bg_color, foreground="#111827")
         
-        # Determine the project directory
-        if getattr(sys, 'frozen', False):
-            # Running from PyInstaller bundle - use absolute path to project
-            self.project_dir = "/Users/dan.maguire/Documents/Amazon_Scrape"
-        else:
-            # Running from source
-            self.project_dir = os.path.dirname(__file__)
+        # Use the path resolver function
+        self.project_dir = get_base_dir()
         
         # Set application icon
         try:
-            # Try to find icon2.png in the project directory
-            if getattr(sys, 'frozen', False):
-                # Running from PyInstaller bundle
-                icon_path = os.path.join(self.project_dir, "icon2.png")
-            else:
-                # Running from source
-                icon_path = os.path.join(os.path.dirname(__file__), "icon2.png")
-            
+            icon_path = os.path.join(self.project_dir, "icon2.png")
             if os.path.exists(icon_path):
                 self.root.iconphoto(True, tk.PhotoImage(file=icon_path))
         except Exception as e:
@@ -94,9 +94,10 @@ class KeywordInputApp:
         # Set up signal handler for dock icon clicks
         self.setup_signal_handler()
         
-        # Initialize variables with correct paths
-        self.history_file = os.path.join(self.project_dir, "output", "client_history.json")
-        self.schedule_file = os.path.join(self.project_dir, "output", "schedule_config.json")
+        # Initialize variables with correct paths using path resolver
+        self.history_file = os.path.join(get_base_dir(), "output", "client_history.json")
+        self.schedule_file = os.path.join(get_base_dir(), "output", "schedule_config.json")
+        
         self.client_history = self.load_client_history()
         self.schedule_config = self.load_schedule_config()
         self.day_vars = {}  # Will store day checkbox variables
@@ -324,7 +325,7 @@ class KeywordInputApp:
         keywords = [kw.strip() for kw in keywords_text.split('\n') if kw.strip()]
         
         # Create output directory if it doesn't exist
-        output_dir = os.path.join(self.project_dir, "output", folder_name)
+        output_dir = os.path.join(get_base_dir(), "output", folder_name)
         os.makedirs(output_dir, exist_ok=True)
         
         # Save keywords to file
@@ -355,7 +356,7 @@ class KeywordInputApp:
             # Get client/product type for output directory
             client_type = self.client_var.get().strip()
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client_type)
-            output_dir = os.path.join(self.project_dir, "output", folder_name)
+            output_dir = os.path.join(get_base_dir(), "output", folder_name)
             
             # Create a popup window to show progress
             popup = tk.Toplevel(self.root)
@@ -550,7 +551,7 @@ class KeywordInputApp:
         """Get all scheduled times from all clients to detect conflicts"""
         scheduled_times = set()
         
-        output_path = os.path.join(self.project_dir, "output")
+        output_path = os.path.join(get_base_dir(), "output")
         if not os.path.exists(output_path):
             return scheduled_times
             
@@ -934,7 +935,7 @@ class KeywordInputApp:
         if client:
             # Create client-specific log directory
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client)
-            log_dir = os.path.join(self.project_dir, "output", folder_name)
+            log_dir = os.path.join(get_base_dir(), "output", folder_name)
             os.makedirs(log_dir, exist_ok=True)
             log_file = os.path.join(log_dir, "scheduler.log")
             
@@ -1142,7 +1143,7 @@ class KeywordInputApp:
         # If client is specified, try to load client-specific config
         if client:
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client)
-            client_schedule_file = os.path.join(self.project_dir, "output", folder_name, "schedule_config.json")
+            client_schedule_file = os.path.join(get_base_dir(), "output", folder_name, "schedule_config.json")
             
             if os.path.exists(client_schedule_file):
                 try:
@@ -1174,7 +1175,7 @@ class KeywordInputApp:
             
         # Create client-specific schedule file path
         folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client)
-        client_schedule_file = os.path.join(self.project_dir, "output", folder_name, "schedule_config.json")
+        client_schedule_file = os.path.join(get_base_dir(), "output", folder_name, "schedule_config.json")
         
         # Get current times
         times = []

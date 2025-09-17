@@ -531,7 +531,8 @@ def search_and_capture(search_term=None, output_dir=None):
             # Process the HTML file to extract TOAs with search term
             try:
                 from process_saved_html import extract_ads_from_html_file
-                extract_ads_from_html_file(html_path)
+                # Pass the HTML file path to ensure only this run's results are processed for images
+                extract_ads_from_html_file(html_path, process_images_for_html=html_path)
             except Exception as e:
                 print(f"   Note: Could not process HTML file immediately: {e}")
             

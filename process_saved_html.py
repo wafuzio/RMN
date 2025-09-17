@@ -53,6 +53,9 @@ def extract_toa_images(json_file, html_file=None, client_name=None):
         if client_name:
             cmd.extend(["--client", client_name])
             
+        # Pass the specific HTML file to only process current run's results
+        # This prevents processing the entire daily JSON file
+            
         print(f"\n📷 Extracting TOA images using screenshot_toa_image.py...")
         
         # Use subprocess.run to wait for completion
@@ -84,7 +87,7 @@ def remove_html_from_ads(ads):
             del ad['html']
     return ads
 
-def extract_ads_from_html_file(html_file):
+def extract_ads_from_html_file(html_file, process_images_for_html=None):
     """Extract ad data from a saved HTML file"""
     print(f"\n📝 Processing HTML file: {os.path.basename(html_file)}")
     
@@ -254,12 +257,24 @@ def process_latest_html_file(input_dir=None, output_dir=None):
     print(f"✅ Found {results['count']} TOAs")
     print(f"💾 Results saved to {results_path}")
     
-    # TOA images are now extracted once from the combined JSON results
-    # This prevents duplicate image generation from multiple HTML files
+    # Extract TOA images only for the specific HTML file if requested
+    if process_images_for_html and process_images_for_html == html_file:
+        print(f"🖼️ Processing images for current HTML file: {os.path.basename(html_file)}")
+        # Extract client name from the directory structure
+        client_name = None
+        dir_path = os.path.dirname(html_file)
+        if dir_path:
+            client_dir = os.path.basename(dir_path)
+            if client_dir != "output":
+                client_name = client_dir
+        
+        # Call image extraction for this specific HTML file only
+        extract_toa_images(results_path, html_file, client_name)
+    else:
+        print("⏭️ Skipping image extraction (not current run)")
     
     # NOTE: Carousel images are now captured directly in kroger_search_and_capture.py
     # No need to extract carousel images here anymore
-    pass
     
     # Print some details about the ads found
     if results['ads']:

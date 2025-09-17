@@ -7,9 +7,9 @@
 	<key>CFBundleExecutable</key>
 	<string>Kroger TOA Scraper</string>
 	<key>CFBundleIconFile</key>
-	<string>icon</string>
+	<string>icon.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.wafuzio.kroger-toa-scraper</string>
+	<string>Kroger TOA Scraper</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -18,17 +18,7 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.0.0</string>
-	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.productivity</string>
-	<key>NSDesktopFolderUsageDescription</key>
-	<string>Kroger TOA Scraper may need access to save files to the Desktop.</string>
-	<key>NSDocumentsFolderUsageDescription</key>
-	<string>Kroger TOA Scraper needs access to the Documents folder to save scraped data, keywords, and configuration files.</string>
-	<key>NSDownloadsFolderUsageDescription</key>
-	<string>Kroger TOA Scraper may need access to save scraped data to the Downloads folder.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
-	<key>NSRequiresAquaSystemAppearance</key>
-	<false/>
 </dict>
 </plist>

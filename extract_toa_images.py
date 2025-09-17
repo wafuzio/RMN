@@ -11,6 +11,7 @@ import argparse
 import glob
 import re
 from datetime import datetime
+import json
 from bs4 import BeautifulSoup
 from PIL import Image
 
@@ -249,6 +250,19 @@ def main():
                 print(f"     Alt text: {result.get('alt_text', 'None')}")
             else:
                 print(f"  ❌ TOA Image #{i+1}: Failed - {result.get('error', 'Unknown error')}")
+
+        # Save per-run snapshot JSON file
+        # Use timestamp for filename
+        snapshot_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        html_dir = os.path.dirname(html_file)
+        snapshot_filename = f"toa_results_{snapshot_ts}.json"
+        snapshot_path = os.path.join(html_dir, snapshot_filename)
+        try:
+            with open(snapshot_path, "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=2, ensure_ascii=False)
+            print(f"  💾 Results snapshot saved: {snapshot_path}")
+        except Exception as e:
+            print(f"  ❌ Failed to save snapshot: {e}")
     
     print(f"\n📊 Summary: Extracted {successful_images} of {total_images} TOA images")
     
