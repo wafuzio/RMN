@@ -13,6 +13,10 @@ output/
 images/
 *.log
 
+# Build artifacts
+build/
+dist/
+
 # Node (if present)
 node_modules/
 .cache/

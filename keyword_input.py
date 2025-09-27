@@ -17,20 +17,56 @@ import time
 import threading
 import re
 
-# Import the search and capture functionality
+# Ensure module imports resolve to run in-process (no extra Python app)
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Base dir resolver (shared across GUI/scheduler/tools)
 def get_base_dir():
     """
-    Return the base directory for user data (output/, configs, etc.)
-    Works for both source runs and PyInstaller bundles.
+    Return the root directory for user data (output/, logs/, etc.).
+    Prefers SCRAPER_HOME so everything is centralized.
+    Falls back to Documents/Amazon_Scrape when packaged, or source dir when dev.
     """
+    shared = os.getenv("SCRAPER_HOME")
+    if shared and shared.strip():
+        return os.path.abspath(shared)
     if getattr(sys, 'frozen', False):
-        # Packaged app (Finder/Dock/Dist)
+        # Packaged app default
         return os.path.expanduser("~/Documents/Amazon_Scrape")
-    else:
-        # Running from source
-        return os.path.dirname(os.path.abspath(__file__))
+    # Source default
+    return os.path.dirname(os.path.abspath(__file__))
+
+# Set up logging (now using SCRAPER_HOME-aware base)
+import logging
+base_dir = get_base_dir()
+log_dir = os.path.join(base_dir, "logs")
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "keyword_input.log")
+logging.basicConfig(
+    filename=log_file,
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logging.info("\n\n=== KEYWORD_INPUT STARTED ===")
+logging.info(f"Python: {sys.version}")
+logging.info(f"Executable: {sys.executable}")
+logging.info(f"Working directory: {os.getcwd()}")
+logging.info(f"sys.path: {sys.path}")
+
+# Avoid NameError in lazy-import checks later
+ksc_search_and_capture = None 
+kproc_latest_missing = None
+
+# Optional: try eager imports; if they fail, globals stay None and the lazy path runs later
+try:
+    from kroger_search_and_capture import search_and_capture as ksc_search_and_capture
+except Exception:
+    pass
+
+try:
+    from process_saved_html import process_latest_missing as kproc_latest_missing
+except Exception:
+    pass
 
 class KeywordInputApp:
     def __init__(self, root):
@@ -102,10 +138,11 @@ class KeywordInputApp:
         self.schedule_config = self.load_schedule_config()
         self.day_vars = {}  # Will store day checkbox variables
         
-        # Check and start scheduler daemon if needed
+        # Check scheduler daemon status (no auto-start by default)
         self.daemon_status = self.check_daemon_status()
-        if not self.daemon_status:
+        if not self.daemon_status and os.getenv("GUI_AUTO_START_DAEMON") == "1":
             self.start_daemon_automatically()
+            self.daemon_status = True
         
         # Set up the main frame
         main_frame = ttk.Frame(root, padding=20, style='App.TFrame')
@@ -194,6 +231,12 @@ class KeywordInputApp:
         
         # Create initial time selectors (default to 3)
         self.update_time_selectors()
+        # Immediately compute conflict status for initial selectors
+        try:
+            if hasattr(self, 'refresh_all_conflict_displays'):
+                self.refresh_all_conflict_displays()
+        except Exception:
+            pass
         
         # Days of week selection
         days_frame = ttk.Labelframe(schedule_frame, text="Days to Run", padding=5, style='Card.TLabelframe')
@@ -387,7 +430,7 @@ class KeywordInputApp:
             self.status_label.config(text=f"Starting scraper for {client_type}...")
             self.root.update()
             
-            # Run the search and capture script for each keyword
+            # Run the search and capture for each keyword IN-PROCESS to avoid spawning a new Python GUI/app
             success_count = 0
             for i, keyword in enumerate(keywords):
                 # Update progress
@@ -401,21 +444,10 @@ class KeywordInputApp:
                 self.status_label.config(text=f"Scraping {i+1}/{len(keywords)}: {keyword}")
                 self.root.update()
                 
-                # Call the search and capture script with output directory
-                cmd = [
-                    sys.executable,
-                    "kroger_search_and_capture.py",
-                    "--search",
-                    keyword,
-                    "--output-dir",
-                    output_dir
-                ]
-                
-                # Run the command with retry logic
+                # Run in-process if available, else fallback to subprocess
                 max_retries = 3
                 retry_count = 0
                 success = False
-                
                 while retry_count < max_retries and not success:
                     if retry_count > 0:
                         retry_msg = f"Retry attempt {retry_count}/{max_retries} for '{keyword}'..."
@@ -424,34 +456,79 @@ class KeywordInputApp:
                         self.status_label.config(text=retry_msg)
                         popup.update()
                         self.root.update()
-                        time.sleep(2)  # Brief pause before retry
-                    
-                    process = subprocess.Popen(
-                        cmd, 
-                        stdout=subprocess.PIPE, 
-                        stderr=subprocess.PIPE,
-                        text=True
-                    )
-                    # Discard stdout as we only need stderr for error reporting
-                    _, stderr = process.communicate()
-                    
-                    if process.returncode == 0:
-                        success = True
-                        success_count += 1
-                        break
-                    else:
+                        time.sleep(2)
+
+                    try:
+                        # Lazy import fallback if initial import failed (e.g., packaged path timing)
+                        global ksc_search_and_capture
+                        logging.info(f"Checking ksc_search_and_capture: {ksc_search_and_capture}")
+                        if ksc_search_and_capture is None:
+                            logging.info("ksc_search_and_capture is None, trying to import...")
+                            sys.path.append(os.path.join(get_base_dir(), "src"))
+                            logging.info(f"Updated sys.path: {sys.path}")
+                            try:
+                                logging.info("Importing kroger_search_and_capture...")
+                                from kroger_search_and_capture import search_and_capture as ksc_search_and_capture
+                                logging.info("Successfully imported kroger_search_and_capture")
+                            except Exception as e:
+                                logging.error(f"Failed to import kroger_search_and_capture: {e}")
+                                import traceback
+                                logging.error(traceback.format_exc())
+                        if ksc_search_and_capture is not None:
+                            logging.info(f"Calling ksc_search_and_capture with keyword={keyword}, output_dir={output_dir}")
+                            try:
+                                ok = ksc_search_and_capture(keyword, output_dir)
+                                logging.info(f"ksc_search_and_capture returned: {ok}")
+                                if ok:
+                                    logging.info("Search and capture successful")
+                                    success = True
+                                    success_count += 1
+                                    break
+                                else:
+                                    logging.error("Search and capture returned False")
+                            except Exception as e:
+                                logging.error(f"Exception during ksc_search_and_capture: {e}")
+                                import traceback
+                                logging.error(traceback.format_exc())
+                                raise
+                            else:
+                                raise RuntimeError("search_and_capture returned False")
+                        else:
+                            # Fallback subprocess (rare path)
+                            cmd = [
+                                sys.executable,
+                                "kroger_search_and_capture.py",
+                                "--search",
+                                keyword,
+                                "--output-dir",
+                                output_dir,
+                            ]
+                            process = subprocess.Popen(
+                                cmd,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True,
+                            )
+                            _, stderr = process.communicate()
+                            if process.returncode == 0:
+                                success = True
+                                success_count += 1
+                                break
+                            else:
+                                raise RuntimeError(stderr or "subprocess failed")
+                    except Exception as e:
                         retry_count += 1
                         if retry_count < max_retries:
-                            error_msg = f"Failed to scrape '{keyword}' (attempt {retry_count}/{max_retries}): {stderr}"
+                            err_text = str(e)
                             if progress_label.winfo_exists():
-                                progress_label.config(text=f"Error: {error_msg}. Retrying...")
+                                progress_label.config(text=f"Error: {err_text}. Retrying...")
                             popup.update()
                         else:
-                            error_msg = f"Failed to scrape '{keyword}' after {max_retries} attempts: {stderr}"
+                            err_text = str(e)
                             if progress_label.winfo_exists():
-                                progress_label.config(text=f"Error: {error_msg}")
+                                progress_label.config(text=f"Error: {err_text}")
                             popup.update()
-                            messagebox.showerror("Error", error_msg)
+                            messagebox.showerror("Error", f"Failed to scrape '{keyword}' after {max_retries} attempts: {err_text}")
             
             # Update progress for processing HTML
             if progress_label.winfo_exists():
@@ -463,11 +540,11 @@ class KeywordInputApp:
             self.status_label.config(text="Processing saved HTML files...")
             self.root.update()
             
-            # Process the saved HTML files with retry logic
+            # Process the newest HTMLs missing images (per-run, no mixing), preferably in-process
             max_retries = 3
             retry_count = 0
             success = False
-            
+            last_error = ""   # <--- track any failure reason
             while retry_count < max_retries and not success:
                 if retry_count > 0:
                     retry_msg = f"Retry attempt {retry_count}/{max_retries} for HTML processing..."
@@ -476,29 +553,152 @@ class KeywordInputApp:
                     self.status_label.config(text=retry_msg)
                     popup.update()
                     self.root.update()
-                    time.sleep(2)  # Brief pause before retry
-                
-                process = subprocess.Popen(
-                    [sys.executable, "process_saved_html.py", "--input-dir", output_dir, "--output-dir", output_dir, "--all-files"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
-                # Discard stdout as we only need stderr for error reporting
-                _, stderr = process.communicate()
-                
-                if process.returncode == 0:
-                    success = True
-                    break
-                else:
+                    time.sleep(2)
+
+                try:
+                    # Lazy import fallback if initial import failed
+                    global kproc_latest_missing
+                    if kproc_latest_missing is None:
+                        from process_saved_html import process_latest_missing as kproc_latest_missing
+                    # CRITICAL: Run post-processing in a completely detached process
+                    # This ensures it won't be affected by the app's state or locks
+                    logging.info("Running post-processing in a detached process")
+                    
+                    # CRITICAL: Run TOA extraction directly and block until it completes
+                    # This ensures images are generated before showing success popup
+                    logging.info("Running TOA extraction directly as a blocking operation")
+                    print("\n📷 Extracting TOA/Skyscraper images...")
+                    
+                    # Find newest JSON and corresponding HTML robustly
+                    import glob
+
+                    # Allow a moment for filesystem to flush
+                    time.sleep(0.75)
+
+                    # Search JSON recursively in case naming/paths vary
+                    json_candidates = glob.glob(os.path.join(output_dir, "**", "run_results_*.json"), recursive=True)
+                    if not json_candidates:
+                        logging.error("No run_results_*.json found (recursive).")
+                        print("❌ No JSON files found for TOA/Skyscraper extraction")
+                        last_error = "No run_results_*.json found under this client output."
+                        break
+                    else:
+                        # Pick newest by mtime
+                        newest_json = max(json_candidates, key=os.path.getmtime)
+                        logging.info(f"Newest JSON: {newest_json}")
+                        print(f"   Using JSON file: {os.path.basename(newest_json)}")
+
+                        # Try to derive HTML by timestamp; if missing, fallback to newest search_results_*.html in same dir
+                        json_dir = os.path.dirname(newest_json)
+                        # Try predictable rename first
+                        candidate_html = newest_json.replace("run_results_", "search_results_").replace(".json", ".html")
+
+                        html_file = candidate_html if os.path.exists(candidate_html) else None
+                        if not html_file:
+                            # Fallback: pick newest search_results_*.html alongside JSON
+                            html_candidates = glob.glob(os.path.join(json_dir, "search_results_*.html"))
+                            if html_candidates:
+                                html_file = max(html_candidates, key=os.path.getmtime)
+
+                        if not html_file or not os.path.exists(html_file):
+                            logging.error(f"No matching HTML file found near {newest_json}")
+                            print("❌ Matching HTML file not found (search_results_*.html)")
+                            last_error = "Matching search_results_*.html not found next to the JSON."
+                            break
+                        else:
+                            logging.info(f"HTML for extraction: {html_file}")
+                            print(f"   Using HTML file: {os.path.basename(html_file)}")
+
+                            # Always prefer the new tool (supports --no-lock)
+                            script_dir = os.path.dirname(os.path.abspath(__file__))
+                            ad_script = os.path.join(script_dir, "screenshot_ad_images.py")
+                            toa_script = os.path.join(script_dir, "screenshot_toa_image.py")
+                            # Force the modern script if present; otherwise fall back
+                            script_to_run = ad_script if os.path.exists(ad_script) else (toa_script if os.path.exists(toa_script) else None)
+
+                            if not script_to_run:
+                                logging.error("No screenshot tool found (screenshot_ad_images.py nor screenshot_toa_image.py).")
+                                print("❌ No screenshot tool found in project directory")
+                                last_error = "No screenshot tool found (screenshot_ad_images.py / screenshot_toa_image.py)."
+                                break
+                            else:
+                                # Build command
+                                cmd = [
+                                    sys.executable,
+                                    script_to_run,
+                                    "--json", newest_json,
+                                    "--html", html_file,
+                                    "--output", output_dir,
+                                    "--headless",
+                                    "--no-lock",
+                                    "--time-window", "45",
+                                    "--browser-lock-timeout", "600",
+                                ]
+
+                                env = os.environ.copy()
+                                env.setdefault("SCRAPER_HOME", get_base_dir())
+                                env.setdefault("PYTHONUNBUFFERED", "1")
+
+                                logging.info(f"Running (no log unless failure): {' '.join(cmd)}")
+                                print(f"\n📷 Running {os.path.basename(script_to_run)}")
+
+                                # First, run quietly
+                                result = subprocess.run(
+                                    cmd,
+                                    env=env,
+                                    cwd=script_dir,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.STDOUT,
+                                    check=False,
+                                    timeout=240
+                                )
+
+                                # Verify images
+                                toa_files = glob.glob(os.path.join(output_dir, "TOA", "*.png"))
+                                sky_files = glob.glob(os.path.join(output_dir, "Skyscraper", "*.png"))
+                                car_files = glob.glob(os.path.join(output_dir, "Carousel", "*.png"))
+                                total_imgs = len(toa_files) + len(sky_files) + len(car_files)
+
+                                if total_imgs > 0:
+                                    logging.info("Image extraction completed successfully")
+                                    print(f"✅ Image extraction completed: TOA={len(toa_files)} Skyscraper={len(sky_files)} Carousel={len(car_files)}")
+                                    success = True
+                                    break
+                                else:
+                                    # On failure (no images), capture one diagnostic log for this attempt
+                                    extract_log = os.path.join(get_base_dir(), "logs", f"image_extract_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+                                    print(f"❌ No images produced (code {result.returncode}). Writing diagnostics to {extract_log}")
+                                    last_error = f"No images produced. See {extract_log}"  # remember why
+                                    with open(extract_log, "a", encoding="utf-8") as lf:
+                                        lf.write(f"\n\n=== START {datetime.now().isoformat()} ===\n")
+                                        lf.write(f"CMD: {' '.join(cmd)}\n")
+                                        lf.write(f"CWD: {script_dir}\n")
+                                        lf.flush()
+                                        subprocess.run(
+                                            cmd,
+                                            env=env,
+                                            cwd=script_dir,
+                                            stdout=lf,
+                                            stderr=lf,
+                                            check=False,
+                                            timeout=240
+                                        )
+                                        lf.write(f"=== END {datetime.now().isoformat()} ===\n")
+
+                                    retry_count += 1
+                                    if retry_count < max_retries:
+                                        print(f"⚠️ Extraction incomplete; will retry ({retry_count}/{max_retries}). See: {extract_log}")
+                                    else:
+                                        print(f"❌ Extraction failed after {max_retries} attempts. See: {extract_log}")
+                except Exception as e:
                     retry_count += 1
                     if retry_count < max_retries:
-                        error_msg = f"Failed to process HTML files (attempt {retry_count}/{max_retries}): {stderr}"
+                        error_msg = f"HTML processing error: {e}. Retrying..."
                         if progress_label.winfo_exists():
-                            progress_label.config(text=f"Error: {error_msg}. Retrying...")
+                            progress_label.config(text=error_msg)
                         popup.update()
                     else:
-                        error_msg = f"Failed to process HTML files after {max_retries} attempts: {stderr}"
+                        error_msg = f"Failed to process HTML files after {max_retries} attempts: {e}"
                         if progress_label.winfo_exists():
                             progress_label.config(text=f"Error: {error_msg}")
                         popup.update()
@@ -507,7 +707,7 @@ class KeywordInputApp:
             
             # Set progress to complete
             progress_var.set(len(keywords))
-            
+
             if success:
                 result_msg = f"Completed scraping {success_count}/{len(keywords)} keywords successfully"
                 if progress_label.winfo_exists():
@@ -515,14 +715,26 @@ class KeywordInputApp:
                 popup.update()
                 messagebox.showinfo("Success", result_msg)
                 self.status_label.config(text="Scraping completed successfully")
-            
-            # Auto-close the popup if selected
+
+                post_processing_label = tk.Label(
+                    popup,
+                    text="\n✅ TOA/Skyscraper extraction completed successfully.\nAll images have been generated.\n",
+                    fg="green"
+                )
+                post_processing_label.pack(pady=5)
+            else:
+                warn = last_error or "No ad images were generated."
+                if progress_label.winfo_exists():
+                    progress_label.config(text=f"⚠️ {warn}")
+                popup.update()
+                messagebox.showwarning("Extraction incomplete", warn)
+                self.status_label.config(text=f"Extraction incomplete: {warn}")
+
+            close_btn = tk.Button(popup, text="Close", command=popup.destroy)
+            close_btn.pack(pady=10)
+
             if auto_close_var.get():
                 popup.after(3000, popup.destroy)  # Close after 3 seconds
-            else:
-                # Add a close button if not auto-closing
-                close_btn = tk.Button(popup, text="Close", command=popup.destroy)
-                close_btn.pack(pady=10)
                 
         except (subprocess.SubprocessError, IOError, OSError) as e:
             error_msg = f"An error occurred: {str(e)}"
@@ -696,69 +908,84 @@ class KeywordInputApp:
     def check_daemon_status(self):
         """Check if scheduler daemon is currently running"""
         try:
-            # Check for running scheduler_daemon process
-            result = subprocess.run(
-                ["ps", "aux"], 
-                capture_output=True, 
-                text=True, 
-                timeout=10
-            )
-            
-            # Look for scheduler_daemon.py in the process list
-            for line in result.stdout.split('\n'):
-                if 'scheduler_daemon.py' in line and 'python' in line:
-                    return True
-            return False
-            
+            base = get_base_dir()
+            retailer = os.getenv("RETAILER", "").strip()
+            # PID path supports retailer namespacing if RETAILER is set
+            pid_path = os.path.join(base, "logs", retailer, "scheduler.pid") if retailer else os.path.join(base, "logs", "scheduler.pid")
+
+            if os.path.exists(pid_path):
+                with open(pid_path, "r") as pf:
+                    pid = pf.read().strip()
+                if pid.isdigit():
+                    # macOS doesn't have /proc — do both checks safely
+                    if os.path.exists(f"/proc/{pid}") or self._ps_contains_pid(pid):
+                        return True
+
+            # Fallback: name-based scan (brittle but better than nothing)
+            return self._ps_contains_name("scheduler_daemon.py")
         except Exception as e:
             print(f"Error checking daemon status: {e}")
             return False
+
+    def _ps_contains_pid(self, pid: str) -> bool:
+        try:
+            result = subprocess.run(["ps", "-p", str(pid), "-o", "pid="],
+                                    capture_output=True, text=True, timeout=5)
+            return str(pid) in (result.stdout or "").strip()
+        except Exception:
+            return False
+
+    def _ps_contains_name(self, name: str) -> bool:
+        try:
+            result = subprocess.run(["ps", "aux"], capture_output=True, text=True, timeout=10)
+            for line in (result.stdout or "").splitlines():
+                if name in line and "grep" not in line:
+                    return True
+            return False
+        except Exception:
+            return False
     
     def start_daemon_automatically(self):
-        """Automatically start the scheduler daemon if it's not running"""
+        """Optionally start the scheduler daemon if it's not running (opt-in only)."""
         try:
-            print("Scheduler daemon not running. Starting automatically...")
-            
-            # Determine the project directory
-            # If running from PyInstaller, we need to find the original project directory
+            print("Scheduler daemon not running. Starting automatically (opt-in)...")
+
+            # Locate start script
             if getattr(sys, 'frozen', False):
-                # Running from PyInstaller bundle
-                # Try to find the project directory by looking for start_scheduler.sh
                 possible_paths = [
-                    "/Users/dan.maguire/Documents/Amazon_Scrape",  # Absolute path
-                    os.path.expanduser("~/Documents/Amazon_Scrape"),  # User home relative
+                    os.path.join(get_base_dir(), "start_scheduler.sh"),
+                    os.path.expanduser("~/Documents/Amazon_Scrape/start_scheduler.sh"),
                 ]
-                
-                daemon_script = None
-                for path in possible_paths:
-                    test_script = os.path.join(path, "start_scheduler.sh")
-                    if os.path.exists(test_script):
-                        daemon_script = test_script
-                        break
+                daemon_script = next((p for p in possible_paths if os.path.exists(p)), None)
             else:
-                # Running from source
                 daemon_script = os.path.join(os.path.dirname(__file__), "start_scheduler.sh")
-            
+
             if daemon_script and os.path.exists(daemon_script):
-                # Start daemon in background
+                env = os.environ.copy()
+                # Ensure the central scheduler gate is set if you want to start from GUI
+                env.setdefault("SCRAPER_HOME", get_base_dir())
+                env.setdefault("CENTRAL_SCHEDULER", "1")  # required by our guarded start script
+                # RETAILER is optional; if you run per-retailer schedulers, set it in the environment
+
                 subprocess.Popen(
                     [daemon_script],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                    start_new_session=True
+                    start_new_session=True,
+                    env=env
                 )
-                print("✅ Scheduler daemon started automatically")
-                self.daemon_status = True
-                
-                # Update status label if it exists
+                print("✅ Scheduler daemon start attempted")
+                # Allow a brief moment then re-check status
+                time.sleep(1.0)
+                self.daemon_status = self.check_daemon_status()
+
                 if hasattr(self, 'status_label'):
-                    self.status_label.config(text="Ready to scrape | ✅ Daemon running (auto-started)")
-                    
+                    daemon_text = "✅ Daemon running (auto-started)" if self.daemon_status else "⚠️ Daemon start attempted"
+                    self.status_label.config(text=f"Ready to scrape | {daemon_text}")
             else:
                 print("⚠️ Scheduler daemon script not found")
                 if hasattr(self, 'status_label'):
                     self.status_label.config(text="⚠️ Daemon script not found - manual start required")
-                
         except Exception as e:
             print(f"Error starting daemon: {e}")
             if hasattr(self, 'status_label'):
@@ -926,9 +1153,16 @@ class KeywordInputApp:
                     self.day_vars[day].set(day in self.schedule_config["days"])
             
             self.status_label.config(text=f"Loaded {len(keywords)} keywords for {selected_client}")
-            
-            # Set up logging for this client
-            self.logger = self.setup_logging(selected_client)
+        
+        # Set up logging for this client
+        self.logger = self.setup_logging(selected_client)
+        
+        # Refresh conflict displays now that client context and times/days are loaded
+        try:
+            if hasattr(self, 'refresh_all_conflict_displays'):
+                self.refresh_all_conflict_displays()
+        except Exception:
+            pass
     
     def setup_logging(self, client=None):
         """Set up logging to file for scheduler events"""
@@ -1131,6 +1365,13 @@ class KeywordInputApp:
                     hour_var.set(saved_hour)
                     minute_var.set(saved_minute)
                     ampm_var.set(saved_ampm)
+
+        # After loading saved values, refresh conflict indicators
+        try:
+            if hasattr(self, 'refresh_all_conflict_displays'):
+                self.refresh_all_conflict_displays()
+        except Exception:
+            pass
     
     def load_schedule_config(self, client=None):
         """Load schedule configuration from file"""

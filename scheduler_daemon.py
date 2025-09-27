@@ -17,11 +17,77 @@ from datetime import datetime
 from pathlib import Path
 import glob
 
+# --- Single-instance lock (PID file) ---
+LOCKFILE = "/tmp/scheduler_daemon.lock"
+
+def _pid_is_running(pid: int) -> bool:
+    """Cross-platform-ish check if a PID is alive.
+    On macOS/Linux, os.kill(pid, 0) raises if process doesn't exist.
+    Returns True if process appears alive, False otherwise.
+    """
+    try:
+        if pid <= 0:
+            return False
+        # signal 0 does not actually send a signal
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        # No such process
+        return False
+    except PermissionError:
+        # We don't have permission, but the process likely exists
+        return True
+    except Exception:
+        return False
+
+def check_single_instance():
+    """Ensure only one scheduler_daemon.py is running at a time."""
+    if os.path.exists(LOCKFILE):
+        pid = None
+        try:
+            with open(LOCKFILE, "r") as f:
+                pid_str = f.read().strip()
+                pid = int(pid_str) if pid_str else None
+        except Exception:
+            pid = None
+
+        if pid and _pid_is_running(pid):
+            print(f"\u26a0\ufe0f Scheduler daemon already running with PID {pid}")
+            sys.exit(1)
+        else:
+            # stale lock, remove it
+            try:
+                os.remove(LOCKFILE)
+            except FileNotFoundError:
+                pass
+
+    # write our PID
+    try:
+        with open(LOCKFILE, "w") as f:
+            f.write(str(os.getpid()))
+    except Exception:
+        # If we cannot create the lockfile, better to abort than risk duplicates
+        print("\u26a0\ufe0f Unable to create scheduler lockfile; aborting to prevent duplicates")
+        sys.exit(1)
+
+def cleanup_lockfile():
+    try:
+        if os.path.exists(LOCKFILE):
+            os.remove(LOCKFILE)
+    except Exception:
+        pass
+
 class SchedulerDaemon:
     def __init__(self):
         """Initialize the scheduler daemon"""
-        self.project_root = Path(__file__).resolve().parent
-        self.output_dir = self.project_root / "output"
+        # Code directory (where scripts live)
+        self.code_dir = Path(__file__).resolve().parent
+        # Data root (where output/, logs/, etc. live). Defaults to code_dir unless SCRAPER_HOME is set
+        self.root_dir = Path(os.environ.get("SCRAPER_HOME", str(self.code_dir))).resolve()
+        # Backward-compatible alias
+        self.project_root = self.code_dir
+        # Output directory now roots under SCRAPER_HOME
+        self.output_dir = self.root_dir / "output"
         self.running = False
         self.threads = {}
         self.last_run_times = {}  # Track last run times to avoid duplicates
@@ -31,7 +97,8 @@ class SchedulerDaemon:
         
     def setup_logging(self):
         """Set up comprehensive logging for the daemon"""
-        log_dir = self.project_root / "logs"
+        # Logs under SCRAPER_HOME/logs
+        log_dir = self.root_dir / "logs"
         log_dir.mkdir(exist_ok=True)
         
         # Main scheduler log
@@ -102,7 +169,8 @@ class SchedulerDaemon:
             
     def load_client_keywords(self, client_dir):
         """Load keywords for a client from their history"""
-        history_file = self.project_root / "output" / "client_history.json"
+        # History under SCRAPER_HOME/output
+        history_file = self.output_dir / "client_history.json"
         
         if not history_file.exists():
             return []
@@ -190,7 +258,7 @@ class SchedulerDaemon:
                 
                 cmd = [
                     sys.executable,
-                    str(self.project_root / "kroger_search_and_capture.py"),
+                    str(self.code_dir / "kroger_search_and_capture.py"),
                     "--search",
                     keyword,
                     "--output-dir",
@@ -229,17 +297,20 @@ class SchedulerDaemon:
                     self.logger.error(f"Error scraping keyword '{keyword}' for {client_name}: {e}")
                     self.execution_logger.error(f"KEYWORD_SCRAPE_EXCEPTION: '{keyword}' - {e}")
                     
-            # Process HTML files
-            self.execution_logger.info(f"HTML_PROCESSING_START: {client_dir}")
+            # Process only newest HTMLs missing images (per-run, no mixing)
+            self.execution_logger.info(f"HTML_PROCESSING_START: {client_dir} (latest-missing)")
             try:
                 process_cmd = [
                     sys.executable,
-                    str(self.project_root / "process_saved_html.py"),
+                    str(self.code_dir / "process_saved_html.py"),
                     "--input-dir",
                     str(client_dir),
-                    "--output-dir", 
+                    "--output-dir",
                     str(client_dir),
-                    "--all-files"
+                    "--latest-missing",
+                    "--missing-gap-minutes",
+                    "2",
+                    "--force-images",  # Always force image extraction regardless of existing files
                 ]
                 
                 self.execution_logger.debug(f"HTML_PROCESS_CMD: {' '.join(process_cmd)}")
@@ -302,6 +373,11 @@ class SchedulerDaemon:
                     client_name = config.get("client", client_dir.name)
                     self.execution_logger.debug(f"CLIENT_INFO: name={client_name}, dir={client_dir}")
                     
+                    # Respect 'enabled' flag in config (default True if missing)
+                    if not config.get("enabled", True):
+                        self.execution_logger.debug(f"CLIENT_DISABLED: {client_name} is disabled; skipping")
+                        continue
+                        
                     # Check if it's time to run
                     self.execution_logger.debug(f"TIME_CHECK_START: {client_name}")
                     if self.is_scheduled_time(config):
@@ -320,7 +396,14 @@ class SchedulerDaemon:
                         
                         # Load keywords for this client
                         self.execution_logger.debug(f"LOADING_KEYWORDS: {client_name}")
-                        keywords = self.load_client_keywords(client_dir)
+                        # Prefer explicit keywords from schedule_config if provided
+                        cfg_keywords = config.get("keywords") or []
+                        if isinstance(cfg_keywords, list) and len(cfg_keywords) > 0:
+                            keywords = cfg_keywords
+                            self.execution_logger.debug(f"KEYWORDS_SOURCE: schedule_config.json ({len(keywords)})")
+                        else:
+                            keywords = self.load_client_keywords(client_dir)
+                            self.execution_logger.debug(f"KEYWORDS_SOURCE: client_history.json ({len(keywords)})")
                         if not keywords:
                             self.logger.warning(f"No keywords found for client {client_name}")
                             self.execution_logger.warning(f"NO_KEYWORDS_FOUND: {client_name}")
@@ -382,8 +465,10 @@ class SchedulerDaemon:
 
 def main():
     """Main entry point"""
+    # Ensure only a single instance runs
+    check_single_instance()
+
     daemon = SchedulerDaemon()
-    
     try:
         daemon.start()
     except KeyboardInterrupt:
@@ -392,6 +477,8 @@ def main():
     except Exception as e:
         daemon.logger.error(f"Fatal error: {e}")
         sys.exit(1)
+    finally:
+        cleanup_lockfile()
 
 
 if __name__ == "__main__":
