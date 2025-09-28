@@ -350,6 +350,8 @@ def process_images(
             context = None
             page = None
             try:
+                print(f"Profile dir: {args.profile_dir or '<none>'}")
+                
                 if args.profile_dir and os.path.isdir(args.profile_dir):
                     # Reuse cookies/session exactly like the scraper
                     print(f"🔑 Using persistent profile: {args.profile_dir}")
@@ -361,13 +363,7 @@ def process_images(
                     )
                     page = context.new_page()
                 else:
-                    # Launch browser with stability flags
-                    browser = p.chromium.launch(
-                        headless=headless,
-                        args=["--disable-quic", "--disable-notifications", "--disable-http2"]
-                    )
-
-                    # Create a browser context
+                    browser = p.chromium.launch(headless=headless, args=["--disable-http2"])
                     context = browser.new_context(
                         viewport={"width": 1280, "height": 720},
                         ignore_https_errors=True,
@@ -377,13 +373,20 @@ def process_images(
                         },
                         user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     )
+                    page = context.new_page()
                 try:
                     context.set_default_navigation_timeout(45000)
                 except Exception:
                     pass
-
-                # Create a new page
-                page = context.new_page()
+                
+                # Check if we have cookies for kroger.com
+                try:
+                    cookies = context.cookies("https://www.kroger.com")
+                    print(f"Cookies for kroger.com: {len(cookies)}")
+                    if len(cookies) == 0:
+                        print("⚠️ No Kroger cookies found - image downloads may fail!")
+                except Exception as e:
+                    print(f"Cookie check failed: {e}")
 
                 # Process each image URL
                 for i, image_info in enumerate(image_urls):

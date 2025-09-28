@@ -575,10 +575,17 @@ class KeywordInputApp:
                         "--time-window", "45",
                         "--browser-lock-timeout", "600",
                     ]
-                    # Pass Chrome profile if available
+                    # Pass persistent Chrome profile if available
                     profile_dir = os.environ.get("KROGER_PROFILE_DIR")
+                    # Fallback to the same profile the scraper uses (per your logs)
+                    if not profile_dir:
+                        default_profile = "/Users/dan.maguire/ChromeProfiles/kroger_clean_profile"
+                        if os.path.isdir(default_profile):
+                            profile_dir = default_profile
+                    
                     if profile_dir and os.path.isdir(profile_dir):
                         cmd += ["--profile-dir", profile_dir]
+                        print(f"🔑 Using profile: {profile_dir}")
 
                     env = os.environ.copy()
                     env.setdefault("SCRAPER_HOME", get_base_dir())
