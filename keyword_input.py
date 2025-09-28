@@ -394,61 +394,57 @@ class KeywordInputApp:
             messagebox.showerror("Error", f"Failed to save keywords: {str(e)}")
     
     def run_scraper(self, keywords):
-        """Run the scraper with the given keywords"""
+        """Run the scraper with the given keywords and then post-process images."""
         try:
-            # Get client/product type for output directory
+            import glob
+
+            # Resolve paths
             client_type = self.client_var.get().strip()
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client_type)
             output_dir = os.path.join(get_base_dir(), "output", folder_name)
-            
-            # Create a popup window to show progress
+            os.makedirs(output_dir, exist_ok=True)
+
+            # Build popup
             popup = tk.Toplevel(self.root)
             popup.title("Scraping Progress")
             popup.geometry("400x150")
-            popup.transient(self.root)  # Set to be on top of the main window
-            popup.grab_set()  # Modal window
-            
-            # Add progress information to popup
+            popup.transient(self.root)
+            popup.grab_set()
+
             progress_label = tk.Label(popup, text=f"Starting scraper for {client_type}...", pady=10)
             progress_label.pack()
-            
-            # Progress bar
+
             progress_var = tk.DoubleVar()
             progress_bar = ttk.Progressbar(popup, variable=progress_var, maximum=len(keywords))
             progress_bar.pack(fill=tk.X, padx=20, pady=10)
-            
-            # Current keyword label
+
             keyword_label = tk.Label(popup, text="")
             keyword_label.pack(pady=5)
-            
-            # Auto-close checkbox
+
             auto_close_var = tk.BooleanVar(value=True)
             auto_close_cb = tk.Checkbutton(popup, text="Auto-close when complete", variable=auto_close_var)
             auto_close_cb.pack(pady=5)
-            
-            # Update the main window status as well
+
             self.status_label.config(text=f"Starting scraper for {client_type}...")
             self.root.update()
-            
-            # Run the search and capture for each keyword IN-PROCESS to avoid spawning a new Python GUI/app
+
+            # Scrape loop
             success_count = 0
             for i, keyword in enumerate(keywords):
-                # Update progress
                 progress_var.set(i)
                 keyword_label.config(text=f"Scraping {i+1}/{len(keywords)}: {keyword}")
                 if progress_label.winfo_exists():
                     progress_label.config(text=f"Processing keyword {i+1} of {len(keywords)}")
                 popup.update()
-                
-                # Update main window status
+
                 self.status_label.config(text=f"Scraping {i+1}/{len(keywords)}: {keyword}")
                 self.root.update()
-                
-                # Run in-process if available, else fallback to subprocess
+
                 max_retries = 3
                 retry_count = 0
-                success = False
-                while retry_count < max_retries and not success:
+                scraped = False
+
+                while retry_count < max_retries and not scraped:
                     if retry_count > 0:
                         retry_msg = f"Retry attempt {retry_count}/{max_retries} for '{keyword}'..."
                         if progress_label.winfo_exists():
@@ -456,96 +452,70 @@ class KeywordInputApp:
                         self.status_label.config(text=retry_msg)
                         popup.update()
                         self.root.update()
-                        time.sleep(2)
+                        time.sleep(1.5)
 
                     try:
-                        # Lazy import fallback if initial import failed (e.g., packaged path timing)
+                        # Lazy import fallback
                         global ksc_search_and_capture
-                        logging.info(f"Checking ksc_search_and_capture: {ksc_search_and_capture}")
                         if ksc_search_and_capture is None:
-                            logging.info("ksc_search_and_capture is None, trying to import...")
                             sys.path.append(os.path.join(get_base_dir(), "src"))
-                            logging.info(f"Updated sys.path: {sys.path}")
-                            try:
-                                logging.info("Importing kroger_search_and_capture...")
-                                from kroger_search_and_capture import search_and_capture as ksc_search_and_capture
-                                logging.info("Successfully imported kroger_search_and_capture")
-                            except Exception as e:
-                                logging.error(f"Failed to import kroger_search_and_capture: {e}")
-                                import traceback
-                                logging.error(traceback.format_exc())
+                            from kroger_search_and_capture import search_and_capture as ksc_search_and_capture
+
                         if ksc_search_and_capture is not None:
-                            logging.info(f"Calling ksc_search_and_capture with keyword={keyword}, output_dir={output_dir}")
-                            try:
-                                ok = ksc_search_and_capture(keyword, output_dir)
-                                logging.info(f"ksc_search_and_capture returned: {ok}")
-                                if ok:
-                                    logging.info("Search and capture successful")
-                                    success = True
-                                    success_count += 1
-                                    break
-                                else:
-                                    logging.error("Search and capture returned False")
-                            except Exception as e:
-                                logging.error(f"Exception during ksc_search_and_capture: {e}")
-                                import traceback
-                                logging.error(traceback.format_exc())
-                                raise
-                            else:
-                                raise RuntimeError("search_and_capture returned False")
-                        else:
-                            # Fallback subprocess (rare path)
-                            cmd = [
-                                sys.executable,
-                                "kroger_search_and_capture.py",
-                                "--search",
-                                keyword,
-                                "--output-dir",
-                                output_dir,
-                            ]
-                            process = subprocess.Popen(
-                                cmd,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,
-                                text=True,
-                            )
-                            _, stderr = process.communicate()
-                            if process.returncode == 0:
-                                success = True
+                            ok = ksc_search_and_capture(keyword, output_dir)
+                            if ok:
+                                scraped = True
                                 success_count += 1
                                 break
                             else:
-                                raise RuntimeError(stderr or "subprocess failed")
+                                raise RuntimeError("search_and_capture returned False")
+                        else:
+                            # Fallback: subprocess
+                            cmd = [
+                                sys.executable,
+                                "kroger_search_and_capture.py",
+                                "--search", keyword,
+                                "--output-dir", output_dir,
+                            ]
+                            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                            _, stderr = p.communicate()
+                            if p.returncode == 0:
+                                scraped = True
+                                success_count += 1
+                                break
+                            else:
+                                raise RuntimeError(stderr or "subprocess search_and_capture failed")
+
                     except Exception as e:
                         retry_count += 1
-                        if retry_count < max_retries:
-                            err_text = str(e)
-                            if progress_label.winfo_exists():
-                                progress_label.config(text=f"Error: {err_text}. Retrying...")
-                            popup.update()
-                        else:
-                            err_text = str(e)
+                        if retry_count >= max_retries:
+                            err_text = f"Failed to scrape '{keyword}' after {max_retries} attempts: {e}"
                             if progress_label.winfo_exists():
                                 progress_label.config(text=f"Error: {err_text}")
                             popup.update()
-                            messagebox.showerror("Error", f"Failed to scrape '{keyword}' after {max_retries} attempts: {err_text}")
-            
-            # Update progress for processing HTML
+                            messagebox.showerror("Error", err_text)
+                            # Continue to next keyword, do not abort whole run
+
+            # Post-processing: TOA/Skyscraper images
             if progress_label.winfo_exists():
                 progress_label.config(text="Processing saved HTML files...")
             keyword_label.config(text="")
             popup.update()
-            
-            # Update main window status
+
             self.status_label.config(text="Processing saved HTML files...")
             self.root.update()
-            
-            # Process the newest HTMLs missing images (per-run, no mixing), preferably in-process
+
             max_retries = 3
             retry_count = 0
-            success = False
-            last_error = ""   # <--- track any failure reason
-            while retry_count < max_retries and not success:
+            post_success = False
+            last_error = ""
+            loop_deadline = time.time() + 6 * 60  # 6-minute watchdog
+
+            while retry_count < max_retries and not post_success:
+                if time.time() > loop_deadline:
+                    last_error = last_error or "Timed out waiting for image extraction."
+                    break
+
                 if retry_count > 0:
                     retry_msg = f"Retry attempt {retry_count}/{max_retries} for HTML processing..."
                     if progress_label.winfo_exists():
@@ -553,243 +523,147 @@ class KeywordInputApp:
                     self.status_label.config(text=retry_msg)
                     popup.update()
                     self.root.update()
-                    time.sleep(2)
+                    time.sleep(1.5)
 
                 try:
-                    # Lazy import fallback if initial import failed
-                    global kproc_latest_missing
-                    if kproc_latest_missing is None:
-                        from process_saved_html import process_latest_missing as kproc_latest_missing
-                    # CRITICAL: Run post-processing in a completely detached process
-                    # This ensures it won't be affected by the app's state or locks
-                    logging.info("Running post-processing in a detached process")
-                    
-                    # CRITICAL: Run TOA extraction directly and block until it completes
-                    # This ensures images are generated before showing success popup
-                    logging.info("Running TOA extraction directly as a blocking operation")
-                    print("\n📷 Extracting TOA/Skyscraper images...")
-                    
-                    # Find newest JSON and corresponding HTML robustly
-                    import glob
-
-                    # Allow a moment for filesystem to flush
+                    # Allow filesystem to flush
                     time.sleep(0.75)
 
-                    # Search JSON recursively in case naming/paths vary
+                    # Find newest run_results_* recursively
                     json_candidates = glob.glob(os.path.join(output_dir, "**", "run_results_*.json"), recursive=True)
                     if not json_candidates:
-                        logging.error("No run_results_*.json found (recursive).")
-                        print("❌ No JSON files found for TOA/Skyscraper extraction")
                         last_error = "No run_results_*.json found under this client output."
                         break
+
+                    newest_json = max(json_candidates, key=os.path.getmtime)
+                    json_dir = os.path.dirname(newest_json)
+                    print(f"   Using JSON file: {os.path.basename(newest_json)}")
+                    logging.info(f"Newest JSON: {newest_json}")
+
+                    candidate_html = newest_json.replace("run_results_", "search_results_").replace(".json", ".html")
+                    html_file = candidate_html if os.path.exists(candidate_html) else None
+                    if not html_file:
+                        html_candidates = glob.glob(os.path.join(json_dir, "search_results_*.html"))
+                        if html_candidates:
+                            html_file = max(html_candidates, key=os.path.getmtime)
+
+                    if not html_file or not os.path.exists(html_file):
+                        last_error = "Matching search_results_*.html not found next to the JSON."
+                        break
+
+                    print(f"   Using HTML file: {os.path.basename(html_file)}")
+                    logging.info(f"HTML for extraction: {html_file}")
+
+                    # Choose extractor (prefer modern)
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    ad_script = os.path.join(script_dir, "screenshot_ad_images.py")
+                    toa_script = os.path.join(script_dir, "screenshot_toa_image.py")
+                    script_to_run = ad_script if os.path.exists(ad_script) else (toa_script if os.path.exists(toa_script) else None)
+                    if not script_to_run:
+                        last_error = "No screenshot tool found (screenshot_ad_images.py / screenshot_toa_image.py)."
+                        break
+
+                    # Build command
+                    cmd = [
+                        sys.executable,
+                        script_to_run,
+                        "--json", newest_json,
+                        "--html", html_file,
+                        "--output", output_dir,
+                        "--headless",
+                        "--no-lock",
+                        "--time-window", "45",
+                        "--browser-lock-timeout", "600",
+                    ]
+                    # Pass Chrome profile if available
+                    profile_dir = os.environ.get("KROGER_PROFILE_DIR")
+                    if profile_dir and os.path.isdir(profile_dir):
+                        cmd += ["--profile-dir", profile_dir]
+
+                    env = os.environ.copy()
+                    env.setdefault("SCRAPER_HOME", get_base_dir())
+                    env.setdefault("PYTHONUNBUFFERED", "1")
+                    if profile_dir and os.path.isdir(profile_dir):
+                        env["KROGER_PROFILE_DIR"] = profile_dir
+                        print(f"🔑 Using profile: {profile_dir}")
+
+                    logging.info(f"Running (no log unless failure): {' '.join(cmd)}")
+                    print(f"\n📷 Running {os.path.basename(script_to_run)}")
+
+                    # Quiet first attempt
+                    result = subprocess.run(
+                        cmd,
+                        env=env,
+                        cwd=script_dir,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.STDOUT,
+                        check=False,
+                        timeout=240
+                    )
+
+                    # Check outputs
+                    toa_files = glob.glob(os.path.join(output_dir, "TOA", "*.png"))
+                    sky_files = glob.glob(os.path.join(output_dir, "Skyscraper", "*.png"))
+                    car_files = glob.glob(os.path.join(output_dir, "Carousel", "*.png"))
+
+                    n_toa, n_sky, n_car = len(toa_files), len(sky_files), len(car_files)
+
+                    # Require at least one TOA or Skyscraper
+                    if (n_toa + n_sky) > 0:
+                        logging.info("Image extraction completed successfully")
+                        print(f"✅ Image extraction completed: TOA={n_toa} Skyscraper={n_sky} Carousel={n_car}")
+                        post_success = True
+                        break
                     else:
-                        # Pick newest by mtime
-                        newest_json = max(json_candidates, key=os.path.getmtime)
-                        logging.info(f"Newest JSON: {newest_json}")
-                        print(f"   Using JSON file: {os.path.basename(newest_json)}")
+                        # On failure, capture a single diagnostic log
+                        extract_log = os.path.join(get_base_dir(), "logs", f"image_extract_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+                        print(f"❌ No TOA/Skyscraper produced (code {result.returncode}). Writing diagnostics to {extract_log}")
+                        last_error = f"No TOA/Skyscraper produced. See {extract_log}"
+                        with open(extract_log, "a", encoding="utf-8") as lf:
+                            lf.write(f"\n\n=== START {datetime.now().isoformat()} ===\n")
+                            lf.write(f"CMD: {' '.join(cmd)}\n")
+                            lf.write(f"CWD: {script_dir}\n")
+                            lf.flush()
+                            subprocess.run(
+                                cmd,
+                                env=env,
+                                cwd=script_dir,
+                                stdout=lf,
+                                stderr=lf,
+                                check=False,
+                                timeout=240
+                            )
+                            lf.write(f"=== END {datetime.now().isoformat()} ===\n")
 
-                        # Try to derive HTML by timestamp; if missing, fallback to newest search_results_*.html in same dir
-                        json_dir = os.path.dirname(newest_json)
-                        # Try predictable rename first
-                        candidate_html = newest_json.replace("run_results_", "search_results_").replace(".json", ".html")
-
-                        html_file = candidate_html if os.path.exists(candidate_html) else None
-                        if not html_file:
-                            # Fallback: pick newest search_results_*.html alongside JSON
-                            html_candidates = glob.glob(os.path.join(json_dir, "search_results_*.html"))
-                            if html_candidates:
-                                html_file = max(html_candidates, key=os.path.getmtime)
-
-                        if not html_file or not os.path.exists(html_file):
-                            logging.error(f"No matching HTML file found near {newest_json}")
-                            print("❌ Matching HTML file not found (search_results_*.html)")
-                            last_error = "Matching search_results_*.html not found next to the JSON."
-                            break
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            print(f"⚠️ Only Carousel found (TOA={n_toa}, Skyscraper={n_sky}, Carousel={n_car}); will retry ({retry_count}/{max_retries}). See: {extract_log}")
                         else:
-                            logging.info(f"HTML for extraction: {html_file}")
-                            print(f"   Using HTML file: {os.path.basename(html_file)}")
+                            print(f"❌ Extraction failed after {max_retries} attempts. See: {extract_log}")
 
-                            # Always prefer the new tool (supports --no-lock)
-                            script_dir = os.path.dirname(os.path.abspath(__file__))
-                            ad_script = os.path.join(script_dir, "screenshot_ad_images.py")
-                            toa_script = os.path.join(script_dir, "screenshot_toa_image.py")
-                            # Force the modern script if present; otherwise fall back
-                            script_to_run = ad_script if os.path.exists(ad_script) else (toa_script if os.path.exists(toa_script) else None)
-
-                            if not script_to_run:
-                                logging.error("No screenshot tool found (screenshot_ad_images.py nor screenshot_toa_image.py).")
-                                print("❌ No screenshot tool found in project directory")
-                                last_error = "No screenshot tool found (screenshot_ad_images.py / screenshot_toa_image.py)."
-                                break
-                            else:
-                                # Build command
-                                cmd = [
-                                    sys.executable,
-                                    script_to_run,
-                                    "--json", newest_json,
-                                    "--html", html_file,
-                                    "--output", output_dir,
-                                    "--headless",
-                                    "--no-lock",
-                                    "--time-window", "45",
-                                    "--browser-lock-timeout", "600",
-                                ]
-                                
-                                # If you use a persistent profile for the scraper, pass it through here
-                                profile_dir = os.getenv("KROGER_PROFILE_DIR")
-                                if profile_dir and os.path.isdir(profile_dir):
-                                    cmd += ["--profile-dir", profile_dir]
-
-                                env = os.environ.copy()
-                                env.setdefault("SCRAPER_HOME", get_base_dir())
-                                env.setdefault("PYTHONUNBUFFERED", "1")
-                                
-                                # Ensure KROGER_PROFILE_DIR is explicitly set in the environment
-                                if profile_dir and os.path.isdir(profile_dir):
-                                    env["KROGER_PROFILE_DIR"] = profile_dir
-                                    print(f"🔑 Using profile: {profile_dir}")
-
-                                logging.info(f"Running (no log unless failure): {' '.join(cmd)}")
-                                print(f"\n📷 Running {os.path.basename(script_to_run)}")
-
-                                # Create a log file for debugging
-                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                log_dir = os.path.join(get_base_dir(), "logs")
-                                os.makedirs(log_dir, exist_ok=True)
-                                log_file = os.path.join(log_dir, f"image_extract_{timestamp}.log")
-                                
-                                print(f"📝 Logging to: {log_file}")
-                                
-                                # Create a progress update mechanism
-                                class ProgressIndicator:
-                                    def __init__(self):
-                                        self.stop = False
-                                        self.thread = None
-                                    
-                                    def updater(self):
-                                        import time
-                                        while not self.stop:
-                                            print(".", end="", flush=True)
-                                            time.sleep(3)
-                                    
-                                    def start(self):
-                                        try:
-                                            import threading
-                                            self.thread = threading.Thread(target=self.updater)
-                                            self.thread.daemon = True
-                                            self.thread.start()
-                                        except Exception:
-                                            pass
-                                    
-                                    def stop_indicator(self):
-                                        self.stop = True
-                                
-                                # Create and start the progress indicator
-                                progress = ProgressIndicator()
-                                progress.start()
-                                
-                                # Progress indicator is now started in the class
-                                
-                                with open(log_file, "w") as f:
-                                    f.write(f"=== START {datetime.now().isoformat()} ===\n")
-                                    f.write(f"CMD: {' '.join(cmd)}\n")
-                                    f.write(f"CWD: {script_dir}\n")
-                                    f.flush()
-                                    
-                                    # Run with output to log file
-                                    try:
-                                        result = subprocess.run(
-                                            cmd,
-                                            env=env,
-                                            cwd=script_dir,
-                                            stdout=f,
-                                            stderr=subprocess.STDOUT,
-                                            check=False,
-                                            timeout=240  # 4 minute timeout
-                                        )
-                                        f.write(f"Exit code: {result.returncode}\n")
-                                    except subprocess.TimeoutExpired:
-                                        f.write("\n❌ ERROR: Process timed out after 240 seconds\n")
-                                        print("\n❌ Image extraction timed out after 240 seconds")
-                                        # Try to kill any hanging processes
-                                        try:
-                                            # Find and kill any related processes
-                                            f.write("Attempting to clean up any hanging processes...\n")
-                                            cleanup_cmd = f"pkill -f '{os.path.basename(script_to_run)}'" 
-                                            subprocess.run(cleanup_cmd, shell=True, timeout=10)
-                                        except Exception as e:
-                                            f.write(f"Cleanup attempt error: {e}\n")
-                                    except Exception as e:
-                                        f.write(f"\n❌ ERROR: {e}\n")
-                                        print(f"\n❌ Image extraction error: {e}")
-                                    finally:
-                                        # Stop the progress indicator
-                                        progress.stop_indicator()
-                                        f.write(f"=== END {datetime.now().isoformat()} ===\n")
-
-                                # Verify images
-                                toa_files = glob.glob(os.path.join(output_dir, "TOA", "*.png"))
-                                sky_files = glob.glob(os.path.join(output_dir, "Skyscraper", "*.png"))
-                                car_files = glob.glob(os.path.join(output_dir, "Carousel", "*.png"))
-                                total_imgs = len(toa_files) + len(sky_files) + len(car_files)
-
-                                if total_imgs > 0:
-                                    logging.info("Image extraction completed successfully")
-                                    print(f"✅ Image extraction completed: TOA={len(toa_files)} Skyscraper={len(sky_files)} Carousel={len(car_files)}")
-                                    success = True
-                                    break
-                                else:
-                                    # On failure (no images), capture one diagnostic log for this attempt
-                                    extract_log = os.path.join(get_base_dir(), "logs", f"image_extract_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-                                    print(f"❌ No images produced (code {result.returncode}). Writing diagnostics to {extract_log}")
-                                    last_error = f"No images produced. See {extract_log}"  # remember why
-                                    with open(extract_log, "a", encoding="utf-8") as lf:
-                                        lf.write(f"\n\n=== START {datetime.now().isoformat()} ===\n")
-                                        lf.write(f"CMD: {' '.join(cmd)}\n")
-                                        lf.write(f"CWD: {script_dir}\n")
-                                        lf.flush()
-                                        subprocess.run(
-                                            cmd,
-                                            env=env,
-                                            cwd=script_dir,
-                                            stdout=lf,
-                                            stderr=lf,
-                                            check=False,
-                                            timeout=240
-                                        )
-                                        lf.write(f"=== END {datetime.now().isoformat()} ===\n")
-
-                                    retry_count += 1
-                                    if retry_count < max_retries:
-                                        print(f"⚠️ Extraction incomplete; will retry ({retry_count}/{max_retries}). See: {extract_log}")
-                                    else:
-                                        print(f"❌ Extraction failed after {max_retries} attempts. See: {extract_log}")
                 except Exception as e:
                     retry_count += 1
-                    if retry_count < max_retries:
-                        error_msg = f"HTML processing error: {e}. Retrying..."
-                        if progress_label.winfo_exists():
-                            progress_label.config(text=error_msg)
-                        popup.update()
-                    else:
-                        error_msg = f"Failed to process HTML files after {max_retries} attempts: {e}"
-                        if progress_label.winfo_exists():
-                            progress_label.config(text=f"Error: {error_msg}")
-                        popup.update()
+                    error_msg = f"HTML processing error: {e}" if retry_count < max_retries else f"Failed to process HTML files after {max_retries} attempts: {e}"
+                    if progress_label.winfo_exists():
+                        progress_label.config(text=f"Error: {error_msg}")
+                    popup.update()
+                    if retry_count >= max_retries:
                         messagebox.showerror("Error", error_msg)
                         self.status_label.config(text="Error processing HTML files")
-            
-            # Set progress to complete
-            progress_var.set(len(keywords))
 
-            if success:
+                    if time.time() > loop_deadline:
+                        last_error = last_error or "Timed out waiting for image extraction."
+                        break
+
+            # Final UI
+            progress_var.set(len(keywords))
+            if post_success:
                 result_msg = f"Completed scraping {success_count}/{len(keywords)} keywords successfully"
                 if progress_label.winfo_exists():
                     progress_label.config(text=result_msg)
                 popup.update()
                 messagebox.showinfo("Success", result_msg)
                 self.status_label.config(text="Scraping completed successfully")
-
                 post_processing_label = tk.Label(
                     popup,
                     text="\n✅ TOA/Skyscraper extraction completed successfully.\nAll images have been generated.\n",
@@ -804,18 +678,14 @@ class KeywordInputApp:
                 messagebox.showwarning("Extraction incomplete", warn)
                 self.status_label.config(text=f"Extraction incomplete: {warn}")
 
-            close_btn = tk.Button(popup, text="Close", command=popup.destroy)
-            close_btn.pack(pady=10)
-
+            tk.Button(popup, text="Close", command=popup.destroy).pack(pady=10)
             if auto_close_var.get():
-                popup.after(3000, popup.destroy)  # Close after 3 seconds
-                
+                popup.after(3000, popup.destroy)
+
         except (subprocess.SubprocessError, IOError, OSError) as e:
             error_msg = f"An error occurred: {str(e)}"
             messagebox.showerror("Error", error_msg)
             self.status_label.config(text=f"Error: {str(e)}")
-            
-            # Close popup if it exists
             try:
                 if 'popup' in locals() and popup.winfo_exists():
                     popup.destroy()
