@@ -16,11 +16,88 @@ import re
 import json
 import time
 import argparse
+import urllib.request
+import urllib.error
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
-from playwright.sync_api import sync_playwright, Page
+from playwright.sync_api import sync_playwright, Page, BrowserContext
 from browser_lock import single_browser_lock, FileLock
+
+
+def direct_download_image(url: str, dest_path: str, retries: int = 3) -> bool:
+    """
+    Last resort: direct download using urllib without browser context.
+    Returns True on success.
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Referer": "https://www.kroger.com/",
+    }
+    
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status == 200:
+                    with open(dest_path, 'wb') as f:
+                        f.write(response.read())
+                    return True
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
+            print(f"Direct download attempt {attempt+1}/{retries} failed: {e}")
+            time.sleep(1)
+    return False
+
+
+def download_image_with_context(
+    context: BrowserContext,
+    url: str,
+    dest_path: str,
+    referer: Optional[str] = None,
+    retries: int = 3,
+    backoff_s: float = 0.8,
+) -> bool:
+    """
+    Fetches image bytes using Playwright's context-bound HTTP client.
+    Preserves cookies/session and sets expected headers. Returns True on success.
+    """
+    headers: Dict[str, str] = {
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Sec-Fetch-Dest": "image",
+        "Sec-Fetch-Mode": "no-cors",
+        "Sec-Fetch-Site": "same-site",
+    }
+    # Try to reuse the same UA the context was created with (best-effort)
+    try:
+        ua = context._impl_obj._options.get("userAgent")
+    except Exception:
+        ua = None
+    if ua:
+        headers["User-Agent"] = ua
+    if referer:
+        headers["Referer"] = referer
+
+    current = url
+    for attempt in range(1, retries + 1):
+        try:
+            resp = context.request.get(current, headers=headers, timeout=15000, fail_on_status=False)
+            # Follow a single redirect chain
+            if resp.status in (301, 302, 303, 307, 308):
+                loc = resp.headers.get("location")
+                if loc:
+                    current = loc
+                    time.sleep(backoff_s * attempt)
+                    continue
+            if 200 <= resp.status < 300:
+                with open(dest_path, "wb") as f:
+                    f.write(resp.body())
+                return True
+        except Exception:
+            pass
+        time.sleep(backoff_s * attempt)
+    return False
 
 
 # ----------------------------
@@ -232,6 +309,7 @@ def process_images(
     fixed_timestamp: Optional[str] = None,
     bypass_locks: bool = False,
     browser_lock_timeout: int = 600,
+    args = None,
 ) -> None:
     """
     Process image URLs and take screenshots.
@@ -272,22 +350,33 @@ def process_images(
             context = None
             page = None
             try:
-                # Launch browser with stability flags
-                browser = p.chromium.launch(
-                    headless=headless,
-                    args=["--disable-quic", "--disable-notifications"]
-                )
+                if args.profile_dir and os.path.isdir(args.profile_dir):
+                    # Reuse cookies/session exactly like the scraper
+                    print(f"🔑 Using persistent profile: {args.profile_dir}")
+                    context = p.chromium.launch_persistent_context(
+                        user_data_dir=args.profile_dir,
+                        headless=headless,
+                        channel="chrome",
+                        args=["--disable-http2"],
+                    )
+                    page = context.new_page()
+                else:
+                    # Launch browser with stability flags
+                    browser = p.chromium.launch(
+                        headless=headless,
+                        args=["--disable-quic", "--disable-notifications", "--disable-http2"]
+                    )
 
-                # Create a browser context
-                context = browser.new_context(
-                    viewport={"width": 1280, "height": 720},
-                    ignore_https_errors=True,
-                    extra_http_headers={
-                        "Referer": "https://www.kroger.com/",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                    },
-                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                )
+                    # Create a browser context
+                    context = browser.new_context(
+                        viewport={"width": 1280, "height": 720},
+                        ignore_https_errors=True,
+                        extra_http_headers={
+                            "Referer": "https://www.kroger.com/",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                        },
+                        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    )
                 try:
                     context.set_default_navigation_timeout(45000)
                 except Exception:
@@ -325,16 +414,41 @@ def process_images(
 
                     # Navigate and screenshot
                     try:
-                        print("🌐 Opening image URL")
-                        resp = page.goto(image_url, timeout=45000)
-                        # Try element screenshot first
-                        success = screenshot_image(page, output_path)
-                        if not success:
-                            # Fallback: full-page screenshot (covers direct image documents)
-                            page.screenshot(path=output_path, full_page=True)
-                            print(f"✅ Fallback full-page screenshot saved to: {output_path}")
+                        print("🌐 Downloading image")
+                        # Prefer direct HTTP fetch tied to the browser context (avoids h2 flakiness)
+                        referer = "https://www.kroger.com/"
+                        ok = download_image_with_context(
+                            context=page.context,
+                            url=image_url,
+                            dest_path=output_path,
+                            referer=referer,
+                            retries=3,
+                            backoff_s=0.8,
+                        )
+                        
+                        if ok:
+                            print(f"✅ Image downloaded successfully to: {output_path}")
+                        else:
+                            # Second attempt: try rendering in a tab (some CDNs require it)
+                            print("⚠️ Context download failed, trying browser fallback...")
+                            try:
+                                # A slightly softer wait avoids h2 reset loops
+                                page.goto(image_url, wait_until="domcontentloaded", timeout=20000)
+                                page.wait_for_timeout(400)
+                                page.screenshot(path=output_path, full_page=False)
+                                print(f"✅ Fallback screenshot saved to: {output_path}")
+                                ok = True
+                            except Exception as e:
+                                print(f"❌ Navigation/screenshot fallback error: {e}")
+                                # Last resort: direct download without browser context
+                                print("⚠️ Browser fallback failed, trying direct download...")
+                                ok = direct_download_image(image_url, output_path, retries=3)
+                                if ok:
+                                    print(f"✅ Direct download successful: {output_path}")
+                                else:
+                                    print(f"❌ All download methods failed for: {image_url}")
                     except Exception as e:
-                        print(f"❌ Navigation/screenshot error: {e}")
+                        print(f"❌ Image download error: {e}")
 
                     time.sleep(1)
 
@@ -360,22 +474,33 @@ def process_images(
                 context = None
                 page = None
                 try:
-                    # Launch browser with stability flags
-                    browser = p.chromium.launch(
-                        headless=headless,
-                        args=["--disable-quic", "--disable-notifications"]
-                    )
+                    if args.profile_dir and os.path.isdir(args.profile_dir):
+                        # Reuse cookies/session exactly like the scraper
+                        print(f"🔑 Using persistent profile: {args.profile_dir}")
+                        context = p.chromium.launch_persistent_context(
+                            user_data_dir=args.profile_dir,
+                            headless=headless,
+                            channel="chrome",
+                            args=["--disable-http2"],
+                        )
+                        page = context.new_page()
+                    else:
+                        # Launch browser with stability flags
+                        browser = p.chromium.launch(
+                            headless=headless,
+                            args=["--disable-quic", "--disable-notifications", "--disable-http2"]
+                        )
 
-                    # Create a browser context
-                    context = browser.new_context(
-                        viewport={"width": 1280, "height": 720},
-                        ignore_https_errors=True,
-                        extra_http_headers={
-                            "Referer": "https://www.kroger.com/",
-                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                        },
-                        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    )
+                        # Create a browser context
+                        context = browser.new_context(
+                            viewport={"width": 1280, "height": 720},
+                            ignore_https_errors=True,
+                            extra_http_headers={
+                                "Referer": "https://www.kroger.com/",
+                                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                            },
+                            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        )
                     try:
                         context.set_default_navigation_timeout(45000)
                     except Exception:
@@ -412,16 +537,41 @@ def process_images(
 
                         # Navigate and screenshot
                         try:
-                            print("🌐 Opening image URL")
-                            resp = page.goto(image_url, timeout=45000)
-                            # Try element screenshot first
-                            success = screenshot_image(page, output_path)
-                            if not success:
-                                # Fallback: full-page screenshot (covers direct image documents)
-                                page.screenshot(path=output_path, full_page=True)
-                                print(f"✅ Fallback full-page screenshot saved to: {output_path}")
+                            print("🌐 Downloading image")
+                            # Prefer direct HTTP fetch tied to the browser context (avoids h2 flakiness)
+                            referer = "https://www.kroger.com/"
+                            ok = download_image_with_context(
+                                context=page.context,
+                                url=image_url,
+                                dest_path=output_path,
+                                referer=referer,
+                                retries=3,
+                                backoff_s=0.8,
+                            )
+                            
+                            if ok:
+                                print(f"✅ Image downloaded successfully to: {output_path}")
+                            else:
+                                # Second attempt: try rendering in a tab (some CDNs require it)
+                                print("⚠️ Context download failed, trying browser fallback...")
+                                try:
+                                    # A slightly softer wait avoids h2 reset loops
+                                    page.goto(image_url, wait_until="domcontentloaded", timeout=20000)
+                                    page.wait_for_timeout(400)
+                                    page.screenshot(path=output_path, full_page=False)
+                                    print(f"✅ Fallback screenshot saved to: {output_path}")
+                                    ok = True
+                                except Exception as e:
+                                    print(f"❌ Navigation/screenshot fallback error: {e}")
+                                    # Last resort: direct download without browser context
+                                    print("⚠️ Browser fallback failed, trying direct download...")
+                                    ok = direct_download_image(image_url, output_path, retries=3)
+                                    if ok:
+                                        print(f"✅ Direct download successful: {output_path}")
+                                    else:
+                                        print(f"❌ All download methods failed for: {image_url}")
                         except Exception as e:
-                            print(f"❌ Navigation/screenshot error: {e}")
+                            print(f"❌ Image download error: {e}")
 
                         time.sleep(1)
 
@@ -465,6 +615,11 @@ def main() -> int:
     parser.add_argument("--max-per-type", type=int, default=1, help="Cap images per ad type when --html is set")
     parser.add_argument("--no-lock", action="store_true", help="Bypass all locks (use with caution)")
     parser.add_argument("--browser-lock-timeout", type=int, default=600, help="Global browser lock timeout seconds")
+    parser.add_argument(
+        "--profile-dir",
+        default=os.getenv("KROGER_PROFILE_DIR"),
+        help="Path to a persistent Chrome/Chromium user data dir (reuse cookies/session)"
+    )
     args = parser.parse_args()
 
     # Safety: require --html unless explicitly allowed
@@ -524,6 +679,7 @@ def main() -> int:
             fixed_timestamp=fixed_ts,
             bypass_locks=args.no_lock,
             browser_lock_timeout=args.browser_lock_timeout,
+            args=args,
         )
     else:
         with FileLock(path=client_lock_path, timeout=900):
@@ -535,7 +691,8 @@ def main() -> int:
                 headless=args.headless,
                 fixed_timestamp=fixed_ts,
                 bypass_locks=False,
-                browser_lock_timeout=args.browser_lock_timeout
+                browser_lock_timeout=args.browser_lock_timeout,
+                args=args,
             )
 
     return 0

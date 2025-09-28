@@ -634,24 +634,98 @@ class KeywordInputApp:
                                     "--time-window", "45",
                                     "--browser-lock-timeout", "600",
                                 ]
+                                
+                                # If you use a persistent profile for the scraper, pass it through here
+                                profile_dir = os.getenv("KROGER_PROFILE_DIR")
+                                if profile_dir and os.path.isdir(profile_dir):
+                                    cmd += ["--profile-dir", profile_dir]
 
                                 env = os.environ.copy()
                                 env.setdefault("SCRAPER_HOME", get_base_dir())
                                 env.setdefault("PYTHONUNBUFFERED", "1")
+                                
+                                # Ensure KROGER_PROFILE_DIR is explicitly set in the environment
+                                if profile_dir and os.path.isdir(profile_dir):
+                                    env["KROGER_PROFILE_DIR"] = profile_dir
+                                    print(f"🔑 Using profile: {profile_dir}")
 
                                 logging.info(f"Running (no log unless failure): {' '.join(cmd)}")
                                 print(f"\n📷 Running {os.path.basename(script_to_run)}")
 
-                                # First, run quietly
-                                result = subprocess.run(
-                                    cmd,
-                                    env=env,
-                                    cwd=script_dir,
-                                    stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.STDOUT,
-                                    check=False,
-                                    timeout=240
-                                )
+                                # Create a log file for debugging
+                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                log_dir = os.path.join(get_base_dir(), "logs")
+                                os.makedirs(log_dir, exist_ok=True)
+                                log_file = os.path.join(log_dir, f"image_extract_{timestamp}.log")
+                                
+                                print(f"📝 Logging to: {log_file}")
+                                
+                                # Create a progress update mechanism
+                                class ProgressIndicator:
+                                    def __init__(self):
+                                        self.stop = False
+                                        self.thread = None
+                                    
+                                    def updater(self):
+                                        import time
+                                        while not self.stop:
+                                            print(".", end="", flush=True)
+                                            time.sleep(3)
+                                    
+                                    def start(self):
+                                        try:
+                                            import threading
+                                            self.thread = threading.Thread(target=self.updater)
+                                            self.thread.daemon = True
+                                            self.thread.start()
+                                        except Exception:
+                                            pass
+                                    
+                                    def stop_indicator(self):
+                                        self.stop = True
+                                
+                                # Create and start the progress indicator
+                                progress = ProgressIndicator()
+                                progress.start()
+                                
+                                # Progress indicator is now started in the class
+                                
+                                with open(log_file, "w") as f:
+                                    f.write(f"=== START {datetime.now().isoformat()} ===\n")
+                                    f.write(f"CMD: {' '.join(cmd)}\n")
+                                    f.write(f"CWD: {script_dir}\n")
+                                    f.flush()
+                                    
+                                    # Run with output to log file
+                                    try:
+                                        result = subprocess.run(
+                                            cmd,
+                                            env=env,
+                                            cwd=script_dir,
+                                            stdout=f,
+                                            stderr=subprocess.STDOUT,
+                                            check=False,
+                                            timeout=240  # 4 minute timeout
+                                        )
+                                        f.write(f"Exit code: {result.returncode}\n")
+                                    except subprocess.TimeoutExpired:
+                                        f.write("\n❌ ERROR: Process timed out after 240 seconds\n")
+                                        print("\n❌ Image extraction timed out after 240 seconds")
+                                        # Try to kill any hanging processes
+                                        try:
+                                            # Find and kill any related processes
+                                            f.write("Attempting to clean up any hanging processes...\n")
+                                            cleanup_cmd = f"pkill -f '{os.path.basename(script_to_run)}'" 
+                                            subprocess.run(cleanup_cmd, shell=True, timeout=10)
+                                        except Exception as e:
+                                            f.write(f"Cleanup attempt error: {e}\n")
+                                    except Exception as e:
+                                        f.write(f"\n❌ ERROR: {e}\n")
+                                        print(f"\n❌ Image extraction error: {e}")
+                                    finally:
+                                        # Stop the progress indicator
+                                        progress.stop_indicator()
+                                        f.write(f"=== END {datetime.now().isoformat()} ===\n")
 
                                 # Verify images
                                 toa_files = glob.glob(os.path.join(output_dir, "TOA", "*.png"))
