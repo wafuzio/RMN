@@ -272,7 +272,7 @@ class KeywordInputApp:
             def on_day_changed(*args):
                 if hasattr(self, 'refresh_all_conflict_displays'):
                     self.refresh_all_conflict_displays()
-                    self.update_save_button_state()
+                    self.refresh_save_button_state()
             var.trace('w', on_day_changed)
         
         # Schedule control buttons
@@ -336,7 +336,7 @@ class KeywordInputApp:
         self.status_label.pack(anchor="w", pady=(10, 0))
         
         # Initialize save button state
-        self.update_save_button_state()
+        self.refresh_save_button_state()
         
     def load_css_variables(self, css_path):
         """Parse :root CSS variables from a stylesheet for reuse in Tkinter."""
@@ -369,7 +369,7 @@ class KeywordInputApp:
         # Get client/product type
         client_type = self.client_var.get().strip()
         if not client_type or client_type == "<choose from menu>":
-            messagebox.showerror("Error", "Please select a client/product from the menu (or click New…).")
+            messagebox.showerror("Error", "Please select a client/product first")
             return
             
         # Create sanitized folder name (remove special characters)
@@ -901,6 +901,59 @@ class KeywordInputApp:
         # If no available time found, return the original
         return preferred_hour, preferred_minute, preferred_ampm
     
+    def get_allowed_minutes_for_hour(self, hour_12: int, ampm: str, days, exclude_client=None):
+        """Return a list of mm strings (00..55 step 5) that are free for ALL selected days for given hour."""
+        # Convert to 24h
+        hour_24 = hour_12
+        if ampm == "PM" and hour_12 < 12:
+            hour_24 += 12
+        elif ampm == "AM" and hour_12 == 12:
+            hour_24 = 0
+
+        scheduled = self.get_all_scheduled_times(exclude_client=exclude_client)
+        allowed = []
+        for m in range(0, 60, 5):
+            conflicted = any((day, hour_24, m) in scheduled for day in days)
+            if not conflicted:
+                allowed.append(f"{m:02d}")
+        return allowed
+
+    def schedule_has_conflicts(self):
+        """Return True if any current time selector is conflicted for selected days."""
+        selected_client = self.client_var.get()
+        if not selected_client or selected_client == "<choose from menu>":
+            return True  # treat as not-saveable
+        selected_days = [day for day, var in self.day_vars.items() if var.get()]
+        if not selected_days:
+            return True
+
+        scheduled = self.get_all_scheduled_times(exclude_client=selected_client)
+        for hour_var, minute_var, ampm_var in self.time_vars:
+            try:
+                h = int(hour_var.get())
+                m = int(minute_var.get())
+                a = ampm_var.get()
+                # 24h
+                h24 = h
+                if a == "PM" and h < 12: h24 += 12
+                if a == "AM" and h == 12: h24 = 0
+                for day in selected_days:
+                    if (day, h24, m) in scheduled:
+                        return True
+            except Exception:
+                return True
+        return False
+
+    def refresh_save_button_state(self):
+        """Enable Save only when selection is valid and non-conflicting."""
+        try:
+            if self.client_var.get() == "<choose from menu>":
+                self.schedule_button.config(state="disabled")
+                return
+            self.schedule_button.config(state="normal" if not self.schedule_has_conflicts() else "disabled")
+        except Exception:
+            self.schedule_button.config(state="disabled")
+    
     def setup_signal_handler(self):
         """Set up signal handler for dock icon clicks"""
         import signal
@@ -1103,7 +1156,7 @@ class KeywordInputApp:
         
         # Update save button state based on conflicts
         try:
-            self.update_save_button_state()
+            self.refresh_save_button_state()
         except Exception:
             pass
     
@@ -1129,9 +1182,7 @@ class KeywordInputApp:
             print(f"Warning: Could not save client history: {e}")
     
     def update_client_dropdown(self):
-        """Update the client dropdown with history"""
         clients = sorted(self.client_history.keys(), key=str.lower)
-        # Add placeholder at the beginning
         self.client_dropdown['values'] = ["<choose from menu>"] + clients
         
     def on_new_client(self):
@@ -1206,7 +1257,7 @@ class KeywordInputApp:
         try:
             if hasattr(self, 'refresh_all_conflict_displays'):
                 self.refresh_all_conflict_displays()
-            self.update_save_button_state()
+            self.refresh_save_button_state()
         except Exception:
             pass
     
@@ -1396,7 +1447,7 @@ class KeywordInputApp:
             pass
         
         # Update save button state based on conflicts
-        self.update_save_button_state()
+        self.refresh_save_button_state()
     
     def load_saved_times(self):
         """Load saved times from schedule configuration"""
@@ -1490,7 +1541,7 @@ class KeywordInputApp:
                         tw['ampm_var'].set(alt_a)
                 # refresh
                 self.refresh_all_conflict_displays()
-                self.update_save_button_state()
+                self.refresh_save_button_state()
                 if self.any_conflicts_current_view():
                     messagebox.showerror("Conflicts remain", "Could not resolve all conflicts automatically.")
                     return False
