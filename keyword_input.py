@@ -58,6 +58,10 @@ logging.info(f"sys.path: {sys.path}")
 ksc_search_and_capture = None 
 kproc_latest_missing = None
 
+# Constants and placeholders
+PLACEHOLDER = "<choose from menu>"
+DEFAULT_PROFILE = "/Users/dan.maguire/ChromeProfiles/kroger_clean_profile"  # used elsewhere already
+
 # Optional: try eager imports; if they fail, globals stay None and the lazy path runs later
 try:
     from kroger_search_and_capture import search_and_capture as ksc_search_and_capture
@@ -149,34 +153,41 @@ class KeywordInputApp:
         main_frame = ttk.Frame(root, padding=20, style='App.TFrame')
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Client/Product Type field with dropdown
+        # Client/Product Type field + New button
         client_frame = ttk.Frame(main_frame, style='Card.TFrame')
         client_frame.pack(fill=tk.X, pady=(0, 15))
 
-        client_label = ttk.Label(
-            client_frame,
-            text="Client/Product:",
-            style='TLabel'
-        )
-        client_label.pack(side=tk.LEFT)
-        
-        # Get existing clients from history
-        clients = list(self.client_history.keys())
-        # Add default and new options
-        dropdown_options = ["<choose from menu>", "New client/product"] + clients
-        
+        ttk.Label(client_frame, text="Client/Product:", style='TLabel').pack(side=tk.LEFT)
+
+        # Alphabetical list from history
+        clients = sorted(self.client_history.keys())
+
         self.client_var = tk.StringVar()
-        self.client_var.set(dropdown_options[0])  # Set default text
-        
+        self.client_var.set(PLACEHOLDER)
+
         self.client_dropdown = ttk.Combobox(
             client_frame,
             textvariable=self.client_var,
-            values=dropdown_options,
+            values=[PLACEHOLDER] + clients,    # placeholder + alphabetical
             width=30,
-            style='App.TCombobox'
+            style='App.TCombobox',
+            state="readonly",
         )
-        self.client_dropdown.pack(side=tk.LEFT, padx=(10, 0))
+        self.client_dropdown.pack(side=tk.LEFT, padx=(10, 6))
         self.client_dropdown.bind("<<ComboboxSelected>>", self.on_client_selected)
+
+        # New client button (not in dropdown)
+        self.new_client_btn = tk.Button(
+            client_frame,
+            text="New…",
+            command=self.create_new_client,
+            bg=self.primary_color,
+            fg="white",
+            font=("Inter", 10, "bold"),
+            padx=10, pady=6,
+            relief="flat", borderwidth=0
+        )
+        self.new_client_btn.pack(side=tk.LEFT)
         
         # Instructions
         instructions = ttk.Label(
@@ -1108,32 +1119,33 @@ class KeywordInputApp:
     
     def update_client_dropdown(self):
         """Update the client dropdown with history"""
-        clients = list(self.client_history.keys())
-        # Add default and new options
-        dropdown_options = ["<choose from menu>", "New client/product"] + clients
-        self.client_dropdown['values'] = dropdown_options
+        clients = sorted(self.client_history.keys())
+        # Add placeholder at the beginning
+        self.client_dropdown['values'] = [PLACEHOLDER] + clients
         
+    def create_new_client(self):
+        """Handle new client button click"""
+        # Prompt for new client name
+        new_client = simpledialog.askstring("New Client", "Enter new client/product name:")
+        if new_client and new_client.strip():
+            # Update dropdown with new client
+            current_values = list(self.client_dropdown["values"])
+            if new_client not in current_values:
+                # Add to alphabetical list
+                clients = sorted(list(self.client_history.keys()) + [new_client])
+                self.client_dropdown["values"] = [PLACEHOLDER] + clients
+                self.client_var.set(new_client)
+                self.keyword_input.delete(1.0, tk.END)  # Clear keywords
+                self.status_label.config(text=f"Created new client: {new_client}")
+        else:
+            # If canceled or empty, reset to default
+            self.client_var.set(PLACEHOLDER)
+    
     def on_client_selected(self, event):
         """Handle client selection from dropdown"""
         selected_client = self.client_var.get()
         
-        if selected_client == "New client/product":
-            # Prompt for new client name
-            new_client = simpledialog.askstring("New Client", "Enter new client/product name:")
-            if new_client and new_client.strip():
-                # Update dropdown with new client
-                current_values = list(self.client_dropdown["values"])
-                if new_client not in current_values:
-                    # Keep the default options at the beginning
-                    updated_values = current_values[:2] + [new_client] + current_values[2:]
-                    self.client_dropdown["values"] = updated_values
-                    self.client_var.set(new_client)
-                    self.keyword_input.delete(1.0, tk.END)  # Clear keywords
-                    self.status_label.config(text=f"Created new client: {new_client}")
-            else:
-                # If canceled or empty, reset to default
-                self.client_var.set("<choose from menu>")
-        elif selected_client == "<choose from menu>":
+        if selected_client == PLACEHOLDER:
             # Just clear the keywords
             self.keyword_input.delete(1.0, tk.END)
         elif selected_client in self.client_history:
