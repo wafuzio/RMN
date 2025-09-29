@@ -62,6 +62,46 @@ kproc_latest_missing = None
 PLACEHOLDER = "<choose from menu>"
 DEFAULT_PROFILE = "/Users/dan.maguire/ChromeProfiles/kroger_clean_profile"  # used elsewhere already
 
+# --- UI tokens (light + dark palettes) ---
+PALETTE = {
+    "light": {
+        "bg":        "#f5f7fa",   # app background
+        "card":      "#ffffff",
+        "text":      "#0f172a",
+        "muted":     "#475569",
+        "border":    "#e5e7eb",
+        "primary":   "#2563eb",   # blue-600
+        "primary_h": "#1e40af",   # hover/press
+        "secondary": "#334155",   # slate-700
+        "secondary_h":"#1f2937",
+        "danger":    "#dc2626",
+        "danger_h":  "#b91c1c",
+        "success":   "#16a34a",
+        "bar":       "#2563eb",
+        "trough":    "#e5e7eb",
+        "field_bg":  "#ffffff",
+        "field_fg":  "#0f172a",
+    },
+    "dark": {
+        "bg":        "#0b1220",
+        "card":      "#101827",
+        "text":      "#e5e7eb",
+        "muted":     "#9ca3af",
+        "border":    "#1f2a3a",
+        "primary":   "#3b82f6",
+        "primary_h": "#1d4ed8",
+        "secondary": "#475569",
+        "secondary_h":"#334155",
+        "danger":    "#ef4444",
+        "danger_h":  "#b91c1c",
+        "success":   "#22c55e",
+        "bar":       "#3b82f6",
+        "trough":    "#1f2937",
+        "field_bg":  "#0f172a",
+        "field_fg":  "#e5e7eb",
+    }
+}
+
 # Optional: try eager imports; if they fail, globals stay None and the lazy path runs later
 try:
     from kroger_search_and_capture import search_and_capture as ksc_search_and_capture
@@ -81,24 +121,14 @@ class KeywordInputApp:
         self.root.geometry("600x700")
         self.root.minsize(600, 700)
         
-        # Set placeholder text
         self.placeholder_text = "Enter keywords (one per line)"
         
         # Initialize logger
         self.logger = None
         
-        # Load CSS variables from web stylesheet for consistent theming
-        css_vars = self.load_css_variables(os.path.join(os.path.dirname(__file__), "static", "css", "style.css"))
-        self.primary_color = css_vars.get('--primary-color', '#2962ff')
-        self.secondary_color = css_vars.get('--secondary-color', '#455a64')
-        self.bg_color = css_vars.get('--background-color', '#f5f7fa')
-        self.card_bg_color = css_vars.get('--card-background', '#ffffff')
-        self.text_bg_color = "#ffffff"
-        self.text_fg_color = "#111827"
-
-        # Apply background color to root window
-        self.root.configure(bg=self.bg_color)
-
+        # Theme will be applied through apply_theme function
+        self.theme = "light"  # Could be made user-configurable in the future
+        
         # Typography similar to web (Inter with sensible fallbacks)
         try:
             tkfont.nametofont("TkDefaultFont").configure(family="Inter", size=11)
@@ -113,46 +143,58 @@ class KeywordInputApp:
             self.style.theme_use('clam')
         except Exception:
             pass
-        self.style.configure('App.TFrame', background=self.bg_color)
-        self.style.configure('Card.TFrame', background=self.card_bg_color)
-        self.style.configure('Card.TLabelframe', background=self.card_bg_color, relief='solid', borderwidth=1)
-        self.style.configure('Card.TLabelframe.Label', background=self.card_bg_color, foreground=self.secondary_color, font=("Inter", 10, "bold"))
-        self.style.configure('TLabel', background=self.card_bg_color, foreground=self.secondary_color)
-        self.style.configure('Body.TLabel', background=self.bg_color, foreground=self.secondary_color)
-        self.style.configure('App.TCombobox', fieldbackground=self.card_bg_color, background=self.card_bg_color, foreground="#111827")
-        
-        # High-contrast ttk styles
-        self.style.configure('Primary.TButton',
-            background='#1d4ed8', foreground='white', padding=(12, 8),
-            font=("Inter", 11, "bold"))
-        self.style.map('Primary.TButton',
-            background=[('active', '#1e40af'), ('disabled', '#9aa5b1')],
-            foreground=[('disabled', '#ffffff')])
+            
+        def apply_theme(style: ttk.Style, mode="light"):
+            c = PALETTE[mode]
+            # Base frames/labels
+            style.configure('App.TFrame', background=c["bg"])
+            style.configure('Card.TFrame', background=c["card"])
+            style.configure('Card.TLabelframe', background=c["card"], relief='solid', borderwidth=1)
+            style.configure('Card.TLabelframe.Label', background=c["card"], foreground=c["muted"], font=("Inter", 10, "bold"))
+            style.configure('Body.TLabel', background=c["bg"], foreground=c["muted"])
+            style.configure('TLabel', background=c["card"], foreground=c["muted"])
 
-        self.style.configure('Secondary.TButton',
-            background='#334155', foreground='white', padding=(12, 8),
-            font=("Inter", 11, "bold"))
-        self.style.map('Secondary.TButton',
-            background=[('active', '#1f2937'), ('disabled', '#9aa5b1')],
-            foreground=[('disabled', '#ffffff')])
+            # Combobox (readable text + field bg)
+            style.configure('App.TCombobox',
+                fieldbackground=c["field_bg"], foreground=c["field_fg"], background=c["field_bg"])
+            style.map('App.TCombobox',
+                fieldbackground=[('readonly', c["field_bg"])],
+                foreground=[('readonly', c["field_fg"])])
 
-        self.style.configure('Danger.TButton',
-            background='#dc2626', foreground='white', padding=(12, 8),
-            font=("Inter", 11, "bold"))
-        self.style.map('Danger.TButton',
-            background=[('active', '#b91c1c'), ('disabled', '#fca5a5')],
-            foreground=[('disabled', '#ffffff')])
+            # Buttons
+            style.configure('Primary.TButton',
+                background=c["primary"], foreground='white',
+                padding=(14, 8), font=("Inter", 11, "bold"), borderwidth=0)
+            style.map('Primary.TButton',
+                background=[('active', c["primary_h"]), ('disabled', '#9aa5b1')],
+                foreground=[('disabled', '#ffffff')])
 
-        # Combobox readable colors
-        self.style.configure('App.TCombobox',
-            fieldbackground='#ffffff', foreground='#0f172a',
-            background='#ffffff')
-        self.style.map('App.TCombobox',
-            fieldbackground=[('readonly', '#ffffff')],
-            foreground=[('readonly', '#0f172a')])
+            style.configure('Secondary.TButton',
+                background=c["secondary"], foreground='white',
+                padding=(14, 8), font=("Inter", 11, "bold"), borderwidth=0)
+            style.map('Secondary.TButton',
+                background=[('active', c["secondary_h"]), ('disabled', '#9aa5b1')],
+                foreground=[('disabled', '#ffffff')])
 
-        # Progressbar color
-        self.style.configure('blue.Horizontal.TProgressbar', troughcolor='#e5e7eb', background='#2563eb')
+            style.configure('Danger.TButton',
+                background=c["danger"], foreground='white',
+                padding=(14, 8), font=("Inter", 11, "bold"), borderwidth=0)
+            style.map('Danger.TButton',
+                background=[('active', c["danger_h"]), ('disabled', '#fca5a5')],
+                foreground=[('disabled', '#ffffff')])
+
+            # Progressbar
+            style.configure('blue.Horizontal.TProgressbar',
+                troughcolor=c["trough"], background=c["bar"], bordercolor=c["trough"], lightcolor=c["bar"], darkcolor=c["bar"])
+
+            # Global bg for root window (non-ttk)
+            try:
+                self.root.configure(bg=c["bg"])
+            except Exception:
+                pass
+                
+        # Apply the theme
+        apply_theme(self.style, mode=self.theme)
         
         # Use the path resolver function
         self.project_dir = get_base_dir()
@@ -227,9 +269,19 @@ class KeywordInputApp:
         instructions.pack(anchor="w", pady=(0, 10))
         
         # Keyword input area
+        # Get current theme colors
+        palette = PALETTE[self.theme]
+        
         self.keyword_input = scrolledtext.ScrolledText(main_frame, height=10)
         self.keyword_input.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
-        self.keyword_input.configure(background="#ffffff", foreground="#0f172a", insertbackground="#111827", borderwidth=1, relief='solid')
+        self.keyword_input.configure(
+            background=palette["field_bg"], 
+            foreground=palette["field_fg"], 
+            insertbackground=palette["text"], 
+            borderwidth=1, 
+            relief='solid',
+            font=("Inter", 11)
+        )
 
         # Add placeholder text
         self.placeholder_text = "<enter keywords here>"
