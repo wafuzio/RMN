@@ -1439,11 +1439,46 @@ class KeywordInputApp:
     
     def save_schedule(self):
         """Save schedule configuration to file"""
-        # Get selected client
         selected_client = self.client_var.get()
         if not selected_client or selected_client == PLACEHOLDER:
             messagebox.showerror("Error", "Please select a client/product before saving schedule")
             return False
+
+        # Detect conflicts
+        if self.any_conflicts_current_view():
+            if messagebox.askyesno("Conflicts detected",
+                               "Some time selections conflict with other clients.\n"
+                               "Auto-adjust to the next available times?"):
+                # auto-fix by applying next available time for each conflicting slot
+                for tw in getattr(self, 'time_widget_refs', []):
+                    lbl = tw.get('conflict_label')
+                    if not lbl:
+                        continue
+                    if "CONFLICT" in (lbl.cget("text") or ""):
+                        # Pull current selection
+                        hv = tw['hour_var'].get()
+                        mv = tw['minute_var'].get()
+                        av = tw['ampm_var'].get()
+                        try:
+                            hour_12 = int(hv); minute = int(mv)
+                        except ValueError:
+                            continue
+                        # compute next available
+                        selected_days = [day for day, var in self.day_vars.items() if var.get()]
+                        alt_h, alt_m, alt_a = self.find_next_available_time(hour_12, minute, av, selected_days, selected_client)
+                        # apply
+                        tw['hour_var'].set(str(alt_h))
+                        tw['minute_var'].set(f"{alt_m:02d}")
+                        tw['ampm_var'].set(alt_a)
+                # refresh
+                self.refresh_all_conflict_displays()
+                self.update_save_button_state()
+                if self.any_conflicts_current_view():
+                    messagebox.showerror("Conflicts remain", "Could not resolve all conflicts automatically.")
+                    return False
+            else:
+                messagebox.showwarning("Conflicts", "Resolve schedule conflicts before saving.")
+                return False
             
         # Create client-specific schedule file path
         folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client)
