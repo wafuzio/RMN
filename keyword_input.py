@@ -271,6 +271,7 @@ class KeywordInputApp:
             def on_day_changed(*args):
                 if hasattr(self, 'refresh_all_conflict_displays'):
                     self.refresh_all_conflict_displays()
+                    self.update_save_button_state()
             var.trace('w', on_day_changed)
         
         # Schedule control buttons
@@ -1054,7 +1055,7 @@ class KeywordInputApp:
             if hasattr(self, 'day_vars'):
                 selected_days = [day for day, var in self.day_vars.items() if var.get()]
                 
-            if not selected_days or not selected_client or selected_client in ["<choose from menu>", "New client/product"]:
+            if not selected_days or not selected_client or selected_client == PLACEHOLDER:
                 conflict_label.config(text="")
                 return
                 
@@ -1098,6 +1099,12 @@ class KeywordInputApp:
             # Silently handle any errors in conflict checking
             if 'conflict_label' in time_widgets:
                 time_widgets['conflict_label'].config(text="")
+        
+        # Update save button state based on conflicts
+        try:
+            self.update_save_button_state()
+        except Exception:
+            pass
     
     def refresh_all_conflict_displays(self):
         """Refresh conflict displays for all time selectors"""
@@ -1286,7 +1293,7 @@ class KeywordInputApp:
             final_minute = default_minute
             final_ampm = default_ampm
             
-            if selected_days and selected_client and selected_client not in ["<choose from menu>", "New client/product"]:
+            if selected_days and selected_client and selected_client != PLACEHOLDER:
                 # Convert to 24-hour for conflict checking
                 hour_24 = default_hour
                 if default_ampm == "PM" and default_hour < 12:
@@ -1363,12 +1370,15 @@ class KeywordInputApp:
         
         # Load saved times if available - check if we have a selected client
         selected_client = self.client_var.get() if hasattr(self, 'client_var') else None
-        if selected_client and selected_client not in ["<choose from menu>", "New client/product"]:
+        if selected_client and selected_client != PLACEHOLDER:
             self.schedule_config = self.load_schedule_config(selected_client)
             self.load_saved_times()
         else:
             # No client selected, just use defaults (already set above)
             pass
+        
+        # Update save button state based on conflicts
+        self.update_save_button_state()
     
     def load_saved_times(self):
         """Load saved times from schedule configuration"""
@@ -1482,12 +1492,22 @@ class KeywordInputApp:
             return False
         return True
     
+    def any_conflicts_current_view(self) -> bool:
+        """Return True if any time selector shows a conflict."""
+        if not hasattr(self, 'time_widget_refs'):
+            return False
+        for tw in self.time_widget_refs:
+            lbl = tw.get('conflict_label')
+            if lbl and ("CONFLICT" in (lbl.cget("text") or "")):
+                return True
+        return False
+
     def update_save_button_state(self):
-        """Enable/disable save button based on client selection"""
+        """Enable Save only when there are no conflicts and a client is selected."""
         try:
             if hasattr(self, 'schedule_button'):
                 selected_client = self.client_var.get()
-                if selected_client and selected_client != PLACEHOLDER:
+                if selected_client and selected_client != PLACEHOLDER and not self.any_conflicts_current_view():
                     self.schedule_button.config(state="normal")
                 else:
                     self.schedule_button.config(state="disabled")
