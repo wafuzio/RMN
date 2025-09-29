@@ -403,6 +403,19 @@ class KeywordInputApp:
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client_type)
             output_dir = os.path.join(get_base_dir(), "output", folder_name)
             os.makedirs(output_dir, exist_ok=True)
+            
+            # Record run start time and baseline JSON set
+            run_start_ts = time.time()
+            import glob, re
+            
+            runs_dir = os.path.join(output_dir, "runs")
+            os.makedirs(runs_dir, exist_ok=True)
+            
+            # Baseline before we create any new files this run
+            baseline_json = set(glob.glob(os.path.join(runs_dir, "run_results_*.json")))
+            # Track what we collect in this GUI run only
+            run_pairs = []      # list of tuples: (json_path, html_path)
+            seen_json = set()   # to avoid double-adding
 
             # Build popup
             popup = tk.Toplevel(self.root)
@@ -464,6 +477,23 @@ class KeywordInputApp:
                         if ksc_search_and_capture is not None:
                             ok = ksc_search_and_capture(keyword, output_dir)
                             if ok:
+                                # Find JSONs created since we started, minus the baseline and already seen
+                                current_json = set(glob.glob(os.path.join(runs_dir, "run_results_*.json")))
+                                new_jsons = sorted(list(current_json - baseline_json - seen_json), key=os.path.getmtime)
+                                
+                                for jpath in new_jsons:
+                                    # Match HTML by filename pattern (same timestamp token)
+                                    hpath = jpath.replace("run_results_", "search_results_").replace(".json", ".html")
+                                    if not os.path.exists(hpath):
+                                        # Fallback: pick newest search_results_*.html nearby (only if created after we started)
+                                        hcands = [p for p in glob.glob(os.path.join(runs_dir, "search_results_*.html"))
+                                                  if os.path.getmtime(p) >= run_start_ts - 2]
+                                        hpath = max(hcands, key=os.path.getmtime) if hcands else None
+                                    
+                                    if hpath and os.path.exists(hpath):
+                                        run_pairs.append((jpath, hpath))
+                                        seen_json.add(jpath)
+                                
                                 scraped = True
                                 success_count += 1
                                 break
@@ -480,6 +510,23 @@ class KeywordInputApp:
                             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                             _, stderr = p.communicate()
                             if p.returncode == 0:
+                                # Find JSONs created since we started, minus the baseline and already seen
+                                current_json = set(glob.glob(os.path.join(runs_dir, "run_results_*.json")))
+                                new_jsons = sorted(list(current_json - baseline_json - seen_json), key=os.path.getmtime)
+                                
+                                for jpath in new_jsons:
+                                    # Match HTML by filename pattern (same timestamp token)
+                                    hpath = jpath.replace("run_results_", "search_results_").replace(".json", ".html")
+                                    if not os.path.exists(hpath):
+                                        # Fallback: pick newest search_results_*.html nearby (only if created after we started)
+                                        hcands = [p for p in glob.glob(os.path.join(runs_dir, "search_results_*.html"))
+                                                  if os.path.getmtime(p) >= run_start_ts - 2]
+                                        hpath = max(hcands, key=os.path.getmtime) if hcands else None
+                                    
+                                    if hpath and os.path.exists(hpath):
+                                        run_pairs.append((jpath, hpath))
+                                        seen_json.add(jpath)
+                                
                                 scraped = True
                                 success_count += 1
                                 break
@@ -496,6 +543,12 @@ class KeywordInputApp:
                             messagebox.showerror("Error", err_text)
                             # Continue to next keyword, do not abort whole run
 
+            # Debug print of collected pairs
+            print(f"\n📊 Collected {len(run_pairs)} JSON/HTML pairs from this run")
+            for i, (jpath, hpath) in enumerate(run_pairs):
+                print(f"  {i+1}. JSON: {os.path.basename(jpath)}")
+                print(f"     HTML: {os.path.basename(hpath)}")
+            
             # Post-processing: TOA/Skyscraper images
             if progress_label.winfo_exists():
                 progress_label.config(text="Processing saved HTML files...")
@@ -526,127 +579,125 @@ class KeywordInputApp:
                     time.sleep(1.5)
 
                 try:
-                    # Allow filesystem to flush
+                    # Small flush delay
                     time.sleep(0.75)
-
-                    # Find newest run_results_* recursively
-                    json_candidates = glob.glob(os.path.join(output_dir, "**", "run_results_*.json"), recursive=True)
-                    if not json_candidates:
-                        last_error = "No run_results_*.json found under this client output."
-                        break
-
-                    newest_json = max(json_candidates, key=os.path.getmtime)
-                    json_dir = os.path.dirname(newest_json)
-                    print(f"   Using JSON file: {os.path.basename(newest_json)}")
-                    logging.info(f"Newest JSON: {newest_json}")
-
-                    candidate_html = newest_json.replace("run_results_", "search_results_").replace(".json", ".html")
-                    html_file = candidate_html if os.path.exists(candidate_html) else None
-                    if not html_file:
-                        html_candidates = glob.glob(os.path.join(json_dir, "search_results_*.html"))
-                        if html_candidates:
-                            html_file = max(html_candidates, key=os.path.getmtime)
-
-                    if not html_file or not os.path.exists(html_file):
-                        last_error = "Matching search_results_*.html not found next to the JSON."
-                        break
-
-                    print(f"   Using HTML file: {os.path.basename(html_file)}")
-                    logging.info(f"HTML for extraction: {html_file}")
-
-                    # Choose extractor (prefer modern)
-                    script_dir = os.path.dirname(os.path.abspath(__file__))
-                    ad_script = os.path.join(script_dir, "screenshot_ad_images.py")
-                    toa_script = os.path.join(script_dir, "screenshot_toa_image.py")
-                    script_to_run = ad_script if os.path.exists(ad_script) else (toa_script if os.path.exists(toa_script) else None)
-                    if not script_to_run:
-                        last_error = "No screenshot tool found (screenshot_ad_images.py / screenshot_toa_image.py)."
-                        break
-
-                    # Build command
-                    cmd = [
-                        sys.executable,
-                        script_to_run,
-                        "--json", newest_json,
-                        "--html", html_file,
-                        "--output", output_dir,
-                        "--headless",
-                        "--no-lock",
-                        "--time-window", "45",
-                        "--browser-lock-timeout", "600",
-                    ]
-                    # Pass persistent Chrome profile if available
-                    profile_dir = os.environ.get("KROGER_PROFILE_DIR")
-                    # Fallback to the same profile the scraper uses (per your logs)
-                    if not profile_dir:
-                        default_profile = "/Users/dan.maguire/ChromeProfiles/kroger_clean_profile"
-                        if os.path.isdir(default_profile):
-                            profile_dir = default_profile
                     
-                    if profile_dir and os.path.isdir(profile_dir):
-                        cmd += ["--profile-dir", profile_dir]
-                        print(f"🔑 Using profile: {profile_dir}")
-
-                    env = os.environ.copy()
-                    env.setdefault("SCRAPER_HOME", get_base_dir())
-                    env.setdefault("PYTHONUNBUFFERED", "1")
-                    if profile_dir and os.path.isdir(profile_dir):
-                        env["KROGER_PROFILE_DIR"] = profile_dir
-                        print(f"🔑 Using profile: {profile_dir}")
-
-                    logging.info(f"Running (no log unless failure): {' '.join(cmd)}")
-                    print(f"\n📷 Running {os.path.basename(script_to_run)}")
-
-                    # Quiet first attempt
-                    result = subprocess.run(
-                        cmd,
-                        env=env,
-                        cwd=script_dir,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.STDOUT,
-                        check=False,
-                        timeout=240
-                    )
-
-                    # Check outputs
-                    toa_files = glob.glob(os.path.join(output_dir, "TOA", "*.png"))
-                    sky_files = glob.glob(os.path.join(output_dir, "Skyscraper", "*.png"))
-                    car_files = glob.glob(os.path.join(output_dir, "Carousel", "*.png"))
-
-                    n_toa, n_sky, n_car = len(toa_files), len(sky_files), len(car_files)
-
-                    # Require at least one TOA or Skyscraper
-                    if (n_toa + n_sky) > 0:
-                        logging.info("Image extraction completed successfully")
-                        print(f"✅ Image extraction completed: TOA={n_toa} Skyscraper={n_sky} Carousel={n_car}")
+                    # Safety: if for some reason collection missed files, fallback minimally
+                    if not run_pairs:
+                        # Collect ONLY files created during this GUI session (mtime gate)
+                        cands = sorted([p for p in glob.glob(os.path.join(runs_dir, "run_results_*.json"))
+                                        if os.path.getmtime(p) >= run_start_ts - 2], key=os.path.getmtime)
+                        for jpath in cands:
+                            hpath = jpath.replace("run_results_", "search_results_").replace(".json", ".html")
+                            if os.path.exists(hpath):
+                                run_pairs.append((jpath, hpath))
+                    
+                    if not run_pairs:
+                        last_error = "No new run_results_*.json were created in this run."
+                        break
+                    
+                    total_toa = total_sky = total_car = 0
+                    per_file_summary = []
+                    
+                    for idx, (json_path, html_path) in enumerate(run_pairs, start=1):
+                        # Choose extractor (prefer modern)
+                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                        ad_script = os.path.join(script_dir, "screenshot_ad_images.py")
+                        toa_script = os.path.join(script_dir, "screenshot_toa_image.py")
+                        script_to_run = ad_script if os.path.exists(ad_script) else (toa_script if os.path.exists(toa_script) else None)
+                        if not script_to_run:
+                            last_error = "No screenshot tool found (screenshot_ad_images.py / screenshot_toa_image.py)."
+                            break
+                        
+                        cmd = [
+                            sys.executable, script_to_run,
+                            "--json", json_path,
+                            "--html", html_path,
+                            "--output", output_dir,
+                            "--headless",
+                            "--no-lock",
+                            "--time-window", "45",
+                            "--browser-lock-timeout", "600",
+                        ]
+                        
+                        # Pass persistent Chrome profile
+                        profile_dir = os.environ.get("KROGER_PROFILE_DIR")
+                        if not profile_dir:
+                            default_profile = "/Users/dan.maguire/ChromeProfiles/kroger_clean_profile"
+                            if os.path.isdir(default_profile):
+                                profile_dir = default_profile
+                        
+                        env = os.environ.copy()
+                        env.setdefault("SCRAPER_HOME", get_base_dir())
+                        env.setdefault("PYTHONUNBUFFERED", "1")
+                        if profile_dir and os.path.isdir(profile_dir):
+                            cmd += ["--profile-dir", profile_dir]
+                            env["KROGER_PROFILE_DIR"] = profile_dir
+                            print(f"🔑 Using profile: {profile_dir}")
+                        
+                        # Stream logs per pair
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        extract_log = os.path.join(get_base_dir(), "logs", f"image_extract_{timestamp}_{idx}.log")
+                        os.makedirs(os.path.dirname(extract_log), exist_ok=True)
+                        
+                        if progress_label.winfo_exists():
+                            progress_label.config(text=f"[{idx}/{len(run_pairs)}] Extracting images… (log: image_extract_{timestamp}_{idx}.log)")
+                        popup.update()
+                        
+                        pair_start = time.time()
+                        with open(extract_log, "w", encoding="utf-8") as lf:
+                            lf.write(f"=== START {datetime.now().isoformat()} ===\n")
+                            lf.write(f"CMD: {' '.join(cmd)}\nCWD: {script_dir}\n\n")
+                            proc = subprocess.Popen(
+                                cmd, env=env, cwd=script_dir,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, bufsize=1, universal_newlines=True,
+                            )
+                            for line in iter(proc.stdout.readline, ""):
+                                lf.write(line)
+                                trimmed = line.strip()
+                                if trimmed and progress_label.winfo_exists():
+                                    short = (trimmed[:100] + "…") if len(trimmed) > 100 else trimmed
+                                    progress_label.config(text=f"[{idx}/{len(run_pairs)}] {short}")
+                                    popup.update()
+                            try:
+                                proc.wait(timeout=240)
+                            except subprocess.TimeoutExpired:
+                                proc.kill()
+                                lf.write("\n❌ Timeout: 240s\n")
+                            lf.write(f"Exit code: {proc.returncode}\n")
+                            lf.write(f"Elapsed: {int(time.time()-pair_start)}s\n")
+                            lf.write(f"=== END {datetime.now().isoformat()} ===\n")
+                        
+                        # Count only files produced in this pair (by mtime)
+                        toa_files = [p for p in glob.glob(os.path.join(output_dir, "TOA", "*.png"))
+                                     if os.path.getmtime(p) >= pair_start - 1]
+                        sky_files = [p for p in glob.glob(os.path.join(output_dir, "Skyscraper", "*.png"))
+                                     if os.path.getmtime(p) >= pair_start - 1]
+                        car_files = [p for p in glob.glob(os.path.join(output_dir, "Carousel", "*.png"))
+                                     if os.path.getmtime(p) >= pair_start - 1]
+                        
+                        n_toa, n_sky, n_car = len(toa_files), len(sky_files), len(car_files)
+                        total_toa += n_toa
+                        total_sky += n_sky
+                        total_car += n_car
+                        per_file_summary.append((os.path.basename(json_path), n_toa, n_sky, n_car))
+                    
+                    # Summarize across all terms from this run
+                    if (total_toa + total_sky) > 0:
+                        print("✅ Image extraction completed for this run:")
+                        for jf, a, b, c in per_file_summary:
+                            print(f"   - {jf}: TOA={a} Skyscraper={b} Carousel={c}")
+                        print(f"TOTAL: TOA={total_toa} Skyscraper={total_sky} Carousel={total_car}")
                         post_success = True
                         break
                     else:
-                        # On failure, capture a single diagnostic log
-                        extract_log = os.path.join(get_base_dir(), "logs", f"image_extract_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-                        print(f"❌ No TOA/Skyscraper produced (code {result.returncode}). Writing diagnostics to {extract_log}")
-                        last_error = f"No TOA/Skyscraper produced. See {extract_log}"
-                        with open(extract_log, "a", encoding="utf-8") as lf:
-                            lf.write(f"\n\n=== START {datetime.now().isoformat()} ===\n")
-                            lf.write(f"CMD: {' '.join(cmd)}\n")
-                            lf.write(f"CWD: {script_dir}\n")
-                            lf.flush()
-                            subprocess.run(
-                                cmd,
-                                env=env,
-                                cwd=script_dir,
-                                stdout=lf,
-                                stderr=lf,
-                                check=False,
-                                timeout=240
-                            )
-                            lf.write(f"=== END {datetime.now().isoformat()} ===\n")
-
+                        last_error = "No TOA/Skyscraper produced for any search in this run."
                         retry_count += 1
                         if retry_count < max_retries:
-                            print(f"⚠️ Only Carousel found (TOA={n_toa}, Skyscraper={n_sky}, Carousel={n_car}); will retry ({retry_count}/{max_retries}). See: {extract_log}")
+                            print(f"⚠️ None produced; will retry ({retry_count}/{max_retries}).")
                         else:
-                            print(f"❌ Extraction failed after {max_retries} attempts. See: {extract_log}")
+                            print("❌ Extraction failed after maximum retries.")
 
                 except Exception as e:
                     retry_count += 1
