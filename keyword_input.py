@@ -45,7 +45,8 @@ log_file = os.path.join(log_dir, "keyword_input.log")
 logging.basicConfig(
     filename=log_file,
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    encoding='utf-8'
 )
 logging.info("\n\n=== KEYWORD_INPUT STARTED ===")
 logging.info(f"Python: {sys.version}")
@@ -507,7 +508,7 @@ class KeywordInputApp:
                                 "--search", keyword,
                                 "--output-dir", output_dir,
                             ]
-                            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
                             _, stderr = p.communicate()
                             if p.returncode == 0:
                                 # Find JSONs created since we started, minus the baseline and already seen
@@ -630,6 +631,7 @@ class KeywordInputApp:
                         env = os.environ.copy()
                         env.setdefault("SCRAPER_HOME", get_base_dir())
                         env.setdefault("PYTHONUNBUFFERED", "1")
+                        env.setdefault("PYTHONIOENCODING", "utf-8")  # ensure child writes UTF-8
                         if profile_dir and os.path.isdir(profile_dir):
                             cmd += ["--profile-dir", profile_dir]
                             env["KROGER_PROFILE_DIR"] = profile_dir
@@ -651,7 +653,8 @@ class KeywordInputApp:
                             proc = subprocess.Popen(
                                 cmd, env=env, cwd=script_dir,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, bufsize=1, universal_newlines=True,
+                                text=True, encoding="utf-8", errors="replace",
+                                bufsize=1, universal_newlines=True,
                             )
                             for line in iter(proc.stdout.readline, ""):
                                 lf.write(line)
@@ -932,14 +935,14 @@ class KeywordInputApp:
     def _ps_contains_pid(self, pid: str) -> bool:
         try:
             result = subprocess.run(["ps", "-p", str(pid), "-o", "pid="],
-                                    capture_output=True, text=True, timeout=5)
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5)
             return str(pid) in (result.stdout or "").strip()
         except Exception:
             return False
 
     def _ps_contains_name(self, name: str) -> bool:
         try:
-            result = subprocess.run(["ps", "aux"], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(["ps", "aux"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
             for line in (result.stdout or "").splitlines():
                 if name in line and "grep" not in line:
                     return True
@@ -967,6 +970,7 @@ class KeywordInputApp:
                 # Ensure the central scheduler gate is set if you want to start from GUI
                 env.setdefault("SCRAPER_HOME", get_base_dir())
                 env.setdefault("CENTRAL_SCHEDULER", "1")  # required by our guarded start script
+                env.setdefault("PYTHONIOENCODING", "utf-8")  # ensure child writes UTF-8
                 # RETAILER is optional; if you run per-retailer schedulers, set it in the environment
 
                 subprocess.Popen(
@@ -974,7 +978,10 @@ class KeywordInputApp:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True,
-                    env=env
+                    env=env,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace"
                 )
                 print("✅ Scheduler daemon start attempted")
                 # Allow a brief moment then re-check status
