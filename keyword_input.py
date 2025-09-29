@@ -363,8 +363,8 @@ class KeywordInputApp:
         """Start the scraping process with the entered keywords"""
         # Get client/product type
         client_type = self.client_var.get().strip()
-        if not client_type:
-            messagebox.showerror("Error", "Please enter a client or product type")
+        if not client_type or client_type == PLACEHOLDER:
+            messagebox.showerror("Error", "Please select a client/product from the menu (or click New…).")
             return
             
         # Create sanitized folder name (remove special characters)
@@ -1431,8 +1431,8 @@ class KeywordInputApp:
         """Save schedule configuration to file"""
         # Get selected client
         selected_client = self.client_var.get()
-        if not selected_client or selected_client == "<choose from menu>":
-            messagebox.showerror("Error", "Please select a client/product type before saving schedule")
+        if not selected_client or selected_client == PLACEHOLDER:
+            messagebox.showerror("Error", "Please select a client/product before saving schedule")
             return False
             
         # Create client-specific schedule file path
