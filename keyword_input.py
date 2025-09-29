@@ -1383,17 +1383,18 @@ class KeywordInputApp:
             colon_label = ttk.Label(time_frame, text=":", style='TLabel')
             colon_label.pack(side=tk.LEFT)
             
-            # Minute selector
+            # Minute selector (populate with allowed minutes for the initial hour/ampm)
             minute_var = tk.StringVar(value=f"{final_minute:02d}")
             minute_combo = ttk.Combobox(
                 time_frame,
                 textvariable=minute_var,
-                values=[f"{m:02d}" for m in range(0, 60, 5)],  # Every 5 minutes
+                values=[f"{m:02d}" for m in range(0, 60, 5)],  # temporary, will filter next
                 width=3,
-                style='App.TCombobox'
+                style='App.TCombobox',
+                state="readonly",
             )
             minute_combo.pack(side=tk.LEFT, padx=(0, 5))
-            
+
             # AM/PM selector
             ampm_var = tk.StringVar(value=final_ampm)
             ampm_combo = ttk.Combobox(
@@ -1401,11 +1402,28 @@ class KeywordInputApp:
                 textvariable=ampm_var,
                 values=["AM", "PM"],
                 width=3,
-                style='App.TCombobox'
+                style='App.TCombobox',
+                state="readonly",
             )
             ampm_combo.pack(side=tk.LEFT, padx=(5, 0))
-            
-            # Add conflict indicator label
+
+            # After both hour and ampm exist, filter minutes to allowed set
+            selected_client = self.client_var.get() if hasattr(self, 'client_var') else None
+            selected_days = [day for day, var in self.day_vars.items() if var.get()] if hasattr(self, 'day_vars') else []
+            allowed_minutes = self.get_allowed_minutes_for_hour(final_hour, final_ampm, selected_days, exclude_client=selected_client)
+            if allowed_minutes:
+                minute_combo["values"] = allowed_minutes
+                if minute_var.get() not in allowed_minutes:
+                    minute_var.set(allowed_minutes[0])
+            else:
+                # No allowed minutes in that hour; auto-suggest next available
+                alt_h, alt_m, alt_a = self.find_next_available_time(final_hour, final_minute, final_ampm, selected_days, selected_client)
+                hour_var.set(str(alt_h))
+                ampm_var.set(alt_a)
+                minute_combo["values"] = self.get_allowed_minutes_for_hour(alt_h, alt_a, selected_days, exclude_client=selected_client)
+                minute_var.set(f"{alt_m:02d}")
+
+            # Conflict indicator label
             conflict_label = ttk.Label(time_frame, text="", style='Body.TLabel')
             conflict_label.pack(side=tk.LEFT, padx=(5, 0))
             
@@ -1422,7 +1440,23 @@ class KeywordInputApp:
             
             # Add event handlers for real-time conflict checking
             def check_time_conflict(*args):
+                # re-filter minute options for current hour/ampm/days
+                try:
+                    selected_client = self.client_var.get()
+                    days = [day for day, var in self.day_vars.items() if var.get()]
+                    h_str = hour_var.get()
+                    a = ampm_var.get()
+                    if h_str and a and days:
+                        h = int(h_str)
+                        allowed = self.get_allowed_minutes_for_hour(h, a, days, exclude_client=selected_client)
+                        minute_combo["values"] = allowed or [minute_var.get()]
+                        if allowed and minute_var.get() not in allowed:
+                            minute_var.set(allowed[0])
+                except Exception:
+                    pass
+                # keep your existing label update
                 self.check_and_update_conflict_display(time_widgets)
+                self.refresh_save_button_state()
                 
             hour_var.trace('w', check_time_conflict)
             minute_var.trace('w', check_time_conflict)
@@ -1514,6 +1548,11 @@ class KeywordInputApp:
             return False
 
         # Detect conflicts
+        if self.schedule_has_conflicts():
+            messagebox.showerror("Conflicts", "Selected times conflict with other clients. Please adjust times (Save is disabled until conflicts are resolved).")
+            return False
+            
+        # Check for visual conflicts (should be redundant with above check)
         if self.any_conflicts_current_view():
             if messagebox.askyesno("Conflicts detected",
                                "Some time selections conflict with other clients.\n"
