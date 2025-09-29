@@ -333,6 +333,9 @@ class KeywordInputApp:
         )
         self.status_label.pack(anchor="w", pady=(10, 0))
         
+        # Initialize save button state
+        self.update_save_button_state()
+        
     def load_css_variables(self, css_path):
         """Parse :root CSS variables from a stylesheet for reuse in Tkinter."""
         vars_map = {}
@@ -1142,46 +1145,43 @@ class KeywordInputApp:
             self.client_var.set(PLACEHOLDER)
     
     def on_client_selected(self, event):
-        """Handle client selection from dropdown"""
+        """Handle client selection from dropdown."""
         selected_client = self.client_var.get()
-        
+
         if selected_client == PLACEHOLDER:
-            # Just clear the keywords
             self.keyword_input.delete(1.0, tk.END)
-        elif selected_client in self.client_history:
-            # Clear current keywords
-            self.keyword_input.delete(1.0, tk.END)
-            
-            # Insert saved keywords
+            self.status_label.config(text="No client selected")
+            # clear schedule UI; keep defaults
+            return
+
+        # existing client
+        self.keyword_input.delete(1.0, tk.END)
+        if selected_client in self.client_history:
             keywords = self.client_history[selected_client]
             self.keyword_input.insert(tk.END, "\n".join(keywords))
-            
-            # Load client-specific schedule configuration
-            self.schedule_config = self.load_schedule_config(selected_client)
-            
-            # Update runs per day if specified in config
-            if "runs" in self.schedule_config:
-                self.runs_var.set(self.schedule_config["runs"])
-                # Recreate time selectors with the correct number
-                self.update_time_selectors()
-            else:
-                # Update UI with loaded schedule
-                self.load_saved_times()
-            
-            # Update days checkboxes if days are in the config
-            if "days" in self.schedule_config:
-                for day in self.day_vars:
-                    self.day_vars[day].set(day in self.schedule_config["days"])
-            
             self.status_label.config(text=f"Loaded {len(keywords)} keywords for {selected_client}")
-        
-        # Set up logging for this client
+
+        # load client-specific schedule config
+        self.schedule_config = self.load_schedule_config(selected_client)
+
+        if "runs" in self.schedule_config:
+            self.runs_var.set(self.schedule_config["runs"])
+            self.update_time_selectors()
+        else:
+            self.load_saved_times()
+
+        if "days" in self.schedule_config:
+            for day in self.day_vars:
+                self.day_vars[day].set(day in self.schedule_config["days"])
+
+        # set up logging for this client
         self.logger = self.setup_logging(selected_client)
-        
-        # Refresh conflict displays now that client context and times/days are loaded
+
+        # refresh conflicts and save-button state
         try:
             if hasattr(self, 'refresh_all_conflict_displays'):
                 self.refresh_all_conflict_displays()
+            self.update_save_button_state()
         except Exception:
             pass
     
@@ -1482,7 +1482,17 @@ class KeywordInputApp:
             return False
         return True
     
-    
+    def update_save_button_state(self):
+        """Enable/disable save button based on client selection"""
+        try:
+            if hasattr(self, 'schedule_button'):
+                selected_client = self.client_var.get()
+                if selected_client and selected_client != PLACEHOLDER:
+                    self.schedule_button.config(state="normal")
+                else:
+                    self.schedule_button.config(state="disabled")
+        except Exception:
+            pass
     
 
 def main():
