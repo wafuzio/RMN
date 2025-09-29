@@ -59,7 +59,6 @@ ksc_search_and_capture = None
 kproc_latest_missing = None
 
 # Constants and placeholders
-PLACEHOLDER = "<choose from menu>"
 DEFAULT_PROFILE = "/Users/dan.maguire/ChromeProfiles/kroger_clean_profile"  # used elsewhere already
 
 # Optional: try eager imports; if they fail, globals stay None and the lazy path runs later
@@ -153,22 +152,22 @@ class KeywordInputApp:
         main_frame = ttk.Frame(root, padding=20, style='App.TFrame')
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Client/Product Type field + New button
+        # Client/Product Type field with dropdown + New button
         client_frame = ttk.Frame(main_frame, style='Card.TFrame')
         client_frame.pack(fill=tk.X, pady=(0, 15))
 
         ttk.Label(client_frame, text="Client/Product:", style='TLabel').pack(side=tk.LEFT)
 
-        # Alphabetical list from history
-        clients = sorted(self.client_history.keys())
+        # Alphabetize clients
+        clients = sorted(self.client_history.keys(), key=str.lower)
 
         self.client_var = tk.StringVar()
-        self.client_var.set(PLACEHOLDER)
+        self.client_var.set("<choose from menu>")  # placeholder only (not a real option we save)
 
         self.client_dropdown = ttk.Combobox(
             client_frame,
             textvariable=self.client_var,
-            values=[PLACEHOLDER] + clients,    # placeholder + alphabetical
+            values=["<choose from menu>"] + clients,
             width=30,
             style='App.TCombobox',
             state="readonly",
@@ -176,16 +175,18 @@ class KeywordInputApp:
         self.client_dropdown.pack(side=tk.LEFT, padx=(10, 6))
         self.client_dropdown.bind("<<ComboboxSelected>>", self.on_client_selected)
 
-        # New client button (not in dropdown)
+        # New client button (replaces "New client/product" list entry)
         self.new_client_btn = tk.Button(
             client_frame,
-            text="New…",
-            command=self.create_new_client,
+            text="New",
+            command=self.on_new_client,
             bg=self.primary_color,
             fg="white",
             font=("Inter", 10, "bold"),
-            padx=10, pady=6,
-            relief="flat", borderwidth=0
+            padx=10,
+            pady=4,
+            relief="flat",
+            borderwidth=0,
         )
         self.new_client_btn.pack(side=tk.LEFT)
         
@@ -367,7 +368,7 @@ class KeywordInputApp:
         """Start the scraping process with the entered keywords"""
         # Get client/product type
         client_type = self.client_var.get().strip()
-        if not client_type or client_type == PLACEHOLDER:
+        if not client_type or client_type == "<choose from menu>":
             messagebox.showerror("Error", "Please select a client/product from the menu (or click New…).")
             return
             
@@ -1055,7 +1056,7 @@ class KeywordInputApp:
             if hasattr(self, 'day_vars'):
                 selected_days = [day for day, var in self.day_vars.items() if var.get()]
                 
-            if not selected_days or not selected_client or selected_client == PLACEHOLDER:
+            if not selected_days or not selected_client or selected_client == "<choose from menu>":
                 conflict_label.config(text="")
                 return
                 
@@ -1129,62 +1130,79 @@ class KeywordInputApp:
     
     def update_client_dropdown(self):
         """Update the client dropdown with history"""
-        clients = sorted(self.client_history.keys())
+        clients = sorted(self.client_history.keys(), key=str.lower)
         # Add placeholder at the beginning
-        self.client_dropdown['values'] = [PLACEHOLDER] + clients
+        self.client_dropdown['values'] = ["<choose from menu>"] + clients
         
-    def create_new_client(self):
-        """Handle new client button click"""
-        # Prompt for new client name
+    def on_new_client(self):
+        """Prompt for a new client, add it alphabetically to the list, select it, and clear the keyword box."""
         new_client = simpledialog.askstring("New Client", "Enter new client/product name:")
-        if new_client and new_client.strip():
-            # Update dropdown with new client
-            current_values = list(self.client_dropdown["values"])
-            if new_client not in current_values:
-                # Add to alphabetical list
-                clients = sorted(list(self.client_history.keys()) + [new_client])
-                self.client_dropdown["values"] = [PLACEHOLDER] + clients
-                self.client_var.set(new_client)
-                self.keyword_input.delete(1.0, tk.END)  # Clear keywords
-                self.status_label.config(text=f"Created new client: {new_client}")
-        else:
-            # If canceled or empty, reset to default
-            self.client_var.set(PLACEHOLDER)
+        if not new_client or not new_client.strip():
+            return
+        new_client = new_client.strip()
+        # Update the dropdown with alphabetical list
+        clients = set(self.client_history.keys())
+        clients.add(new_client)
+        ordered = sorted(clients, key=str.lower)
+        self.client_dropdown["values"] = ["<choose from menu>"] + ordered
+        self.client_var.set(new_client)
+        self.keyword_input.delete(1.0, tk.END)
+        self.status_label.config(text=f"Created new client: {new_client}")
+
+        # Also set up logging for this client
+        self.logger = self.setup_logging(new_client)
+        # Refresh conflict labels if needed
+        try:
+            if hasattr(self, 'refresh_all_conflict_displays'):
+                self.refresh_all_conflict_displays()
+        except Exception:
+            pass
     
     def on_client_selected(self, event):
         """Handle client selection from dropdown."""
         selected_client = self.client_var.get()
 
-        if selected_client == PLACEHOLDER:
+        if selected_client == "<choose from menu>":
+            # Just clear the keywords, do not create folders
             self.keyword_input.delete(1.0, tk.END)
-            self.status_label.config(text="No client selected")
-            # clear schedule UI; keep defaults
+            self.status_label.config(text="Ready to scrape")
+            # Disable Save until a real client is chosen
+            self.schedule_button.config(state="disabled")
             return
 
-        # existing client
+        # For a real client
         self.keyword_input.delete(1.0, tk.END)
+
+        # Insert saved keywords if any
         if selected_client in self.client_history:
             keywords = self.client_history[selected_client]
             self.keyword_input.insert(tk.END, "\n".join(keywords))
             self.status_label.config(text=f"Loaded {len(keywords)} keywords for {selected_client}")
+        else:
+            self.status_label.config(text=f"New client: {selected_client}")
 
-        # load client-specific schedule config
+        # Load client-specific schedule config
         self.schedule_config = self.load_schedule_config(selected_client)
 
+        # Update runs per day if specified
         if "runs" in self.schedule_config:
             self.runs_var.set(self.schedule_config["runs"])
             self.update_time_selectors()
         else:
             self.load_saved_times()
 
+        # Update day checkboxes
         if "days" in self.schedule_config:
             for day in self.day_vars:
                 self.day_vars[day].set(day in self.schedule_config["days"])
 
-        # set up logging for this client
+        # Set up logging
         self.logger = self.setup_logging(selected_client)
 
-        # refresh conflicts and save-button state
+        # Re-enable save (will be toggled off again if conflicts exist)
+        self.schedule_button.config(state="normal")
+
+        # Refresh conflicts
         try:
             if hasattr(self, 'refresh_all_conflict_displays'):
                 self.refresh_all_conflict_displays()
@@ -1293,7 +1311,7 @@ class KeywordInputApp:
             final_minute = default_minute
             final_ampm = default_ampm
             
-            if selected_days and selected_client and selected_client != PLACEHOLDER:
+            if selected_days and selected_client and selected_client != "<choose from menu>":
                 # Convert to 24-hour for conflict checking
                 hour_24 = default_hour
                 if default_ampm == "PM" and default_hour < 12:
@@ -1370,7 +1388,7 @@ class KeywordInputApp:
         
         # Load saved times if available - check if we have a selected client
         selected_client = self.client_var.get() if hasattr(self, 'client_var') else None
-        if selected_client and selected_client != PLACEHOLDER:
+        if selected_client and selected_client != "<choose from menu>":
             self.schedule_config = self.load_schedule_config(selected_client)
             self.load_saved_times()
         else:
@@ -1440,7 +1458,7 @@ class KeywordInputApp:
     def save_schedule(self):
         """Save schedule configuration to file"""
         selected_client = self.client_var.get()
-        if not selected_client or selected_client == PLACEHOLDER:
+        if not selected_client or selected_client == "<choose from menu>":
             messagebox.showerror("Error", "Please select a client/product before saving schedule")
             return False
 
@@ -1542,7 +1560,7 @@ class KeywordInputApp:
         try:
             if hasattr(self, 'schedule_button'):
                 selected_client = self.client_var.get()
-                if selected_client and selected_client != PLACEHOLDER and not self.any_conflicts_current_view():
+                if selected_client and selected_client != "<choose from menu>" and not self.any_conflicts_current_view():
                     self.schedule_button.config(state="normal")
                 else:
                     self.schedule_button.config(state="disabled")
