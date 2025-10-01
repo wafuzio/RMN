@@ -1,56 +1,27 @@
 {
-  "Land O Frost": [
-    "black forest ham",
-    "packaged deli meat",
-    "honey ham"
+  "gold bond": [
+    "gold bond"
   ],
-  "MilkPEP": [
-    "protein drink",
-    "milk"
+  "cheesy poofs": [
+    "cheese puffs"
   ],
-  "Bomb Pop": [
-    "ice pop",
-    "bomb pop"
+  "<choose from menu>": [
+    "<enter keywords here>"
   ],
-  "Blue Bunny": [
-    "ice cream tubs",
-    "ice cream cones"
+  "test2": [
+    "healthy potato chips"
   ],
-  "halo top": [
-    "healthy ice cream",
-    "halo top"
+  "pickle": [
+    "pickle spears"
   ],
-  "trolli pop": [
-    "trolli pop",
-    "gummy pop"
+  "cheese dip": [
+    "cheese dip"
   ],
-  "pepsi": [
-    "soda",
-    "pop",
-    "coke"
+  "sour cream": [
+    "light sour cream"
   ],
-  "test": [
-    "protein cereal",
-    "red baron pizza"
-  ],
-  "ollipop": [
-    "prebiotic soda",
-    "healthy soda"
-  ],
-  "Digiorno": [
-    "pepperoni pizza",
-    "stuffed crust pizza"
-  ],
-  "Red Baron": [
-    "red baron",
-    "frozen pizza pepperoni"
-  ],
-  "butterball": [
-    "butterball",
-    "frozen turkey"
-  ],
-  "testeses": [
-    "apple juice",
-    "cranberry juice"
+  "bandaid": [
+    "waterproof bandages",
+    "cartoon bandages"
   ]
 }

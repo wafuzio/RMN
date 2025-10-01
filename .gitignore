@@ -3,19 +3,44 @@
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 .DS_Store
+.pytest_cache/
+*.egg-info/
 
 # Local runtime/output
 logs/
 diagnostics/
+
+# Allow reports in diagnostics to be tracked (Markdown/CSV only)
+!diagnostics/reports/
+!diagnostics/reports/*.md
+!diagnostics/reports/*.csv
 playwright_profile/
 output/
+
+# Allow reports in output to be tracked (Markdown/CSV only)
+!output/reports/
+!output/reports/*.md
+!output/reports/*.csv
 images/
 *.log
+file_list.log
+filtered_file_list.log
+debug.log
+scraper_subprocess.log
+profiles/
+
+# macOS
+.DS_Store
 
 # Build artifacts
 build/
 dist/
+*.spec
+*.app/
+*.exe
+*.dmg
 
 # Node (if present)
 node_modules/

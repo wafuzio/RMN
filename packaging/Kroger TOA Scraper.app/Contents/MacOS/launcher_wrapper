@@ -1,0 +1,105 @@
+#!/bin/bash
+# Kroger TOA Scraper App Launcher Wrapper
+
+set -euo pipefail
+
+# Defaults for centralized paths and UTF-8 locale
+export SCRAPER_HOME="${SCRAPER_HOME:-$HOME/Documents/Amazon_Scrape}"
+# Optional retailer namespacing (uncomment to pin this app to kroger):
+# export RETAILER="${RETAILER:-kroger}"
+export LC_ALL="${LC_ALL:-en_US.UTF-8}"
+export LANG="${LANG:-en_US.UTF-8}"
+
+LOG_DIR="$SCRAPER_HOME/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/wrapper.log"
+
+{
+  printf "\n\n=== WRAPPER STARTED AT %s ===\n" "$(date)"
+  printf "Working directory: %s\n" "$(pwd)"
+  printf "User: %s\n" "$(whoami)"
+  printf "PATH: %s\n" "$PATH"
+  printf "BASH_SOURCE: %s\n" "${BASH_SOURCE[0]}"
+} >> "$LOG_FILE"
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_BUNDLE_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+PROJECT_DIR="$(dirname "$APP_BUNDLE_DIR")"
+
+{
+  printf "SCRIPT_DIR: %s\n" "$SCRIPT_DIR"
+  printf "APP_BUNDLE_DIR: %s\n" "$APP_BUNDLE_DIR"
+  printf "PROJECT_DIR: %s\n" "$PROJECT_DIR"
+} >> "$LOG_FILE"
+
+# Change to project directory and export for Python to read
+cd "$PROJECT_DIR"
+export PROJECT_DIR
+
+{
+  printf "Changed to directory: %s\n" "$(pwd)"
+  printf "Directory contents:\n"
+  ls -la
+} >> "$LOG_FILE"
+
+# Launch the Python application via here-doc to avoid quoting issues
+echo "Launching Python application..." >> "$LOG_FILE"
+python3 - <<'PY'
+import os, sys, traceback
+import tkinter as tk
+
+# Centralized logging path
+scraper_home = os.environ.get('SCRAPER_HOME') or os.path.expanduser('~/Documents/Amazon_Scrape')
+log_dir = os.path.join(scraper_home, 'logs')
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, 'wrapper_python.log')
+
+with open(log_file, 'a', encoding='utf-8') as f:
+    f.write('\n\n=== WRAPPER PYTHON STARTED ===\n')
+    f.write(f'Python version: {sys.version}\n')
+    f.write(f'Executable: {sys.executable}\n')
+    f.write(f'Working directory: {os.getcwd()}\n')
+    f.write(f'PROJECT_DIR: {os.environ.get("PROJECT_DIR", "")}\n')
+    f.write(f'SCRAPER_HOME: {scraper_home}\n')
+
+# Ensure project dir on sys.path
+proj = os.environ.get('PROJECT_DIR') or os.getcwd()
+if proj not in sys.path:
+    sys.path.insert(0, proj)
+
+with open(log_file, 'a', encoding='utf-8') as f:
+    f.write(f'sys.path: {sys.path}\n')
+
+try:
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('Importing keyword_input...\n')
+    import keyword_input
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('keyword_input imported successfully\n')
+
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('Creating Tk root window...\n')
+    root = tk.Tk()
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('Root window created successfully\n')
+
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('Initializing KeywordInputApp...\n')
+    app = keyword_input.KeywordInputApp(root)
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('KeywordInputApp initialized successfully\n')
+
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('Starting mainloop...\n')
+    root.mainloop()
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('mainloop exited\n')
+
+except Exception as e:
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write(f'Error: {e}\n')
+        f.write('Traceback:\n')
+        traceback.print_exc(file=f)
+    raise
+PY

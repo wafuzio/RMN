@@ -258,7 +258,7 @@ class SchedulerDaemon:
                 
                 cmd = [
                     sys.executable,
-                    str(self.code_dir / "kroger_search_and_capture.py"),
+                    str(self.code_dir / "archived" / "kroger_search_and_capture.py"),
                     "--search",
                     keyword,
                     "--output-dir",
@@ -268,7 +268,7 @@ class SchedulerDaemon:
                 self.execution_logger.debug(f"SUBPROCESS_CMD: {' '.join(cmd)}")
                 
                 try:
-                    self.execution_logger.debug(f"SUBPROCESS_START: kroger_search_and_capture.py for '{keyword}'")
+                    self.execution_logger.debug(f"SUBPROCESS_START: archived/kroger_search_and_capture.py for '{keyword}'")
                     result = subprocess.run(
                         cmd,
                         capture_output=True,

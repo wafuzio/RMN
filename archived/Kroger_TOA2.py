@@ -26,8 +26,8 @@ from datetime import datetime
 import json
 import os
 
-from Kroger_TOA import extract_toa_ads_from_url
-from Kroger_login import get_authenticated_context
+from archived.Kroger_TOA import extract_toa_ads_from_url
+from kroger_login import get_authenticated_context
 
 search_terms = [
     # Deli & Meat

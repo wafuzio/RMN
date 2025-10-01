@@ -1,345 +1,339 @@
-# Kroger TOA Scraper
+Multi‑Retailer TOA Scraper
+A macOS + Python automation platform for tracking and analyzing Targeted Onsite Ads (TOAs) across retailers (starting with Kroger). Includes a native GUI, optional web dashboard, conflict‑aware scheduler, and pluggable “retailer adapters” so you can add Walmart/Target/etc. without touching the UI.
 
-A comprehensive automation platform for tracking and analyzing Targeted Onsite Ads (TOAs) on Kroger.com, featuring a native macOS app, web interface, scheduling system, and Builder.io integration.
+Note: Kroger remains the default path. If you don’t choose another retailer, behavior is identical to the original Kroger tool.
 
-## Overview
+TL;DR for future debugging
+TOA/Skyscraper images come from retailer CDNs and require a valid logged‑in session (cookies).
+The image extractor must reuse the same browser profile as the scraper. If not, expect timeouts/HTTP2 resets and “only Carousel.”
+Kroger: export KROGER_PROFILE_DIR="/Users/<you>/ChromeProfiles/kroger_clean_profile"
+Logs live in logs/<retailer>/..., and per‑run extractor logs are in logs/<retailer>/image_extract_*.log.
+A 6‑minute watchdog prevents “Processing saved HTML files…” from hanging forever.
+Jump to Session Persistence (CRITICAL) and Troubleshooting for precise fixes.
 
-The Kroger TOA Scraper is a complete monitoring solution that provides:
+What's new
+Retailer adapters: a tiny interface that wraps search, pair collection, and image extraction per retailer.
+core/retailers.py: registry + base class.
+retailers/kroger/adapter.py: Kroger implementation (uses your existing scripts).
+retailers/amazon/adapter.py: Amazon implementation (captures Sponsored Brands, Products, and Display ads).
+Retailer‑scoped paths and logs:
+output///...
 
-- **Native macOS App**: PyInstaller-built GUI app with dock integration and custom icon
-- **Web Interface**: Modern Bootstrap-based scheduler and dashboard
-- **Automated Scheduling**: Multi-client conflict-aware scheduling system
-- **Real-time Monitoring**: Background daemon for automated scraping
-- **Builder.io Integration**: Vendored Flask API with CORS support
-- **Advanced Ad Extraction**: Modular system for different ad types
-- **Client Management**: Multi-tenant architecture with isolated data
+Supported Retailers
+- Kroger: Captures TOA, Skyscraper, and Carousel ads
+- Amazon: Captures Sponsored Brands (TOA), Sponsored Display (Skyscraper), and Sponsored Products (Carousel)
+logs/<retailer>/...
+Schedule files include a retailer field for conflict detection and back‑compat.
+Overview
+Native macOS app (py2app)
+Tkinter GUI with high‑contrast ttk styles
+Optional Flask web dashboard (Bootstrap)
+Automated scheduling with conflict detection
+Background daemon
+Advanced ad extraction (TOA, Skyscraper, Carousel)
+Multi‑tenant client data separation
+Pluggable multi‑retailer architecture (adapters)
+Architecture
+Core runtime
 
-## Architecture
+GUI controller: keyword_input.py
+Retailer registry: core/retailers.py
+Run context (paths/profile per run): core/run_context.py
+Retailer‑aware paths: core/paths.py
+Retailer adapters
 
-### Desktop Application
-- **Native macOS App Bundle**: `Kroger TOA Scraper.app` with custom icon and dock integration
-- **PyInstaller Build**: Standalone executable with vendored dependencies
-- **Tkinter GUI**: Modern interface with CSS-synchronized styling
-- **Signal Handling**: Proper dock icon click restoration
+retailers/kroger/adapter.py (default, wraps your existing Kroger pipeline)
+Add new ones via retailers//adapter.py
+Web interface (optional)
 
-### Web Interface
-- **Flask Server**: `builder_server.py` with vendored dependencies in `libs/`
-- **Bootstrap 5**: Modern responsive UI with custom CSS
-- **Scheduler Dashboard**: Real-time conflict detection and management
-- **API Endpoints**: RESTful interface for Builder.io integration
+builder_server.py (vendored Flask in libs/)
+Bootstrap templates and static assets
+Automation
 
-### Automation System
-- **Background Daemon**: `scheduler_daemon.py` for automated execution
-- **Multi-client Scheduling**: Conflict-aware time slot management
-- **Real-time Monitoring**: 5-minute conflict windows with visual indicators
-- **Cross-platform Compatibility**: macOS and Linux support
-
-## Directory Structure
-
-```
+scheduler_daemon.py
+Conflict‑aware scheduler (5‑minute windows)
+Per‑retailer logs and locks
+Directory Structure
+├── core/
+│   ├── retailers.py          # base adapter + registry
+│   ├── run_context.py        # RunContext dataclass
+│   └── paths.py              # retailer-aware path helpers
+├── auth/
+│   ├── retailer_auth.py      # Authentication helper for retailers
+│   ├── gui_helper.py         # GUI integration for auth
+│   └── profiles.json         # Profile configuration
+├── retailers/
+│   ├── kroger/
+│   │   └── adapter.py        # Kroger adapter (uses existing scripts)
+│   └── amazon/
+│       └── adapter.py        # Amazon adapter (captures Sponsored ads)
 ├── dist/
-│   └── Kroger TOA Scraper.app/     # macOS app bundle
-├── libs/                           # Vendored Flask dependencies
-│   ├── flask/
-│   ├── jinja2/
-│   └── ...
-├── static/
-│   ├── css/
-│   │   ├── style.css              # Main styling with CSS variables
-│   │   └── scheduler.css          # Scheduler-specific styles
-│   └── js/
-├── templates/
-│   ├── index.html                 # Main scheduler interface
-│   └── nfl_dashboard.html         # NFL-style dashboard
+│   └── Retail Ad Monitor.app/
+├── libs/                     # Vendored Flask deps
+├── static/                   # CSS/JS for web UI
+├── templates/                # Flask templates
 ├── output/
-│   └── <client_name>/             # Client-specific directories
-│       ├── main/                  # Full page screenshots
-│       ├── TOA/                   # TOA-only images and results
-│       ├── schedule_config.json   # Client scheduling configuration
-│       ├── scheduler.log          # Client-specific logs
-│       └── *.html                 # Saved HTML files
-└── ad_extractors/                 # Modular ad extraction system
-    ├── base_extractor.py
-    ├── toa_extractor.py
-    └── ...
+│   └── <retailer>/
+│       └── <client>/
+│           ├── runs/                 # run_results_*.json + search_results_*.html
+│           ├── TOA/ Skyscraper/ Carousel/
+│           ├── schedule_config.json  # includes retailer + client
+│           └── scheduler.log
+├── logs/
+│   └── <retailer>/
+│       ├── keyword_input.log
+│       ├── image_extract_*.log
+│       └── locks/*_image_extraction.lock
+└── (existing extractor/scraper scripts)
+Back‑compat: old Kroger‑only schedules under output//schedule_config.json are still read; new saves go to output/kroger//.
+
+Key Components
+GUI: keyword_input.py (Tkinter ttk)
+Retailer registry: core/retailers.py
+Run context: core/run_context.py
+Paths: core/paths.py
+Authentication: auth/retailer_auth.py, auth/gui_helper.py
+Kroger adapter: retailers/kroger/adapter.py
+Amazon adapter: retailers/amazon/adapter.py
+Scraper: kroger_search_and_capture.py (root directory, Playwright, persistent profile)
+Image Extractors: extractors/screenshot_ad_images.py (preferred), extractors/screenshot_toa_image.py (legacy)
+Scheduler: scheduler_daemon.py
+Web API/UI: web/builder_server.py, web/templates, web/static
+Requirements
+macOS 10.14+
+Python 3.8+ (Tkinter included on macOS)
+Playwright installed with browsers
+4 GB RAM+ recommended
+~2 GB disk for outputs/caches
+Python deps:
+
+playwright, beautifulsoup4, pillow, flask, numpy
+Flask is vendored under libs for deploys
+Installation
+Quick Start (macOS)
+
+CLI Python:
+pip install playwright
+playwright install
+If you use the app‑bundle Python:
+APP_PY="/Users/<you>/Documents/Amazon_Scrape/dist/Retail Ad Monitor.app/Contents/MacOS/python"
+"$APP_PY" -m pip install playwright
+"$APP_PY" -m playwright install chromium
+
+### Environment Variables (Optional)
+
+For best results, set these in your shell profile (`~/.zshrc` or `~/.bash_profile`):
+
+```bash
+export SCRAPER_HOME="/Users/<you>/Documents/Amazon_Scrape"
+export KROGER_PROFILE_DIR="/Users/<you>/ChromeProfiles/kroger_clean_profile"
+export AMZ_PROFILE_DIR="/Users/<you>/Documents/Amazon_Scrape/profiles/amazon"
+
+# Optional: Use a specific Python interpreter (e.g., venv)
+# export PYTHON_EXEC="/Users/<you>/Documents/Amazon_Scrape/.venv/bin/python"
 ```
 
-## Key Components
+The launcher will use these to find your source code and browser profiles.
 
-### Desktop Application
-- **keyword_input.py**: Main Tkinter GUI with CSS-synchronized styling
-- **launcher**: macOS app bundle launcher with proper path resolution
-- **kroger_toa_scraper.spec**: PyInstaller configuration with custom icon
+### macOS App Launcher
 
-### Web Interface & API
-- **builder_server.py**: Flask server with vendored dependencies
-- **templates/**: Bootstrap-based web interface
-- **static/**: CSS/JS assets with CSS variables for theming
+The app uses an in-process launcher that:
+- Runs live source code from `SCRAPER_HOME` (no rebuild needed for code changes)
+- Uses inline View menu to avoid Tk/Cocoa menubar crashes on macOS
+- Supports custom Python interpreter via `PYTHON_EXEC` environment variable
+- Reads configuration from `config/launcher.env` if present
 
-### Core Functionality
-- **kroger_search_and_capture.py**: Playwright-based search automation
-- **kroger_ad_core.py**: Core ad extraction with modular extractors
-- **scheduler_daemon.py**: Background automation daemon
-- **ad_extractors/**: Pluggable extraction system
-  - **base_extractor.py**: Common extraction methods
-  - **toa_extractor.py**: TOA-specific extraction
-  - **carousel_extractor.py**: Carousel ad extraction
-  - **skyscraper_extractor.py**: Skyscraper ad extraction
+Boot logs: `~/Documents/Amazon_Scrape/logs/app_launcher_boot.log`
+GUI logs: `~/Documents/Amazon_Scrape/logs/gui_boot.log`
 
-### Utilities
-- **process_saved_html.py**: Batch HTML processing
-- **capture_toa_images.py**: Precise TOA image cropping
-- **test_*.py**: Comprehensive test suite
-
-## API Endpoints
-
-### Web Interface
-- `GET /` - Main scheduler interface
-- `GET /nfl` - NFL-style dashboard view
-
-### Data API
-- `GET /api/ads` - List all clients
-- `GET /api/ads/<client>` - Get ads for specific client
-- `GET /api/nfl-grid/<client>` - NFL-style grid data
-
-### Asset Serving
-- `GET /api/images/<client>/<filename>` - Full page screenshots
-- `GET /api/toa/<client>/<filename>` - TOA-only images
-
-### CORS Support
-- Full CORS headers for Builder.io integration
-- Vendored Flask dependencies for deployment compatibility
-
-## Features
-
-### Desktop Application
-- **Native macOS Integration**: Proper dock icon, app bundle, Launch Services registration
-- **Custom Icon Support**: Dynamic icon loading with PyInstaller compatibility
-- **CSS Synchronization**: Desktop styling matches web interface variables
-- **Signal Handling**: Proper window restoration on dock icon clicks
-
-### Scheduling & Automation
-- **Multi-client Scheduling**: Independent schedules per client with conflict detection
-- **Real-time Conflict Visualization**: Color-coded time slots with suggestions
-- **Background Daemon**: Automated execution with comprehensive logging
-- **Cross-client Coordination**: 5-minute conflict windows prevent browser conflicts
-
-### Web Interface
-- **Modern Bootstrap UI**: Responsive design with custom theming
-- **Real-time Updates**: Dynamic conflict checking and schedule management
-- **Client Management**: Dropdown selection with history persistence
-- **Visual Feedback**: Status indicators and progress tracking
-
-### Technical Features
-- **Session Persistence**: Akamai Bot Protection handling with cookie management
-- **Modular Architecture**: Pluggable ad extractors for different ad types
-- **Adaptive Detection**: Edge detection for precise TOA banner cropping
-- **Vendor Independence**: Self-contained Flask dependencies for deployment
-- **Cross-platform Support**: macOS and Linux compatibility
-
-## Requirements
-
-### System Requirements
-- **macOS**: 10.14+ (for native app bundle)
-- **Python**: 3.8+ with tkinter support
-- **Memory**: 4GB+ RAM recommended
-- **Storage**: 2GB+ for dependencies and output data
-
-### Python Dependencies
-- **Playwright**: Browser automation
-- **BeautifulSoup4**: HTML parsing
-- **Pillow (PIL)**: Image processing
-- **Flask**: Web server (vendored in `libs/`)
-- **NumPy**: Numerical operations
-- **Tkinter**: GUI framework (usually included with Python)
-
-## Installation
-
-### Quick Start (macOS)
-1. **Download the App**: Use the pre-built `Kroger TOA Scraper.app` from `dist/`
-2. **Install Playwright**: `pip install playwright && playwright install`
-3. **Launch**: Double-click the app or use `open "Kroger TOA Scraper.app"`
-
-### Development Setup
-1. **Clone Repository**:
-   ```bash
-   git clone <repository-url>
-   cd Amazon_Scrape
-   ```
-
-2. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   playwright install
-   ```
-
-3. **Build App Bundle** (optional):
-   ```bash
-   pyinstaller kroger_toa_scraper.spec --noconfirm
-   ```
-
-## Usage
-
-### Desktop Application
-
-#### Launch the Native App
-```bash
-# Method 1: Direct launch
-open "dist/Kroger TOA Scraper.app"
-
-# Method 2: From source
+Launch
+Double‑click the .app, or:
 python keyword_input.py
-```
+Development Setup
 
-#### Using the GUI
-1. **Select Client**: Choose existing client or create new one
-2. **Enter Keywords**: Add search terms (one per line)
-3. **Configure Schedule**: Set times and days for automated runs
-4. **Run Now**: Execute immediate scraping
-5. **Save Schedule**: Enable automated execution
+git clone https://github.com/wafuzio/RMN.git
+cd Amazon_Scrape
+pip install -r requirements.txt
+playwright install
+Bundle (optional)
 
-### Web Interface
-
-#### Start the Web Server
 ```bash
-# With vendored dependencies
-python builder_server.py
+# Build alias app (runs live source code, updates automatically)
+python3 setup.py py2app -A
 
-# Access at http://localhost:5006
+# Build standalone app (frozen, doesn't update with code changes)
+python3 setup.py py2app
 ```
+Usage (GUI)
+Select Retailer (defaults to Kroger)
+Choose Client or click New…
+Paste keywords (one per line)
+Start Scraping
+Save Schedule (optional)
+Outputs are written to output///...
 
-#### Web Features
-- **Scheduler Dashboard**: Visual schedule management
-- **Client Overview**: Multi-client monitoring
-- **Conflict Detection**: Real-time scheduling conflicts
-- **API Access**: RESTful endpoints for integration
+Session Persistence (CRITICAL)
+Most retailer CDN images require a valid session. If the extractor runs with a fresh browser context:
 
-### Automation & Scheduling
+Page.goto timeouts / net::ERR_HTTP2_PROTOCOL_ERROR
+Only Carousel images (page capture), no TOA/Sky
+GUI appears stuck on “Processing saved HTML files…”
+Fix: run the extractor with the SAME persistent profile as the scraper.
 
-#### Background Daemon
+Per‑retailer profiles
+
+Kroger: export KROGER_PROFILE_DIR="/Users/<you>/ChromeProfiles/kroger_clean_profile"
+Amazon: export AMZ_PROFILE_DIR="/Users/<you>/Documents/Amazon_Scrape/profiles/amazon"
+For additional retailers, each adapter declares its profile env var (e.g., WMT_PROFILE_DIR for Walmart).
+
+Setting up retailer profiles:
+
 ```bash
-# Start scheduler daemon
+# For Amazon
+./scripts/setup_amazon_profile.sh
+# Or manually:
+# python3 auth/retailer_auth.py --retailer amazon --profile-dir ~/Documents/Amazon_Scrape/profiles/amazon
+```
+The GUI passes --profile-dir automatically if the env var exists or a default profile path is found. Extractor logic uses:
+
+python
+p.chromium.launch_persistent_context(
+  user_data_dir=args.profile_dir, channel="chrome", headless=...
+)
+Manual verification Run the last command printed in the GUI log and add --profile-dir:
+
+APP_PY="/Users/<you>/Documents/Amazon_Scrape/dist/Retail Ad Monitor.app/Contents/MacOS/python"
+JSON="/Users/<you>/Documents/Amazon_Scrape/output/<retailer>/<client>/runs/run_results_...json"
+HTML="/Users/<you>/Documents/Amazon_Scrape/output/<retailer>/<client>/runs/search_results_...html"
+PROFILE="/Users/<you>/ChromeProfiles/kroger_clean_profile"
+
+"$APP_PY" ./extractors/screenshot_toa_image.py \
+  --json "$JSON" --html "$HTML" \
+  --output "/Users/<you>/Documents/Amazon_Scrape/output/<retailer>/<client>" \
+  --headless --time-window 45 --browser-lock-timeout 600 \
+  --profile-dir "$PROFILE"
+Logs & Live Visibility
+GUI log:
+~/Documents/Amazon_Scrape/logs/<retailer>/keyword_input.log
+tail -f ~/Documents/Amazon_Scrape/logs/<retailer>/keyword_input.log
+Extractor logs:
+~/Documents/Amazon_Scrape/logs/<retailer>/image_extract_YYYYMMDD_HHMMSS.log
+EX=$(ls -t ~/Documents/Amazon_Scrape/logs/<retailer>/image_extract_*.log | head -n1); tail -f "$EX"
+Locks:
+~/Documents/Amazon_Scrape/logs/<retailer>/locks/*_image_extraction.lock
+find ~/Documents/Amazon_Scrape/logs/<retailer>/locks -name "*_image_extraction.lock" -print -delete
+Success rule:
+“Success” requires at least one TOA or Skyscraper (Carousel alone triggers retry/warn).
+Watchdog:
+6‑minute post‑processing cap to avoid indefinite “Processing saved HTML files…”
+Scheduling & Daemon
+Start daemon:
+
 ./start_scheduler.sh
+Check status:
 
-# Check daemon status
 ps aux | grep scheduler_daemon
-```
+tail -f output/<retailer>/<client>/scheduler.log
+Conflict handling:
 
-#### Manual Operations
-```bash
-# Process saved HTML files
-python process_saved_html.py --input-dir output/<client> --output-dir output/<client>
+Schedules are retailer‑aware and conflict‑aware (5‑minute windows). The GUI filters/disables unavailable minute values and disables Save if conflicts exist.
+Troubleshooting
+“Processing saved HTML files…” hangs
 
-# Create TOA-only images
-python capture_toa_images.py <client_name>
+Stale lock: delete *_image_extraction.lock (see above).
+Cookie‑less extractor: missing --profile-dir (see Session Persistence).
+CDN timeouts: without cookies the JPGs won’t stream.
+Check quickly:
 
-# Run diagnostics
-python test_kroger_diagnostics.py
-```
+tail -f ~/Documents/Amazon_Scrape/logs/<retailer>/keyword_input.log
+EX=$(ls -t ~/Documents/Amazon_Scrape/logs/<retailer>/image_extract_*.log | head -n1); tail -f "$EX"
+Only Carousel images
 
-## Configuration
+Carousel is page‑side; TOA/Sky require CDN JPGs. Pass the profile and retry.
+“Page.goto: net::ERR_HTTP2_PROTOCOL_ERROR”
 
-### Client Management
-- **Client History**: Stored in `output/client_history.json`
-- **Schedule Config**: Per-client in `output/<client>/schedule_config.json`
-- **Logs**: Client-specific logs in `output/<client>/scheduler.log`
+CDN refusing streams; use persistent context with cookies.
+App‑bundle Python doesn’t have browsers
 
-### Styling Synchronization
-The desktop app automatically syncs with web CSS variables:
-```css
-/* static/css/style.css */
-:root {
-    --primary-color: #2962ff;
-    --secondary-color: #455a64;
-    --background-color: #f5f7fa;
-    --card-background: #ffffff;
-}
-```
+APP_PY="/Users/<you>/Documents/Amazon_Scrape/dist/Retail Ad Monitor.app/Contents/MacOS/python"
+"$APP_PY" -m pip install playwright
+"$APP_PY" -m playwright install chromium
+Finder doesn’t pass env
 
-### Builder.io Integration
-1. **Start Server**: `python builder_server.py`
-2. **Configure Builder**: Point to `http://localhost:5006`
-3. **Access APIs**: Use `/api/` endpoints for data and images
+Apps launched from Finder don’t inherit your shell. The GUI tries a default profile; safer during debugging:
+export KROGER_PROFILE_DIR=... then run python keyword_input.py, or add a launcher wrapper that sets env.
+Verify cookies
 
-## Development
+Print cookie count in the extractor (optional): Cookies for : N (should be >0)
+Extending to a new retailer (adapter)
+Add a file retailers//adapter.py implementing three hooks and register it.
 
-### Adding New Ad Extractors
-1. **Create Extractor**:
-   ```bash
-   cp ad_extractors/template_extractor.py ad_extractors/new_extractor.py
-   ```
+Example skeleton:
 
-2. **Implement Logic**:
-   ```python
-   class NewExtractor(BaseExtractor):
-       def extract_ads(self, soup, url):
-           # Custom extraction logic
-           return ads
-   ```
+python
+# retailers/walmart/adapter.py
+from core.retailers import RetailerAdapter, register
 
-3. **Register Extractor**:
-   ```python
-   # In kroger_ad_core.py
-   from ad_extractors.new_extractor import NewExtractor
-   ```
+class WalmartAdapter(RetailerAdapter):
+    slug = "walmart"
+    display_name = "Walmart"
+    profile_env = "WMT_PROFILE_DIR"
 
-### Building App Bundle
-```bash
-# Update icon (optional)
-cp new_icon.png icon2.png
+    def search_and_capture(self, keyword, ctx) -> bool:
+        # implement Playwright flow (or wrap an existing script)
+        ...
 
-# Build with PyInstaller
-pyinstaller kroger_toa_scraper.spec --noconfirm
+    def collect_pairs_for_run(self, ctx, run_start_ts: float):
+        # return list[(json_path, html_path)]
+        ...
 
-# Register with macOS
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "dist/Kroger TOA Scraper.app"
-```
+    def extract_images(self, json_path, html_path, ctx) -> dict:
+        # run screenshot scripts, pass --profile-dir, return counts
+        ...
 
-### Testing
-```bash
-# Run test suite
-python test_diagnostics.py
-python test_kroger_diagnostics.py
-python test_session_persistence.py
+register(WalmartAdapter())
+The GUI picks up the new retailer automatically via the registry. You can allow multi‑select and iterate adapters per run.
 
-# Test GUI components
-python test_tkinter.py
-```
+Backward Compatibility & Migration
+Old schedules (output/<client>/schedule_config.json) are still read and treated as retailer="kroger".
+New saves write output/<retailer>/<client>/schedule_config.json with "retailer" included.
+Extractor and scraper scripts remain unchanged; the Kroger adapter wraps them.
+Web Interface & API (optional)
+Start:
 
-## Troubleshooting
+python web/builder_server.py
+# http://localhost:5006
+Endpoints:
 
-### Common Issues
+GET / – scheduler UI
+GET /api/ads
+GET /api/ads/
+GET /api/nfl-grid/
+GET /api/images//
+GET /api/toa//
+CORS enabled for Builder.io.
 
-**App Won't Launch from Dock**
-- Rebuild app bundle: `pyinstaller kroger_toa_scraper.spec --noconfirm`
-- Re-register with Launch Services: `lsregister -f "dist/Kroger TOA Scraper.app"`
+Known Issues
+In some runs TOA/Sky can over‑collect. Recommended mitigations:
+Deduplicate by creative ID/viewport region
+Reduce concurrency; debounce per keyword
+Planned: stricter creative hashing
+License
+Proprietary – Internal use only
 
-**Scheduler Conflicts**
-- Check daemon status: `ps aux | grep scheduler_daemon`
-- Review logs: `tail -f output/<client>/scheduler.log`
-- Use web interface for visual conflict resolution
+Appendix: Handy Commands
+Tail GUI log
 
-**Builder.io Connection Issues**
-- Verify Flask server: `curl http://localhost:5006`
-- Check CORS headers in browser dev tools
-- Ensure vendored dependencies: `ls libs/`
+tail -f ~/Documents/Amazon_Scrape/logs/<retailer>/keyword_input.log
+Tail latest extractor log
 
-**Styling Issues**
-- Desktop app reads CSS variables from `static/css/style.css`
-- Rebuild app after CSS changes
-- Check font availability: Inter font family
+EX=$(ls -t ~/Documents/Amazon_Scrape/logs/<retailer>/image_extract_*.log | head -n1); tail -f "$EX"
+Clear stale image locks
 
-### Logs & Diagnostics
-- **App Logs**: Console output when running from terminal
-- **Scheduler Logs**: `output/<client>/scheduler.log`
-- **Daemon Logs**: Check system logs for `scheduler_daemon.py`
-- **Web Logs**: Flask server console output
+find ~/Documents/Amazon_Scrape/logs/<retailer>/locks -name "*_image_extraction.lock" -print -delete
+Run extractor manually with profile
 
-## Known Issues
-- **TOA and Skyscraper pulling too many times**: In some runs, the TOA and skyscraper extractors may over-collect, resulting in duplicate/extra captures beyond the intended single pass per page/keyword. This is under investigation.
-  - Symptom: Repeated detections or multiple images/log entries for the same ad position.
-  - Temporary mitigation: Limit concurrent runs, review `output/<client>/scheduler.log` for repetition, and deduplicate outputs by timestamp or filename when aggregating.
-  - Planned fix: Add per-keyword/per-page debouncing and stricter deduplication by creative selector/ID and viewport region.
-
-## License
-Proprietary - Internal use only
+APP_PY="/Users/<you>/Documents/Amazon_Scrape/dist/Retail Ad Monitor.app/Contents/MacOS/python"
+"$APP_PY" ./extractors/screenshot_toa_image.py --json <JSON> --html <HTML> --output <OUT> \
+  --headless --time-window 45 --browser-lock-timeout 600 \
+  --profile-dir "/Users/<you>/ChromeProfiles/kroger_clean_profile"

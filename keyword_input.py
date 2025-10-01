@@ -4,16 +4,40 @@ Keyword Input GUI
 A simple popup interface for entering keywords to scrape.
 """
 
-import tkinter as tk
-from tkinter import messagebox, simpledialog, ttk, scrolledtext
-from tkinter import font as tkfont
-import os
-import sys
+# Guards must be set BEFORE importing tkinter to prevent Tk's console/menubar init in embedded app
+import os, sys
+os.environ.setdefault("TK_CONSOLE", "0")
+os.environ.setdefault("TK_NO_CONSOLE", "1")
+# Help Tk find the correct embedded interpreter (prevents some weird Cocoa/Tk state)
+os.environ.setdefault("PYTHONEXECUTABLE", sys.executable)
+
+# --- ultra-early boot log for embedded debugging ---
+import time, traceback
+_logdir = os.path.join(os.environ.get("SCRAPER_HOME", os.path.expanduser("~/Documents/Amazon_Scrape")), "logs")
+os.makedirs(_logdir, exist_ok=True)
+_gui_boot = os.path.join(_logdir, "gui_boot.log")
+def _glog(msg):
+    try:
+        with open(_gui_boot, "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+    except Exception:
+        pass
+
+_glog("START keyword_input.py")
+try:
+    _glog("before tkinter import")
+    import tkinter as tk
+    from tkinter import messagebox, simpledialog, ttk, scrolledtext
+    from tkinter import font as tkfont
+    _glog("after tkinter import")
+except Exception as e:
+    _glog(f"tkinter import failed: {e}\n{traceback.format_exc()}")
+    raise
+
 import json
 import logging
 from datetime import datetime
 import subprocess
-import time
 import threading
 import re
 
@@ -102,6 +126,14 @@ PALETTE = {
     }
 }
 
+# Retailer adapter registry
+from core.retailers import get as get_retailer_adapter, list_adapters
+from core.run_context import RunContext
+from core.paths import output_dir_for, logs_dir_for
+# ensure retailer adapters are registered
+import retailers.kroger.adapter  # noqa: F401
+import retailers.amazon.adapter  # noqa: F401
+
 # Optional: try eager imports; if they fail, globals stay None and the lazy path runs later
 try:
     from kroger_search_and_capture import search_and_capture as ksc_search_and_capture
@@ -114,10 +146,18 @@ except Exception:
     pass
 
 class KeywordInputApp:
+    def _safe_ttk_themes(self):
+        """Return list of safe ttk themes (exclude aqua on macOS to avoid menu crash)."""
+        names = list(self.style.theme_names())
+        # Tk + macOS: aqua can crash when building the menubar
+        if sys.platform == 'darwin' and 'aqua' in names:
+            names.remove('aqua')
+        return names
+    
     def __init__(self, root):
         """Initialize the application"""
         self.root = root
-        self.root.title("Kroger TOA Scraper")
+        self.root.title("Retail Ad Monitor")
         self.root.geometry("600x700")
         self.root.minsize(600, 700)
         
@@ -139,62 +179,37 @@ class KeywordInputApp:
 
         # ttk styles matching web look
         self.style = ttk.Style()
-        try:
-            self.style.theme_use('clam')
-        except Exception:
-            pass
-            
-        def apply_theme(style: ttk.Style, mode="light"):
-            c = PALETTE[mode]
-            # Base frames/labels
-            style.configure('App.TFrame', background=c["bg"])
-            style.configure('Card.TFrame', background=c["card"])
-            style.configure('Card.TLabelframe', background=c["card"], relief='solid', borderwidth=1)
-            style.configure('Card.TLabelframe.Label', background=c["card"], foreground=c["muted"], font=("Inter", 10, "bold"))
-            style.configure('Body.TLabel', background=c["bg"], foreground=c["muted"])
-            style.configure('TLabel', background=c["card"], foreground=c["muted"])
-
-            # Combobox (readable text + field bg)
-            style.configure('App.TCombobox',
-                fieldbackground=c["field_bg"], foreground=c["field_fg"], background=c["field_bg"])
-            style.map('App.TCombobox',
-                fieldbackground=[('readonly', c["field_bg"])],
-                foreground=[('readonly', c["field_fg"])])
-
-            # Buttons
-            style.configure('Primary.TButton',
-                background=c["primary"], foreground='white',
-                padding=(14, 8), font=("Inter", 11, "bold"), borderwidth=0)
-            style.map('Primary.TButton',
-                background=[('active', c["primary_h"]), ('disabled', '#9aa5b1')],
-                foreground=[('disabled', '#ffffff')])
-
-            style.configure('Secondary.TButton',
-                background=c["secondary"], foreground='white',
-                padding=(14, 8), font=("Inter", 11, "bold"), borderwidth=0)
-            style.map('Secondary.TButton',
-                background=[('active', c["secondary_h"]), ('disabled', '#9aa5b1')],
-                foreground=[('disabled', '#ffffff')])
-
-            style.configure('Danger.TButton',
-                background=c["danger"], foreground='white',
-                padding=(14, 8), font=("Inter", 11, "bold"), borderwidth=0)
-            style.map('Danger.TButton',
-                background=[('active', c["danger_h"]), ('disabled', '#fca5a5')],
-                foreground=[('disabled', '#ffffff')])
-
-            # Progressbar
-            style.configure('blue.Horizontal.TProgressbar',
-                troughcolor=c["trough"], background=c["bar"], bordercolor=c["trough"], lightcolor=c["bar"], darkcolor=c["bar"])
-
-            # Global bg for root window (non-ttk)
+        
+        # Try to use a theme that honors color overrides (avoid 'aqua' which ignores most styling)
+        theme_applied = False
+        for tname in self._safe_ttk_themes():
             try:
-                self.root.configure(bg=c["bg"])
-            except Exception:
-                pass
-                
+                self.style.theme_use(tname)
+                print(f"Applied theme: {tname}")
+                theme_applied = True
+                break
+            except Exception as e:
+                print(f"Failed to apply theme {tname}: {e}")
+        
+        if not theme_applied:
+            print("Warning: Could not apply any compatible theme. UI styling may be limited.")
+            
         # Apply the theme
-        apply_theme(self.style, mode=self.theme)
+        self.apply_theme(self.style, mode=self.theme)
+        
+        # Load saved UI prefs and apply (ttk theme + our palette)
+        prefs = self._load_ui_prefs()
+        tt = prefs.get("ttk_theme")
+        # Coerce aqua -> clam on macOS to avoid crash
+        if sys.platform == 'darwin' and tt == 'aqua':
+            tt = 'clam'
+            self._save_ui_prefs(ttk_theme=tt, palette=prefs.get("palette", "light"))
+        if tt and tt in self.style.theme_names():
+            self.apply_ttk_theme(tt)
+        # apply our palette (light/dark)
+        self.apply_palette(prefs.get("palette", "light"))
+        # Build menubar so you can change themes from the macOS top bar
+        self._build_menubar()
         
         # Use the path resolver function
         self.project_dir = get_base_dir()
@@ -259,6 +274,22 @@ class KeywordInputApp:
         )
         self.new_client_btn.state(['!disabled'])  # ensure enabled
         self.new_client_btn.pack(side=tk.LEFT)
+        
+        # Retailer dropdown (default: Kroger)
+        adapters = list_adapters()
+        self._retailer_by_name = {a.display_name: a.slug for a in adapters}
+        retailer_names = [a.display_name for a in adapters]
+
+        self.retailer_var = tk.StringVar(value="Kroger")
+        retailer_combo = ttk.Combobox(
+            client_frame,
+            textvariable=self.retailer_var,
+            values=retailer_names,
+            width=12,
+            style='App.TCombobox',
+            state="readonly",
+        )
+        retailer_combo.pack(side=tk.LEFT, padx=(10, 6))
         
         # Instructions
         instructions = ttk.Label(
@@ -449,8 +480,13 @@ class KeywordInputApp:
         # Split keywords by newlines and clean them
         keywords = [kw.strip() for kw in keywords_text.split('\n') if kw.strip()]
         
-        # Create output directory if it doesn't exist
-        output_dir = os.path.join(get_base_dir(), "output", folder_name)
+        # Get retailer for proper output path
+        retailer_name = self.retailer_var.get().strip() or "Kroger"
+        retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
+        
+        # Create output directory using retailer-scoped path
+        base = get_base_dir()
+        output_dir = output_dir_for(base, retailer_slug, folder_name)
         os.makedirs(output_dir, exist_ok=True)
         
         # Save keywords to file
@@ -483,15 +519,34 @@ class KeywordInputApp:
             # Resolve paths
             client_type = self.client_var.get().strip()
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client_type)
-            output_dir = os.path.join(get_base_dir(), "output", folder_name)
-            os.makedirs(output_dir, exist_ok=True)
+
+            # Resolve retailer + adapter
+            retailer_name = self.retailer_var.get().strip() or "Kroger"
+            retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
+            adapter = get_retailer_adapter(retailer_slug)
+
+            base = get_base_dir()
+            out_dir = output_dir_for(base, retailer_slug, folder_name)
+            logs_dir = logs_dir_for(base, retailer_slug)
+
+            profile_dir = os.environ.get(adapter.profile_env) or os.environ.get("KROGER_PROFILE_DIR") or DEFAULT_PROFILE
+
+            ctx = RunContext(
+                retailer=retailer_slug,
+                client=folder_name,
+                base_dir=base,
+                output_dir=out_dir,
+                runs_dir=os.path.join(out_dir, "runs"),
+                logs_dir=logs_dir,
+                profile_dir=profile_dir if os.path.isdir(profile_dir) else None,
+                script_dir=os.path.dirname(os.path.abspath(__file__)),
+            )
+            output_dir = ctx.output_dir  # keep your existing variable name for reuse
+            runs_dir = ctx.runs_dir
             
             # Record run start time and baseline JSON set
             run_start_ts = time.time()
             import glob, re
-            
-            runs_dir = os.path.join(output_dir, "runs")
-            os.makedirs(runs_dir, exist_ok=True)
             
             # Baseline before we create any new files this run
             baseline_json = set(glob.glob(os.path.join(runs_dir, "run_results_*.json")))
@@ -557,24 +612,16 @@ class KeywordInputApp:
                             from kroger_search_and_capture import search_and_capture as ksc_search_and_capture
 
                         if ksc_search_and_capture is not None:
-                            ok = ksc_search_and_capture(keyword, output_dir)
+                            # Use adapter instead of direct call
+                            ok = adapter.search_and_capture(keyword, ctx)
                             if ok:
-                                # Find JSONs created since we started, minus the baseline and already seen
-                                current_json = set(glob.glob(os.path.join(runs_dir, "run_results_*.json")))
-                                new_jsons = sorted(list(current_json - baseline_json - seen_json), key=os.path.getmtime)
-                                
-                                for jpath in new_jsons:
-                                    # Match HTML by filename pattern (same timestamp token)
-                                    hpath = jpath.replace("run_results_", "search_results_").replace(".json", ".html")
-                                    if not os.path.exists(hpath):
-                                        # Fallback: pick newest search_results_*.html nearby (only if created after we started)
-                                        hcands = [p for p in glob.glob(os.path.join(runs_dir, "search_results_*.html"))
-                                                  if os.path.getmtime(p) >= run_start_ts - 2]
-                                        hpath = max(hcands, key=os.path.getmtime) if hcands else None
-                                    
-                                    if hpath and os.path.exists(hpath):
-                                        run_pairs.append((jpath, hpath))
-                                        seen_json.add(jpath)
+                                # Use adapter to collect pairs for this run
+                                new_pairs = adapter.collect_pairs_for_run(ctx, run_start_ts)
+                                # De-dup by seen_json
+                                for (j, h) in new_pairs:
+                                    if j not in seen_json:
+                                        run_pairs.append((j, h))
+                                        seen_json.add(j)
                                 
                                 scraped = True
                                 success_count += 1
@@ -585,7 +632,7 @@ class KeywordInputApp:
                             # Fallback: subprocess
                             cmd = [
                                 sys.executable,
-                                "kroger_search_and_capture.py",
+                                "archived/kroger_search_and_capture.py",
                                 "--search", keyword,
                                 "--output-dir", output_dir,
                             ]
@@ -682,90 +729,22 @@ class KeywordInputApp:
                     per_file_summary = []
                     
                     for idx, (json_path, html_path) in enumerate(run_pairs, start=1):
-                        # Choose extractor (prefer modern)
-                        script_dir = os.path.dirname(os.path.abspath(__file__))
-                        ad_script = os.path.join(script_dir, "screenshot_ad_images.py")
-                        toa_script = os.path.join(script_dir, "screenshot_toa_image.py")
-                        script_to_run = ad_script if os.path.exists(ad_script) else (toa_script if os.path.exists(toa_script) else None)
-                        if not script_to_run:
-                            last_error = "No screenshot tool found (screenshot_ad_images.py / screenshot_toa_image.py)."
-                            break
-                        
-                        cmd = [
-                            sys.executable, script_to_run,
-                            "--json", json_path,
-                            "--html", html_path,
-                            "--output", output_dir,
-                            "--headless",
-                            "--no-lock",
-                            "--time-window", "45",
-                            "--browser-lock-timeout", "600",
-                        ]
-                        
-                        # Pass persistent Chrome profile
-                        profile_dir = os.environ.get("KROGER_PROFILE_DIR")
-                        if not profile_dir:
-                            default_profile = "/Users/dan.maguire/ChromeProfiles/kroger_clean_profile"
-                            if os.path.isdir(default_profile):
-                                profile_dir = default_profile
-                        
-                        env = os.environ.copy()
-                        env.setdefault("SCRAPER_HOME", get_base_dir())
-                        env.setdefault("PYTHONUNBUFFERED", "1")
-                        env.setdefault("PYTHONIOENCODING", "utf-8")  # ensure child writes UTF-8
-                        if profile_dir and os.path.isdir(profile_dir):
-                            cmd += ["--profile-dir", profile_dir]
-                            env["KROGER_PROFILE_DIR"] = profile_dir
-                            print(f"🔑 Using profile: {profile_dir}")
-                        
-                        # Stream logs per pair
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        extract_log = os.path.join(get_base_dir(), "logs", f"image_extract_{timestamp}_{idx}.log")
-                        os.makedirs(os.path.dirname(extract_log), exist_ok=True)
-                        
                         if progress_label.winfo_exists():
-                            progress_label.config(text=f"[{idx}/{len(run_pairs)}] Extracting images… (log: image_extract_{timestamp}_{idx}.log)")
-                        popup.update()
+                            progress_label.config(text=f"[{idx}/{len(run_pairs)}] Extracting images...")
+                            popup.update()
                         
-                        pair_start = time.time()
-                        with open(extract_log, "w", encoding="utf-8") as lf:
-                            lf.write(f"=== START {datetime.now().isoformat()} ===\n")
-                            lf.write(f"CMD: {' '.join(cmd)}\nCWD: {script_dir}\n\n")
-                            proc = subprocess.Popen(
-                                cmd, env=env, cwd=script_dir,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, encoding="utf-8", errors="replace",
-                                bufsize=1, universal_newlines=True,
-                            )
-                            for line in iter(proc.stdout.readline, ""):
-                                lf.write(line)
-                                trimmed = line.strip()
-                                if trimmed and progress_label.winfo_exists():
-                                    short = (trimmed[:100] + "…") if len(trimmed) > 100 else trimmed
-                                    progress_label.config(text=f"[{idx}/{len(run_pairs)}] {short}")
-                                    popup.update()
-                            try:
-                                proc.wait(timeout=240)
-                            except subprocess.TimeoutExpired:
-                                proc.kill()
-                                lf.write("\n❌ Timeout: 240s\n")
-                            lf.write(f"Exit code: {proc.returncode}\n")
-                            lf.write(f"Elapsed: {int(time.time()-pair_start)}s\n")
-                            lf.write(f"=== END {datetime.now().isoformat()} ===\n")
-                        
-                        # Count only files produced in this pair (by mtime)
-                        toa_files = [p for p in glob.glob(os.path.join(output_dir, "TOA", "*.png"))
-                                     if os.path.getmtime(p) >= pair_start - 1]
-                        sky_files = [p for p in glob.glob(os.path.join(output_dir, "Skyscraper", "*.png"))
-                                     if os.path.getmtime(p) >= pair_start - 1]
-                        car_files = [p for p in glob.glob(os.path.join(output_dir, "Carousel", "*.png"))
-                                     if os.path.getmtime(p) >= pair_start - 1]
-                        
-                        n_toa, n_sky, n_car = len(toa_files), len(sky_files), len(car_files)
+                        # Use adapter to extract images
+                        res = adapter.extract_images(json_path, html_path, ctx)
+                        n_toa, n_sky, n_car = res.get("toa", 0), res.get("sky", 0), res.get("car", 0)
                         total_toa += n_toa
                         total_sky += n_sky
                         total_car += n_car
                         per_file_summary.append((os.path.basename(json_path), n_toa, n_sky, n_car))
+                        
+                        # Update progress with results
+                        if progress_label.winfo_exists():
+                            progress_label.config(text=f"[{idx}/{len(run_pairs)}] Extracted: TOA={n_toa}, Sky={n_sky}, Car={n_car}")
+                            popup.update()
                     
                     # Summarize across all terms from this run
                     if (total_toa + total_sky) > 0:
@@ -852,46 +831,28 @@ class KeywordInputApp:
         output_path = os.path.join(get_base_dir(), "output")
         if not os.path.exists(output_path):
             return scheduled_times
-            
-        # Scan all client directories for schedule configs
-        for client_dir in os.listdir(output_path):
-            client_path = os.path.join(output_path, client_dir)
-            if not os.path.isdir(client_path):
-                continue
-                
-            schedule_file = os.path.join(client_path, "schedule_config.json")
-            if not os.path.exists(schedule_file):
-                continue
-                
+
+        def _process_schedule(file_path, client_name_guess):
             try:
-                with open(schedule_file, "r", encoding="utf-8") as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
-                    
-                client_name = config.get("client", client_dir)
-                
-                # Skip the current client if specified
-                if exclude_client and client_name == exclude_client:
-                    continue
-                    
-                # Extract times and days
+                retailer = config.get("retailer", "kroger")
+                client_name = config.get("client", client_name_guess)
                 times = config.get("times", [])
                 days = config.get("days", [])
                 
+                # Skip the current client if specified
+                if exclude_client and client_name == exclude_client:
+                    return
+                    
                 for hour_str, minute_str, ampm in times:
                     try:
-                        hour_12 = int(hour_str)
-                        minute = int(minute_str)
-                        
-                        # Convert to 24-hour format
+                        hour_12 = int(hour_str); minute = int(minute_str)
                         hour_24 = hour_12
-                        if ampm == "PM" and hour_12 < 12:
-                            hour_24 += 12
-                        elif ampm == "AM" and hour_12 == 12:
-                            hour_24 = 0
-                            
-                        # Add to scheduled times for each day
+                        if ampm == "PM" and hour_12 < 12: hour_24 += 12
+                        elif ampm == "AM" and hour_12 == 12: hour_24 = 0
+                        # 5-minute window
                         for day in days:
-                            # Create 5-minute window around the scheduled time
                             for offset in range(-2, 3):  # -2, -1, 0, 1, 2 minutes
                                 conflict_minute = minute + offset
                                 conflict_hour = hour_24
@@ -910,13 +871,32 @@ class KeywordInputApp:
                                 elif conflict_hour < 0:
                                     conflict_hour = 23
                                     
-                                scheduled_times.add((day, conflict_hour, conflict_minute))
-                                
+                                scheduled_times.add((retailer, day, conflict_hour, conflict_minute))
                     except (ValueError, TypeError):
                         continue
-                        
-            except (json.JSONDecodeError, IOError):
+            except Exception:
+                pass
+
+        # New layout: output/<retailer>/<client>/schedule_config.json
+        for rdir in os.listdir(output_path):
+            rpath = os.path.join(output_path, rdir)
+            if not os.path.isdir(rpath):
                 continue
+            for cdir in os.listdir(rpath):
+                cpath = os.path.join(rpath, cdir)
+                if not os.path.isdir(cpath):
+                    continue
+                sched = os.path.join(cpath, "schedule_config.json")
+                if os.path.exists(sched):
+                    _process_schedule(sched, cdir)
+
+        # Back-compat: old layout output/<client>/schedule_config.json
+        for cdir in os.listdir(output_path):
+            cpath = os.path.join(output_path, cdir)
+            if os.path.isdir(cpath):
+                sched = os.path.join(cpath, "schedule_config.json")
+                if os.path.exists(sched):
+                    _process_schedule(sched, cdir)
                 
         return scheduled_times
     
@@ -924,8 +904,13 @@ class KeywordInputApp:
         """Check if a specific time conflicts with existing schedules"""
         scheduled_times = self.get_all_scheduled_times(exclude_client)
         
+        # Get current retailer
+        retailer_name = self.retailer_var.get().strip() or "Kroger"
+        retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
+        
         for day in days:
-            if (day, hour_24, minute) in scheduled_times:
+            # Check for conflicts in the same retailer
+            if (retailer_slug, day, hour_24, minute) in scheduled_times:
                 return True
         return False
     
@@ -975,10 +960,12 @@ class KeywordInputApp:
         elif ampm == "AM" and hour_12 == 12:
             hour_24 = 0
 
+        retailer_name = self.retailer_var.get().strip() or "Kroger"
+        retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
         scheduled = self.get_all_scheduled_times(exclude_client=exclude_client)
         allowed = []
         for m in range(0, 60, 5):
-            conflicted = any((day, hour_24, m) in scheduled for day in days)
+            conflicted = any((retailer_slug, day, hour_24, m) in scheduled for day in days)
             if not conflicted:
                 allowed.append(f"{m:02d}")
         return allowed
@@ -992,6 +979,8 @@ class KeywordInputApp:
         if not selected_days:
             return True
 
+        retailer_name = self.retailer_var.get().strip() or "Kroger"
+        retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
         scheduled = self.get_all_scheduled_times(exclude_client=selected_client)
         for hour_var, minute_var, ampm_var in self.time_vars:
             try:
@@ -1003,7 +992,7 @@ class KeywordInputApp:
                 if a == "PM" and h < 12: h24 += 12
                 if a == "AM" and h == 12: h24 = 0
                 for day in selected_days:
-                    if (day, h24, m) in scheduled:
+                    if (retailer_slug, day, h24, m) in scheduled:
                         return True
             except Exception:
                 return True
@@ -1033,6 +1022,83 @@ class KeywordInputApp:
                 self.schedule_button.config(state="disabled")
             except Exception:
                 pass
+    
+    def apply_theme(self, style: ttk.Style, mode="light"):
+        """Apply theme styling to all widgets"""
+        c = PALETTE[mode]
+        
+        # Print available themes for debugging
+        print(f"Available themes: {style.theme_names()}")
+        print(f"Current theme: {style.theme_use()}")
+        
+        # Base frames/labels
+        style.configure('App.TFrame', background=c["bg"])
+        style.configure('Card.TFrame', background=c["card"])
+        style.configure('Card.TLabelframe', background=c["card"], relief='solid', borderwidth=1)
+        style.configure('Card.TLabelframe.Label', background=c["card"], foreground=c["muted"], font=("Inter", 10, "bold"))
+        style.configure('Body.TLabel', background=c["bg"], foreground=c["muted"])
+        style.configure('TLabel', background=c["card"], foreground=c["muted"])
+        
+        # Apply styles to standard widgets too
+        style.configure('TFrame', background=c["bg"])
+        style.configure('TLabelframe', background=c["card"], bordercolor=c["border"])
+        style.configure('TLabelframe.Label', foreground=c["text"])
+
+        # Combobox (readable text + field bg)
+        style.configure('App.TCombobox',
+            fieldbackground=c["field_bg"], foreground=c["field_fg"], background=c["field_bg"])
+        style.map('App.TCombobox',
+            fieldbackground=[('readonly', c["field_bg"])],
+            foreground=[('readonly', c["field_fg"])])
+
+        # Buttons - enhanced for macOS visibility
+        # Standard button style override
+        style.configure('TButton', 
+            background=c["secondary"], foreground='white',
+            padding=(10, 6), font=("Inter", 11), borderwidth=1)
+        style.map('TButton',
+            background=[('active', c["secondary_h"]), ('disabled', '#9aa5b1')],
+            foreground=[('disabled', '#ffffff')])
+            
+        # Primary button (blue)
+        style.configure('Primary.TButton',
+            background=c["primary"], foreground='white',
+            padding=(14, 8), font=("Inter", 11, "bold"), borderwidth=1,
+            relief="raised")
+        style.map('Primary.TButton',
+            background=[('active', c["primary_h"]), ('pressed', c["primary_h"]), ('disabled', '#9aa5b1')],
+            foreground=[('disabled', '#ffffff')],
+            relief=[('pressed', 'sunken'), ('active', 'raised')])
+
+        # Secondary button (gray)
+        style.configure('Secondary.TButton',
+            background=c["secondary"], foreground='white',
+            padding=(14, 8), font=("Inter", 11, "bold"), borderwidth=1,
+            relief="raised")
+        style.map('Secondary.TButton',
+            background=[('active', c["secondary_h"]), ('pressed', c["secondary_h"]), ('disabled', '#9aa5b1')],
+            foreground=[('disabled', '#ffffff')],
+            relief=[('pressed', 'sunken'), ('active', 'raised')])
+
+        # Danger button (red)
+        style.configure('Danger.TButton',
+            background=c["danger"], foreground='white',
+            padding=(14, 8), font=("Inter", 11, "bold"), borderwidth=1,
+            relief="raised")
+        style.map('Danger.TButton',
+            background=[('active', c["danger_h"]), ('pressed', c["danger_h"]), ('disabled', '#fca5a5')],
+            foreground=[('disabled', '#ffffff')],
+            relief=[('pressed', 'sunken'), ('active', 'raised')])
+
+        # Progressbar
+        style.configure('blue.Horizontal.TProgressbar',
+            troughcolor=c["trough"], background=c["bar"], bordercolor=c["trough"], lightcolor=c["bar"], darkcolor=c["bar"])
+
+        # Global bg for root window (non-ttk)
+        try:
+            self.root.configure(bg=c["bg"])
+        except Exception:
+            pass
     
     def setup_signal_handler(self):
         """Set up signal handler for dock icon clicks"""
@@ -1337,9 +1403,12 @@ class KeywordInputApp:
     def setup_logging(self, client=None):
         """Set up logging to file for scheduler events"""
         if client:
-            # Create client-specific log directory
+            # Create client-specific log directory (retailer-scoped)
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client)
-            log_dir = os.path.join(get_base_dir(), "output", folder_name)
+            # Default to kroger for backward compatibility
+            retailer_slug = "kroger"
+            base = get_base_dir()
+            log_dir = output_dir_for(base, retailer_slug, folder_name)
             os.makedirs(log_dir, exist_ok=True)
             log_file = os.path.join(log_dir, "scheduler.log")
             
@@ -1597,7 +1666,14 @@ class KeywordInputApp:
         # If client is specified, try to load client-specific config
         if client:
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client)
-            client_schedule_file = os.path.join(get_base_dir(), "output", folder_name, "schedule_config.json")
+            # Try retailer-scoped path first (new), then fall back to old path
+            base = get_base_dir()
+            retailer_slug = "kroger"  # Default for backward compatibility
+            client_schedule_file = os.path.join(base, "output", retailer_slug, folder_name, "schedule_config.json")
+            
+            # Fall back to old path if new path doesn't exist
+            if not os.path.exists(client_schedule_file):
+                client_schedule_file = os.path.join(base, "output", folder_name, "schedule_config.json")
             
             if os.path.exists(client_schedule_file):
                 try:
@@ -1669,7 +1745,11 @@ class KeywordInputApp:
             
         # Create client-specific schedule file path
         folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client)
-        client_schedule_file = os.path.join(get_base_dir(), "output", folder_name, "schedule_config.json")
+        
+        # Include retailer in the path
+        retailer_name = self.retailer_var.get().strip() or "Kroger"
+        retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
+        client_schedule_file = os.path.join(get_base_dir(), "output", retailer_slug, folder_name, "schedule_config.json")
         
         # Get current times
         times = []
@@ -1687,7 +1767,8 @@ class KeywordInputApp:
             "runs": self.runs_var.get(),
             "times": times,
             "days": selected_days,
-            "client": selected_client  # Store client name in config
+            "client": selected_client,  # Store client name in config
+            "retailer": retailer_slug  # Include retailer in the config
         }
         
         # Save to file
@@ -1735,10 +1816,144 @@ class KeywordInputApp:
                     self.schedule_button.config(state="disabled")
         except Exception:
             pass
-    
+        
+    # --- Theme persistence + menu ---
+
+    def _ui_config_path(self):
+        """Where we persist UI prefs."""
+        cfg_dir = os.path.join(get_base_dir(), "config")
+        os.makedirs(cfg_dir, exist_ok=True)
+        return os.path.join(cfg_dir, "ui.json")
+
+    def _load_ui_prefs(self):
+        """Return {'ttk_theme': 'clam'|'aqua'|..., 'palette': 'light'|'dark'}"""
+        try:
+            with open(self._ui_config_path(), "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return {
+                "ttk_theme": data.get("ttk_theme"),
+                "palette": data.get("palette", "light"),
+            }
+        except Exception:
+            return {"ttk_theme": None, "palette": "light"}
+
+    def _save_ui_prefs(self, ttk_theme=None, palette=None):
+        """Merge & save current prefs."""
+        cur = self._load_ui_prefs()
+        if ttk_theme:
+            cur["ttk_theme"] = ttk_theme
+        if palette:
+            cur["palette"] = palette
+        try:
+            with open(self._ui_config_path(), "w", encoding="utf-8") as f:
+                json.dump(cur, f, indent=2)
+        except Exception:
+            pass
+
+    def apply_ttk_theme(self, name: str):
+        """Switch ttk base theme; reapply custom palette styles after."""
+        try:
+            # Safety: coerce aqua -> clam on macOS to avoid menu crash
+            if sys.platform == 'darwin' and name == 'aqua':
+                name = 'clam'
+            if name not in self.style.theme_names():
+                return False
+            self.style.theme_use(name)
+            # Update radio var and persist
+            if hasattr(self, "ttk_theme_var"):
+                self.ttk_theme_var.set(name)
+            self._save_ui_prefs(ttk_theme=name, palette=self.theme)
+            # Re-apply our color palette styling on top
+            self.apply_theme(self.style, mode=self.theme)
+            return True
+        except Exception as e:
+            print(f"Failed to apply ttk theme {name}: {e}")
+            return False
+
+    def apply_palette(self, palette: str):
+        """Switch our light/dark palette; persist."""
+        if palette not in ("light", "dark"):
+            return
+        self.theme = palette
+        self._save_ui_prefs(ttk_theme=self.style.theme_use(), palette=palette)
+        self.apply_theme(self.style, mode=self.theme)
+        if hasattr(self, "palette_var"):
+            self.palette_var.set(palette)
+
+    def _build_menubar(self):
+        # Build the submenus first (theme_menu, palette_menu) using self.root as parent
+        theme_menu = tk.Menu(self.root, tearoff=0)
+        current = self.style.theme_use()
+        self.ttk_theme_var = tk.StringVar(value=current)
+        names = list(self.style.theme_names())
+        if sys.platform == 'darwin' and 'aqua' in names:
+            names.remove('aqua')
+        for name in names:
+            theme_menu.add_radiobutton(
+                label=name, value=name, variable=self.ttk_theme_var,
+                command=lambda n=name: self.apply_ttk_theme(n),
+            )
+
+        palette_menu = tk.Menu(self.root, tearoff=0)
+        self.palette_var = tk.StringVar(value=self.theme)
+        palette_menu.add_radiobutton(label="Light", value="light", variable=self.palette_var,
+                                    command=lambda: self.apply_palette("light"))
+        palette_menu.add_radiobutton(label="Dark", value="dark", variable=self.palette_var,
+                                    command=lambda: self.apply_palette("dark"))
+
+        # If guard is set, DO NOT attach native menubar; install inline button instead
+        if os.environ.get("RAM_NO_NATIVE_MENUBAR") == "1":
+            inline = ttk.Menubutton(self.root, text="View")
+            inline_menu = tk.Menu(inline, tearoff=0)
+            inline_menu.add_cascade(label="Theme", menu=theme_menu)
+            inline_menu.add_cascade(label="Palette", menu=palette_menu)
+            inline["menu"] = inline_menu
+            inline.pack(anchor="ne", padx=8, pady=6)
+            return  # IMPORTANT: do not call root.config(menu=...) below
+
+        # Native menubar (only when guard is not set)
+        menubar = tk.Menu(self.root)
+        file_menu = tk.Menu(self.root, tearoff=0)
+        file_menu.add_command(label="Quit", command=self.root.quit)
+        menubar.add_cascade(label="File", menu=file_menu)
+
+        view_menu = tk.Menu(self.root, tearoff=0)
+        view_menu.add_cascade(label="Theme", menu=theme_menu)
+        view_menu.add_cascade(label="Palette", menu=palette_menu)
+        menubar.add_cascade(label="View", menu=view_menu)
+
+        self.root.config(menu=menubar)   
 
 def main():
-    print("Starting Kroger TOA Scraper GUI...")
+    _glog("main: start")
+    try:
+        # Prime Cocoa so Tk doesn't have to bootstrap NSApplication while AppleEvents are in flight
+        try:
+            _glog("main: priming NSApplication")
+            from AppKit import NSApplication, NSApp, NSApplicationActivationPolicyRegular
+            NSApplication.sharedApplication()
+            # Don't set activation policy aggressively; Tk will manage windows. This call ensures NSApp exists.
+            _glog("main: NSApplication primed")
+        except Exception as e:
+            _glog(f"main: NSApplication prime skipped: {e}")
+
+        _glog("main: creating Tk()")
+        root = tk.Tk()
+        _glog("main: Tk() created")
+
+        app = KeywordInputApp(root)
+        _glog("main: app initialized")
+
+        root.mainloop()
+    except Exception as e:
+        _glog(f"main: exception: {e}\n{traceback.format_exc()}")
+        # Mirror to stdout for Terminal runs
+        print(f"Error in main: {e}")
+        traceback.print_exc()
+        raise
+
+if __name__ == "__main__":
+    print("Starting Retail Ad Monitor GUI...")
     try:
         print("Creating Tk root window")
         root = tk.Tk()

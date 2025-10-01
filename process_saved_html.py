@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from bs4 import BeautifulSoup
-from kroger_ad_core import extract_ads_from_html, extract_common_words_and_phrases
+from archived.kroger_ad_core import extract_ads_from_html, extract_common_words_and_phrases
 from urllib.parse import urljoin
 
 # Import for TOA image capture
@@ -39,15 +39,14 @@ def extract_toa_images(json_file, html_file=None, client_name=None, output_overr
         html_file (str, optional): Path to specific HTML file to process
         client_name (str): Client name for organizing output
         
-    Returns:
         bool: True if successful, False otherwise
     """
     try:
         import subprocess
         here = os.path.dirname(os.path.abspath(__file__))
-        script_path = os.path.join(here, "screenshot_toa_image.py")
-
-        # Build command to run screenshot_toa_image.py (headed by default)
+        script_path = os.path.join(here, "extractors", "screenshot_toa_image.py")
+        
+        # Build command to run extractors/screenshot_toa_image.py (headed by default)
         json_abs = os.path.abspath(json_file)
         cmd = ["python3", script_path, "--json", json_abs]
 
@@ -78,7 +77,7 @@ def extract_toa_images(json_file, html_file=None, client_name=None, output_overr
         elif client_name:
             cmd.extend(["--client", client_name])
 
-        print(f"\n📷 Extracting TOA images using screenshot_toa_image.py...")
+        print(f"\n📷 Extracting TOA images using extractors/screenshot_toa_image.py...")
         try:
             print("   Command:", " ".join(cmd))
         except Exception:
@@ -203,9 +202,10 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
     def compute_runs_root(client_name: Optional[str], output_dir: Optional[str]) -> str:
         base_out = output_dir or DEFAULT_DIR
         if client_name:
-            # If output_dir already is output/<client>
             base = Path(base_out).resolve()
-            if base.name == client_name and base.parent.name == "output":
+            # Check if output_dir already includes the client name at the end
+            # Handles both: output/<client> and output/<retailer>/<client>
+            if base.name == client_name:
                 return str(base / "runs")
             # Otherwise, join output/<client>/runs relative to base_out
             return str(Path(base_out).resolve() / client_name / "runs")
@@ -778,7 +778,7 @@ def process_latest_html_file(input_dir=None, output_dir=None, force_images=False
     # Call image extraction for this specific HTML file only
     extract_toa_images(results_path, latest_html, client_name)
     
-    # NOTE: Carousel images are now captured directly in kroger_search_and_capture.py
+    # NOTE: Carousel images are now captured directly in archived/kroger_search_and_capture.py
     # No need to extract carousel images here anymore
     
     # Print some details about the ads found

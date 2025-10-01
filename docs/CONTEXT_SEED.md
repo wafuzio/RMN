@@ -1,0 +1,101 @@
+# Context Seed — Multi‑Retailer TOA Scraper
+
+This is the canonical snapshot of how the tool is structured. Keep it short, current, and true.
+
+## Objective
+- One GUI + scheduler that runs “search capture → image extraction” across multiple retailers.
+- Reuse a persistent browser profile per retailer so session‑gated CDN images (TOA/Skyscraper) render reliably.
+- Keep Kroger fully working; add retailers without breaking existing behavior.
+
+## Architecture (seam-first)
+
+- RetailerAdapter (core/retailers.py)
+  - Hooks every adapter must implement:
+    - search_and_capture(keyword, ctx) -> bool
+    - collect_pairs_for_run(ctx, run_start_ts) -> list[(json_path, html_path)]
+    - extract_images(json_path, html_path, ctx) -> {"toa": int, "sky": int, "car": int, "log": path}
+  - Registry: register(adapter); GUI pulls display names from registry.
+
+- Run context (core/run_context.py)
+  - RunContext fields:
+    - retailer, client, base_dir, output_dir, runs_dir, logs_dir
+    - profile_dir (persistent Chrome user data dir)
+    - script_dir (where screenshot_* live)
+
+- Paths (core/paths.py)
+  - output/<retailer>/<client>/{runs, TOA, Skyscraper, Carousel}
+  - logs/<retailer>/{keyword_input.log, image_extract_*.log, locks/…}
+  - Back‑compat: old schedules in output/<client>/schedule_config.json still read as retailer="kroger"; new saves go to output/kroger/<client>/schedule_config.json and include "retailer".
+
+- Import paths (post-reorg):
+  - kroger_search_and_capture.py → root directory
+  - kroger_ad_core.py → archived/ directory
+  - Extractors add project root to sys.path for browser_lock import
+
+- GUI (keyword_input.py)
+  - Retailer dropdown (defaults to Kroger), Client dropdown + New…, keyword box.
+  - Start Scraping = two‑phase:
+    1) adapter.search_and_capture → saves runs/*.html + runs/*.json
+    2) collect_pairs_for_run → extract_images per pair → write PNGs
+  - Scheduler: conflict‑aware, filters unavailable minute options, disables Save on conflicts.
+
+## Current Adapters
+- kroger (stable)
+  - Persistent profile via KROGER_PROFILE_DIR (or default path).
+  - Produces PNGs in TOA/Skyscraper/Carousel; success = (TOA or Skyscraper) ≥ 1.
+- amazon (WIP)
+  - Persistent profile via AMZ_PROFILE_DIR.
+  - Mirrors Kroger’s outputs; initial selectors for SB/SBV/SP; refine with samples.
+
+## Auth & Profiles
+- One-time human login to each retailer using Playwright and a persistent user_data_dir.
+- Helper: auth/retailer_auth.py
+  - Example: python3 auth/retailer_auth.py --retailer amazon --profile-dir ~/Documents/Amazon_Scrape/profiles/amazon
+- Env naming convention:
+  - SCRAPER_HOME → base dir (default: ~/Documents/Amazon_Scrape); launcher uses this first
+  - PYTHON_EXEC → optional custom Python interpreter path (e.g., .venv/bin/python)
+  - KROGER_PROFILE_DIR → Kroger profile path
+  - AMZ_PROFILE_DIR → Amazon profile path
+  - (Future: WMT_PROFILE_DIR, TGT_PROFILE_DIR, etc.)
+
+## macOS App Bundle
+- Native app: "Retail Ad Monitor.app" (built with py2app)
+- In-process launcher runs live source code from SCRAPER_HOME
+- No rebuild needed for code changes (alias mode: `python3 setup.py py2app -A`)
+- Uses inline View menu to avoid Tk/Cocoa menubar crashes
+- Boot logs: logs/app_launcher_boot.log, logs/gui_boot.log
+- Supports PYTHON_EXEC env var for custom interpreter (e.g., venv)
+
+## Success Rule
+- A run is “successful” if at least one TOA or Skyscraper image is produced (Carousel alone ≠ success).
+- GUI shows Success dialog only under that condition; otherwise warns after retry.
+
+## Key Files & Locations
+- GUI: keyword_input.py (Tkinter, retailer-aware)
+- Launcher: launcher.py (in-process runner for .app bundle)
+- Kroger scraper: kroger_search_and_capture.py (root directory)
+- Ad extraction: archived/kroger_ad_core.py (HTML → JSON)
+- Image extractors: extractors/screenshot_ad_image.py (main), extractors/screenshot_toa_image.py (shim)
+- Process HTML: process_saved_html.py (calls kroger_ad_core, creates run_results_*.json)
+
+- GUI log: logs/<retailer>/keyword_input.log
+- Extractor logs: logs/<retailer>/image_extract_YYYYMMDD_HHMMSS.log
+- Locks: logs/<retailer>/locks/*_image_extraction.lock (stale locks can hang post‑processing)
+
+## Open Worklist
+- [x] Fixed path imports after repo reorg (archived/, extractors/, retailers/)
+- [x] Fixed duplicate output directories (output/client vs output/kroger/client)
+- [x] Fixed browser_lock import in extractors
+- [x] macOS app launcher with in-process execution (single dock icon)
+- [ ] Tighten Amazon selectors for SB/SBV/SP and right‑rail SD
+- [ ] GUI "Manage Login…" button → launches auth/retailer_auth.py for selected retailer
+- [ ] Back‑compat scan to migrate old schedules into output/kroger/<client>/ (optional move or symlink)
+- [ ] Unit tests for scheduler_utils allowed_minutes/has_conflict
+- [ ] Optional: AmazonAdapter PDP parsing for CSV export (separate feature)
+
+## Quick Test Checklist
+{{ ... }}
+- export AMZ_PROFILE_DIR=~/Documents/Amazon_Scrape/profiles/amazon
+- python3 keyword_input.py → Retailer=Kroger → run 1 keyword → expect TOA/Sky PNGs
+- Switch to Amazon → run 1 keyword → expect runs/*.html + TOA fallback PNG (until selectors are tuned)
+- tail -f logs/<retailer>/keyword_input.log and the newest logs/<retailer>/image_extract_*.log

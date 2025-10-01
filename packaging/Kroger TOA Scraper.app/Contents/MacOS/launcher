@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""
+Kroger TOA Scraper App Launcher
+This Python script serves as the main executable for the app bundle
+"""
+
+import os
+import sys
+import subprocess
+
+def main():
+    # Resolve base dir (centralized path for logs/output)
+    base_dir = os.environ.get("SCRAPER_HOME") or os.path.expanduser("~/Documents/Amazon_Scrape")
+    os.environ.setdefault("SCRAPER_HOME", base_dir)
+    # Optional retailer namespace (uncomment if you intend multi‑retailer schedulers)
+    # os.environ.setdefault("RETAILER", "kroger")
+
+    # Ensure UTF-8 locale for logs/UI rendering
+    os.environ.setdefault("LC_ALL", "en_US.UTF-8")
+    os.environ.setdefault("LANG", "en_US.UTF-8")
+
+    # Set up logging under SCRAPER_HOME/logs
+    log_dir = os.path.join(base_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "app_launcher.log")
+
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write("\n\n=== LAUNCHER STARTED ===\n")
+        f.write(f"Python: {sys.version}\n")
+        f.write(f"Executable: {sys.executable}\n")
+        f.write(f"Args: {sys.argv}\n")
+        # Avoid dumping entire env (may contain secrets); log only key vars
+        safe_env = {
+            "SCRAPER_HOME": os.environ.get("SCRAPER_HOME"),
+            "RETAILER": os.environ.get("RETAILER", ""),
+            "LC_ALL": os.environ.get("LC_ALL"),
+            "LANG": os.environ.get("LANG"),
+            "PATH": os.environ.get("PATH"),
+        }
+        f.write(f"Env (sanitized): {safe_env}\n")
+
+    # Determine the project directory
+    # launcher is in: <App>.app/Contents/MacOS/launcher
+    # Go up 3 levels to .app, then 1 more to the project root
+    current_file = os.path.abspath(__file__)
+    app_bundle_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))  # -> .../.app
+    project_dir = os.path.dirname(app_bundle_dir)  # -> project root
+
+    print(f"Launcher path: {current_file}")
+    print(f"Project directory: {project_dir}")
+
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(f"Launcher path: {current_file}\n")
+        f.write(f"Project directory: {project_dir}\n")
+
+    # Change to the project directory
+    os.chdir(project_dir)
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(f"Changed to directory: {os.getcwd()}\n")
+        try:
+            f.write(f"Directory contents: {os.listdir()}\n")
+        except Exception as e:
+            f.write(f"Directory list failed: {e}\n")
+
+    # Launch the main application
+    try:
+        # Import and run the main application directly
+        sys.path.insert(0, project_dir)
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"sys.path: {sys.path}\n")
+            f.write("Importing keyword_input...\n")
+
+        import keyword_input
+
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write("keyword_input imported successfully\n")
+
+        print("Starting Kroger TOA Scraper GUI...")
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write("Starting Kroger TOA Scraper GUI...\n")
+
+        import tkinter as tk
+
+        print("Creating Tk root window")
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write("Creating Tk root window\n")
+        root = tk.Tk()
+        print("Root window created successfully")
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write("Root window created successfully\n")
+
+        print("Initializing KeywordInputApp")
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write("Initializing KeywordInputApp\n")
+        app = keyword_input.KeywordInputApp(root)
+        print("KeywordInputApp initialized successfully")
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write("KeywordInputApp initialized successfully\n")
+
+        print("Starting mainloop")
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write("Starting mainloop\n")
+        root.mainloop()
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write("mainloop exited\n")
+
+    except Exception as e:
+        print(f"Error launching application: {e}")
+        import traceback
+        traceback.print_exc()
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"Error launching application: {e}\n")
+            f.write("Traceback:\n")
+            traceback.print_exc(file=f)
+        # Fallback to subprocess launch
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write("Falling back to subprocess launch\n")
+        subprocess.run([sys.executable, os.path.join(project_dir, "keyword_input.py")])
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write("Subprocess completed\n")
+
+if __name__ == '__main__':
+    main()
