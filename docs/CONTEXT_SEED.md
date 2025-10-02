@@ -50,7 +50,7 @@ This is the canonical snapshot of how the tool is structured. Keep it short, cur
   - Persistent profile via INSTACART_PROFILE_DIR.
   - Store selection via INSTACART_STORE env var (default: publix).
   - URL pattern: https://www.instacart.com/store/{store}/s?k={keyword}
-  - Ad types: Shoppable Display (div.e-1qzz7bi), Top Banner (div.e-1hv1sre), Sponsored Labels (div.e-cwus85).
+  - Ad types: Shoppable Display Ad, Shoppable Video Ad (div.e-1qzz7bi), Display Ad (div.e-1hv1sre), Sponsored Label (div.e-cwus85).
   - Verified: 8+ ads detected with authenticated session.
 
 ## Auth & Profiles

@@ -100,10 +100,11 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             }
             
             # Find all ad containers
+            # Note: div.e-1qzz7bi includes both Shoppable Display Ads and Shoppable Video Ads
             ad_selectors = {
-                'shoppable_display': 'div.e-1qzz7bi',
-                'top_banner': 'div.e-1hv1sre',
-                'sponsored_label': 'div.e-cwus85',
+                'Shoppable Display Ad': 'div.e-1qzz7bi',
+                'Display Ad': 'div.e-1hv1sre',
+                'Sponsored Label': 'div.e-cwus85',
             }
             
             for ad_type, selector in ad_selectors.items():
@@ -113,11 +114,19 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                         # Get ad ID if available
                         ad_id = elem.get_attribute('id') or f"{ad_type}_{i}"
                         
+                        # For Shoppable Display Ads, check if it contains video
+                        actual_ad_type = ad_type
+                        if ad_type == 'Shoppable Display Ad':
+                            # Check if this ad contains a video player
+                            video_player = elem.query_selector('div[id^="video-player-"]')
+                            if video_player:
+                                actual_ad_type = 'Shoppable Video Ad'
+                        
                         # Get bounding box for screenshot coordinates
                         bbox = elem.bounding_box()
                         
                         ad_info = {
-                            "type": ad_type,
+                            "type": actual_ad_type,
                             "selector": selector,
                             "id": ad_id,
                             "index": i,

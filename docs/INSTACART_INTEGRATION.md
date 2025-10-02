@@ -35,26 +35,27 @@ Successfully integrated Instacart into the multi-retailer scraper application. T
 ```
 https://www.instacart.com/store/{store}/s?k={keyword}
 ```
-
 Example:
 ```
 https://www.instacart.com/store/publix/s?k=eggs
 ```
 
-### Ad Types Detected
-1. **Shoppable Display Ads** (`div.e-1qzz7bi`)
-   - Video and static ads with product carousels
-   - Brand logo + headline + "Sponsored" label
+### **Ad Types Detected**
+1. **Shoppable Display Ad** (`div.e-1qzz7bi`)
+   - Static image ads with product carousels
    - Mapped to: `TOA` folder
 
-2. **Top Banner Ads** (`div.e-1hv1sre`)
+2. **Shoppable Video Ad** (`div.e-1qzz7bi` with video player)
+   - Video ads with product carousels
+   - Automatically detected by presence of video player element
+   - Mapped to: `TOA` folder
+
+3. **Display Ad** (`div.e-1hv1sre`)
    - Horizontal brand strips at top of search results
-   - Compact header with product carousel
    - Mapped to: `Skyscraper` folder
 
-3. **Sponsored Labels** (`div.e-cwus85`)
-   - "Sponsored" text indicators
-   - Appears on all ad types
+4. **Sponsored Label** (`div.e-cwus85`)
+   - "Sponsored" text indicators appearing on all ad types
    - Mapped to: `Carousel` folder
 
 ### Wait Strategy

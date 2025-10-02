@@ -44,25 +44,30 @@ python3 keyword_input.py
 
 The Instacart adapter maps Instacart ad placements to the existing output folders:
 
-- **TOA**: Shoppable Display Ads (video and static ads with product carousels)
-- **Skyscraper**: Top Banner Ads (horizontal brand strips at top of search results)
+- **TOA**: Shoppable Display Ads and Shoppable Video Ads (large format ads with product carousels)
+- **Skyscraper**: Display Ads (horizontal brand strips at top of search results)
 - **Carousel**: Product carousels within shoppable ads
 
 ## Ad Types Detected
 
 Based on HTML analysis, the adapter detects:
 
-1. **Shoppable Display Ads** (`div.e-1qzz7bi`)
+1. **Shoppable Display Ad** (`div.e-1qzz7bi`)
    - Static image ads with product carousels
+   - Brand logo + headline + "Sponsored" label
+   - Large format placement in search results
+
+2. **Shoppable Video Ad** (`div.e-1qzz7bi` with video player)
    - Video ads with product carousels
    - Brand logo + headline + "Sponsored" label
+   - Automatically detected by presence of video player element
 
-2. **Top Banner Ads** (`div.e-1hv1sre`)
+3. **Display Ad** (`div.e-1hv1sre`)
    - Horizontal brand strips
    - Compact header with product carousel
    - Appears at top of search results
 
-3. **Sponsored Labels** (`div.e-cwus85`)
+4. **Sponsored Label** (`div.e-cwus85`)
    - "Sponsored" text indicators
    - Appears on all ad types
 
