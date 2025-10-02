@@ -133,6 +133,7 @@ from core.paths import output_dir_for, logs_dir_for
 # ensure retailer adapters are registered
 import retailers.kroger.adapter  # noqa: F401
 import retailers.amazon.adapter  # noqa: F401
+import retailers.instacart.adapter  # noqa: F401
 
 # Optional: try eager imports; if they fail, globals stay None and the lazy path runs later
 try:

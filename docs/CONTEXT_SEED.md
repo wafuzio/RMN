@@ -45,17 +45,24 @@ This is the canonical snapshot of how the tool is structured. Keep it short, cur
   - Produces PNGs in TOA/Skyscraper/Carousel; success = (TOA or Skyscraper) ≥ 1.
 - amazon (WIP)
   - Persistent profile via AMZ_PROFILE_DIR.
-  - Mirrors Kroger’s outputs; initial selectors for SB/SBV/SP; refine with samples.
+  - Mirrors Kroger's outputs; initial selectors for SB/SBV/SP; refine with samples.
+- instacart (new)
+  - Persistent profile via INSTACART_PROFILE_DIR.
+  - Store selection via INSTACART_STORE env var (default: publix).
+  - URL pattern: https://www.instacart.com/store/{store}/s?k={keyword}
+  - Ad types: Shoppable Display (div.e-1qzz7bi), Top Banner (div.e-1hv1sre), Sponsored Labels (div.e-cwus85).
+  - Verified: 8+ ads detected with authenticated session.
 
 ## Auth & Profiles
 - One-time human login to each retailer using Playwright and a persistent user_data_dir.
 - Helper: auth/retailer_auth.py
   - Example: python3 auth/retailer_auth.py --retailer amazon --profile-dir ~/Documents/Amazon_Scrape/profiles/amazon
-- Env naming convention:
   - SCRAPER_HOME → base dir (default: ~/Documents/Amazon_Scrape); launcher uses this first
   - PYTHON_EXEC → optional custom Python interpreter path (e.g., .venv/bin/python)
   - KROGER_PROFILE_DIR → Kroger profile path
   - AMZ_PROFILE_DIR → Amazon profile path
+  - INSTACART_PROFILE_DIR → Instacart profile path
+  - INSTACART_STORE → Instacart store slug (default: publix)
   - (Future: WMT_PROFILE_DIR, TGT_PROFILE_DIR, etc.)
 
 ## macOS App Bundle
@@ -96,6 +103,9 @@ This is the canonical snapshot of how the tool is structured. Keep it short, cur
 ## Quick Test Checklist
 {{ ... }}
 - export AMZ_PROFILE_DIR=~/Documents/Amazon_Scrape/profiles/amazon
+- export INSTACART_PROFILE_DIR=~/Documents/Amazon_Scrape/profiles/instacart
+- export INSTACART_STORE=publix
 - python3 keyword_input.py → Retailer=Kroger → run 1 keyword → expect TOA/Sky PNGs
 - Switch to Amazon → run 1 keyword → expect runs/*.html + TOA fallback PNG (until selectors are tuned)
+- Switch to Instacart → run 1 keyword → expect 8+ ads (3 shoppable, 1 banner, 4 sponsored)
 - tail -f logs/<retailer>/keyword_input.log and the newest logs/<retailer>/image_extract_*.log
