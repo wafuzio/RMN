@@ -1,5 +1,8 @@
 import os, sys, traceback, runpy, subprocess
 
+# Disable bytecode caching in development
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+
 # Boot logger so we can see exactly what Finder launched
 LOG_DIR = os.path.join(os.path.expanduser('~/Documents/Amazon_Scrape'), 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -72,6 +75,23 @@ def main():
     src_root = find_source_root()
     load_env_file(src_root)
     os.environ.setdefault("SCRAPER_HOME", src_root)
+    
+    # Log interpreter info
+    _bootlog(f"[env] sys.executable={sys.executable}")
+    _bootlog(f"[env] sys.version={sys.version}")
+    _bootlog(f"[env] sys.path[0]={sys.path[0] if sys.path else 'N/A'}")
+    
+    # Ensure Playwright browsers are installed to user-writable path
+    try:
+        sys.path.insert(0, src_root)
+        from scripts.bootstrap.ensure_playwright import ensure_playwright_browsers
+        pw_path = ensure_playwright_browsers()
+        _bootlog(f"[bootstrap] Playwright browsers ready at: {pw_path}")
+    except Exception as e:
+        _bootlog(f"[bootstrap] Failed to ensure Playwright: {e}")
+        import traceback
+        _bootlog(traceback.format_exc())
+    
     entry = os.path.join(src_root, "keyword_input.py")
 
     _bootlog("=== LAUNCHER START ===")

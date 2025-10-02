@@ -86,6 +86,14 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                 headless=False,
                 viewport={'width': 1920, 'height': 1080},
                 locale='en-US',
+                args=[
+                    '--disable-dev-shm-usage',
+                    '--no-sandbox',
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-first-run',
+                    '--no-default-browser-check',
+                    '--disable-session-crashed-bubble',  # Suppress "Restore pages?" prompt
+                ],
             )
             
             page = context.pages[0] if context.pages else context.new_page()
