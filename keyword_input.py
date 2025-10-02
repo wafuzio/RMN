@@ -24,6 +24,25 @@ def _glog(msg):
         pass
 
 _glog("START keyword_input.py")
+
+# Load environment variables from config/launcher.env if present
+def _load_launcher_env():
+    env_file = os.path.join(os.environ.get("SCRAPER_HOME", os.path.expanduser("~/Documents/Amazon_Scrape")), "config", "launcher.env")
+    if os.path.exists(env_file):
+        _glog(f"Loading env from {env_file}")
+        with open(env_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+                _glog(f"  Set {k.strip()}={v.strip()}")
+    else:
+        _glog(f"No launcher.env found at {env_file}")
+
+_load_launcher_env()
+
 try:
     _glog("before tkinter import")
     import tkinter as tk
@@ -606,62 +625,22 @@ class KeywordInputApp:
                         time.sleep(1.5)
 
                     try:
-                        # Lazy import fallback
-                        global ksc_search_and_capture
-                        if ksc_search_and_capture is None:
-                            sys.path.append(os.path.join(get_base_dir(), "src"))
-                            from kroger_search_and_capture import search_and_capture as ksc_search_and_capture
-
-                        if ksc_search_and_capture is not None:
-                            # Use adapter instead of direct call
-                            ok = adapter.search_and_capture(keyword, ctx)
-                            if ok:
-                                # Use adapter to collect pairs for this run
-                                new_pairs = adapter.collect_pairs_for_run(ctx, run_start_ts)
-                                # De-dup by seen_json
-                                for (j, h) in new_pairs:
-                                    if j not in seen_json:
-                                        run_pairs.append((j, h))
-                                        seen_json.add(j)
-                                
-                                scraped = True
-                                success_count += 1
-                                break
-                            else:
-                                raise RuntimeError("search_and_capture returned False")
+                        # Use adapter for all retailers
+                        ok = adapter.search_and_capture(keyword, ctx)
+                        if ok:
+                            # Use adapter to collect pairs for this run
+                            new_pairs = adapter.collect_pairs_for_run(ctx, run_start_ts)
+                            # De-dup by seen_json
+                            for (j, h) in new_pairs:
+                                if j not in seen_json:
+                                    run_pairs.append((j, h))
+                                    seen_json.add(j)
+                            
+                            scraped = True
+                            success_count += 1
+                            break
                         else:
-                            # Fallback: subprocess
-                            cmd = [
-                                sys.executable,
-                                "archived/kroger_search_and_capture.py",
-                                "--search", keyword,
-                                "--output-dir", output_dir,
-                            ]
-                            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
-                            _, stderr = p.communicate()
-                            if p.returncode == 0:
-                                # Find JSONs created since we started, minus the baseline and already seen
-                                current_json = set(glob.glob(os.path.join(runs_dir, "run_results_*.json")))
-                                new_jsons = sorted(list(current_json - baseline_json - seen_json), key=os.path.getmtime)
-                                
-                                for jpath in new_jsons:
-                                    # Match HTML by filename pattern (same timestamp token)
-                                    hpath = jpath.replace("run_results_", "search_results_").replace(".json", ".html")
-                                    if not os.path.exists(hpath):
-                                        # Fallback: pick newest search_results_*.html nearby (only if created after we started)
-                                        hcands = [p for p in glob.glob(os.path.join(runs_dir, "search_results_*.html"))
-                                                  if os.path.getmtime(p) >= run_start_ts - 2]
-                                        hpath = max(hcands, key=os.path.getmtime) if hcands else None
-                                    
-                                    if hpath and os.path.exists(hpath):
-                                        run_pairs.append((jpath, hpath))
-                                        seen_json.add(jpath)
-                                
-                                scraped = True
-                                success_count += 1
-                                break
-                            else:
-                                raise RuntimeError(stderr or "subprocess search_and_capture failed")
+                            raise RuntimeError("search_and_capture returned False")
 
                     except Exception as e:
                         retry_count += 1

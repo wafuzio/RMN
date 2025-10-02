@@ -80,6 +80,8 @@ def main():
     _bootlog(f"src_root={src_root}")
     _bootlog(f"entry={entry}")
     _bootlog(f"PYTHON_EXEC={os.environ.get('PYTHON_EXEC')}")
+    _bootlog(f"INSTACART_PROFILE_DIR={os.environ.get('INSTACART_PROFILE_DIR')}")
+    _bootlog(f"INSTACART_STORE={os.environ.get('INSTACART_STORE')}")
     _bootlog("Attempting run_in_process...")
 
     if not os.path.exists(entry):

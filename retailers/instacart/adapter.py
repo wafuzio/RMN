@@ -12,18 +12,49 @@ class InstacartAdapter(RetailerAdapter):
 
     def search_and_capture(self, keyword: str, ctx) -> bool:
         """Execute Instacart search and capture HTML/JSON."""
-        import sys
-        # Add project root to path
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        sys.path.insert(0, project_root)
+        # Create debug log in output directory
+        debug_log = os.path.join(ctx.output_dir, "adapter_debug.log")
+        os.makedirs(ctx.output_dir, exist_ok=True)
         
-        # Import the search_and_capture function from root directory
-        from instacart_search_and_capture import search_and_capture
+        def log(msg):
+            print(msg)
+            try:
+                from datetime import datetime
+                with open(debug_log, 'a', encoding='utf-8') as f:
+                    f.write(f"{datetime.now().isoformat()} {msg}\n")
+            except:
+                pass
         
-        # Get store from environment (default: publix)
-        store = os.environ.get('INSTACART_STORE', 'publix')
+        log(f"=== ADAPTER START: {keyword} ===")
+        log(f"Output dir: {ctx.output_dir}")
+        log(f"Profile dir: {ctx.profile_dir}")
         
-        return search_and_capture(keyword, ctx.output_dir, store=store)
+        try:
+            import sys
+            # Add project root to path
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            sys.path.insert(0, project_root)
+            log(f"Project root: {project_root}")
+            
+            # Import the search_and_capture function from root directory
+            log("Attempting import...")
+            from instacart_search_and_capture import search_and_capture
+            log("✅ Import successful")
+            
+            # Get store from environment (default: publix)
+            store = os.environ.get('INSTACART_STORE', 'publix')
+            log(f"Store: {store}")
+            
+            log("Calling search_and_capture...")
+            result = search_and_capture(keyword, ctx.output_dir, store=store)
+            log(f"Result: {result}")
+            return result
+            
+        except Exception as e:
+            log(f"❌ EXCEPTION in adapter: {type(e).__name__}: {e}")
+            import traceback
+            log(traceback.format_exc())
+            return False
 
     def collect_pairs_for_run(self, ctx, run_start_ts: float):
         """Collect JSON/HTML pairs from the most recent run."""
@@ -37,28 +68,17 @@ class InstacartAdapter(RetailerAdapter):
             if os.path.exists(h):
                 pairs.append((j, h))
         return pairs
-
     def extract_images(self, json_path: str, html_path: str, ctx) -> dict:
-        """
-        Extract ad images from Instacart HTML using screenshot script.
-        
-        This uses the same extractor infrastructure as Kroger/Amazon,
-        but with Instacart-specific selectors.
-        """
-        # Use the main ad extractor script
-        ad_script = os.path.join(ctx.script_dir, "extractors/screenshot_ad_images.py")
-        toa_script = os.path.join(ctx.script_dir, "extractors/screenshot_toa_image.py")
-        script = ad_script if os.path.exists(ad_script) else toa_script
+        """Extract ad images using Instacart-specific screenshot script."""
+        # Use Instacart-specific extractor
+        script = os.path.join(ctx.script_dir, "extractors/screenshot_instacart_ads.py")
 
         cmd = [
             os.sys.executable, script,
             "--json", json_path,
             "--html", html_path,
             "--output", ctx.output_dir,
-            "--headless",
-            "--no-lock",
-            "--time-window", "45",
-            "--browser-lock-timeout", "600",
+            "--no-headless",  # Show browser for debugging login issues
         ]
         
         env = os.environ.copy()
@@ -102,7 +122,12 @@ class InstacartAdapter(RetailerAdapter):
             return len([p for p in glob.glob(os.path.join(ctx.output_dir, leaf, "*.png"))
                         if os.path.getmtime(p) >= pair_start - 1])
 
-        return {"toa": count("TOA"), "sky": count("Skyscraper"), "car": count("Carousel"), "log": log_path}
+        return {
+            "toa": count("Shoppable_Display_Ads") + count("Shoppable_Video_Ads"),  # Map to TOA for GUI compatibility
+            "sky": count("Display_Ads"),  # Map to Skyscraper for GUI compatibility
+            "car": 0,  # Instacart doesn't have separate carousel ads
+            "log": log_path
+        }
 
 
 # Register on import

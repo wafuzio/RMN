@@ -9,46 +9,75 @@ import sys
 import json
 import time
 from datetime import datetime
-from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 
 def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool:
     """
-    Search Instacart for a keyword and capture the results page.
+    Search Instacart for a keyword and capture the results.
     
     Args:
         keyword: Search term
-        output_dir: Base output directory (e.g., output/instacart/client_name)
-        store: Store slug (e.g., 'publix'). Defaults to INSTACART_STORE env var or 'publix'
+        output_dir: Directory to save results
+        store: Store slug (e.g., 'publix', 'kroger'). Defaults to INSTACART_STORE env var or 'publix'
     
     Returns:
         True if successful, False otherwise
     """
     
+    # Set up debug logging
+    debug_log = os.path.join(output_dir, "debug_search.log")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    def log(msg):
+        """Log to both stdout and debug file"""
+        print(msg)
+        try:
+            with open(debug_log, 'a', encoding='utf-8') as f:
+                f.write(f"{datetime.now().isoformat()} {msg}\n")
+        except:
+            pass
+    
+    log(f"=== SEARCH START: {keyword} ===")
+    
     # Get store from parameter or environment
     if store is None:
         store = os.environ.get('INSTACART_STORE', 'publix')
+    log(f"Store: {store}")
     
     # Get profile directory
     profile_dir = os.environ.get('INSTACART_PROFILE_DIR')
+    log(f"Profile dir: {profile_dir}")
     if not profile_dir or not os.path.isdir(profile_dir):
-        print(f"❌ INSTACART_PROFILE_DIR not set or invalid: {profile_dir}")
-        print("Run: ./scripts/setup_instacart_profile.sh")
+        log(f"❌ INSTACART_PROFILE_DIR not set or invalid: {profile_dir}")
+        log("Run: ./scripts/setup_instacart_profile.sh")
         return False
+    log(f"✅ Profile directory valid")
+    
+    # Clean up stale lock file if it exists
+    lock_file = os.path.join(profile_dir, 'SingletonLock')
+    if os.path.exists(lock_file):
+        try:
+            os.remove(lock_file)
+            print(f"   Removed stale lock file: {lock_file}")
+        except Exception as e:
+            print(f"   Warning: Could not remove lock file: {e}")
     
     # Create runs directory
     runs_dir = os.path.join(output_dir, "runs")
     os.makedirs(runs_dir, exist_ok=True)
+    log(f"Runs directory: {runs_dir}")
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     html_file = os.path.join(runs_dir, f"search_results_{timestamp}.html")
     json_file = os.path.join(runs_dir, f"run_results_{timestamp}.json")
     
-    print(f"🔍 Searching Instacart for: '{keyword}'")
-    print(f"   Store: {store}")
-    print(f"   Profile: {profile_dir}")
+    log(f"🔍 Searching Instacart for: '{keyword}'")
+    log(f"   Store: {store}")
+    log(f"   Profile: {profile_dir}")
     
+    # Use Playwright with persistent context (authenticated session)
+    log("Starting Playwright...")
     try:
         with sync_playwright() as p:
             # Launch with persistent context (authenticated session)
@@ -61,22 +90,28 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             
             page = context.pages[0] if context.pages else context.new_page()
             
+            # Pre-visit homepage to refresh session cookies
+            log("Refreshing session...")
+            page.goto(f'https://www.instacart.com/store/{store}', wait_until='domcontentloaded', timeout=15000)
+            time.sleep(2)
+            
             # Navigate to search page
             # URL pattern: https://www.instacart.com/store/{store}/s?k={keyword}
             search_url = f'https://www.instacart.com/store/{store}/s?k={keyword}'
-            print(f"   URL: {search_url}")
+            log(f"   URL: {search_url}")
             
             # Navigate (don't wait for networkidle - Instacart has lots of dynamic content)
             page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
             
             # Wait for content to load
-            time.sleep(8)
+            time.sleep(5)
             
-            # Check if we're logged in
-            login_modal = page.query_selector('text=/sign up/i, text=/log in/i')
+            # Check if we're logged in - look for login modal
+            login_modal = page.query_selector('.ReactModalPortal .AuthModal__Overlay, [data-testid="authModalWrapper"]')
             if login_modal and login_modal.is_visible():
-                print("❌ Login modal detected - authentication required")
-                print("Run: ./scripts/setup_instacart_profile.sh")
+                print("❌ Login modal detected - session expired")
+                print("   Please re-authenticate by running:")
+                print("   ./scripts/setup_instacart_profile.sh")
                 context.close()
                 return False
             
@@ -164,12 +199,24 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             return True
             
     except PlaywrightTimeout as e:
-        print(f"❌ Timeout: {e}")
+        log(f"❌ Timeout: {e}")
         return False
     except Exception as e:
-        print(f"❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
+        error_msg = str(e)
+        log(f"❌ EXCEPTION: {type(e).__name__}: {error_msg}")
+        
+        # Don't print full traceback for known errors
+        if "ProcessSingleton" in error_msg or "SingletonLock" in error_msg:
+            log("   Profile is locked by another browser instance.")
+            log("   Close all Chromium windows and try again.")
+        elif "Target page, context or browser has been closed" in error_msg:
+            log("   Browser was closed unexpectedly.")
+        else:
+            # Print traceback for unexpected errors
+            import traceback
+            tb = traceback.format_exc()
+            log(f"TRACEBACK:\n{tb}")
+        
         return False
 
 
