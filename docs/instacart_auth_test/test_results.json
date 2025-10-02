@@ -1,0 +1,22 @@
+{
+  "authenticated": true,
+  "ads_found": [
+    {
+      "type": "Shoppable Display Ads (div.e-1qzz7bi)",
+      "selector": "div.e-1qzz7bi",
+      "count": 3
+    },
+    {
+      "type": "Top Banner Ads (div.e-1hv1sre)",
+      "selector": "div.e-1hv1sre",
+      "count": 1
+    },
+    {
+      "type": "Sponsored Labels (div.e-cwus85)",
+      "selector": "div.e-cwus85",
+      "count": 4
+    }
+  ],
+  "ad_count": 8,
+  "test_keyword": "eggs"
+}

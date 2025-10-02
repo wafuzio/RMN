@@ -6,6 +6,7 @@ RETAILER_URLS = {
     "amazon": "https://www.amazon.com/",
     "kroger": "https://www.kroger.com/",
     "walmart": "https://www.walmart.com/",
+    "instacart": "https://www.instacart.com/store/publix",  # Default to Publix for initial setup
 }
 
 def ensure_profile(retailer: str, profile_dir: str, channel="chrome"):
@@ -30,6 +31,8 @@ def ensure_profile(retailer: str, profile_dir: str, channel="chrome"):
                     break
                 if retailer == "kroger" and ("my account" in content or "sign out" in content):
                     break
+                if retailer == "instacart" and ("log out" in content or "sign out" in content):
+                    break
             except Exception:
                 pass
             time.sleep(3)
@@ -38,7 +41,7 @@ def ensure_profile(retailer: str, profile_dir: str, channel="chrome"):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--retailer", required=True, choices=["kroger","amazon","walmart"])
+    ap.add_argument("--retailer", required=True, choices=["kroger","amazon","walmart","instacart"])
     ap.add_argument("--profile-dir", required=True, help="Path to persistent Chrome profile dir")
     args = ap.parse_args()
     ensure_profile(args.retailer, args.profile_dir)
