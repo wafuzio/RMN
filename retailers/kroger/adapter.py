@@ -10,15 +10,46 @@ class KrogerAdapter(RetailerAdapter):
     profile_env = "KROGER_PROFILE_DIR"
 
     def search_and_capture(self, keyword: str, ctx) -> bool:
-        # Reuse your existing function (works from source and bundle)
-        import sys
-        import os
-        # Add project root to path (kroger_search_and_capture.py is in root, not archived)
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        sys.path.insert(0, project_root)
-        # Import the search_and_capture function from the root directory
-        from kroger_search_and_capture import search_and_capture
-        return search_and_capture(keyword, ctx.output_dir)
+        # Create debug log in output directory
+        debug_log = os.path.join(ctx.output_dir, "adapter_debug.log")
+        os.makedirs(ctx.output_dir, exist_ok=True)
+        
+        def log(msg):
+            print(msg)
+            try:
+                from datetime import datetime
+                with open(debug_log, 'a', encoding='utf-8') as f:
+                    f.write(f"{datetime.now().isoformat()} {msg}\n")
+            except:
+                pass
+        
+        log(f"=== KROGER ADAPTER START: {keyword} ===")
+        log(f"Output dir: {ctx.output_dir}")
+        log(f"Profile dir: {ctx.profile_dir}")
+        
+        try:
+            import sys
+            import os
+            # Add project root to path (kroger_search_and_capture.py is in root, not archived)
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            sys.path.insert(0, project_root)
+            log(f"Project root: {project_root}")
+            
+            # Import the search_and_capture function from the root directory
+            log("Attempting import...")
+            from kroger_search_and_capture import search_and_capture
+            log("✅ Import successful")
+            
+            log("Calling search_and_capture...")
+            result = search_and_capture(keyword, ctx.output_dir)
+            log(f"Result: {result}")
+            return result
+            
+        except Exception as e:
+            log(f"❌ EXCEPTION in adapter: {type(e).__name__}: {e}")
+            import traceback
+            log(traceback.format_exc())
+            return False
 
     def collect_pairs_for_run(self, ctx, run_start_ts: float):
         runs = os.path.join(ctx.output_dir, "runs")

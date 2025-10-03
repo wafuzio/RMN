@@ -149,6 +149,7 @@ PALETTE = {
 from core.retailers import get as get_retailer_adapter, list_adapters
 from core.run_context import RunContext
 from core.paths import output_dir_for, logs_dir_for
+from widgets.retailer_picker import RetailerPicker
 # ensure retailer adapters are registered
 import retailers.kroger.adapter  # noqa: F401
 import retailers.amazon.adapter  # noqa: F401
@@ -178,8 +179,8 @@ class KeywordInputApp:
         """Initialize the application"""
         self.root = root
         self.root.title("Retail Ad Monitor")
-        self.root.geometry("600x700")
-        self.root.minsize(600, 700)
+        self.root.geometry("720x900")
+        self.root.minsize(720, 800)
         
         self.placeholder_text = "Enter keywords (one per line)"
         
@@ -295,21 +296,30 @@ class KeywordInputApp:
         self.new_client_btn.state(['!disabled'])  # ensure enabled
         self.new_client_btn.pack(side=tk.LEFT)
         
-        # Retailer dropdown (default: Kroger)
+        # Build retailer name mapping
         adapters = list_adapters()
         self._retailer_by_name = {a.display_name: a.slug for a in adapters}
-        retailer_names = [a.display_name for a in adapters]
-
-        self.retailer_var = tk.StringVar(value="Kroger")
-        retailer_combo = ttk.Combobox(
-            client_frame,
-            textvariable=self.retailer_var,
-            values=retailer_names,
-            width=12,
-            style='App.TCombobox',
-            state="readonly",
-        )
-        retailer_combo.pack(side=tk.LEFT, padx=(10, 6))
+        self._retailer_by_name_ci = {a.display_name.lower(): a.slug for a in adapters}
+        print(f"Registered adapters: {self._retailer_by_name}")
+        
+        # Multi-select retailer picker
+        retailer_frame = ttk.LabelFrame(main_frame, text="Select Retailers", style='Card.TLabelframe', padding=10)
+        retailer_frame.pack(fill=tk.X, padx=20, pady=(10, 5))
+        
+        # Determine which retailers are unavailable (not yet implemented)
+        unavailable = set()
+        for name in ["Amazon", "Walmart", "Albertsons", "Doordash", "gopuff", "Target", "Hyvee", "Meijer", "Ahold", "Kroger", "Instacart"]:
+            if name.lower() not in self._retailer_by_name_ci:
+                unavailable.add(name)
+        
+        self.retailer_picker = RetailerPicker(retailer_frame, unavailable=unavailable, columns=4)
+        self.retailer_picker.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Pre-select Kroger and Instacart by default
+        if "Kroger" in self.retailer_picker.vars:
+            self.retailer_picker.vars["Kroger"].set(True)
+        if "Instacart" in self.retailer_picker.vars:
+            self.retailer_picker.vars["Instacart"].set(True)
         
         # Instructions
         instructions = ttk.Label(
@@ -323,8 +333,8 @@ class KeywordInputApp:
         # Get current theme colors
         palette = PALETTE[self.theme]
         
-        self.keyword_input = scrolledtext.ScrolledText(main_frame, height=10)
-        self.keyword_input.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        self.keyword_input = scrolledtext.ScrolledText(main_frame, height=8)
+        self.keyword_input.pack(fill=tk.X, expand=False, pady=(0, 15))
         self.keyword_input.configure(
             background=palette["field_bg"], 
             foreground=palette["field_fg"], 
@@ -422,7 +432,7 @@ class KeywordInputApp:
         
         # Buttons frame
         button_frame = ttk.Frame(main_frame, style='App.TFrame')
-        button_frame.pack(fill=tk.X, pady=(0, 10))
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 10))
         
         # Start scraping button
         self.scrape_button = ttk.Button(
@@ -449,10 +459,37 @@ class KeywordInputApp:
             text=f"Ready to scrape | {daemon_text}",
             style='Body.TLabel'
         )
-        self.status_label.pack(anchor="w", pady=(10, 0))
+        self.status_label.pack(side=tk.BOTTOM, anchor="w", pady=(0, 10))
         
         # Initialize save button state
         self.refresh_save_button_state()
+    
+    def _schedule_retailer_slug(self) -> str:
+        """
+        Return a single retailer slug used for scheduling/file paths.
+        - If exactly one retailer is selected in the picker, use it.
+        - Otherwise, fall back to 'kroger' for backward compatibility.
+        """
+        try:
+            sel = self.retailer_picker.get_selected()
+            if len(sel) == 1:
+                name = sel[0]
+                return self._retailer_by_name.get(name, name.lower())
+        except Exception:
+            pass
+        return "kroger"
+    
+    def log(self, msg: str):
+        """Log to stdout and to client-specific logger if configured."""
+        try:
+            print(msg)
+        except Exception:
+            pass
+        try:
+            if hasattr(self, 'logger') and self.logger:
+                self.logger.info(msg)
+        except Exception:
+            pass
         
     def load_css_variables(self, css_path):
         """Parse :root CSS variables from a stylesheet for reuse in Tkinter."""
@@ -501,8 +538,7 @@ class KeywordInputApp:
         keywords = [kw.strip() for kw in keywords_text.split('\n') if kw.strip()]
         
         # Get retailer for proper output path
-        retailer_name = self.retailer_var.get().strip() or "Kroger"
-        retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
+        retailer_slug = self._schedule_retailer_slug()
         
         # Create output directory using retailer-scoped path
         base = get_base_dir()
@@ -536,150 +572,134 @@ class KeywordInputApp:
         try:
             import glob
 
+            # Get selected retailers
+            selected_retailers = self.retailer_picker.get_selected()
+            if not selected_retailers:
+                self.log("⚠️ Please select at least one retailer.")
+                messagebox.showwarning("No Retailers Selected", "Please select at least one retailer to scrape.")
+                return
+            
+            self.log(f"Selected retailers: {selected_retailers}")
+            self.log(f"Adapter map: {self._retailer_by_name}")
+            
             # Resolve paths
             client_type = self.client_var.get().strip()
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client_type)
 
-            # Resolve retailer + adapter
-            retailer_name = self.retailer_var.get().strip() or "Kroger"
-            retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
-            adapter = get_retailer_adapter(retailer_slug)
-
-            base = get_base_dir()
-            out_dir = output_dir_for(base, retailer_slug, folder_name)
-            logs_dir = logs_dir_for(base, retailer_slug)
-
-            profile_dir = os.environ.get(adapter.profile_env) or os.environ.get("KROGER_PROFILE_DIR") or DEFAULT_PROFILE
-
-            ctx = RunContext(
-                retailer=retailer_slug,
-                client=folder_name,
-                base_dir=base,
-                output_dir=out_dir,
-                runs_dir=os.path.join(out_dir, "runs"),
-                logs_dir=logs_dir,
-                profile_dir=profile_dir if os.path.isdir(profile_dir) else None,
-                script_dir=os.path.dirname(os.path.abspath(__file__)),
-            )
-            output_dir = ctx.output_dir  # keep your existing variable name for reuse
-            runs_dir = ctx.runs_dir
-            
-            # Record run start time and baseline JSON set
-            run_start_ts = time.time()
-            import glob, re
-            
-            # Baseline before we create any new files this run
-            baseline_json = set(glob.glob(os.path.join(runs_dir, "run_results_*.json")))
-            # Track what we collect in this GUI run only
-            run_pairs = []      # list of tuples: (json_path, html_path)
-            seen_json = set()   # to avoid double-adding
-
-            # Build popup
-            popup = tk.Toplevel(self.root)
-            popup.title("Scraping Progress")
-            popup.geometry("400x150")
-            popup.transient(self.root)
-            popup.grab_set()
-
-            progress_label = tk.Label(popup, text=f"Starting scraper for {client_type}...", pady=10)
-            progress_label.pack()
-
-            progress_var = tk.DoubleVar()
-            progress_bar = ttk.Progressbar(popup, variable=progress_var, maximum=len(keywords), style='blue.Horizontal.TProgressbar')
-            progress_bar.pack(fill=tk.X, padx=20, pady=10)
-
-            keyword_label = tk.Label(popup, text="")
-            keyword_label.pack(pady=5)
-
-            auto_close_var = tk.BooleanVar(value=True)
-            auto_close_cb = tk.Checkbutton(popup, text="Auto-close when complete", variable=auto_close_var)
-            auto_close_cb.pack(pady=5)
-
-            self.status_label.config(text=f"Starting scraper for {client_type}...")
-            self.root.update()
-
-            # Scrape loop
-            success_count = 0
-            for i, keyword in enumerate(keywords):
-                progress_var.set(i)
-                keyword_label.config(text=f"Scraping {i+1}/{len(keywords)}: {keyword}")
-                if progress_label.winfo_exists():
-                    progress_label.config(text=f"Processing keyword {i+1} of {len(keywords)}")
-                popup.update()
-
-                self.status_label.config(text=f"Scraping {i+1}/{len(keywords)}: {keyword}")
-                self.root.update()
-
-                max_retries = 3
-                retry_count = 0
-                scraped = False
-
-                while retry_count < max_retries and not scraped:
-                    if retry_count > 0:
-                        retry_msg = f"Retry attempt {retry_count}/{max_retries} for '{keyword}'..."
-                        if progress_label.winfo_exists():
-                            progress_label.config(text=retry_msg)
-                        self.status_label.config(text=retry_msg)
-                        popup.update()
-                        self.root.update()
-                        time.sleep(1.5)
-
+            # Run sequentially for each selected retailer
+            for retailer_name in selected_retailers:
+                try:
+                    slug = self._retailer_by_name_ci.get(retailer_name.lower())
+                    if not slug:
+                        self.log(f"⚠️ No adapter slug for '{retailer_name}' (skipping)")
+                        continue
+                    
                     try:
-                        # Use adapter for all retailers
-                        ok = adapter.search_and_capture(keyword, ctx)
-                        if ok:
-                            # Use adapter to collect pairs for this run
-                            new_pairs = adapter.collect_pairs_for_run(ctx, run_start_ts)
-                            # De-dup by seen_json
-                            for (j, h) in new_pairs:
-                                if j not in seen_json:
-                                    run_pairs.append((j, h))
-                                    seen_json.add(j)
-                            
-                            scraped = True
-                            success_count += 1
-                            break
-                        else:
-                            raise RuntimeError("search_and_capture returned False")
-
+                        adapter = get_retailer_adapter(slug)
                     except Exception as e:
-                        retry_count += 1
-                        if retry_count >= max_retries:
-                            err_text = f"Failed to scrape '{keyword}' after {max_retries} attempts: {e}"
-                            if progress_label.winfo_exists():
-                                progress_label.config(text=f"Error: {err_text}")
-                            popup.update()
-                            messagebox.showerror("Error", err_text)
-                            # Continue to next keyword, do not abort whole run
-
-            # Debug print of collected pairs
-            print(f"\n📊 Collected {len(run_pairs)} JSON/HTML pairs from this run")
-            for i, (jpath, hpath) in enumerate(run_pairs):
-                print(f"  {i+1}. JSON: {os.path.basename(jpath)}")
-                print(f"     HTML: {os.path.basename(hpath)}")
+                        self.log(f"⚠️ No adapter module for slug '{slug}' (skipping): {e}")
+                        continue
+                    
+                    self.log(f"\n{'='*60}")
+                    self.log(f"➡️ Running adapter '{slug}' for '{retailer_name}'")
+                    self.log(f"{'='*60}")
+                    
+                    self._run_scraper_for_retailer(retailer_name, slug, adapter, folder_name, keywords)
+                    
+                except Exception as e:
+                    self.log(f"❌ [{retailer_name}] failed: {e}")
+                    import traceback
+                    self.log(traceback.format_exc())
+                    
+            self.log(f"\n{'='*60}")
+            self.log(f"✅ Completed scraping for {len(selected_retailers)} retailer(s)")
+            self.log(f"{'='*60}\n")
             
-            # Post-processing: TOA/Skyscraper images
+        except Exception as e:
+            self.log(f"❌ Error: {str(e)}")
+            import traceback
+            self.log(traceback.format_exc())
+    
+    def _run_scraper_for_retailer(self, retailer_name, retailer_slug, adapter, folder_name, keywords):
+        """Run scraper for a single retailer."""
+        import glob
+
+        base = get_base_dir()
+        out_dir = output_dir_for(base, retailer_slug, folder_name)
+        logs_dir = logs_dir_for(base, retailer_slug)
+
+        profile_dir = os.environ.get(adapter.profile_env) or os.environ.get("KROGER_PROFILE_DIR") or DEFAULT_PROFILE
+        
+        if profile_dir and not os.path.isdir(profile_dir):
+            self.log(f"[{retailer_name}] profile dir not found or not a directory: {profile_dir} (continuing without persistent profile)")
+            profile_dir = None
+
+        ctx = RunContext(
+            retailer=retailer_slug,
+            client=folder_name,
+            base_dir=base,
+            output_dir=out_dir,
+            runs_dir=os.path.join(out_dir, "runs"),
+            logs_dir=logs_dir,
+            profile_dir=profile_dir if os.path.isdir(profile_dir) else None,
+            script_dir=os.path.dirname(os.path.abspath(__file__)),
+        )
+        output_dir = ctx.output_dir  # keep your existing variable name for reuse
+        runs_dir = ctx.runs_dir
+        
+        # Record run start time and baseline JSON set
+        run_start_ts = time.time()
+        import glob, re
+        
+        # Baseline before we create any new files this run
+        baseline_json = set(glob.glob(os.path.join(runs_dir, "run_results_*.json")))
+        # Track what we collect in this GUI run only
+        run_pairs = []      # list of tuples: (json_path, html_path)
+        seen_json = set()   # to avoid double-adding
+
+        # Build popup
+        popup = tk.Toplevel(self.root)
+        popup.title(f"Scraping Progress - {retailer_name}")
+        popup.geometry("400x150")
+        popup.transient(self.root)
+        popup.grab_set()
+
+        progress_label = tk.Label(popup, text=f"Starting scraper for {retailer_name}...", pady=10)
+        progress_label.pack()
+
+        progress_var = tk.DoubleVar()
+        progress_bar = ttk.Progressbar(popup, variable=progress_var, maximum=len(keywords), style='blue.Horizontal.TProgressbar')
+        progress_bar.pack(fill=tk.X, padx=20, pady=10)
+
+        keyword_label = tk.Label(popup, text="")
+        keyword_label.pack(pady=5)
+
+        auto_close_var = tk.BooleanVar(value=True)
+        auto_close_cb = tk.Checkbutton(popup, text="Auto-close when complete", variable=auto_close_var)
+        auto_close_cb.pack(pady=5)
+
+        self.status_label.config(text=f"Starting scraper for {retailer_name}...")
+        self.root.update()
+
+        # Scrape loop
+        success_count = 0
+        for i, keyword in enumerate(keywords):
+            progress_var.set(i)
+            keyword_label.config(text=f"Scraping {i+1}/{len(keywords)}: {keyword}")
             if progress_label.winfo_exists():
-                progress_label.config(text="Processing saved HTML files...")
-            keyword_label.config(text="")
+                progress_label.config(text=f"Processing keyword {i+1} of {len(keywords)}")
             popup.update()
 
-            self.status_label.config(text="Processing saved HTML files...")
+            self.status_label.config(text=f"Scraping {i+1}/{len(keywords)}: {keyword}")
             self.root.update()
 
             max_retries = 3
             retry_count = 0
-            post_success = False
-            last_error = ""
-            loop_deadline = time.time() + 6 * 60  # 6-minute watchdog
+            scraped = False
 
-            while retry_count < max_retries and not post_success:
-                if time.time() > loop_deadline:
-                    last_error = last_error or "Timed out waiting for image extraction."
-                    break
-
+            while retry_count < max_retries and not scraped:
                 if retry_count > 0:
-                    retry_msg = f"Retry attempt {retry_count}/{max_retries} for HTML processing..."
+                    retry_msg = f"Retry attempt {retry_count}/{max_retries} for '{keyword}'..."
                     if progress_label.winfo_exists():
                         progress_label.config(text=retry_msg)
                     self.status_label.config(text=retry_msg)
@@ -688,77 +708,140 @@ class KeywordInputApp:
                     time.sleep(1.5)
 
                 try:
-                    # Small flush delay
-                    time.sleep(0.75)
-                    
-                    # Safety: if for some reason collection missed files, fallback minimally
-                    if not run_pairs:
-                        # Collect ONLY files created during this GUI session (mtime gate)
-                        cands = sorted([p for p in glob.glob(os.path.join(runs_dir, "run_results_*.json"))
-                                        if os.path.getmtime(p) >= run_start_ts - 2], key=os.path.getmtime)
-                        for jpath in cands:
-                            hpath = jpath.replace("run_results_", "search_results_").replace(".json", ".html")
-                            if os.path.exists(hpath):
-                                run_pairs.append((jpath, hpath))
-                    
-                    if not run_pairs:
-                        last_error = "No new run_results_*.json were created in this run."
-                        break
-                    
-                    total_toa = total_sky = total_car = 0
-                    per_file_summary = []
-                    
-                    for idx, (json_path, html_path) in enumerate(run_pairs, start=1):
-                        if progress_label.winfo_exists():
-                            progress_label.config(text=f"[{idx}/{len(run_pairs)}] Extracting images...")
-                            popup.update()
+                    # Use adapter for all retailers
+                    ok = adapter.search_and_capture(keyword, ctx)
+                    if ok:
+                        # Use adapter to collect pairs for this run
+                        new_pairs = adapter.collect_pairs_for_run(ctx, run_start_ts)
+                        # De-dup by seen_json
+                        for (j, h) in new_pairs:
+                            if j not in seen_json:
+                                run_pairs.append((j, h))
+                                seen_json.add(j)
                         
-                        # Use adapter to extract images
-                        res = adapter.extract_images(json_path, html_path, ctx)
-                        n_toa, n_sky, n_car = res.get("toa", 0), res.get("sky", 0), res.get("car", 0)
-                        total_toa += n_toa
-                        total_sky += n_sky
-                        total_car += n_car
-                        per_file_summary.append((os.path.basename(json_path), n_toa, n_sky, n_car))
-                        
-                        # Update progress with results
-                        if progress_label.winfo_exists():
-                            progress_label.config(text=f"[{idx}/{len(run_pairs)}] Extracted: TOA={n_toa}, Sky={n_sky}, Car={n_car}")
-                            popup.update()
-                    
-                    # Summarize across all terms from this run
-                    if (total_toa + total_sky) > 0:
-                        print("✅ Image extraction completed for this run:")
-                        for jf, a, b, c in per_file_summary:
-                            print(f"   - {jf}: TOA={a} Skyscraper={b} Carousel={c}")
-                        print(f"TOTAL: TOA={total_toa} Skyscraper={total_sky} Carousel={total_car}")
-                        post_success = True
+                        scraped = True
+                        success_count += 1
                         break
                     else:
-                        last_error = "No TOA/Skyscraper produced for any search in this run."
-                        retry_count += 1
-                        if retry_count < max_retries:
-                            print(f"⚠️ None produced; will retry ({retry_count}/{max_retries}).")
-                        else:
-                            print("❌ Extraction failed after maximum retries.")
+                        raise RuntimeError("search_and_capture returned False")
 
                 except Exception as e:
                     retry_count += 1
-                    error_msg = f"HTML processing error: {e}" if retry_count < max_retries else f"Failed to process HTML files after {max_retries} attempts: {e}"
-                    if progress_label.winfo_exists():
-                        progress_label.config(text=f"Error: {error_msg}")
-                    popup.update()
                     if retry_count >= max_retries:
-                        messagebox.showerror("Error", error_msg)
-                        self.status_label.config(text="Error processing HTML files")
+                        err_text = f"Failed to scrape '{keyword}' after {max_retries} attempts: {e}"
+                        if progress_label.winfo_exists():
+                            progress_label.config(text=f"Error: {err_text}")
+                        popup.update()
+                        messagebox.showerror("Error", err_text)
+                        # Continue to next keyword, do not abort whole run
 
-                    if time.time() > loop_deadline:
-                        last_error = last_error or "Timed out waiting for image extraction."
-                        break
+        # Debug print of collected pairs
+        print(f"\n📊 Collected {len(run_pairs)} JSON/HTML pairs from this run")
+        for i, (jpath, hpath) in enumerate(run_pairs):
+            print(f"  {i+1}. JSON: {os.path.basename(jpath)}")
+            print(f"     HTML: {os.path.basename(hpath)}")
+        
+        # Post-processing: TOA/Skyscraper images
+        if progress_label.winfo_exists():
+            progress_label.config(text="Processing saved HTML files...")
+        keyword_label.config(text="")
+        popup.update()
 
-            # Final UI
-            progress_var.set(len(keywords))
-            if post_success:
+        self.status_label.config(text="Processing saved HTML files...")
+        self.root.update()
+
+        max_retries = 3
+        retry_count = 0
+        post_success = False
+        last_error = ""
+        loop_deadline = time.time() + 6 * 60  # 6-minute watchdog
+
+        while retry_count < max_retries and not post_success:
+            if time.time() > loop_deadline:
+                last_error = last_error or "Timed out waiting for image extraction."
+                break
+
+            if retry_count > 0:
+                retry_msg = f"Retry attempt {retry_count}/{max_retries} for HTML processing..."
+                if progress_label.winfo_exists():
+                    progress_label.config(text=retry_msg)
+                self.status_label.config(text=retry_msg)
+                popup.update()
+                self.root.update()
+                time.sleep(1.5)
+
+            try:
+                # Small flush delay
+                time.sleep(0.75)
+                
+                # Safety: if for some reason collection missed files, fallback minimally
+                if not run_pairs:
+                    # Collect ONLY files created during this GUI session (mtime gate)
+                    cands = sorted([p for p in glob.glob(os.path.join(runs_dir, "run_results_*.json"))
+                                    if os.path.getmtime(p) >= run_start_ts - 2], key=os.path.getmtime)
+                    for jpath in cands:
+                        hpath = jpath.replace("run_results_", "search_results_").replace(".json", ".html")
+                        if os.path.exists(hpath):
+                            run_pairs.append((jpath, hpath))
+                
+                if not run_pairs:
+                    last_error = "No new run_results_*.json were created in this run."
+                    break
+                
+                total_toa = total_sky = total_car = 0
+                per_file_summary = []
+                
+                for idx, (json_path, html_path) in enumerate(run_pairs, start=1):
+                    if progress_label.winfo_exists():
+                        progress_label.config(text=f"[{idx}/{len(run_pairs)}] Extracting images...")
+                        popup.update()
+                    
+                    # Use adapter to extract images
+                    res = adapter.extract_images(json_path, html_path, ctx)
+                    n_toa, n_sky, n_car = res.get("toa", 0), res.get("sky", 0), res.get("car", 0)
+                    total_toa += n_toa
+                    total_sky += n_sky
+                    total_car += n_car
+                    per_file_summary.append((os.path.basename(json_path), n_toa, n_sky, n_car))
+                    
+                    # Update progress with results
+                    if progress_label.winfo_exists():
+                        progress_label.config(text=f"[{idx}/{len(run_pairs)}] Extracted: TOA={n_toa}, Sky={n_sky}, Car={n_car}")
+                        popup.update()
+                
+                # Summarize across all terms from this run
+                if (total_toa + total_sky) > 0:
+                    print("✅ Image extraction completed for this run:")
+                    for jf, a, b, c in per_file_summary:
+                        print(f"   - {jf}: TOA={a} Skyscraper={b} Carousel={c}")
+                    print(f"TOTAL: TOA={total_toa} Skyscraper={total_sky} Carousel={total_car}")
+                    post_success = True
+                    break
+                else:
+                    last_error = "No TOA/Skyscraper produced for any search in this run."
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        print(f"⚠️ None produced; will retry ({retry_count}/{max_retries}).")
+                    else:
+                        print("❌ Extraction failed after maximum retries.")
+
+            except Exception as e:
+                retry_count += 1
+                error_msg = f"HTML processing error: {e}" if retry_count < max_retries else f"Failed to process HTML files after {max_retries} attempts: {e}"
+                if progress_label.winfo_exists():
+                    progress_label.config(text=f"Error: {error_msg}")
+                popup.update()
+                if retry_count >= max_retries:
+                    messagebox.showerror("Error", error_msg)
+                    self.status_label.config(text="Error processing HTML files")
+
+                if time.time() > loop_deadline:
+                    last_error = last_error or "Timed out waiting for image extraction."
+                    break
+
+        # Final UI
+        progress_var.set(len(keywords))
+        if post_success:
                 result_msg = f"Completed scraping {success_count}/{len(keywords)} keywords successfully"
                 if progress_label.winfo_exists():
                     progress_label.config(text=result_msg)
@@ -771,7 +854,7 @@ class KeywordInputApp:
                     fg="green"
                 )
                 post_processing_label.pack(pady=5)
-            else:
+        else:
                 warn = last_error or "No ad images were generated."
                 if progress_label.winfo_exists():
                     progress_label.config(text=f"⚠️ {warn}")
@@ -779,19 +862,9 @@ class KeywordInputApp:
                 messagebox.showwarning("Extraction incomplete", warn)
                 self.status_label.config(text=f"Extraction incomplete: {warn}")
 
-            tk.Button(popup, text="Close", command=popup.destroy).pack(pady=10)
-            if auto_close_var.get():
-                popup.after(3000, popup.destroy)
-
-        except (subprocess.SubprocessError, IOError, OSError) as e:
-            error_msg = f"An error occurred: {str(e)}"
-            messagebox.showerror("Error", error_msg)
-            self.status_label.config(text=f"Error: {str(e)}")
-            try:
-                if 'popup' in locals() and popup.winfo_exists():
-                    popup.destroy()
-            except (NameError, tk.TclError):
-                pass
+        tk.Button(popup, text="Close", command=popup.destroy).pack(pady=10)
+        if auto_close_var.get():
+            popup.after(3000, popup.destroy)
 
     def load_client_history(self):
         """Load client history from file"""
@@ -885,8 +958,7 @@ class KeywordInputApp:
         scheduled_times = self.get_all_scheduled_times(exclude_client)
         
         # Get current retailer
-        retailer_name = self.retailer_var.get().strip() or "Kroger"
-        retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
+        retailer_slug = self._schedule_retailer_slug()
         
         for day in days:
             # Check for conflicts in the same retailer
@@ -940,8 +1012,7 @@ class KeywordInputApp:
         elif ampm == "AM" and hour_12 == 12:
             hour_24 = 0
 
-        retailer_name = self.retailer_var.get().strip() or "Kroger"
-        retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
+        retailer_slug = self._schedule_retailer_slug()
         scheduled = self.get_all_scheduled_times(exclude_client=exclude_client)
         allowed = []
         for m in range(0, 60, 5):
@@ -959,8 +1030,7 @@ class KeywordInputApp:
         if not selected_days:
             return True
 
-        retailer_name = self.retailer_var.get().strip() or "Kroger"
-        retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
+        retailer_slug = self._schedule_retailer_slug()
         scheduled = self.get_all_scheduled_times(exclude_client=selected_client)
         for hour_var, minute_var, ampm_var in self.time_vars:
             try:
@@ -1727,8 +1797,7 @@ class KeywordInputApp:
         folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client)
         
         # Include retailer in the path
-        retailer_name = self.retailer_var.get().strip() or "Kroger"
-        retailer_slug = self._retailer_by_name.get(retailer_name, "kroger")
+        retailer_slug = self._schedule_retailer_slug()
         client_schedule_file = os.path.join(get_base_dir(), "output", retailer_slug, folder_name, "schedule_config.json")
         
         # Get current times
@@ -1931,22 +2000,6 @@ def main():
         print(f"Error in main: {e}")
         traceback.print_exc()
         raise
-
-if __name__ == "__main__":
-    print("Starting Retail Ad Monitor GUI...")
-    try:
-        print("Creating Tk root window")
-        root = tk.Tk()
-        print("Root window created successfully")
-        print("Initializing KeywordInputApp")
-        app = KeywordInputApp(root)
-        print("KeywordInputApp initialized successfully")
-        print("Starting mainloop")
-        root.mainloop()
-    except Exception as e:
-        print(f"Error in main: {e}")
-        import traceback
-        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
