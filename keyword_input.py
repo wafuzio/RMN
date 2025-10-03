@@ -296,29 +296,19 @@ class KeywordInputApp:
         self.new_client_btn.state(['!disabled'])  # ensure enabled
         self.new_client_btn.pack(side=tk.LEFT)
         
-        # Build retailer name mapping
+        # Build adapter maps (exact and case-insensitive)
         adapters = list_adapters()
         self._retailer_by_name = {a.display_name: a.slug for a in adapters}
         self._retailer_by_name_ci = {a.display_name.lower(): a.slug for a in adapters}
         print(f"Registered adapters: {self._retailer_by_name}")
-        print(f"CI map: {self._retailer_by_name_ci}")
-        
-        # Debug: ensure adapters are registered
-        if not adapters:
-            print("⚠️ WARNING: No adapters registered!")
-            import sys as _sys
-            _sys.stderr.write("ERROR: No retailer adapters found!\n")
-            _sys.stderr.flush()
         
         # Multi-select retailer picker
         retailer_frame = ttk.LabelFrame(main_frame, text="Select Retailers", style='Card.TLabelframe', padding=10)
         retailer_frame.pack(fill=tk.X, padx=20, pady=(10, 5))
         
-        # Determine which retailers are unavailable (not yet implemented)
-        unavailable = set()
-        for name in ["Amazon", "Walmart", "Albertsons", "Doordash", "gopuff", "Target", "Hyvee", "Meijer", "Ahold", "Kroger", "Instacart"]:
-            if name.lower() not in self._retailer_by_name_ci:
-                unavailable.add(name)
+        # Determine which retailers are unavailable (not registered)
+        all_names = ["Amazon", "Walmart", "Kroger", "Instacart", "Albertsons", "Doordash", "gopuff", "Target", "Hyvee", "Meijer", "Ahold"]
+        unavailable = {name for name in all_names if name.lower() not in self._retailer_by_name_ci}
         
         self.retailer_picker = RetailerPicker(retailer_frame, unavailable=unavailable, columns=4)
         self.retailer_picker.pack(fill=tk.X, padx=5, pady=5)
@@ -602,18 +592,12 @@ class KeywordInputApp:
                         self.log(f"⚠️ No adapter slug for '{retailer_name}' (skipping)")
                         continue
                     
-                    try:
-                        adapter = get_retailer_adapter(slug)
-                    except Exception as e:
-                        self.log(f"⚠️ No adapter module for slug '{slug}' (skipping): {e}")
-                        continue
+                    adapter = get_retailer_adapter(slug)
+                    self.log(f"➡️ [{retailer_name}] resolved to slug '{slug}', adapter={getattr(adapter, '__module__', adapter)}")
                     
-                    self.log(f"\n{'='*60}")
-                    self.log(f"➡️ Running adapter '{slug}' for '{retailer_name}'")
-                    self.log(f"{'='*60}")
-                    
+                    self.log(f"➡️ [{retailer_name}] entering _run_scraper_for_retailer")
                     self._run_scraper_for_retailer(retailer_name, slug, adapter, folder_name, keywords)
-                    
+                    self.log(f"✅ [{retailer_name}] _run_scraper_for_retailer returned")
                 except Exception as e:
                     self.log(f"❌ [{retailer_name}] failed: {e}")
                     import traceback
