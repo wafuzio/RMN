@@ -43,7 +43,7 @@ class KrogerAdapter(RetailerAdapter):
             "--json", json_path,
             "--html", html_path,
             "--output", ctx.output_dir,
-            "--headless",
+            # Removed --headless for Kroger: navigation works better in headed mode
             "--no-lock",
             "--time-window", "45",
             "--browser-lock-timeout", "600",
@@ -51,6 +51,9 @@ class KrogerAdapter(RetailerAdapter):
         env = os.environ.copy()
         env.setdefault("PYTHONUNBUFFERED", "1")
         env.setdefault("PYTHONIOENCODING", "utf-8")
+        # Ensure Playwright browsers path is passed to subprocess
+        if "PLAYWRIGHT_BROWSERS_PATH" in os.environ:
+            env["PLAYWRIGHT_BROWSERS_PATH"] = os.environ["PLAYWRIGHT_BROWSERS_PATH"]
         if ctx.profile_dir and os.path.isdir(ctx.profile_dir):
             cmd += ["--profile-dir", ctx.profile_dir]
             env[self.profile_env] = ctx.profile_dir

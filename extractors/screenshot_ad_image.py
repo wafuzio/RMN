@@ -23,10 +23,11 @@ import time
 import argparse
 import urllib.request
 import urllib.error
+from urllib.parse import urljoin
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
-from playwright.sync_api import sync_playwright, Page, BrowserContext, TimeoutError as PlaywrightTimeout
+from playwright.sync_api import sync_playwright, BrowserContext
 from browser_lock import single_browser_lock, FileLock
 import pathlib
 
@@ -40,9 +41,7 @@ REAL_UA = (
 DEFAULT_HEADERS = {
     "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-Mode": "no-cors",
-    "Sec-Fetch-Dest": "image",
+    # Sec-Fetch headers removed - servers compute these; mismatches can trigger 403/redirects
 }
 
 
@@ -114,8 +113,8 @@ def download_image_with_context(
             if resp.status in (301, 302, 303, 307, 308):
                 loc = resp.headers.get("location")
                 if loc:
-                    current = loc
-                    print(f"[ctx] redirect {resp.status} -> {loc}")
+                    current = urljoin(current, loc)  # Handle relative redirects
+                    print(f"[ctx] redirect {resp.status} -> {current}")
                     time.sleep(backoff_s * attempt)
                     continue
             print(f"[ctx] status {resp.status} for {current}")
@@ -304,31 +303,8 @@ def extract_image_urls_from_json(
 
 
 # ----------------------------
-# Screenshot
+# Screenshot / Process
 # ----------------------------
-
-def screenshot_img_element(page: Page, output_path: str) -> bool:
-    """
-    Try to screenshot only the <img> element on the page.
-    Returns True on success.
-    """
-    try:
-        img = page.query_selector("img")
-        if not img:
-            # Try waiting briefly for late image attach
-            page.wait_for_selector("img", state="visible", timeout=5000)
-            img = page.query_selector("img")
-        if not img:
-            return False
-
-        # Take element screenshot
-        img.screenshot(path=output_path)
-        print(f"✅ Element screenshot saved: {output_path}")
-        return True
-    except Exception as e:
-        print(f"⚠️ Element screenshot failed, will try fallback: {e}")
-        return False
-
 
 def process_images(
     image_urls: List[Dict[str, Any]],
@@ -339,7 +315,7 @@ def process_images(
     bypass_locks: bool = False,
     browser_lock_timeout: int = 600,
     args = None,
-) -> None:
+) -> int:
     """
     Process image URLs and take screenshots.
     Will:
@@ -347,10 +323,14 @@ def process_images(
     - For each URL, navigate and capture a screenshot
       * If the document is an image (Content-Type: image/*), capture full-page
       * Else, try to capture the <img> element; fall back to full-page
+    
+    Returns: Number of images successfully saved
     """
     if not image_urls:
         print("❌ No image URLs to process")
-        return
+        return 0
+    
+    saved_count = 0
 
     # Base output root
     base_dir = os.path.join(output_dir, client) if client else output_dir
@@ -371,6 +351,10 @@ def process_images(
             return carousel_dir
         return toa_dir
 
+    # Compute SRP URL once for all images
+    srp_url = load_srp_url(args.json) or ""
+    print(f"[session] srp_url={srp_url or '<none>'}")
+    
     if bypass_locks:
         print("⚠️ Bypassing browser lock as requested")
         # Run without the browser lock
@@ -404,22 +388,35 @@ def process_images(
                     page.set_default_timeout(15000)
                     page.set_default_navigation_timeout(45000)
                     
-                    # Seed cookies by visiting the SRP page once
-                    srp_url = load_srp_url(args.json)
-                    if srp_url:
+                    # Seed cookies robustly - try multiple URLs
+                    seed_candidates = [
+                        srp_url,
+                        "https://www.kroger.com/search?query=milk",  # lighter than root
+                        "https://www.kroger.com/",  # root as last resort
+                    ]
+                    cookies_ok = False
+                    for seed in [u for u in seed_candidates if u]:
                         try:
-                            print(f"[session] Seeding cookies from: {srp_url}")
-                            page.goto(srp_url, wait_until="domcontentloaded", timeout=45000)
-                            page.wait_for_timeout(1000)
-                            
-                            # Log cookie count and names
+                            print(f"[session] Seeding cookies from: {seed}")
+                            page.goto(seed, wait_until="commit", timeout=60000)  # commit is more reliable
+                            page.wait_for_timeout(1200)
                             cookies = context.cookies("https://www.kroger.com")
-                            print(f"[cookies] kroger.com={len(cookies)} -> {[c['name'] for c in cookies[:5]]}")
+                            print(f"[cookies] kroger.com={len(cookies)} -> {[c['name'] for c in cookies[:6]]}")
+                            if len(cookies) > 0:
+                                cookies_ok = True
+                                break
                         except Exception as e:
-                            print(f"[warn] Could not preload SRP: {e}")
+                            print(f"[warn] Seed failed for {seed}: {e}")
+                    
+                    if not cookies_ok:
+                        print("⚠️ No cookies after seeding attempts. Image downloads may hang.")
                     
                     # Set headers for all subsequent requests
-                    context.set_extra_http_headers({**DEFAULT_HEADERS, "Referer": srp_url or "https://www.kroger.com"})
+                    context.set_extra_http_headers({
+                        **DEFAULT_HEADERS,
+                        "Referer": srp_url or "https://www.kroger.com/",
+                        "User-Agent": REAL_UA
+                    })
                 else:
                     browser = p.chromium.launch(headless=headless, args=["--disable-http2"])
                     context = browser.new_context(
@@ -428,24 +425,35 @@ def process_images(
                         user_agent=REAL_UA,
                     )
                     
-                    # Seed cookies by visiting the SRP page once
-                    srp_url = load_srp_url(args.json)
-                    if srp_url:
+                    # Seed cookies robustly - try multiple URLs
+                    seed_candidates = [
+                        srp_url,
+                        "https://www.kroger.com/search?query=milk",  # lighter than root
+                        "https://www.kroger.com/",  # root as last resort
+                    ]
+                    cookies_ok = False
+                    tmp = context.new_page()
+                    for seed in [u for u in seed_candidates if u]:
                         try:
-                            print(f"[session] Seeding cookies from: {srp_url}")
-                            tmp = context.new_page()
-                            tmp.goto(srp_url, wait_until="domcontentloaded", timeout=45000)
-                            tmp.wait_for_timeout(1000)
-                            tmp.close()
+                            print(f"[session] Seeding cookies from: {seed}")
+                            tmp.goto(seed, wait_until="commit", timeout=60000)  # commit is more reliable
+                            tmp.wait_for_timeout(1200)
                             cookies = context.cookies("https://www.kroger.com")
-                            print(f"[cookies] kroger.com={len(cookies)} -> {[c['name'] for c in cookies[:5]]}")
+                            print(f"[cookies] kroger.com={len(cookies)} -> {[c['name'] for c in cookies[:6]]}")
+                            if len(cookies) > 0:
+                                cookies_ok = True
+                                break
                         except Exception as e:
-                            print(f"[warn] Could not preload SRP: {e}")
+                            print(f"[warn] Seed failed for {seed}: {e}")
+                    tmp.close()
+                    
+                    if not cookies_ok:
+                        print("⚠️ No cookies after seeding attempts. Image downloads may hang.")
                     
                     # Set headers for ALL subsequent requests
                     context.set_extra_http_headers({
                         **DEFAULT_HEADERS,
-                        "Referer": srp_url or "https://www.kroger.com",
+                        "Referer": srp_url or "https://www.kroger.com/",
                         "User-Agent": REAL_UA
                     })
                     
@@ -485,36 +493,38 @@ def process_images(
                     # Navigate and screenshot
                     try:
                         print("🌐 Downloading image")
-                        # Prefer direct HTTP fetch tied to the browser context (avoids h2 flakiness)
-                        referer = load_srp_url(args.json) or "https://www.kroger.com/"
-                        ok = download_image_with_context(
-                            context=page.context,
-                            url=image_url,
-                            dest_path=output_path,
-                            referer=referer,
-                            retries=3,
-                            backoff_s=1.0,
-                        )
+                        ok = False
                         
-                        if ok:
-                            print(f"✅ Image downloaded successfully to: {output_path}")
-                        else:
-                            # Second attempt: try rendering in a tab (some CDNs require it)
-                            print("⚠️ Context download failed, trying browser fallback...")
+                        # Fast path: try context.request once with short timeout (Kroger CDN often blocks this)
+                        try:
+                            resp = page.context.request.get(image_url, timeout=5000)
+                            if resp.ok:
+                                with open(output_path, "wb") as f:
+                                    f.write(resp.body())
+                                print(f"✅ [fast] Image downloaded via context.request")
+                                saved_count += 1
+                                ok = True
+                        except Exception as e:
+                            print(f"[fast] context.request failed or timed out: {e}")
+                        
+                        # Robust path: navigation (works reliably for Kroger CDN)
+                        if not ok:
                             try:
-                                # Image documents don't fire domcontentloaded; use commit
+                                print("[nav] Opening image URL in browser tab...")
                                 page.goto(image_url, wait_until="commit", timeout=30000)
-                                page.wait_for_timeout(400)
+                                page.wait_for_timeout(300)
                                 page.screenshot(path=output_path, full_page=False)
-                                print(f"✅ Fallback screenshot saved to: {output_path}")
+                                print(f"✅ [nav] Screenshot saved to: {output_path}")
+                                saved_count += 1
                                 ok = True
                             except Exception as e:
-                                print(f"❌ Navigation/screenshot fallback error: {e}")
-                                # Last resort: direct download without browser context
-                                print("⚠️ Browser fallback failed, trying direct download...")
-                                ok = direct_download_image(image_url, output_path, referer=referer, retries=3)
+                                print(f"❌ [nav] Navigation failed: {e}")
+                                # Last resort: direct urllib download
+                                print("[urllib] Trying direct download...")
+                                ok = direct_download_image(image_url, output_path, referer=srp_url or "https://www.kroger.com/", retries=3)
                                 if ok:
-                                    print(f"✅ Direct download successful: {output_path}")
+                                    print(f"✅ [urllib] Direct download successful")
+                                    saved_count += 1
                                 else:
                                     print(f"❌ All download methods failed for: {image_url}")
                     except Exception as e:
@@ -567,22 +577,35 @@ def process_images(
                         page.set_default_timeout(15000)
                         page.set_default_navigation_timeout(45000)
                         
-                        # Seed cookies by visiting the SRP page once
-                        srp_url = load_srp_url(args.json)
-                        if srp_url:
+                        # Seed cookies robustly - try multiple URLs
+                        seed_candidates = [
+                            srp_url,
+                            "https://www.kroger.com/search?query=milk",  # lighter than root
+                            "https://www.kroger.com/",  # root as last resort
+                        ]
+                        cookies_ok = False
+                        for seed in [u for u in seed_candidates if u]:
                             try:
-                                print(f"[session] Seeding cookies from: {srp_url}")
-                                page.goto(srp_url, wait_until="domcontentloaded", timeout=45000)
-                                page.wait_for_timeout(1000)
-                                
-                                # Log cookie count and names
+                                print(f"[session] Seeding cookies from: {seed}")
+                                page.goto(seed, wait_until="commit", timeout=60000)  # commit is more reliable
+                                page.wait_for_timeout(1200)
                                 cookies = context.cookies("https://www.kroger.com")
-                                print(f"[cookies] kroger.com={len(cookies)} -> {[c['name'] for c in cookies[:5]]}")
+                                print(f"[cookies] kroger.com={len(cookies)} -> {[c['name'] for c in cookies[:6]]}")
+                                if len(cookies) > 0:
+                                    cookies_ok = True
+                                    break
                             except Exception as e:
-                                print(f"[warn] Could not preload SRP: {e}")
+                                print(f"[warn] Seed failed for {seed}: {e}")
+                        
+                        if not cookies_ok:
+                            print("⚠️ No cookies after seeding attempts. Image downloads may hang.")
                         
                         # Set headers for all subsequent requests
-                        context.set_extra_http_headers({**DEFAULT_HEADERS, "Referer": srp_url or "https://www.kroger.com"})
+                        context.set_extra_http_headers({
+                            **DEFAULT_HEADERS,
+                            "Referer": srp_url or "https://www.kroger.com/",
+                            "User-Agent": REAL_UA
+                        })
                     else:
                         # Launch browser with stability flags
                         browser = p.chromium.launch(
@@ -598,23 +621,21 @@ def process_images(
                         )
                         
                         # Seed cookies by visiting the SRP page once
-                        srp_url = load_srp_url(args.json)
-                        if srp_url:
-                            try:
-                                print(f"[session] Seeding cookies from: {srp_url}")
-                                tmp = context.new_page()
-                                tmp.goto(srp_url, wait_until="domcontentloaded", timeout=45000)
-                                tmp.wait_for_timeout(1000)
-                                tmp.close()
-                                cookies = context.cookies("https://www.kroger.com")
-                                print(f"[cookies] kroger.com={len(cookies)} -> {[c['name'] for c in cookies[:5]]}")
-                            except Exception as e:
-                                print(f"[warn] Could not preload SRP: {e}")
+                        try:
+                            print(f"[session] Seeding cookies from: {srp_url}")
+                            tmp = context.new_page()
+                            tmp.goto(srp_url, wait_until="domcontentloaded", timeout=45000)
+                            tmp.wait_for_timeout(1000)
+                            tmp.close()
+                            cookies = context.cookies("https://www.kroger.com")
+                            print(f"[cookies] kroger.com={len(cookies)} -> {[c['name'] for c in cookies[:5]]}")
+                        except Exception as e:
+                            print(f"[warn] Could not preload SRP: {e}")
                         
                         # Set headers for ALL subsequent requests
                         context.set_extra_http_headers({
                             **DEFAULT_HEADERS,
-                            "Referer": srp_url or "https://www.kroger.com",
+                            "Referer": srp_url,
                             "User-Agent": REAL_UA
                         })
                     
@@ -656,14 +677,13 @@ def process_images(
                         try:
                             print("🌐 Downloading image")
                             # Prefer direct HTTP fetch tied to the browser context (avoids h2 flakiness)
-                            referer = "https://www.kroger.com/"
                             ok = download_image_with_context(
                                 context=page.context,
                                 url=image_url,
                                 dest_path=output_path,
-                                referer=referer,
+                                referer=srp_url,
                                 retries=3,
-                                backoff_s=0.8,
+                                backoff_s=1.0,
                             )
                             
                             if ok:
@@ -672,8 +692,8 @@ def process_images(
                                 # Second attempt: try rendering in a tab (some CDNs require it)
                                 print("⚠️ Context download failed, trying browser fallback...")
                                 try:
-                                    # A slightly softer wait avoids h2 reset loops
-                                    page.goto(image_url, wait_until="domcontentloaded", timeout=20000)
+                                    # Image docs don't reliably fire domcontentloaded; use commit
+                                    page.goto(image_url, wait_until="commit", timeout=30000)
                                     page.wait_for_timeout(400)
                                     page.screenshot(path=output_path, full_page=False)
                                     print(f"✅ Fallback screenshot saved to: {output_path}")
@@ -682,7 +702,7 @@ def process_images(
                                     print(f"❌ Navigation/screenshot fallback error: {e}")
                                     # Last resort: direct download without browser context
                                     print("⚠️ Browser fallback failed, trying direct download...")
-                                    ok = direct_download_image(image_url, output_path, retries=3)
+                                    ok = direct_download_image(image_url, output_path, referer=srp_url, retries=3)
                                     if ok:
                                         print(f"✅ Direct download successful: {output_path}")
                                     else:
@@ -705,6 +725,9 @@ def process_images(
                             browser.close()
                     except Exception:
                         pass
+    
+    print(f"\n📊 Summary: {saved_count}/{len(image_urls)} images saved successfully")
+    return saved_count
 
 
 # ----------------------------
@@ -788,7 +811,7 @@ def main() -> int:
 
     print(f"🔒 Queuing for client '{client_for_lock}' at {client_lock_path}")
     if args.no_lock:
-        process_images(
+        saved = process_images(
             image_urls=image_urls,
             output_dir=args.output,
             client=args.client,
@@ -801,7 +824,7 @@ def main() -> int:
     else:
         with FileLock(path=client_lock_path, timeout=900):
             print("✅ Acquired per-client queue")
-            process_images(
+            saved = process_images(
                 image_urls=image_urls,
                 output_dir=args.output,
                 client=args.client,
@@ -811,6 +834,10 @@ def main() -> int:
                 browser_lock_timeout=args.browser_lock_timeout,
                 args=args,
             )
+    
+    if saved == 0:
+        print("❌ No images saved; exiting with failure for orchestrator.")
+        return 1
 
     return 0
 
