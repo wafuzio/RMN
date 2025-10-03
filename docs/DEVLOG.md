@@ -1,6 +1,22 @@
 # Dev Log
 
-Reverse‑chronological, terse. Link PRs when applicable.
+Append-only notes by retailer/division. Keep each bullet to ~2 lines and link the PR.
+
+## Kroger
+
+**2025-10-02:** Headless timeouts in packaged app; headed ok. Adopted nav-first capture, headed-but-hidden mode, SRP fallback, exit 1 on zero saves. Require `source_url` in JSON. Added minimization flags to hide browser window. (PR #TBD)
+
+## Instacart
+
+**2025-09-??:** Location pin via zip; login modal guard; headless ok. Element screenshot from SRP (no direct image URLs). (PR #118)
+
+## Internal
+
+**2025-10-02:** README taxonomy now auto-generated from `utils/path_taxonomy.py`; added `scripts/docs/update_docs.py` and CI check. Created comprehensive onboarding docs: RETAILER_ONBOARDING_CHECKLIST.md, PLAYWRIGHT_BOOTSTRAP.md, ARTIFACT_TAXONOMY.md, COMMON_ISSUES.md. (PR #TBD)
+
+---
+
+## Archive (Reverse-chronological)
 
 ## 2025‑10‑01
 - Repository reorganization and path fixes

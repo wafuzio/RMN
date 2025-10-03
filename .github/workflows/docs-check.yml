@@ -1,0 +1,50 @@
+name: Docs Check
+
+on:
+  pull_request:
+    paths:
+      - 'utils/path_taxonomy.py'
+      - 'README.md'
+      - 'scripts/docs/**'
+      - '.github/workflows/docs-check.yml'
+
+jobs:
+  docs:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Check README taxonomy is up to date
+        run: python scripts/docs/update_docs.py --check
+      
+      - name: Verify taxonomy consistency
+        run: |
+          python3 -c "
+          from utils.path_taxonomy import TAXONOMY
+          import os
+          
+          # Check for invalid folders in existing output
+          for retailer in TAXONOMY.keys():
+              retailer_dir = f'output/{retailer}'
+              if not os.path.isdir(retailer_dir):
+                  continue
+              
+              allowed = set(TAXONOMY[retailer])
+              
+              for client in os.listdir(retailer_dir):
+                  client_path = os.path.join(retailer_dir, client)
+                  if not os.path.isdir(client_path):
+                      continue
+                  
+                  for folder in os.listdir(client_path):
+                      folder_path = os.path.join(client_path, folder)
+                      if os.path.isdir(folder_path) and folder not in allowed:
+                          print(f'❌ Invalid folder: {folder_path}')
+                          exit(1)
+          
+          print('✅ All folders valid')
+          "

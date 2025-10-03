@@ -20,8 +20,22 @@ Retailer‑scoped paths and logs:
 output///...
 
 Supported Retailers
-- Kroger: Captures TOA, Skyscraper, and Carousel ads
-- Amazon: Captures Sponsored Brands (TOA), Sponsored Display (Skyscraper), and Sponsored Products (Carousel)
+- **Kroger:** Captures TOA, Skyscraper, and Carousel ads
+- **Instacart:** Captures Shoppable Display Ads, Shoppable Video Ads, and Display Ads
+- **Amazon:** Captures Sponsored Brands (TOA), Sponsored Display (Skyscraper), and Sponsored Products (Carousel)
+
+## Retailer Taxonomy (Auto-Generated)
+
+> **Do not edit inside this block.** Run `python scripts/docs/update_docs.py` to regenerate from code.
+
+<!-- TAXONOMY_START -->
+| Retailer | Allowed subfolders |
+|----------|-------------------|
+| **Amazon** | `Carousel`, `Main`, `Skyscraper`, `TOA`, `runs` |
+| **Instacart** | `Display_Ads`, `Main`, `Shoppable_Display_Ads`, `Shoppable_Video_Ads`, `runs` |
+| **Kroger** | `Carousel`, `Display_Ads`, `Main`, `Skyscraper`, `TOA`, `runs` |
+<!-- TAXONOMY_END -->
+
 logs/<retailer>/...
 Schedule files include a retailer field for conflict detection and back‑compat.
 Overview

@@ -382,6 +382,12 @@ def process_images(
                             "--no-first-run",
                             "--no-default-browser-check",
                             "--disable-session-crashed-bubble",
+                            # Minimize window to avoid user seeing flash (headed mode for CDN)
+                            "--start-minimized",
+                            "--window-position=0,0",
+                            "--window-size=10,10",
+                            "--disable-renderer-backgrounding",
+                            "--disable-backgrounding-occluded-windows",
                         ],
                     )
                     page = context.pages[0] if context.pages else context.new_page()
