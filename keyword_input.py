@@ -301,6 +301,14 @@ class KeywordInputApp:
         self._retailer_by_name = {a.display_name: a.slug for a in adapters}
         self._retailer_by_name_ci = {a.display_name.lower(): a.slug for a in adapters}
         print(f"Registered adapters: {self._retailer_by_name}")
+        print(f"CI map: {self._retailer_by_name_ci}")
+        
+        # Debug: ensure adapters are registered
+        if not adapters:
+            print("⚠️ WARNING: No adapters registered!")
+            import sys as _sys
+            _sys.stderr.write("ERROR: No retailer adapters found!\n")
+            _sys.stderr.flush()
         
         # Multi-select retailer picker
         retailer_frame = ttk.LabelFrame(main_frame, text="Select Retailers", style='Card.TLabelframe', padding=10)
