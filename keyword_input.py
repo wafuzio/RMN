@@ -450,6 +450,14 @@ class KeywordInputApp:
         )
         self.clear_button.pack(side=tk.LEFT)
         
+        # --- App log console (non-modal) ---
+        log_frame = ttk.LabelFrame(main_frame, text="Activity", style='Card.TLabelframe', padding=8)
+        log_frame.pack(fill=tk.BOTH, expand=False, pady=(10, 0))
+        
+        self.app_log = scrolledtext.ScrolledText(log_frame, height=8, wrap="word")
+        self.app_log.pack(fill=tk.BOTH, expand=True)
+        self.app_log.configure(font=("Inter", 10), state="disabled")
+        
         # Status label with daemon status
         daemon_text = "✅ Daemon running" if self.daemon_status else "⚠️ Daemon stopped"
         self.status_label = ttk.Label(
@@ -488,6 +496,50 @@ class KeywordInputApp:
                 self.logger.info(msg)
         except Exception:
             pass
+    
+    def _log_console(self, msg: str):
+        """Write to the activity console."""
+        try:
+            self.app_log.configure(state="normal")
+            self.app_log.insert("end", msg.rstrip() + "\n")
+            self.app_log.see("end")
+        finally:
+            self.app_log.configure(state="disabled")
+    
+    def notify(self, msg: str, kind: str = "info"):
+        """
+        Non-modal notification:
+        - writes to console
+        - updates status label
+        - prints to stdout / file logger if configured
+        kind: 'info' | 'warn' | 'error' | 'success'
+        """
+        prefix = {"info": "ℹ️", "warn": "⚠️", "error": "❌", "success": "✅"}.get(kind, "ℹ️")
+        line = f"{prefix} {msg}"
+        
+        # console
+        if hasattr(self, "app_log"):
+            self._log_console(line)
+        
+        # status
+        if hasattr(self, "status_label"):
+            self.status_label.config(text=msg)
+        
+        # stdout + file logger
+        try:
+            print(line)
+        except Exception:
+            pass
+        try:
+            if self.logger:
+                if kind == "error":
+                    self.logger.error(msg)
+                elif kind == "warn":
+                    self.logger.warning(msg)
+                else:
+                    self.logger.info(msg)
+        except Exception:
+            pass
         
     def load_css_variables(self, css_path):
         """Parse :root CSS variables from a stylesheet for reuse in Tkinter."""
@@ -520,7 +572,7 @@ class KeywordInputApp:
         # Get client/product type
         client_type = self.client_var.get().strip()
         if not client_type or client_type == PLACEHOLDER:
-            messagebox.showerror("Error", "Please select a client/product first")
+            self.notify("Please select a client/product first", "error")
             return
             
         # Create sanitized folder name (remove special characters)
@@ -529,7 +581,7 @@ class KeywordInputApp:
         # Get keywords from the input area
         keywords_text = self.keyword_input.get(1.0, tk.END).strip()
         if not keywords_text:
-            messagebox.showerror("Error", "Please enter some keywords")
+            self.notify("Please enter some keywords", "warn")
             return
             
         # Split keywords by newlines and clean them
@@ -563,7 +615,7 @@ class KeywordInputApp:
             self.run_scraper(keywords)
             
         except (IOError, PermissionError) as e:
-            messagebox.showerror("Error", f"Failed to save keywords: {str(e)}")
+            self.notify(f"Failed to save keywords: {e}", "error")
     
     def run_scraper(self, keywords):
         """Run the scraper with the given keywords and then post-process images."""
@@ -573,8 +625,7 @@ class KeywordInputApp:
             # Get selected retailers
             selected_retailers = self.retailer_picker.get_selected()
             if not selected_retailers:
-                self.log("⚠️ Please select at least one retailer.")
-                messagebox.showwarning("No Retailers Selected", "Please select at least one retailer to scrape.")
+                self.notify("Please select at least one retailer to scrape.", "warn")
                 return
             
             self.log(f"Selected retailers: {selected_retailers}")
@@ -724,7 +775,7 @@ class KeywordInputApp:
                         if progress_label.winfo_exists():
                             progress_label.config(text=f"Error: {err_text}")
                         popup.update()
-                        messagebox.showerror("Error", err_text)
+                        self.notify(err_text, "error")
                         # Continue to next keyword, do not abort whole run
 
         # Debug print of collected pairs
@@ -824,7 +875,7 @@ class KeywordInputApp:
                     progress_label.config(text=f"Error: {error_msg}")
                 popup.update()
                 if retry_count >= max_retries:
-                    messagebox.showerror("Error", error_msg)
+                    self.notify(error_msg, "error")
                     self.status_label.config(text="Error processing HTML files")
 
                 if time.time() > loop_deadline:
@@ -838,7 +889,7 @@ class KeywordInputApp:
                 if progress_label.winfo_exists():
                     progress_label.config(text=result_msg)
                 popup.update()
-                messagebox.showinfo("Success", result_msg)
+                self.notify(result_msg, "success")
                 self.status_label.config(text="Scraping completed successfully")
                 post_processing_label = tk.Label(
                     popup,
@@ -851,7 +902,7 @@ class KeywordInputApp:
                 if progress_label.winfo_exists():
                     progress_label.config(text=f"⚠️ {warn}")
                 popup.update()
-                messagebox.showwarning("Extraction incomplete", warn)
+                self.notify(f"Extraction incomplete: {warn}", "warn")
                 self.status_label.config(text=f"Extraction incomplete: {warn}")
 
         tk.Button(popup, text="Close", command=popup.destroy).pack(pady=10)
@@ -1741,48 +1792,44 @@ class KeywordInputApp:
         """Save schedule configuration to file"""
         selected_client = self.client_var.get()
         if not selected_client or selected_client == PLACEHOLDER:
-            messagebox.showerror("Error", "Please select a client/product before saving schedule")
+            self.notify("Select a client/product before saving schedule", "error")
             return False
 
         # Detect conflicts
         if self.schedule_has_conflicts():
-            messagebox.showerror("Conflicts", "Selected times conflict with other clients. Please adjust before saving.")
+            self.notify("Selected times conflict with other clients. Adjust before saving.", "error")
             return False
             
         # Check for visual conflicts (should be redundant with above check)
         if self.any_conflicts_current_view():
-            if messagebox.askyesno("Conflicts detected",
-                               "Some time selections conflict with other clients.\n"
-                               "Auto-adjust to the next available times?"):
-                # auto-fix by applying next available time for each conflicting slot
-                for tw in getattr(self, 'time_widget_refs', []):
-                    lbl = tw.get('conflict_label')
-                    if not lbl:
+            # Auto-fix conflicts without modal prompt
+            self.notify("Conflicts detected. Auto-adjusting to next available times.", "warn")
+            # auto-fix by applying next available time for each conflicting slot
+            for tw in getattr(self, 'time_widget_refs', []):
+                lbl = tw.get('conflict_label')
+                if not lbl:
+                    continue
+                if "CONFLICT" in (lbl.cget("text") or ""):
+                    # Pull current selection
+                    hv = tw['hour_var'].get()
+                    mv = tw['minute_var'].get()
+                    av = tw['ampm_var'].get()
+                    try:
+                        hour_12 = int(hv); minute = int(mv)
+                    except ValueError:
                         continue
-                    if "CONFLICT" in (lbl.cget("text") or ""):
-                        # Pull current selection
-                        hv = tw['hour_var'].get()
-                        mv = tw['minute_var'].get()
-                        av = tw['ampm_var'].get()
-                        try:
-                            hour_12 = int(hv); minute = int(mv)
-                        except ValueError:
-                            continue
-                        # compute next available
-                        selected_days = [day for day, var in self.day_vars.items() if var.get()]
-                        alt_h, alt_m, alt_a = self.find_next_available_time(hour_12, minute, av, selected_days, selected_client)
-                        # apply
-                        tw['hour_var'].set(str(alt_h))
-                        tw['minute_var'].set(f"{alt_m:02d}")
-                        tw['ampm_var'].set(alt_a)
-                # refresh
-                self.refresh_all_conflict_displays()
-                self.refresh_save_button_state()
-                if self.any_conflicts_current_view():
-                    messagebox.showerror("Conflicts remain", "Could not resolve all conflicts automatically.")
-                    return False
-            else:
-                messagebox.showwarning("Conflicts", "Resolve schedule conflicts before saving.")
+                    # compute next available
+                    selected_days = [day for day, var in self.day_vars.items() if var.get()]
+                    alt_h, alt_m, alt_a = self.find_next_available_time(hour_12, minute, av, selected_days, selected_client)
+                    # apply
+                    tw['hour_var'].set(str(alt_h))
+                    tw['minute_var'].set(f"{alt_m:02d}")
+                    tw['ampm_var'].set(alt_a)
+            # refresh
+            self.refresh_all_conflict_displays()
+            self.refresh_save_button_state()
+            if self.any_conflicts_current_view():
+                self.notify("Could not resolve all conflicts automatically.", "error")
                 return False
             
         # Create client-specific schedule file path
@@ -1828,10 +1875,10 @@ class KeywordInputApp:
                 
             return True
         except (IOError, PermissionError) as e:
-            messagebox.showerror("Error", f"Failed to save schedule: {str(e)}")
+            self.notify(f"Failed to save schedule: {e}", "error")
             self.status_label.config(text=f"Error saving schedule: {str(e)}")
         except json.JSONDecodeError as e:
-            messagebox.showerror("Error", f"Failed to encode schedule data: {str(e)}")
+            self.notify(f"Failed to encode schedule data: {e}", "error")
             self.status_label.config(text=f"Error encoding schedule data: {str(e)}")
             return False
         return True
