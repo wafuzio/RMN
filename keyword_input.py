@@ -633,7 +633,7 @@ class KeywordInputApp:
             output_dir=out_dir,
             runs_dir=os.path.join(out_dir, "runs"),
             logs_dir=logs_dir,
-            profile_dir=profile_dir if os.path.isdir(profile_dir) else None,
+            profile_dir=profile_dir,  # Already validated above, can be None
             script_dir=os.path.dirname(os.path.abspath(__file__)),
         )
         output_dir = ctx.output_dir  # keep your existing variable name for reuse
