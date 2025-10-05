@@ -154,6 +154,7 @@ from widgets.retailer_picker import RetailerPicker
 import retailers.kroger.adapter  # noqa: F401
 import retailers.amazon.adapter  # noqa: F401
 import retailers.instacart.adapter  # noqa: F401
+import retailers.walmart.adapter  # noqa: F401
 
 # Optional: try eager imports; if they fail, globals stay None and the lazy path runs later
 try:
@@ -229,8 +230,6 @@ class KeywordInputApp:
             self.apply_ttk_theme(tt)
         # apply our palette (light/dark)
         self.apply_palette(prefs.get("palette", "light"))
-        # Build menubar so you can change themes from the macOS top bar
-        self._build_menubar()
         
         # Use the path resolver function
         self.project_dir = get_base_dir()
@@ -331,7 +330,7 @@ class KeywordInputApp:
         # Get current theme colors
         palette = PALETTE[self.theme]
         
-        self.keyword_input = scrolledtext.ScrolledText(main_frame, height=8)
+        self.keyword_input = scrolledtext.ScrolledText(main_frame, height=5)
         self.keyword_input.pack(fill=tk.X, expand=False, pady=(0, 15))
         self.keyword_input.configure(
             background=palette["field_bg"], 
@@ -506,6 +505,60 @@ class KeywordInputApp:
         finally:
             self.app_log.configure(state="disabled")
     
+    def activity_clear(self):
+        """Clear the activity console."""
+        try:
+            self.app_log.configure(state="normal")
+            self.app_log.delete("1.0", "end")
+            self.app_log.configure(state="disabled")
+        except Exception:
+            pass
+    
+    def _activity_line(self, msg: str, kind: str = "info"):
+        """Write one formatted line to the Activity console."""
+        from datetime import datetime
+        badge = {"info": "•", "warn": "⚠️", "error": "❌", "success": "✅"}.get(kind, "•")
+        ts = datetime.now().strftime("%H:%M:%S")
+        line = f"[{ts}] {badge} {msg}\n"
+        try:
+            self.app_log.configure(state="normal")
+            self.app_log.insert("end", line)
+            self.app_log.see("end")
+        finally:
+            self.app_log.configure(state="disabled")
+        # keep status in sync
+        if hasattr(self, "status_label"):
+            self.status_label.config(text=msg)
+    
+    def step(self, retailer: str, msg: str, kind: str = "info"):
+        """Convenience: prefix message with [Retailer]."""
+        self._activity_line(f"[{retailer}] {msg}", kind)
+    
+    def ok(self, retailer: str, msg: str = "Done"):
+        """Mark retailer step as successful."""
+        self.step(retailer, msg, "success")
+    
+    def fail(self, retailer: str, msg: str):
+        """Mark retailer step as failed."""
+        self.step(retailer, msg, "error")
+    
+    def timed_step(self, retailer: str, label: str):
+        """Context manager for timing a step."""
+        from time import monotonic
+        from contextlib import contextmanager
+        
+        @contextmanager
+        def _timed():
+            t0 = monotonic()
+            self.step(retailer, f"{label}…")
+            try:
+                yield
+            finally:
+                dt = monotonic() - t0
+                self.step(retailer, f"{label} done ({dt:.1f}s)")
+        
+        return _timed()
+    
     def notify(self, msg: str, kind: str = "info"):
         """
         Non-modal notification:
@@ -621,6 +674,10 @@ class KeywordInputApp:
         """Run the scraper with the given keywords and then post-process images."""
         try:
             import glob
+            
+            # Clear activity console and start fresh
+            self.activity_clear()
+            self._activity_line("Starting run…")
 
             # Get selected retailers
             selected_retailers = self.retailer_picker.get_selected()
@@ -640,23 +697,21 @@ class KeywordInputApp:
                 try:
                     slug = self._retailer_by_name_ci.get(retailer_name.lower())
                     if not slug:
-                        self.log(f"⚠️ No adapter slug for '{retailer_name}' (skipping)")
+                        self.fail(retailer_name, "No adapter found (skipping)")
                         continue
                     
                     adapter = get_retailer_adapter(slug)
-                    self.log(f"➡️ [{retailer_name}] resolved to slug '{slug}', adapter={getattr(adapter, '__module__', adapter)}")
+                    self.step(retailer_name, "Setting up…")
                     
-                    self.log(f"➡️ [{retailer_name}] entering _run_scraper_for_retailer")
                     self._run_scraper_for_retailer(retailer_name, slug, adapter, folder_name, keywords)
-                    self.log(f"✅ [{retailer_name}] _run_scraper_for_retailer returned")
+                    self.ok(retailer_name, "Finished")
                 except Exception as e:
-                    self.log(f"❌ [{retailer_name}] failed: {e}")
+                    self.fail(retailer_name, f"{e}")
                     import traceback
-                    self.log(traceback.format_exc())
-                    
-            self.log(f"\n{'='*60}")
-            self.log(f"✅ Completed scraping for {len(selected_retailers)} retailer(s)")
-            self.log(f"{'='*60}\n")
+                    self._activity_line(traceback.format_exc(), "warn")
+            
+            # End-of-run summary
+            self._activity_line("All retailers finished.", "success")
             
         except Exception as e:
             self.log(f"❌ Error: {str(e)}")
@@ -746,14 +801,20 @@ class KeywordInputApp:
                     if progress_label.winfo_exists():
                         progress_label.config(text=retry_msg)
                     self.status_label.config(text=retry_msg)
+                    self.step(retailer_name, f"Retrying ({retry_count}/{max_retries})...", "warn")
                     popup.update()
                     self.root.update()
                     time.sleep(1.5)
 
                 try:
-                    # Use adapter for all retailers
-                    ok = adapter.search_and_capture(keyword, ctx)
+                    # Show we're fetching with timing
+                    with self.timed_step(retailer_name, f"Fetch '{keyword}'"):
+                        # Use adapter for all retailers
+                        ok = adapter.search_and_capture(keyword, ctx)
+                    
                     if ok:
+                        self.step(retailer_name, f"HTML captured ({i+1}/{len(keywords)})")
+                        
                         # Use adapter to collect pairs for this run
                         new_pairs = adapter.collect_pairs_for_run(ctx, run_start_ts)
                         # De-dup by seen_json
@@ -839,8 +900,10 @@ class KeywordInputApp:
                         progress_label.config(text=f"[{idx}/{len(run_pairs)}] Extracting images...")
                         popup.update()
                     
-                    # Use adapter to extract images
-                    res = adapter.extract_images(json_path, html_path, ctx)
+                    # Use adapter to extract images with timing
+                    with self.timed_step(retailer_name, f"Extract images [{idx}/{len(run_pairs)}]"):
+                        res = adapter.extract_images(json_path, html_path, ctx)
+                    
                     n_toa, n_sky, n_car = res.get("toa", 0), res.get("sky", 0), res.get("car", 0)
                     total_toa += n_toa
                     total_sky += n_sky
@@ -854,6 +917,8 @@ class KeywordInputApp:
                 
                 # Summarize across all terms from this run
                 if (total_toa + total_sky) > 0:
+                    total_imgs = total_toa + total_sky + total_car
+                    self.step(retailer_name, f"Images captured ({total_imgs})")
                     print("✅ Image extraction completed for this run:")
                     for jf, a, b, c in per_file_summary:
                         print(f"   - {jf}: TOA={a} Skyscraper={b} Carousel={c}")
@@ -1968,49 +2033,7 @@ class KeywordInputApp:
         if hasattr(self, "palette_var"):
             self.palette_var.set(palette)
 
-    def _build_menubar(self):
-        # Build the submenus first (theme_menu, palette_menu) using self.root as parent
-        theme_menu = tk.Menu(self.root, tearoff=0)
-        current = self.style.theme_use()
-        self.ttk_theme_var = tk.StringVar(value=current)
-        names = list(self.style.theme_names())
-        if sys.platform == 'darwin' and 'aqua' in names:
-            names.remove('aqua')
-        for name in names:
-            theme_menu.add_radiobutton(
-                label=name, value=name, variable=self.ttk_theme_var,
-                command=lambda n=name: self.apply_ttk_theme(n),
-            )
-
-        palette_menu = tk.Menu(self.root, tearoff=0)
-        self.palette_var = tk.StringVar(value=self.theme)
-        palette_menu.add_radiobutton(label="Light", value="light", variable=self.palette_var,
-                                    command=lambda: self.apply_palette("light"))
-        palette_menu.add_radiobutton(label="Dark", value="dark", variable=self.palette_var,
-                                    command=lambda: self.apply_palette("dark"))
-
-        # If guard is set, DO NOT attach native menubar; install inline button instead
-        if os.environ.get("RAM_NO_NATIVE_MENUBAR") == "1":
-            inline = ttk.Menubutton(self.root, text="View")
-            inline_menu = tk.Menu(inline, tearoff=0)
-            inline_menu.add_cascade(label="Theme", menu=theme_menu)
-            inline_menu.add_cascade(label="Palette", menu=palette_menu)
-            inline["menu"] = inline_menu
-            inline.pack(anchor="ne", padx=8, pady=6)
-            return  # IMPORTANT: do not call root.config(menu=...) below
-
-        # Native menubar (only when guard is not set)
-        menubar = tk.Menu(self.root)
-        file_menu = tk.Menu(self.root, tearoff=0)
-        file_menu.add_command(label="Quit", command=self.root.quit)
-        menubar.add_cascade(label="File", menu=file_menu)
-
-        view_menu = tk.Menu(self.root, tearoff=0)
-        view_menu.add_cascade(label="Theme", menu=theme_menu)
-        view_menu.add_cascade(label="Palette", menu=palette_menu)
-        menubar.add_cascade(label="View", menu=view_menu)
-
-        self.root.config(menu=menubar)   
+   
 
 def main():
     _glog("main: start")
