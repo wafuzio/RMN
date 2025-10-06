@@ -28,6 +28,14 @@ TAXONOMY = {
         "Main",
         "runs",
     },
+    "walmart": {
+        "Top_Banner",
+        "SBA",
+        "Tile_Takeover",
+        "SBV",
+        "Main",
+        "runs",
+    },
 }
 
 

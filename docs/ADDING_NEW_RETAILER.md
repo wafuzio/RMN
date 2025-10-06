@@ -369,9 +369,57 @@ register(NewRetailerAdapter())
 
 ---
 
-## Step 4: Register with GUI
+## Step 4: Add to Path Taxonomy
 
-### 4.1 Import Adapter in GUI
+### 4.1 Update `utils/path_taxonomy.py`
+**⚠️ CRITICAL STEP - This is the #1 cause of "Start Scraping doesn't work"!**
+
+Add your retailer to the `TAXONOMY` dictionary:
+
+```python
+TAXONOMY = {
+    "kroger": {...},
+    "instacart": {...},
+    "amazon": {...},
+    "newretailer": {  # Add your retailer here
+        "Ad_Type_1",      # Based on your ad selectors
+        "Ad_Type_2",
+        "Main",           # Always include
+        "runs",           # Always include
+    },
+}
+```
+
+**Example for Walmart:**
+```python
+"walmart": {
+    "Top_Banner",      # For a.ad, a.adctr
+    "SBA",             # For [data-testid="sba-container"]
+    "Tile_Takeover",   # For [data-testid="tile-take-over"]
+    "SBV",             # For [data-testid="search-video-in-grid"]
+    "Main",
+    "runs",
+},
+```
+
+**Why this matters:**
+- Without this, you'll get: `ValueError: Unknown retailer: 'newretailer'`
+- The error happens when clicking "Start Scraping"
+- The adapter is registered but path creation fails
+- This is checked in `core/paths.py` → `output_dir_for()`
+
+### 4.2 Verify Taxonomy
+```bash
+python3 -c "from utils.path_taxonomy import allowed_subdirs; print(allowed_subdirs('newretailer'))"
+```
+
+Should print your folder set without errors.
+
+---
+
+## Step 5: Register with GUI
+
+### 5.1 Import Adapter in GUI
 Edit `keyword_input.py`:
 
 ```python
@@ -397,9 +445,9 @@ print('Registered adapters:')
 
 ---
 
-## Step 5: Configure Environment Variables
+## Step 6: Configure Environment Variables
 
-### 5.1 Update `config/launcher.env`
+### 6.1 Update `config/launcher.env`
 **⚠️ CRITICAL STEP - App won't work without this!**
 
 Edit `config/launcher.env`:
@@ -427,9 +475,9 @@ source ~/.zshrc
 
 ---
 
-## Step 6: Testing
+## Step 7: Testing
 
-### 6.1 Create Test Script
+### 7.1 Create Test Script
 File: `scripts/test_{retailer}_adapter.py`
 
 ```python
@@ -555,9 +603,9 @@ open "dist/Retail Ad Monitor.app"
 
 ---
 
-## Step 7: Documentation
+## Step 8: Documentation
 
-### 7.1 Create Retailer README
+### 8.1 Create Retailer README
 File: `retailers/{retailer}/README.md`
 
 Include:
@@ -597,7 +645,7 @@ Document:
 
 ---
 
-## Step 8: Rebuild App (if needed)
+## Step 9: Rebuild App (if needed)
 
 If the app was built in full mode (not alias mode), rebuild it:
 
@@ -625,8 +673,9 @@ Use this checklist when adding a new retailer:
 - [ ] Create `{retailer}_search_and_capture.py` in project root
 - [ ] Create `retailers/{retailer}/adapter.py`
 - [ ] Create `retailers/{retailer}/__init__.py`
+- [ ] **Add retailer to `utils/path_taxonomy.py` TAXONOMY** ⚠️ CRITICAL #1
 - [ ] Import adapter in `keyword_input.py`
-- [ ] **Add environment variables to `config/launcher.env`** ⚠️ CRITICAL
+- [ ] **Add environment variables to `config/launcher.env`** ⚠️ CRITICAL #2
 - [ ] Add environment variables to `~/.zshrc` (for CLI)
 - [ ] Create test script `scripts/test_{retailer}_adapter.py`
 - [ ] Test adapter registration
@@ -642,6 +691,12 @@ Use this checklist when adding a new retailer:
 ---
 
 ## Common Pitfalls
+
+### ❌ #1 MOST COMMON: Forgot to add to path taxonomy
+**Symptom**: `ValueError: Unknown retailer: 'newretailer'` when clicking "Start Scraping"
+**Error location**: `utils/path_taxonomy.py`, line 39
+**Fix**: Add retailer to `TAXONOMY` dictionary in `utils/path_taxonomy.py`
+**Why it happens**: Adapter is registered but path creation fails
 
 ### ❌ Forgot to add environment variables to `config/launcher.env`
 **Symptom**: App fails with "PROFILE_DIR not set or invalid"

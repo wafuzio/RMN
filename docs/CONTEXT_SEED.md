@@ -1,5 +1,7 @@
 # Context Seed — Multi‑Retailer TOA Scraper
 
+USE MCP: wafuzio/RMN@insta_debug_login (read)
+
 This is the canonical snapshot of how the tool is structured. Keep it short, current, and true.
 
 ## Objective
@@ -52,6 +54,11 @@ This is the canonical snapshot of how the tool is structured. Keep it short, cur
   - URL pattern: https://www.instacart.com/store/{store}/s?k={keyword}
   - Ad types: Shoppable Display Ad, Shoppable Video Ad (div.e-1qzz7bi), Display Ad (div.e-1hv1sre), Sponsored Label (div.e-cwus85).
   - Verified: 8+ ads detected with authenticated session.
+- walmart (new)
+  - Persistent profile via WALMART_PROFILE_DIR
+  - URL: https://www.walmart.com/search?q={keyword}
+  - Ad types: programmatic banner (a.ad, a.adctr), SBA ([data-testid="sba-container"]), tile takeover ([data-testid="tile-take-over"]), SBV ([data-testid="search-video-in-grid"])
+  - Meta: stores outbound links (sp/track rd=…) and video assets if available
 
 ## Auth & Profiles
 - One-time human login to each retailer using Playwright and a persistent user_data_dir.

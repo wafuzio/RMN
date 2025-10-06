@@ -33,6 +33,8 @@ def ensure_profile(retailer: str, profile_dir: str, channel="chrome"):
                     break
                 if retailer == "instacart" and ("log out" in content or "sign out" in content):
                     break
+                if retailer == "walmart" and ("account" in content or "sign out" in content):
+                    break
             except Exception:
                 pass
             time.sleep(3)
