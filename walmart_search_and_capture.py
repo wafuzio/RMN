@@ -393,6 +393,8 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                         meta.setdefault("links", []).append(_parse_walmart_redirect(href))
             except Exception:
                 pass
+            # Throttle per-element operations to avoid rapid-fire actions
+            time.sleep(random.uniform(0.12, 0.28))
         except Exception:
             continue
     return count, shots
@@ -466,10 +468,12 @@ def _detect_block_signals(page) -> tuple:
 def _scroll_burst_wheel(page, lines=8):
     """Emit a small burst of native wheel events (human-like)."""
     for _ in range(lines):
-        page.mouse.wheel(0, random.randint(32, 120))  # mac trackpad-ish deltas
+        if not _within_scroll_budget(1):
+            break
+        page.mouse.wheel(0, random.randint(48, 140))  # mac trackpad-ish deltas
         time.sleep(random.uniform(0.045, 0.12))
 
-def _scroll_like_human(page, say, bursts=2, lines_min=6, lines_max=12, pause_min=0.25, pause_max=0.7, SL=None):
+def _scroll_like_human(page, say, bursts=2, lines_min=6, lines_max=12, pause_min=0.25, pause_max=0.9, SL=None):
     """Several short wheel bursts with pauses; solve PX if it appears mid-scroll."""
     if PX_HOLD_GUARD["in_progress"]:
         if SL: SL.log("scroll_blocked", reason="hold_in_progress")
@@ -478,7 +482,15 @@ def _scroll_like_human(page, say, bursts=2, lines_min=6, lines_max=12, pause_min
     if not ok:
         if SL: SL.log("scroll_blocked", reason=reason, url=page.url)
         return
-    for b in range(bursts):
+
+    # First scroll on results: keep it light
+    local_bursts = bursts
+    if not FIRST_SCROLL_DONE["done"]:
+        local_bursts = min(local_bursts, 2)
+        lines_min, lines_max = max(4, lines_min-2), max(6, min(8, lines_max))
+        if SL: SL.log("first_scroll_start", bursts=local_bursts, lines_min=lines_min, lines_max=lines_max)
+
+    for b in range(local_bursts):
         _scroll_burst_wheel(page, lines=random.randint(lines_min, lines_max))
         time.sleep(random.uniform(pause_min, pause_max))
         # If PX pops during scroll, solve with controller
@@ -491,6 +503,13 @@ def _scroll_like_human(page, say, bursts=2, lines_min=6, lines_max=12, pause_min
             # after solving, don't resume scrolling immediately
             _lock_scroll("px_recent")
             return
+
+        if not FIRST_SCROLL_DONE["done"]:
+            # Idle after very first burst to avoid "action storm"
+            time.sleep(random.uniform(1.0, 2.2))
+            FIRST_SCROLL_DONE["done"] = True
+            FIRST_SCROLL_DONE["ts"] = time.time()
+            if SL: SL.log("first_scroll_done", ts=FIRST_SCROLL_DONE["ts"])
 
 def _tap_pagedown(page, SL=None):
     """Press PageDown key (varies input method)."""
@@ -543,6 +562,23 @@ PX_HOLD_GUARD = {"in_progress": False}
 SCROLL_LOCK = {"unlocked": False, "why": "init"}
 LAST_NAV_DONE_TS = {"t": 0.0}
 LAST_PX_CLEAR_TS = {"t": 0.0}
+
+# --- BEGIN: scroll pacing ---
+SCROLL_BUDGET = {"win_start": 0.0, "events": 0}
+FIRST_SCROLL_DONE = {"done": False, "ts": 0.0}
+
+def _reset_scroll_budget():
+    SCROLL_BUDGET["win_start"] = time.time()
+    SCROLL_BUDGET["events"] = 0
+
+def _within_scroll_budget(delta_events=1, max_events_per_10s=40):
+    # ~4 events/sec average cap
+    now = time.time()
+    if now - SCROLL_BUDGET["win_start"] > 10.0:
+        _reset_scroll_budget()
+    SCROLL_BUDGET["events"] += delta_events
+    return SCROLL_BUDGET["events"] <= max_events_per_10s
+# --- END: scroll pacing ---
 
 def _lock_scroll(why="lock"):
     SCROLL_LOCK["unlocked"] = False
@@ -1043,10 +1079,14 @@ def search_and_capture(
                     # Type with human-like delays (PerimeterX tracks keystroke timing!)
                     say("info", f"[{retailer}] Typing keyword: {keyword}")
                     for char in keyword:
-                        search_box.type(char, delay=random.uniform(80, 200))  # 80-200ms per keystroke
+                        search_box.type(char, delay=random.uniform(80, 220))  # 80-220ms per keystroke
                     
-                    # CRITICAL: Dwell after typing (humans pause 400-1100ms before submit)
-                    time.sleep(random.uniform(0.40, 1.10))
+                    # Extra "thinking" pause on longer terms
+                    if len(keyword) >= 10 and random.random() < 0.6:
+                        time.sleep(random.uniform(0.20, 0.45))
+                    
+                    # CRITICAL: Dwell after typing (humans pause 600-1200ms before submit)
+                    time.sleep(random.uniform(0.60, 1.20))
                     
                     # Tiny caret movement or mouse micro-move (optional, low probability)
                     if random.random() < 0.35:
