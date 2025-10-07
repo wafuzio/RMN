@@ -277,6 +277,9 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
     args = []
     
     if profile_dir:
+        # DIAGNOSTIC: Verify we're using the same profile path every run
+        print(f"[profile] using user_data_dir={profile_dir!r}")
+        
         # Load stable fingerprint for this profile (not randomized per run!)
         viewport, timezone = _load_or_init_profile_fingerprint(profile_dir)
         
@@ -1014,9 +1017,21 @@ def search_and_capture(
     if proxy_config:
         say("info", f"[{retailer}] Using proxy: {proxy_config.get('server', 'N/A')}")
     
+    # Cookie diagnostic helper
+    def _cookie_names(ctx):
+        try:
+            return sorted(set(c["name"] for c in ctx.cookies("https://www.walmart.com/")))
+        except:
+            return []
+    
     with sync_playwright() as p:
         browser, ctx, page, persistent = _launch(p, profile_dir, headless=headless, proxy_config=proxy_config)
         try:
+            # DIAGNOSTIC: Check cookie persistence before any navigation
+            pre_cookies = _cookie_names(ctx)
+            print(f"[cookies] pre-run walmart.com: {len(pre_cookies)} names={pre_cookies[:8]}")
+            SL.log("cookies_pre", count=len(pre_cookies), names=pre_cookies[:8])
+            
             page.set_default_timeout(15000)  # 15s
             
             # CRITICAL: Establish session with human-like browsing pattern
@@ -1279,6 +1294,11 @@ def search_and_capture(
                 pass
         
         finally:
+            # DIAGNOSTIC: Check cookie persistence after run
+            post_cookies = _cookie_names(ctx)
+            print(f"[cookies] post-run walmart.com: {len(post_cookies)} names={post_cookies[:8]}")
+            SL.log("cookies_post", count=len(post_cookies), names=post_cookies[:8])
+            
             # Save trace for debugging silent exits
             try:
                 trace_path = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_trace.zip"))
