@@ -2,6 +2,21 @@
 
 Append-only notes by retailer/division. Keep each bullet to ~2 lines and link the PR.
 
+Repo: wafuzio/RMN
+Branch/ref: insta_debug_login
+Scope: summarize all .md files, paste nothing unless asked
+OK to fetch and read file contents: yes I will:
+Enumerate .md with a repo tree/list call.
+Fetch file contents via file API.
+Return a concise map + summaries. I’ll only paste full content if you ask.
+Option B — If tools seem blocked (private repo or session without GitHub wiring) Use raw links I can read without auth:
+
+Example: https://raw.githubusercontent.com/wafuzio/RMN/insta_debug_login/docs/INSTACART_INTEGRATION.md https://raw.githubusercontent.com/wafuzio/RMN/insta_debug_login/README.md Tell me “Summarize all” or name specific files to paste.
+Option C — One-line local list + paste back Run locally and paste the output:
+
+git fetch origin insta_debug_login && git checkout insta_debug_login
+git ls-tree -r --name-only HEAD | grep -Ei '.md$' Then say “Summarize all of these,” and I’ll ask for any I need to fetch via raw links.
+
 ## Kroger
 
 **2025-10-02:** Headless timeouts in packaged app; headed ok. Adopted nav-first capture, headed-but-hidden mode, SRP fallback, exit 1 on zero saves. Require `source_url` in JSON. Added minimization flags to hide browser window. (PR #TBD)
@@ -9,6 +24,14 @@ Append-only notes by retailer/division. Keep each bullet to ~2 lines and link th
 ## Instacart
 
 **2025-09-??:** Location pin via zip; login modal guard; headless ok. Element screenshot from SRP (no direct image URLs). (PR #118)
+
+## Walmart
+
+**2025-10-06 (Final):** Production-ready PerimeterX bypass with comprehensive telemetry. Removed heavy anti-fingerprinting (playwright-stealth only), removed homepage scrolling (major trigger), added dwell time after typing (400-1100ms), prefer button click over Enter, micro caret movement, immediate retry controller (3 quick retries for same widget), longer steady holds (6.8-10.2s adaptive), off-domain guard (nav-only), JSONL step logger with millisecond-precision telemetry. Successfully bypasses PX challenges with detailed diagnostics. (PR #TBD)
+
+**2025-10-06 (Initial):** Complete PerimeterX bypass implementation. Native wheel scrolling (replaced JS scrollTo), auto press-and-hold solver (3.1-3.6s), PX cookie verification (_px3/_pxvid), modal + /blocked detection, off-domain guard rails (blocks Google), telemetry (tracing/video/crash hooks), stable per-profile fingerprint, playwright-stealth integration, empty Chrome args (no banners), chromium_sandbox=True. Successfully captures all ad units through PX challenges. (PR #TBD)
+
+**2025-10-05:** Initial integration complete. Selector-based ad detection (Top_Banner, SBA, Tile_Takeover, SBV). Added anti-bot stealth mode: disabled AutomationControlled, injected navigator.webdriver override, homepage-first navigation pattern with random delays. Path taxonomy added (critical for GUI integration). (PR #TBD)
 
 ## Internal
 
