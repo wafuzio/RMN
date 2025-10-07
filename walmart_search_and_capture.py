@@ -169,7 +169,13 @@ def _download(url: str, out_path: str, timeout: int = 25) -> bool:
     """Download asset (video) through proxy if configured."""
     try:
         proxies = _requests_proxies_from_env()
-        r = requests.get(url, headers=HEADERS, timeout=timeout, proxies=proxies)
+        # Mirror browser headers to avoid 403s
+        hdrs = {
+            "User-Agent": HEADERS["user-agent"],
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.walmart.com/",
+        }
+        r = requests.get(url, headers=hdrs, timeout=timeout, proxies=proxies)
         r.raise_for_status()
         with open(out_path, "wb") as f:
             f.write(r.content)
@@ -365,14 +371,15 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
     return browser, ctx, page, False
 
 
-def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, meta: Dict) -> Tuple[int, List[str]]:
+def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, meta: Dict, SL=None) -> Tuple[int, List[str]]:
     shots: List[str] = []
     loc = page.locator(css)
     count = loc.count()
     for i in range(count):
         item = loc.nth(i)
         try:
-            item.scroll_into_view_if_needed()
+            # Use native wheel scroll instead of programmatic scrollIntoView
+            _bring_into_view(page, item, SL=SL)
             time.sleep(0.2)
             out = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_{label}_{i+1}.png"))
             item.screenshot(path=out)
@@ -494,6 +501,36 @@ def _tap_pagedown(page, SL=None):
     page.keyboard.press("PageDown")
     time.sleep(random.uniform(0.25, 0.55))
 
+def _bring_into_view(page, loc, SL=None, max_bursts=8):
+    """Prefer native wheel to move viewport; fall back to scrollIntoView if needed."""
+    try:
+        box = loc.bounding_box()
+        if not box:
+            return False
+        viewport = page.viewport_size or {"width": 1366, "height": 768}
+        center_y = viewport["height"] * 0.45
+        # If already near center, do nothing
+        if 0 < box["y"] < viewport["height"] and abs(box["y"] - center_y) < 200:
+            return True
+        # Use wheel bursts to approach the target
+        bursts = 0
+        while bursts < max_bursts:
+            direction = 1 if box["y"] > center_y else -1
+            for _ in range(random.randint(4, 8)):
+                page.mouse.wheel(0, direction * random.randint(48, 140))
+                time.sleep(random.uniform(0.045, 0.11))
+            bursts += 1
+            box = loc.bounding_box() or box
+            if 0 < box["y"] < viewport["height"] and abs(box["y"] - center_y) < 220:
+                return True
+        # Fallback (only if we failed to bring it close with wheel)
+        loc.scroll_into_view_if_needed()
+        time.sleep(0.2)
+        return True
+    except Exception as e:
+        if SL: SL.log("bring_into_view_error", err=str(e))
+        return False
+
 # --- END: human scroll helpers ---
 
 # --- BEGIN: PX modal solver v4 (steady-only, no jitter) ---
@@ -524,7 +561,7 @@ def _mark_px_cleared(SL=None):
     LAST_PX_CLEAR_TS["t"] = time.time()
     if SL: SL.log("px_cleared_ts", ts=LAST_PX_CLEAR_TS["t"])
 
-def _can_scroll_now(page, SL=None, px_cooldown=2.5) -> Tuple[bool, str]:
+def _can_scroll_now(page, SL=None, px_cooldown=3.7) -> Tuple[bool, str]:
     if not SCROLL_LOCK["unlocked"]:
         return False, f"locked:{SCROLL_LOCK['why']}"
     if _still_px_modal(page):
@@ -836,61 +873,15 @@ def _solve_px_until_clear(page, say, SL=None, immediate_retries=3, max_cycles=3,
     return not _still_px_modal(page)
 # --- END: PX multi-prompt controller ---
 
-# --- BEGIN: PX press-and-hold solver (sync) ---
-def _find_px_frame_sync(page):
-    """Find the PerimeterX frame or return page if not in iframe."""
-    try:
-        # Direct body widget
-        if page.locator("#px-captcha, #px-captcha iframe, #px-captcha button").count() > 0:
-            return page
-    except:
-        pass
-    for frame in page.frames:
-        try:
-            u = (frame.url or "").lower()
-            if any(k in u for k in ("perimeterx", "px-captcha", "captcha")):
-                return frame
-            if frame.locator('text=Press & Hold').count() > 0:
-                return frame
-        except:
-            continue
-    return page
+# --- BEGIN: PX press-and-hold solver (sync) - DEPRECATED ---
+def _find_px_frame_sync(*args, **kwargs):
+    """DEPRECATED: Do not use."""
+    raise RuntimeError("Deprecated solver path: do not call.")
 
-def _press_and_hold_sync(px_frame, hold_ms=2800):
-    """Simulate press-and-hold on PerimeterX CAPTCHA button."""
-    # Try a few selectors; some widgets render a button, others a canvas
-    try:
-        btn = px_frame.locator(
-            'button:has-text("Press & Hold"), button:has-text("PRESS & HOLD"), button:has-text("Press and hold"), #px-captcha button'
-        ).first
-        if btn.count() == 0:
-            btn = px_frame.locator('#px-captcha canvas, #px-captcha').first
-        if btn.count() == 0:
-            return False, "press_hold_target_not_found"
-
-        btn.scroll_into_view_if_needed()
-        box = btn.bounding_box()
-        if not box:
-            return False, "no_bounding_box"
-        cx = box["x"] + box["width"] / 2
-        cy = box["y"] + box["height"] / 2
-
-        # Hover, then press and hold with tiny jitter
-        btn.hover()
-        px_frame.page.mouse.move(cx, cy, steps=8)
-        px_frame.page.mouse.down()
-        start = time.time()
-        while (time.time() - start) < (hold_ms / 1000.0):
-            jx = cx + random.uniform(-1.5, 1.5)
-            jy = cy + random.uniform(-1.5, 1.5)
-            px_frame.page.mouse.move(jx, jy, steps=2)
-            time.sleep(random.uniform(0.06, 0.14))
-        px_frame.page.mouse.up()
-        time.sleep(random.uniform(1.0, 2.0))
-        return True, "press_hold_attempted"
-    except Exception as e:
-        return False, f"press_hold_error: {e}"
-# --- END: PX press-and-hold solver (sync) ---
+def _press_and_hold_sync(*args, **kwargs):
+    """DEPRECATED: Do not use. Use _press_and_hold_until_complete instead."""
+    raise RuntimeError("Deprecated solver path with jitter: do not call. Use _press_and_hold_until_complete.")
+# --- END: PX press-and-hold solver (sync) - DEPRECATED ---
 
 def _should_refresh_cookies(profile_dir: Optional[str]) -> bool:
     """Check if cookies should be refreshed (every 24 hours)."""
@@ -1088,11 +1079,27 @@ def search_and_capture(
                                 continue
                     
                     if not clicked:
-                        # fallback to Enter (after dwell)
-                        say("info", f"[{retailer}] Pressing Enter (button not found)")
-                        search_box.press("Enter")
+                        # Try typeahead suggestion click before Enter fallback
+                        if random.random() < 0.35:
+                            sug = page.locator('[data-automation-id="typeahead"] li, [data-testid="typeahead-suggestion"]').first
+                            if sug.count() > 0:
+                                try:
+                                    sug.click()
+                                    page.wait_for_load_state('domcontentloaded')
+                                    search_typed = True
+                                    say("info", f"[{retailer}] Clicked typeahead suggestion")
+                                    clicked = True
+                                except:
+                                    pass
+                        
+                        if not clicked:
+                            # Final fallback to Enter
+                            say("info", f"[{retailer}] Pressing Enter (button not found)")
+                            search_box.press("Enter")
                     
-                    page.wait_for_load_state('domcontentloaded')
+                    if not search_typed:
+                        page.wait_for_load_state('domcontentloaded')
+                        _nav_mark_done(SL=SL)
                     search_typed = True
                     say("info", f"[{retailer}] Search completed via typing")
                 else:
@@ -1141,13 +1148,16 @@ def search_and_capture(
             _scroll_like_human(page, say, bursts=random.randint(2, 4), lines_min=6, lines_max=12, SL=SL)
             
             # Hover over a product (if visible) - realistic behavior
-            try:
-                first_product = page.locator('[data-item-id]').first
-                if first_product.count() > 0:
-                    first_product.hover()
-                    time.sleep(random.uniform(0.5, 1.0))
-            except:
-                pass
+            # Wait a bit after scroll before hovering to avoid triggering PX
+            time.sleep(random.uniform(0.8, 1.3))
+            if not _still_px_modal(page):
+                try:
+                    first_product = page.locator('[data-item-id]').first
+                    if first_product.count() > 0:
+                        first_product.hover()
+                        time.sleep(random.uniform(0.5, 1.0))
+                except:
+                    pass
             
             # Simple mouse movement
             page.mouse.move(
@@ -1176,19 +1186,19 @@ def search_and_capture(
                 say("warn", f"[{retailer}] HTML save failed: {e}")
             
             # 1) Programmatic banners
-            n, s = _capture_elements(page, base_dir, keyword, "top_banner", SELECTORS["top_banner"], meta)
+            n, s = _capture_elements(page, base_dir, keyword, "top_banner", SELECTORS["top_banner"], meta, SL=SL)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] Top banner found ({n})")
             
             # 2) SBA
-            n, s = _capture_elements(page, base_dir, keyword, "sba", SELECTORS["sba"], meta)
+            n, s = _capture_elements(page, base_dir, keyword, "sba", SELECTORS["sba"], meta, SL=SL)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] SBA found ({n})")
             
             # 3) Tile takeover
-            n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta)
+            n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta, SL=SL)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] Tile takeover found ({n})")
