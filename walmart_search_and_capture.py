@@ -1012,6 +1012,25 @@ def search_and_capture(
     #                 except:
     #                     pass
     
+    # CRITICAL: Verify persistent profile is configured
+    profile_dir = profile_dir or os.environ.get(PROFILE_ENV)
+    print(f"[profile] WALMART_PROFILE_DIR={profile_dir!r}")
+    assert profile_dir and profile_dir.strip(), "Missing WALMART_PROFILE_DIR (persistent profile disabled)"
+    
+    # Profile health check helper
+    def _profile_health(pdir):
+        d = os.path.join(pdir, "Default")
+        paths = {
+            "Cookies": os.path.join(d, "Cookies"),
+            "Network Persistent State": os.path.join(d, "Network Persistent State"),
+            "Preferences": os.path.join(d, "Preferences"),
+        }
+        info = {}
+        for k, p in paths.items():
+            size = os.path.getsize(p) if os.path.exists(p) else 0
+            info[k] = {"exists": os.path.exists(p), "size": size}
+        return info
+    
     # Get proxy configuration if available
     proxy_config = _get_proxy_config()
     if proxy_config:
@@ -1027,6 +1046,11 @@ def search_and_capture(
     with sync_playwright() as p:
         browser, ctx, page, persistent = _launch(p, profile_dir, headless=headless, proxy_config=proxy_config)
         try:
+            # DIAGNOSTIC: Profile health check (verify Chrome is writing to disk)
+            health = _profile_health(profile_dir)
+            print(f"[profile_health] {health}")
+            SL.log("profile_health", **health)
+            
             # DIAGNOSTIC: Check cookie persistence before any navigation
             pre_cookies = _cookie_names(ctx)
             print(f"[cookies] pre-run walmart.com: {len(pre_cookies)} names={pre_cookies[:8]}")
@@ -1039,6 +1063,11 @@ def search_and_capture(
             
             # 1. Visit homepage (like real users)
             page.goto("https://www.walmart.com/", wait_until="domcontentloaded")
+            
+            # DIAGNOSTIC: Log User-Agent (should be stable across runs)
+            ua = page.evaluate("() => navigator.userAgent")
+            print(f"[ua] {ua}")
+            SL.log("user_agent", ua=ua)
             
             # Check for PX challenge and solve with cooldown/retry
             if _still_px_modal(page):
