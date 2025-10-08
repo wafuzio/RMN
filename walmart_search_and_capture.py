@@ -1,21 +1,41 @@
-#!/usr/bin/env python3
-"""
-Walmart search and capture with selector-based ad detection.
-"""
-from __future__ import annotations
 import os
+import pdb
+import threading
 import time
 import json
 import base64
-import urllib.parse as ul
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Callable
-import threading
-from contextlib import contextmanager
-
 import requests
-from playwright.sync_api import sync_playwright
+import glob
+import collections
+import sys
 import random
+import inspect
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List, Dict, Optional, Callable, Tuple
+from urllib.parse import urlparse, parse_qs, unquote, quote_plus
+from playwright.sync_api import sync_playwright, Page, BrowserContext, Browser
+# --- BEGIN: debug configuration ---
+@dataclass
+class DebugConfig:
+    break_on_px: bool = False
+    break_on_blocked: bool = False
+    line_trace: bool = False
+    pdb_on_exception: bool = True
+
+DEBUG = DebugConfig()
+
+def _apply_debug_config(debug: DebugConfig):
+    """Apply debug configuration from GUI to globals and environment."""
+    global DEBUG
+    DEBUG = debug or DebugConfig()
+
+    # Mirror to environment for any legacy checks
+    os.environ["WALMART_BREAK_ON_PX"] = "1" if DEBUG.break_on_px else "0"
+    os.environ["WALMART_BREAK_ON_BLOCKED"] = "1" if DEBUG.break_on_blocked else "0"
+    os.environ["WALMART_TRACE"] = "1" if DEBUG.line_trace else "0"
+# --- END: debug configuration ---
 
 # --- BEGIN: robust stealth import ---
 apply_stealth = None
@@ -94,9 +114,62 @@ def step(SL, name: str, **meta):
         SL.log("step_end", name=name, dur=round(time.time()-t0, 3))
 # --- END: step logger ---
 
-SLUG = "walmart"
-DISPLAY_NAME = "Walmart"
-PROFILE_ENV = "WALMART_PROFILE_DIR"
+# --- BEGIN: close-aware guards ---
+CLOSED = {"page": False, "ctx": False}
+
+def _on_page_close():
+    CLOSED["page"] = True
+    print("[page] closed")
+
+def _on_ctx_close():
+    CLOSED["ctx"] = True
+    print("[ctx] closed")
+
+def _guard_against_closed(action_name="action"):
+    """Guard against acting after page/context closes."""
+    if CLOSED["page"] or CLOSED["ctx"]:
+        if CURRENT_SL:
+            CURRENT_SL.log("closed_guard_trip", where=action_name)
+        return True
+    return False
+# --- END: close-aware guards ---
+
+# --- BEGIN: milestone tracker ---
+class MilestoneTracker:
+    def __init__(self, SL):
+        self.SL = SL
+        self.m = {}   # name -> {"ok": bool, "ts": float, "note": str}
+    def mark(self, name, ok=True, note=""):
+        self.m[name] = {"ok": bool(ok), "ts": time.time(), "note": note}
+        if self.SL:
+            self.SL.log("milestone", run_id=RUN_ID, name=name, ok=bool(ok), note=note)
+    def summary(self):
+        ok_all = all(v["ok"] for v in self.m.values()) if self.m else False
+        ordered = [{"name": k, **v} for k, v in self.m.items()]
+        return {"ok_all": ok_all, "count": len(self.m), "milestones": ordered}
+# --- END: milestone tracker ---
+
+# --- BEGIN: scoped line tracer (opt-in via WALMART_TRACE=1) ---
+class ScopedTracer:
+    def __init__(self, filename_filter: str, out_path: str):
+        self.filter = filename_filter
+        self.out_path = out_path
+        self.f = None
+    def __enter__(self):
+        self.f = open(self.out_path, "w", encoding="utf-8")
+        def tracer(frame, event, arg):
+            if event == "line":
+                fn = os.path.basename(frame.f_code.co_filename)
+                if self.filter in fn:
+                    self.f.write(f"{fn}:{frame.f_lineno} {frame.f_code.co_name}\n")
+            return tracer
+        sys.settrace(tracer)
+        return self
+    def __exit__(self, exc_type, exc, tb):
+        sys.settrace(None)
+        try: self.f.close()
+        except: pass
+# --- END: scoped line tracer ---
 
 # CRITICAL: Exact headers from real Chrome browser
 # ORDER MATTERS! PerimeterX checks header order
@@ -123,6 +196,21 @@ HEADERS = {
     "user-agent": REAL_CHROME_HEADERS["User-Agent"],
 }
 
+# Module-level constants
+PROFILE_ENV = "WALMART_PROFILE_DIR"
+SLUG = "walmart"
+DISPLAY_NAME = "Walmart"
+
+# Module-level logger handles (set inside search_and_capture)
+CURRENT_SL: Optional["StepLogger"] = None
+RUN_ID: Optional[str] = None
+
+# Submit tracking for forensics
+SUBMIT = {"method": "", "t": 0.0}
+
+# Browser UA cache (set once per run from live browser)
+BROWSER_UA = {"ua": None}
+
 # Ad modules we'll detect and screenshot
 SELECTORS = {
     "top_banner": "a.ad, a.adctr",  # programmatic banners (top/bottom)
@@ -130,8 +218,6 @@ SELECTORS = {
     "tile_takeover": '[data-testid="tile-take-over"]',  # Tile takeover
     "sbv": '[data-testid="search-video-in-grid"]',  # Sponsored Brand Video
 }
-
-
 @dataclass
 class CaptureResult:
     html_saved: int
@@ -148,6 +234,97 @@ def safe_filename(name: str) -> str:
     return "".join(c if c.isalnum() or c in ("-", "_", ".") else "_" for c in name)
 
 
+def _write_run_report(base_dir: str, report: dict):
+    """Write both JSON and Markdown report into the run dir."""
+    try:
+        # JSON
+        jpath = os.path.join(base_dir, "run_report.json")
+        with open(jpath, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        
+        # Markdown
+        mpath = os.path.join(base_dir, "run_report.md")
+        lines = []
+        add = lines.append
+        add(f"# Walmart Run Report — {report.get('keyword','')}")
+        add(f"- started: {report.get('started_at','')}")
+        add(f"- outcome: {report.get('outcome','')}  ")
+        if report.get("bail_reason"):
+            add(f"- bail_reason: {report['bail_reason']}")
+        add("")
+        add("## Timings")
+        t = report.get("timings", {})
+        for k,v in t.items():
+            add(f"- {k}: {v}")
+        add("")
+        add("## Environment")
+        env = report.get("env",{})
+        add(f"- user_agent: {env.get('ua')}")
+        wg = env.get("webgl",{})
+        add(f"- webgl_vendor: {wg.get('vendor')}  ")
+        add(f"- webgl_renderer: {wg.get('renderer')}")
+        add("")
+        add("## Cookies")
+        cok = report.get("cookies",{})
+        add(f"- pre_count: {cok.get('pre_count')}  pre_names: {cok.get('pre_names',[])[:8]}")
+        add(f"- post_count: {cok.get('post_count')} post_names: {cok.get('post_names',[])[:8]}")
+        add("")
+        add("## PX")
+        px = report.get("px",{})
+        for k,v in px.items():
+            add(f"- {k}: {v}")
+        add("")
+        add("## Network Forensics")
+        nf = report.get("network",{})
+        add(f"- req_failed: {nf.get('req_failed',0)}")
+        add(f"- resp_doc: {nf.get('resp_doc',0)}")
+        add(f"- route_errors: {nf.get('route_errors',0)}")
+        add("")
+        add("## Artifacts")
+        art = report.get("artifacts",{})
+        for k,v in art.items():
+            if v:
+                add(f"- {k}: {v}")
+        try:
+            with open(mpath, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+        except Exception:
+            pass
+        
+        return {"json": jpath, "md": mpath}
+    except Exception:
+        return {}
+
+
+def _build_report(keyword, outcome, bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL):
+    """Helper to build report dict."""
+    return {
+        "keyword": keyword,
+        "outcome": outcome,
+        "bail_reason": bail_reason,
+        "started_at": started_at,
+        "timings": timings,
+        "env": env_info,
+        "cookies": cookies_info,
+        "px": px_stats,
+        "network": net_counters,
+        "artifacts": {**artifacts, "steps_log": SL.path if SL else None},
+    }
+
+
+def _dump_html_png(page, base_dir: str, stem: str):
+    """Save HTML and screenshot for forensics."""
+    try:
+        page.screenshot(path=os.path.join(base_dir, safe_filename(f"{stem}.png")))
+    except Exception:
+        pass
+    try:
+        with open(os.path.join(base_dir, safe_filename(f"{stem}.html")), "w", encoding="utf-8") as f:
+            f.write((page.content() or "")[:200_000])
+    except Exception:
+        pass
+
+
 def _parse_walmart_redirect(href: str) -> str:
     """
     Walmart redirectors:
@@ -156,10 +333,10 @@ def _parse_walmart_redirect(href: str) -> str:
     Prefer rd= when present; otherwise leave as-is.
     """
     try:
-        u = ul.urlparse(href)
-        qs = ul.parse_qs(u.query)
+        u = urlparse(href)
+        qs = parse_qs(u.query)
         if "rd" in qs and qs["rd"]:
-            return ul.unquote(qs["rd"][0])
+            return unquote(qs["rd"][0])
         return href
     except Exception:
         return href
@@ -169,9 +346,9 @@ def _download(url: str, out_path: str, timeout: int = 25) -> bool:
     """Download asset (video) through proxy if configured."""
     try:
         proxies = _requests_proxies_from_env()
-        # Mirror browser headers to avoid 403s
+        # Use live browser UA (not hardcoded)
         hdrs = {
-            "User-Agent": HEADERS["user-agent"],
+            "User-Agent": BROWSER_UA["ua"] or HEADERS["user-agent"],
             "Accept-Language": "en-US,en;q=0.9",
             "Referer": "https://www.walmart.com/",
         }
@@ -227,10 +404,10 @@ def _load_or_init_profile_fingerprint(profile_dir: Optional[str]):
 
 def _get_proxy_config():
     """Get proxy configuration from environment if available."""
-    proxy_server = os.environ.get('WALMART_PROXY_SERVER')  # e.g., http://proxy.example.com:8080
+    proxy_server = os.environ.get('WALMART_PROXY_SERVER')  # e.g., http://proxy.example.com:8080?session=WALMART001
     proxy_username = os.environ.get('WALMART_PROXY_USERNAME')
     proxy_password = os.environ.get('WALMART_PROXY_PASSWORD')
-    
+
     if proxy_server:
         proxy_config = {'server': proxy_server}
         if proxy_username and proxy_password:
@@ -266,12 +443,14 @@ def _requests_proxies_from_env():
     }
 
 
-def _launch(playwright, profile_dir: Optional[str], headless: bool = False, proxy_config: dict = None):
+def _launch(playwright, profile_dir: Optional[str], headless: bool = False, proxy_config: dict = None, net_counters: dict = None):
     """
     Returns (browser_or_None, context, page, is_persistent)
     Uses persistent context when profile_dir is provided.
     Uses persistent Chrome (channel=chrome) for maximum stealth.
     """
+    if net_counters is None:
+        net_counters = {"req_failed": 0, "resp_doc": 0, "route_errors": 0}
     # CRITICAL: NO args that trigger Chrome banners (PerimeterX flags them instantly)
     # Empty args = cleanest Chrome = best trust score
     args = []
@@ -321,36 +500,100 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
         ctx.tracing.start(screenshots=True, snapshots=True, sources=False)
         ctx.on("close", lambda: print("[ctx] closed"))
         
+        # Create page BEFORE using it anywhere
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page.on("crash", lambda: print("[page] crashed"))
+        page.on("close", lambda: _on_page_close())
+        ctx.on("close", lambda: _on_ctx_close())
+        page.on("console", lambda msg: print("[console]", msg.type, msg.text))
+        
+        # --- forensic listeners ---
+        def _req_failed(req):
+            if CURRENT_SL:
+                CURRENT_SL.log("req_failed",
+                               url=req.url, method=req.method,
+                               resource=req.resource_type, failure=str(req.failure))
+            net_counters["req_failed"] += 1
+
+        def _resp_doc(res):
+            try:
+                req = res.request
+                if req.is_navigation_request() and req.resource_type == "document":
+                    if CURRENT_SL:
+                        CURRENT_SL.log("resp_doc",
+                                       url=res.url, status=res.status,
+                                       method=req.method, fromCache=res.from_service_worker)
+                    net_counters["resp_doc"] += 1
+            except Exception as e:
+                if CURRENT_SL:
+                    CURRENT_SL.log("resp_doc_error", err=str(e))
+
+        def _page_error(err):
+            if CURRENT_SL:
+                CURRENT_SL.log("page_error", error=str(err))
+
+        ctx.on("requestfailed", _req_failed)
+        ctx.on("response", _resp_doc)
+        page.on("pageerror", _page_error)
+        
         # --- BEGIN: off-domain guard rails ---
-        # Block only TOP-LEVEL navigations to Google (allow all subresources including PX beacons)
         def _guard_nav(route):
             req = route.request
-            url = req.url.lower()
-            # Block only TOP-LEVEL navs to google
-            if req.is_navigation_request() and ("//google." in url or "//www.google." in url):
-                print(f"[blocked] Google nav: {req.url}")
-                return route.abort()
-            # Allow everything else (including PX beacons to *.px-cloud.net)
-            return route.continue_()
-        
+            try:
+                url = req.url
+                lu = url.lower()
+                if req.is_navigation_request():
+                    if CURRENT_SL:
+                        CURRENT_SL.log("route_nav", url=url, resource=req.resource_type, method=req.method)
+                    # Block only top-level Google navigations
+                    if "//google." in lu or "//www.google." in lu:
+                        if CURRENT_SL:
+                            CURRENT_SL.log("route_abort", url=url, reason="google_top_nav")
+                        return route.abort()
+                # Default: continue
+                return route.continue_()
+            except Exception as e:
+                # Do not let route errors kill the run — log and best-effort continue
+                if CURRENT_SL:
+                    CURRENT_SL.log("route_error", url=req.url, err=str(e))
+                net_counters["route_errors"] += 1
+                try:
+                    return route.continue_()
+                except Exception:
+                    pass
         ctx.route("**/*", _guard_nav)
+        # --- END: off-domain guard rails ---
         
-        # Log PX collector beacons to verify they're reaching the network
+        # PX beacons (requests)
         def _log_px_beacon(req):
             u = req.url.lower()
             if "px-cloud.net" in u:
                 print(f"[px] beacon -> {req.method} {req.url}")
-        
         ctx.on("request", _log_px_beacon)
-        # --- END: off-domain guard rails ---
         
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.on("crash", lambda: print("[page] crashed"))
-        page.on("close", lambda: print("[page] closed"))
-        page.on("console", lambda msg: print("[console]", msg.type, msg.text))
+        # PX responses - log via CURRENT_SL
+        def _log_px_response(res):
+            u = res.url.lower()
+            if "px-cloud.net" in u and CURRENT_SL:
+                CURRENT_SL.log("px_resp", url=res.url, status=res.status, method=res.request.method)
+        ctx.on("response", _log_px_response)
         
-        # Apply playwright-stealth (handles fingerprinting automatically)
-        # NO manual anti-fingerprinting - playwright-stealth is sufficient
+        # Navigation logging - log via CURRENT_SL
+        def _log_navigation(fr):
+            if CURRENT_SL:
+                CURRENT_SL.log("nav", url=fr.url, name=fr.name)
+        page.on("framenavigated", _log_navigation)
+        
+        # /blocked detector (request-level)
+        def _log_blocked_nav(req):
+            if req.is_navigation_request() and "walmart.com/blocked" in req.url.lower():
+                _log_px_trip(CURRENT_SL, "nav_to_blocked")
+                if os.environ.get("WALMART_BREAK_ON_BLOCKED") == "1":
+                    print(f"\n🔴 NAV TO BLOCKED: {req.url}")
+                    import pdb; pdb.set_trace()
+        ctx.on("request", _log_blocked_nav)
+        
+        # Apply stealth after page exists
         apply_stealth(page)
         
         return None, ctx, page, True
@@ -367,9 +610,10 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
         locale="en-US",
     )
     page = ctx.new_page()
-    
-    # Apply playwright-stealth (no manual fingerprinting)
-    apply_stealth(page)
+    page.on("crash", lambda: print("[page] crashed"))
+    page.on("close", lambda: _on_page_close())
+    ctx.on("close", lambda: _on_ctx_close())
+    page.on("console", lambda msg: print("[console]", msg.type, msg.text))
     
     return browser, ctx, page, False
 
@@ -378,7 +622,24 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
     shots: List[str] = []
     loc = page.locator(css)
     count = loc.count()
+
+    # Close guard at start
+    try:
+        if page.is_closed():
+            if SL: SL.log("closed_guard_trip", where="capture_elements_start", label=label)
+            return 0, []
+    except Exception:
+        return 0, []
+
     for i in range(count):
+        # Close guard in loop
+        try:
+            if page.is_closed():
+                if SL: SL.log("closed_guard_trip", where="capture_elements_loop", label=label, i=i)
+                break
+        except Exception:
+            break
+
         item = loc.nth(i)
         try:
             # Use native wheel scroll instead of programmatic scrollIntoView
@@ -404,7 +665,7 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
 
 
 def _search_url(keyword: str) -> str:
-    q = ul.quote_plus(keyword)
+    q = quote_plus(keyword)
     return f"https://www.walmart.com/search?q={q}"
 
 
@@ -414,21 +675,29 @@ RESULT_READY_SELECTORS = [
     'div[data-automation="search-result-gridview-items"]'
 ]
 
-def _wait_for_results(page, timeout_ms=10000):
-    """Wait for search results to render."""
-    deadline = time.time() + timeout_ms / 1000.0
+def _wait_for_search_results(page, timeout_ms=15000):
+    """Wait until we're on /search AND result containers exist."""
+    deadline = time.time() + timeout_ms/1000.0
     last = {}
     while time.time() < deadline:
+        url = page.url
+        on_search = ("/search?" in url or url.rstrip("/").endswith("/search"))
+        found = False
+        which = None
         for sel in RESULT_READY_SELECTORS:
             try:
                 c = page.locator(sel).count()
                 last[sel] = c
                 if c > 0:
-                    return True, sel
+                    found = True
+                    which = sel
+                    break
             except:
                 pass
+        if on_search and found:
+            return True, which
         time.sleep(0.2)
-    return False, f"no result selectors seen: {last}"
+    return False, f"wait timed out; url={page.url} last={last}"
 
 def _detect_block_signals(page) -> tuple:
     """
@@ -478,6 +747,14 @@ def _scroll_burst_wheel(page, lines=8):
 
 def _scroll_like_human(page, say, bursts=2, lines_min=6, lines_max=12, pause_min=0.25, pause_max=0.9, SL=None):
     """Several short wheel bursts with pauses; solve PX if it appears mid-scroll."""
+    # Close guard
+    try:
+        if page.is_closed():
+            if SL: SL.log("closed_guard_trip", where="scroll_like_human_start")
+            return
+    except Exception:
+        return
+
     if PX_HOLD_GUARD["in_progress"]:
         if SL: SL.log("scroll_blocked", reason="hold_in_progress")
         return
@@ -525,6 +802,14 @@ def _tap_pagedown(page, SL=None):
 
 def _bring_into_view(page, loc, SL=None, max_bursts=8):
     """Prefer native wheel to move viewport; fall back to scrollIntoView if needed."""
+    # Close guard at start
+    try:
+        if page.is_closed():
+            if SL: SL.log("closed_guard_trip", where="bring_into_view")
+            return False
+    except Exception:
+        return False
+
     try:
         box = loc.bounding_box()
         if not box:
@@ -555,8 +840,91 @@ def _bring_into_view(page, loc, SL=None, max_bursts=8):
 
 # --- END: human scroll helpers ---
 
+# --- BEGIN: human typing and micro-movement helpers ---
+def human_type(element, text: str):
+    """Type with human-like delays and occasional pauses."""
+    for ch in text:
+        element.type(ch, delay=random.uniform(80, 220))
+        if random.random() < 0.10:
+            time.sleep(random.uniform(0.05, 0.15))
+    if len(text) >= 10 and random.random() < 0.6:
+        time.sleep(random.uniform(0.20, 0.45))
+
+
+def micro_mouse_attention(page, around=(8, 15), jitter=10):
+    """Subtle mouse micro-movements to simulate attention."""
+    try:
+        pos = page.mouse.position
+        mx, my = pos['x'], pos['y']
+    except Exception:
+        mx, my = (random.randint(300, 700), random.randint(300, 600))
+    steps = random.randint(*around)
+    for i in range(steps):
+        dx = random.randint(-jitter, jitter)
+        dy = random.randint(-jitter, jitter)
+        mx += dx
+        my += dy
+        page.mouse.move(mx, my)
+        time.sleep(random.uniform(0.01, 0.03))
+
+
+def random_delay(a=0.6, b=1.4):
+    """Random delay between actions."""
+    time.sleep(random.uniform(a, b))
+
+
+def _wait_results_stable(page, timeout_ms=4000, still_ms=350):
+    """Wait for results count to stabilize (avoid acting on mid-render DOM)."""
+    t0 = time.time()
+    dead = t0 + timeout_ms/1000.0
+    last_count, stable_start = None, None
+    while time.time() < dead:
+        try:
+            c = page.locator('[data-item-id]').count()
+        except Exception:
+            c = 0
+        if c > 0 and c == last_count:
+            if stable_start is None:
+                stable_start = time.time()
+            if (time.time() - stable_start)*1000 >= still_ms:
+                return True
+        else:
+            stable_start = None
+        last_count = c
+        time.sleep(0.1)
+    return False
+
+
+def _drift_reading(page, seconds=2.0):
+    """Subtle mouse drift to simulate reading/scanning."""
+    end = time.time() + seconds
+    try:
+        pos = page.mouse.position
+        x, y = pos['x'], pos['y']
+    except Exception:
+        x, y = (random.randint(300, 700), random.randint(300, 600))
+    
+    while time.time() < end:
+        x += random.randint(-15, 15)
+        y += random.randint(-10, 12)
+        try:
+            page.mouse.move(x, y, steps=random.randint(2, 5))
+        except Exception:
+            break
+        time.sleep(random.uniform(0.12, 0.35))
+
+
+def _backscroll_peek(page):
+    """Occasional back-scroll peek (35% chance)."""
+    if random.random() < 0.35:
+        try:
+            page.mouse.wheel(0, -random.randint(120, 320))
+            time.sleep(random.uniform(0.4, 0.9))
+        except Exception:
+            pass
+# --- END: human typing and micro-movement helpers ---
+
 # --- BEGIN: PX modal solver v4 (steady-only, no jitter) ---
-import base64
 
 # PX hold guard – prevents any other action while we're holding
 PX_HOLD_GUARD = {"in_progress": False}
@@ -697,8 +1065,8 @@ def _on_blocked(url: str) -> bool:
 def _decoded_target_from_blocked(url: str):
     """Extract and decode redirect target from blocked URL."""
     try:
-        u = ul.urlparse(url)
-        raw = ul.parse_qs(u.query).get("url", [""])[0]
+        u = urlparse(url)
+        raw = parse_qs(u.query).get("url", [""])[0]
         if not raw:
             return None
         try:
@@ -766,14 +1134,44 @@ def _force_redirect_off_blocked(page, SL=None) -> bool:
     if SL: SL.log("px_redirect_failed", url=page.url)
     return False
 
-def _still_px_modal(page) -> bool:
-    """Check if PX modal is still present."""
+def _log_px_trip(SL, reason: str):
+    """Log PX detection with stack trace for debugging."""
     try:
-        return page.locator('#px-captcha').count() > 0 or \
-               page.locator('iframe[title="Human verification challenge"]').count() > 0 or \
-               page.locator('text=Robot or human?').count() > 0
-    except Exception:
-        return False
+        # Get stack trace
+        stack = inspect.stack()
+        # Skip this function and the caller (_still_px_modal)
+        relevant_stack = stack[2:5]  # Get 3 levels up
+
+        stack_info = []
+        for frame_info in relevant_stack:
+            filename = os.path.basename(frame_info.filename)
+            line_num = frame_info.lineno
+            func_name = frame_info.function
+            code_line = frame_info.code_context[0].strip() if frame_info.code_context else ""
+            stack_info.append({
+                "file": filename,
+                "line": line_num,
+                "func": func_name,
+                "code": code_line
+            })
+
+        if SL:
+            SL.log("px_trip", reason=reason, stack=stack_info)
+
+        # Break into debugger if DEBUG.break_on_px is set
+        if DEBUG.break_on_px:
+            print(f"\n🔴 PX DETECTED: {reason}")
+            print("Stack trace:")
+            for i, frame in enumerate(stack_info):
+                print(f"  {i+1}. {frame['file']}:{frame['line']} in {frame['func']}")
+                if frame['code']:
+                    print(f"     {frame['code']}")
+            print("\n🔍 BREAKING INTO DEBUGGER - Type 'c' to continue, 'q' to quit")
+            pdb.set_trace()
+
+    except Exception as e:
+        if SL:
+            SL.log("px_trip_error", error=str(e), reason=reason)
 
 def _press_and_hold_until_complete(page, say, SL=None):
     """
@@ -781,13 +1179,26 @@ def _press_and_hold_until_complete(page, say, SL=None):
     - Waits for widget to be visible and stable
     - Focus click once
     - Mouse down, sleep, mouse up (no movement)
-    - Returns True when PX cookies present OR modal disappears
+    - Wait for Walmart's auto-transition (beacon + modal vanish)
+    - Only if needed: gentle fallback (reload vs goto home)
     """
     PX_HOLD_GUARD["in_progress"] = True
+
+    # Setup PX beacon detection before hold
+    px_beacon_seen = {"ok": False}
+    def _on_response(res):
+        try:
+            if "px-cloud.net" in res.url.lower():
+                px_beacon_seen["ok"] = True
+                if SL: SL.log("px_beacon_detected", url=res.url)
+        except:
+            pass
+    page.on("response", _on_response)
+
     try:
         el, box, t_ready = _wait_visible_hc_iframe(page, timeout_ms=12000, stable_ms=700)
-        if SL: 
-            SL.log("px_widget_ready", t_ready=round(t_ready,2), 
+        if SL:
+            SL.log("px_widget_ready", t_ready=round(t_ready,2),
                    box=None if not box else {k: round(box[k],1) for k in ("x","y","width","height")})
         if not el or not box:
             say("warn", "[Walmart] PX widget not ready in time")
@@ -796,8 +1207,13 @@ def _press_and_hold_until_complete(page, say, SL=None):
         x = box["x"] + box["width"] * 0.25   # inside button
         y = box["y"] + box["height"] / 2.0
 
-        page.mouse.move(x, y, steps=10)
-        page.mouse.click(x, y, delay=random.randint(40, 120))
+        # Focus click (guarded against page close)
+        try:
+            page.mouse.move(x, y, steps=10)
+            page.mouse.click(x, y, delay=random.randint(40, 120))
+        except Exception:
+            if SL: SL.log("px_hold_bail", reason="page_closed_on_focus_click")
+            return False
         time.sleep(random.uniform(0.25, 0.45))
 
         if t_ready < 3.0:
@@ -809,27 +1225,64 @@ def _press_and_hold_until_complete(page, say, SL=None):
         if SL: SL.log("px_hold_plan", duration=round(duration,2))
         say("info", f"[Walmart] Steady hold {duration:.2f}s (ready in {t_ready:.2f}s)")
 
-        page.mouse.down()
-        time.sleep(duration)
-        page.mouse.up()
+        # Hold (guarded against page close)
+        try:
+            page.mouse.down()
+            time.sleep(duration)
+            page.mouse.up()
+        except Exception:
+            if SL: SL.log("px_hold_bail", reason="page_closed_on_down_up")
+            return False
         time.sleep(random.uniform(1.4, 2.0))
 
-        # Cookie check
+        # Wait for Walmart's auto-transition (beacon + modal vanish or nav)
+        t0 = time.time()
+        auto_ok = False
+        if SL: SL.log("px_auto_wait_start", timeout=4.0)
+
+        while time.time() - t0 < 4.0:
+            if px_beacon_seen["ok"]:
+                auto_ok = True
+                if SL: SL.log("px_auto_ok", reason="beacon_seen")
+                break
+            if page.locator("#px-captcha").count() == 0 and \
+               page.locator('iframe[title="Human verification challenge"]').count() == 0 and \
+               "Robot or human?" not in (page.content() or ""):
+                auto_ok = True
+                if SL: SL.log("px_auto_ok", reason="modal_vanished")
+                break
+            time.sleep(0.15)
+
+        if SL and not auto_ok:
+            SL.log("px_auto_wait_timeout", waited=round(time.time()-t0,2))
+
+        # Gentle fallback only if auto-transition failed
+        if not auto_ok:
+            if SL: SL.log("px_fallback_start")
+            if _on_blocked(page.url):
+                # Go to home (like Walmart would send us), then idle
+                if SL: SL.log("px_fallback", action="goto_home")
+                try:
+                    page.goto("https://www.walmart.com/", wait_until="domcontentloaded")
+                    time.sleep(random.uniform(1.2, 2.0))
+                except Exception as e:
+                    if SL: SL.log("px_fallback_error", error=str(e))
+            else:
+                # Soft reload to let scripts re-evaluate
+                if SL: SL.log("px_fallback", action="soft_reload")
+                try:
+                    page.reload(wait_until="domcontentloaded")
+                    time.sleep(random.uniform(0.8, 1.4))
+                except Exception as e:
+                    if SL: SL.log("px_fallback_error", error=str(e))
+
+        # Cookie check and cleared calculation AFTER wait/recovery
         has_px, names = _wait_px_cookie(page.context, timeout_ms=8000)
-
-        # Try to get off /blocked
-        if not _force_redirect_off_blocked(page, SL=SL):
-            # Give PX a moment to settle and try a soft reload once
-            time.sleep(1.0)
-            try:
-                page.reload(wait_until="domcontentloaded")
-                time.sleep(0.8)
-            except Exception:
-                pass
-
         cleared = has_px and not _still_px_modal(page)
-        _mark_px_cleared(SL=SL)  # record PX clear time even if we remain cautious
-        if SL: SL.log("px_hold_done", cookies_present=has_px, cookie_names=names[:6], cleared=cleared, url=page.url)
+
+        _mark_px_cleared(SL=SL)
+        if SL: SL.log("px_hold_done", cookies_present=has_px, cookie_names=names[:6],
+                     cleared=cleared, url=page.url, auto_ok=auto_ok)
         say("info", f"[Walmart] cookies:{has_px} cleared:{cleared} names:{names[:8]}")
         return cleared
     finally:
@@ -840,15 +1293,18 @@ def _press_and_hold_until_complete(page, say, SL=None):
 MAX_PX_SOLVES_PER_RUN = 3            # hard cap per run
 PX_SOLVE_COOLDOWN_RANGE = (12, 25)   # seconds; backoff before trying again
 
-def _still_px_challenged(page) -> bool:
-    """Check if PX challenge is present (modal or /blocked)."""
+def _still_px_modal(page) -> bool:
+    """Check if PX modal is still present; on first visible transition, log px_trip."""
+    # Static memory to avoid spamming on every call
+    if not hasattr(_still_px_modal, "_prev"): _still_px_modal._prev = False
     try:
-        if "walmart.com/blocked" in page.url.lower():
-            return True
-        return page.locator('#px-captcha').count() > 0 or \
-               page.locator('iframe[title="Human verification challenge"]').count() > 0 or \
-               page.locator('text=Robot or human?').count() > 0 or \
-               page.locator('button:has-text("PRESS & HOLD")').count() > 0
+        now = page.locator('#px-captcha').count() > 0 or \
+              page.locator('iframe[title="Human verification challenge"]').count() > 0 or \
+              page.locator('text=Robot or human?').count() > 0
+        if now and not _still_px_modal._prev:
+            _log_px_trip(CURRENT_SL, "modal_visible_first")
+        _still_px_modal._prev = now
+        return now
     except Exception:
         return False
 
@@ -950,6 +1406,68 @@ def _mark_cookies_refreshed(profile_dir: Optional[str]):
         f.write(str(time.time()))
 
 
+def _abs(path: str) -> str:
+    """Get absolute path, expanding user home (~)."""
+    return os.path.abspath(os.path.expanduser(path or ""))
+
+
+def _goto_home(page, SL, timeout_dom_ms=30000):
+    """Resilient homepage navigation with commit → selector fallback."""
+    url = "https://www.walmart.com/"
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=timeout_dom_ms)
+        if SL:
+            SL.log("home_goto_phase", phase="domcontentloaded")
+        return "domcontentloaded"
+    except Exception as e:
+        if SL:
+            SL.log("home_goto_timeout", err=str(e))
+        # Forensics on timeout
+        try:
+            _dump_html_png(page, SL.base_dir if hasattr(SL, "base_dir") else "/tmp", f"{SLUG}_home_timeout")
+        except Exception:
+            pass
+        # Fallback: commit + wait for search box (visual readiness)
+        try:
+            page.goto(url, wait_until="commit", timeout=15000)
+            page.wait_for_selector('input[aria-label="Search"]', timeout=15000)
+            if SL:
+                SL.log("home_goto_phase", phase="commit+search")
+            return "commit+search"
+        except Exception as e2:
+            if SL:
+                SL.log("home_goto_phase", phase="commit+networkidle", err=str(e2))
+            try:
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                pass
+            return "networkidle"
+
+def _verify_writable_dir(path: str, create: bool = True) -> str:
+    """Ensure path exists and is writable. Returns absolute path; raises on failure."""
+    p = _abs(path)
+    if create:
+        os.makedirs(p, exist_ok=True)
+    # write test
+    try:
+        test_path = os.path.join(p, f".perm{int(time.time()*1000)}")
+        with open(test_path, "w", encoding="utf-8") as f:
+            f.write("ok")
+        os.remove(test_path)
+    except OSError as e:
+        raise RuntimeError(f"Directory not writable: {p} ({e})")
+    return p
+
+def _resolve_run_dir(base_dir: Optional[str], keyword: str) -> str:
+    """Always produce a unique, timestamped run folder and create it."""
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    if base_dir:
+        root = _abs(base_dir)
+    else:
+        root = _abs(os.path.join("output", "walmart", safe_filename(keyword)))
+    run_dir = os.path.join(root, ts)
+    return _verify_writable_dir(run_dir, create=True)
+
 def search_and_capture(
     root_logger,
     activity_cb: Optional[Callable[[str, str], None]],
@@ -957,11 +1475,12 @@ def search_and_capture(
     keyword: str,
     profile_dir: Optional[str] = None,
     headless: bool = False,  # Default to headed for Walmart
+    debug: DebugConfig | None = None,
 ) -> CaptureResult:
     """
     GUI calls this function.
     activity_cb(kind, msg) — kind in {'info','warn','error','success'}
-    
+
     Strategy based on cookie-based trust:
     - Fresh fingerprint with exact Chrome headers
     - Stable viewport/timezone per profile
@@ -969,26 +1488,78 @@ def search_and_capture(
     - Human-like browsing patterns
     - Auto press-and-hold CAPTCHA solver
     """
-    # Initialize step logger for detailed telemetry
+    # PRE-FLIGHT: do not begin until these are verified
+    # 1) activity_cb must be provided and callable (GUI live logging)
+    if not callable(activity_cb):
+        raise AssertionError("activity_cb is required and must be callable for GUI live logging")
+
+    # 2) base_dir must be a real, timestamped folder per run
+    #    We always convert the incoming base_dir to a unique run folder here.
+    try:
+        run_dir = _resolve_run_dir(base_dir, keyword)
+    except Exception as e:
+        # We have no logger yet, so raise a crisp error that the GUI can surface
+        raise RuntimeError(f"Base directory preflight failed: {e}")
+
+    # 3) WALMART_PROFILE_DIR must exist and be writable (stable persistent profile)
+    resolved_profile = profile_dir or os.environ.get(PROFILE_ENV)
+    if not resolved_profile or not resolved_profile.strip():
+        raise AssertionError(f"{PROFILE_ENV} is required (persistent Chrome profile for Walmart)")
+    try:
+        resolved_profile = _verify_writable_dir(resolved_profile, create=True)
+    except Exception as e:
+        raise RuntimeError(f"Profile directory preflight failed: {e}")
+
+    # CRITICAL: Never use real Chrome Default profile (contains personal data)
+    if resolved_profile.rstrip("/").endswith("Google/Chrome/Default"):
+        raise AssertionError("Do not use your real Chrome Default profile. Set RETAILER_PROFILE_DIR to a dedicated folder (e.g., ~/ChromeProfiles/retailer_clean_profile).")
+
+    # From here on, use run_dir and resolved_profile only
+    base_dir = run_dir
+    profile_dir = resolved_profile
+
+    # Apply debug selection from GUI
+    _apply_debug_config(debug or DebugConfig())
+
+    # Initialize step logger AFTER preflight, so runs only start when verified
     SL = StepLogger(base_dir, keyword)
-    
+
     def say(kind: str, msg: str):
         try:
             SL.log("log", level=kind, msg=msg)
-            if activity_cb:
-                activity_cb(kind, msg)
-            elif root_logger:
-                (root_logger.info if kind != "error" else root_logger.error)(msg)
-            else:
-                print(f"{kind.upper()}: {msg}")
+            activity_cb(kind, msg)
         except Exception:
             pass
+
+    # Run wiring
+    global CURRENT_SL, RUN_ID
+    CURRENT_SL = SL
+    RUN_ID = f"{int(time.time()*1000)}-{random.randint(1000,9999)}"
+    SL.log("run_start", run_id=RUN_ID, keyword=keyword,
+           preflight={"base_dir": base_dir, "profile_dir": profile_dir},
+           debug=(debug or DebugConfig()).__dict__)
+    # _install_global_exception_hook(lambda: CURRENT_SL)  # TODO: implement if needed
+
+    # Milestones
+    MT = MilestoneTracker(SL)
+    MT.mark("preflight_ok", ok=True)
+    
+    # Run report metrics
+    started_at = datetime.now().isoformat(timespec="seconds")
+    timings = {"to_home_ms": None, "after_submit_px_ms": None, "results_ready_ms": None}
+    px_stats = {"tries": 0, "cycles": 0, "cleared": None}
+    net_counters = {"req_failed": 0, "resp_doc": 0, "route_errors": 0}
+    env_info = {"ua": None, "webgl": {}}
+    cookies_info = {"pre_count": 0, "pre_names": [], "post_count": 0, "post_names": []}
+    artifacts = {"steps_log": SL.path, "trace_zip": None, "no_results_html": None, 
+                 "no_results_png": None, "saved_html": None, "meta_json": None}
     
     retailer = DISPLAY_NAME
     shots: List[str] = []
     assets: List[str] = []
     meta: Dict = {"links": [], "videos": []}
     html_saved = 0
+    bail_reason = None  # Set when we should NOT retry
     
     _ensure_dir(base_dir)
     url = _search_url(keyword)
@@ -1035,6 +1606,9 @@ def search_and_capture(
     proxy_config = _get_proxy_config()
     if proxy_config:
         say("info", f"[{retailer}] Using proxy: {proxy_config.get('server', 'N/A')}")
+        # Log proxy session info for debugging
+        if 'session=' in proxy_config.get('server', ''):
+            SL.log("proxy_config", server=proxy_config['server'], has_session=True)
     
     # Cookie diagnostic helper
     def _cookie_names(ctx):
@@ -1043,9 +1617,43 @@ def search_and_capture(
         except:
             return []
     
-    with sync_playwright() as p:
-        browser, ctx, page, persistent = _launch(p, profile_dir, headless=headless, proxy_config=proxy_config)
-        try:
+    # Initialize browser/context/page to None to prevent UnboundLocalError
+    page: Optional[Page] = None
+    ctx: Optional[BrowserContext] = None
+    browser: Optional[Browser] = None
+    
+    try:
+        with sync_playwright() as p:
+            with step(SL, "launch_context"):
+                browser, ctx, page, persistent = _launch(p, profile_dir, headless=headless, proxy_config=proxy_config, net_counters=net_counters)
+                MT.mark("launch_context", ok=True)
+
+            # --- BEGIN: close-aware guards ---
+            CLOSED = {"page": False, "ctx": False}
+
+            def _on_page_close():
+                CLOSED["page"] = True
+                print("[page] closed")
+
+            def _on_ctx_close():
+                CLOSED["ctx"] = True
+                print("[ctx] closed")
+
+            # Only register handlers if page/ctx were successfully created
+            if page and ctx:
+                try:
+                    page.on("close", lambda: _on_page_close())
+                    ctx.on("close", lambda: _on_ctx_close())
+                except Exception:
+                    pass
+            # --- END: close-aware guards ---
+            
+            # Guard: If launch failed, bail early
+            if not page or not ctx:
+                SL.log("launch_failed", reason="page or ctx is None")
+                say("error", f"[{retailer}] Browser launch failed")
+                return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
+            
             # DIAGNOSTIC: Profile health check (verify Chrome is writing to disk)
             health = _profile_health(profile_dir)
             print(f"[profile_health] {health}")
@@ -1055,19 +1663,84 @@ def search_and_capture(
             pre_cookies = _cookie_names(ctx)
             print(f"[cookies] pre-run walmart.com: {len(pre_cookies)} names={pre_cookies[:8]}")
             SL.log("cookies_pre", count=len(pre_cookies), names=pre_cookies[:8])
+            cookies_info["pre_count"] = len(pre_cookies)
+            cookies_info["pre_names"] = pre_cookies[:12]
+
+            # CRITICAL: Verify cookie persistence for debugging
+            if len(pre_cookies) == 0:
+                SL.log("cookie_persistence", status="NO_COOKIES",
+                       note="First run or profile issue - cookies will be saved after this run")
+            elif len(pre_cookies) > 0:
+                SL.log("cookie_persistence", status="COOKIES_PRESENT",
+                       note=f"Profile working - {len(pre_cookies)} cookies persisted from previous run")
+            else:
+                SL.log("cookie_persistence", status="ERROR",
+                       note="Cookie read failed - check profile permissions")
             
-            page.set_default_timeout(15000)  # 15s
+            # Increase timeouts for Walmart (PX delays can be long)
+            page.set_default_timeout(30000)  # 30s
+            try:
+                page.set_default_navigation_timeout(30000)  # 30s
+            except Exception:
+                pass
+            
+            # Log PX collector beacons to verify they're reaching the network
+            def _log_px_beacon(req):
+                u = req.url.lower()
+                if "px-cloud.net" in u:
+                    print(f"[px] beacon -> {req.method} {req.url}")
+            ctx.on("request", _log_px_beacon)
+            
+            # Log navigation to /blocked with stack trace
+            def _log_blocked_nav(req):
+                if req.is_navigation_request() and "walmart.com/blocked" in req.url.lower():
+                    _log_px_trip(SL, "nav_to_blocked")
+                    # Optional breakpoint for debugging
+                    if DEBUG.break_on_blocked:
+                        print(f"\n🔴 NAV TO BLOCKED: {req.url}")
+                        print("Breaking into debugger - Type 'c' to continue, 'q' to quit")
+                        import pdb; pdb.set_trace()
             
             # CRITICAL: Establish session with human-like browsing pattern
             say("info", f"[{retailer}] Establishing session (human-like pattern)")
             
-            # 1. Visit homepage (like real users)
-            page.goto("https://www.walmart.com/", wait_until="domcontentloaded")
+            # 1. Visit homepage (like real users) - resilient navigation
+            phase = _goto_home(page, SL)
+            SL.log("home_goto_phase_final", phase=phase)
+            
+            # Timing: to homepage
+            timings["to_home_ms"] = int((time.time() - SL.t0) * 1000)
             
             # DIAGNOSTIC: Log User-Agent (should be stable across runs)
             ua = page.evaluate("() => navigator.userAgent")
             print(f"[ua] {ua}")
             SL.log("user_agent", ua=ua)
+            env_info["ua"] = ua
+            
+            # Cache UA for requests library (video downloads)
+            BROWSER_UA["ua"] = ua
+            try:
+                HEADERS["user-agent"] = ua
+            except Exception:
+                pass
+            
+            # Log WebGL info (sanity check GPU isn't SwiftShader)
+            try:
+                vendor = page.evaluate("""() => {
+                    const c=document.createElement('canvas');
+                    const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+                    return gl ? gl.getParameter(gl.VENDOR) : null;
+                }""")
+                renderer = page.evaluate("""() => {
+                    const c=document.createElement('canvas');
+                    const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+                    return gl ? gl.getParameter(gl.RENDERER) : null;
+                }""")
+                SL.log("webgl", vendor=vendor, renderer=renderer)
+                print(f"[webgl] vendor={vendor}, renderer={renderer}")
+                env_info["webgl"] = {"vendor": vendor, "renderer": renderer}
+            except Exception:
+                pass
             
             # Check for PX challenge and solve with cooldown/retry
             if _still_px_modal(page):
@@ -1078,7 +1751,12 @@ def search_and_capture(
                 else:
                     say("error", f"[{retailer}] Failed to clear PX after max attempts")
                     SL.log("px_result", where="home", ok=False)
-                    return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
+                    bail_reason = "px_locked"
+                    meta["bail"] = bail_reason
+                    meta["steps_log"] = SL.path
+                    report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                    _write_run_report(base_dir, report)
+                    return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
             
             # Idle before any action (no scrolling - triggers PX)
             time.sleep(random.uniform(1.0, 2.0))
@@ -1092,6 +1770,14 @@ def search_and_capture(
             
             # Directly type into search – do not scroll the homepage
             say("info", f"[{retailer}] Typing search query")
+            
+            # Optional: line-by-line tracer around “type → submit → first PX check”
+            if DEBUG.line_trace:
+                trace_path = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_linetrace.log"))
+                with ScopedTracer(os.path.basename(__file__), trace_path):
+                    # typing + submit code block
+                    # immediate PX check after submit (your px_after_submit_check)
+                    pass
             
             # Try to use the search box if visible (more realistic)
             search_typed = False
@@ -1118,25 +1804,18 @@ def search_and_capture(
                     # Click search box
                     say("info", f"[{retailer}] Clicking search box")
                     search_box.click()
-                    time.sleep(random.uniform(0.2, 0.4))
+                    random_delay(0.2, 0.4)
                     
-                    # Type with human-like delays (PerimeterX tracks keystroke timing!)
+                    # Human typing with natural delays
                     say("info", f"[{retailer}] Typing keyword: {keyword}")
-                    for char in keyword:
-                        search_box.type(char, delay=random.uniform(80, 220))  # 80-220ms per keystroke
-                    
-                    # Extra "thinking" pause on longer terms
-                    if len(keyword) >= 10 and random.random() < 0.6:
-                        time.sleep(random.uniform(0.20, 0.45))
+                    human_type(search_box, keyword)
                     
                     # CRITICAL: Dwell after typing (humans pause 600-1200ms before submit)
-                    time.sleep(random.uniform(0.60, 1.20))
+                    random_delay(0.60, 1.20)
                     
-                    # Tiny caret movement or mouse micro-move (optional, low probability)
-                    if random.random() < 0.35:
-                        page.keyboard.press("ArrowLeft")
-                        time.sleep(random.uniform(0.08, 0.18))
-                        page.keyboard.press("ArrowRight")
+                    # Tiny "attention" mouse move (low energy)
+                    if random.random() < 0.4:
+                        micro_mouse_attention(page, around=(5, 9), jitter=6)
                     
                     # Prefer clicking the search button (varies per build)
                     clicked = False
@@ -1154,7 +1833,11 @@ def search_and_capture(
                                 if box:
                                     mx = box["x"] + box["width"] * random.uniform(0.35, 0.65)
                                     my = box["y"] + box["height"] * random.uniform(0.35, 0.65)
-                                    page.mouse.move(mx, my, steps=8)
+                                    page.mouse.move(mx, my, steps=random.randint(6, 12))
+                                random_delay(0.05, 0.12)
+                                # Track submit for forensics
+                                SUBMIT["method"] = "button"
+                                SUBMIT["t"] = time.time()
                                 btn.click()
                                 clicked = True
                                 say("info", f"[{retailer}] Clicked search button")
@@ -1179,11 +1862,24 @@ def search_and_capture(
                         if not clicked:
                             # Final fallback to Enter
                             say("info", f"[{retailer}] Pressing Enter (button not found)")
+                            # Track submit for forensics
+                            SUBMIT["method"] = "enter"
+                            SUBMIT["t"] = time.time()
                             search_box.press("Enter")
                     
                     if not search_typed:
                         page.wait_for_load_state('domcontentloaded')
                         _nav_mark_done(SL=SL)
+                        # After submit, sample PX status and log timing
+                        px_now = _still_px_modal(page)
+                        ms_since_submit = int((time.time() - (SUBMIT.get("t") or time.time())) * 1000)
+                        cookies_now = sorted(set(c["name"] for c in page.context.cookies("https://www.walmart.com/")))
+                        SL.log("after_submit", method=SUBMIT.get("method","?"), px_visible=bool(px_now),
+                               ms_since_submit=ms_since_submit, url=page.url, cookies=cookies_now[:6])
+                        timings["after_submit_px_ms"] = ms_since_submit if px_now else None
+                        if px_now and DEBUG.break_on_px:
+                            print("\n🔴 PX appeared right after submit")
+                            import pdb; pdb.set_trace()
                     search_typed = True
                     say("info", f"[{retailer}] Search completed via typing")
                 else:
@@ -1207,48 +1903,104 @@ def search_and_capture(
                 else:
                     say("error", f"[{retailer}] Failed to clear PX on search results")
                     SL.log("px_result", where="search_results", ok=False)
+                    bail_reason = "px_locked"
+                    meta["bail"] = bail_reason
+                    meta["steps_log"] = SL.path
+                    report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                    _write_run_report(base_dir, report)
                     return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
+
+            # Hard block detection: if immediately sent to /blocked after submit, bail
+            if _on_blocked(page.url) and (time.time() - LAST_NAV_DONE_TS["t"] < 5.0):
+                SL.log("hard_block", where="after_submit", url=page.url, reason="blocked_immediate_after_nav")
+                say("warn", f"[{retailer}] Hard block immediately after submit; backing off")
+                bail_reason = "hard_block"
+                meta["bail"] = bail_reason
+                meta["steps_log"] = SL.path
+                report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                _write_run_report(base_dir, report)
+                return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
+            
+            # Re-run search only after a small idle on home (if PX recovery took us home)
+            if page.url.rstrip("/") == "https://www.walmart.com":
+                say("info", f"[{retailer}] Post-PX recovery: idling on home")
+                time.sleep(random.uniform(2.0, 4.0))  # give PX state time to settle
+                # If PX re-appeared on home, bail
+                if _still_px_modal(page):
+                    SL.log("hard_block", reason="px_on_home_after_recovery", url=page.url)
+                    bail_reason = "px_locked"
+                    meta["bail"] = bail_reason
+                    meta["steps_log"] = SL.path
+                    report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                    _write_run_report(base_dir, report)
+                    return CaptureResult(html_saved=0, shots=shots, assets=assets, meta=meta)
+                # Single retry to search
+                page.goto(url, wait_until="domcontentloaded")
+                _nav_mark_done(SL=SL)
+                # If this jumps to /blocked immediately, bail (don't hammer)
+                if _on_blocked(page.url) and (time.time() - LAST_NAV_DONE_TS["t"] < 5.0):
+                    SL.log("hard_block", reason="blocked_immediate_after_recovery_nav", url=page.url)
+                    bail_reason = "hard_block"
+                    meta["bail"] = bail_reason
+                    meta["steps_log"] = SL.path
+                    report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                    _write_run_report(base_dir, report)
+                    return CaptureResult(html_saved=0, shots=shots, assets=assets, meta=meta)
             
             # Wait for results to render (avoid false "empty" detection)
-            ready, which = _wait_for_results(page, timeout_ms=12000)
+            ready, which = _wait_for_search_results(page, timeout_ms=15000)
             SL.log("results_ready", ready=ready, selector=which, url=page.url)
             _nav_mark_done(SL=SL)  # mark nav end regardless
             say("info", f"[{retailer}] Results ready: {ready} ({which}) | url={page.url}")
+            
+            # Wait for visual stability before acting
+            if ready:
+                timings["results_ready_ms"] = int((time.time() - (SUBMIT.get("t") or time.time()))*1000)
+                stable = _wait_results_stable(page)
+                SL.log("results_stable", stable=stable)
+            
             if not ready:
                 # Forensics to avoid silent retry
                 say("warn", f"[{retailer}] No results detected - saving forensics")
-                try:
-                    page.screenshot(path=os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_no_results.png")))
-                    with open(os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_no_results.html")), "w", encoding="utf-8") as f:
-                        f.write((page.content() or "")[:20000])
-                except:
-                    pass
+                _dump_html_png(page, base_dir, f"{SLUG}_{keyword}_no_results")
+                artifacts["no_results_html"] = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_no_results.html"))
+                artifacts["no_results_png"] = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_no_results.png"))
             
             # Idle a beat before first scroll, then unlock scrolling
-            time.sleep(random.uniform(1.6, 2.8))
+            random_delay(2.2, 3.5)  # Increased from 1.6-2.8 for better trust
             _unlock_scroll("results_ready", SL=SL)
             
             # Scroll like a human with native wheel events (PX modal handled inside)
             _scroll_like_human(page, say, bursts=random.randint(2, 4), lines_min=6, lines_max=12, SL=SL)
             
-            # Hover over a product (if visible) - realistic behavior
-            # Wait a bit after scroll before hovering to avoid triggering PX
-            time.sleep(random.uniform(0.8, 1.3))
-            if not _still_px_modal(page):
-                try:
-                    first_product = page.locator('[data-item-id]').first
-                    if first_product.count() > 0:
-                        first_product.hover()
-                        time.sleep(random.uniform(0.5, 1.0))
-                except:
-                    pass
+            # Exploratory behavior: drift reading + optional back-scroll + hover
+            _drift_reading(page, seconds=random.uniform(1.8, 3.0))
+            _backscroll_peek(page)
             
-            # Simple mouse movement
-            page.mouse.move(
-                random.randint(300, 800),
-                random.randint(400, 600)
-            )
-            time.sleep(random.uniform(0.2, 0.4))
+            # Hover on a random product tile
+            try:
+                if not page.is_closed() and not _still_px_modal(page):
+                    tiles = page.locator('[data-item-id]')
+                    if tiles.count() > 0:
+                        n = random.randint(0, min(5, tiles.count()-1))
+                        tiles.nth(n).hover()
+                        time.sleep(random.uniform(0.4, 0.9))
+            except Exception:
+                pass
+            
+            # Wait a bit after interactions before capturing
+            time.sleep(random.uniform(0.5, 0.9))
+            
+            # Simple mouse movement (guarded against closed)
+            try:
+                if not page.is_closed():
+                    page.mouse.move(
+                        random.randint(300, 800),
+                        random.randint(400, 600)
+                    )
+                    time.sleep(random.uniform(0.2, 0.4))
+            except Exception as e:
+                if SL: SL.log("mouse_move_error", error=str(e))
             
             # Final check for PX challenge before capturing
             if _still_px_modal(page):
@@ -1256,6 +2008,11 @@ def search_and_capture(
                 if not _solve_px_until_clear(page, say, SL=SL):
                     say("error", f"[{retailer}] Failed to clear PX before capture")
                     SL.log("px_result", where="before_capture", ok=False)
+                    bail_reason = "px_locked"
+                    meta["bail"] = bail_reason
+                    meta["steps_log"] = SL.path
+                    report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                    _write_run_report(base_dir, report)
                     return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
             
             # Save HTML
@@ -1265,6 +2022,7 @@ def search_and_capture(
                 with open(html_path, "w", encoding="utf-8") as f:
                     f.write(content)
                 html_saved = 1
+                artifacts["saved_html"] = html_path
                 say("info", f"[{retailer}] HTML captured (1/1)")
             except Exception as e:
                 say("warn", f"[{retailer}] HTML save failed: {e}")
@@ -1319,27 +2077,54 @@ def search_and_capture(
                 with open(meta_path, "w", encoding="utf-8") as f:
                     json.dump(meta, f, indent=2)
                 assets.append(meta_path)
+                artifacts["meta_json"] = meta_path
             except Exception:
                 pass
-        
-        finally:
-            # DIAGNOSTIC: Check cookie persistence after run
-            post_cookies = _cookie_names(ctx)
-            print(f"[cookies] post-run walmart.com: {len(post_cookies)} names={post_cookies[:8]}")
-            SL.log("cookies_post", count=len(post_cookies), names=post_cookies[:8])
-            
+    
+    except Exception as e:
+        # Catch launch failures or other outer errors
+        SL.log("outer_error", error=str(e))
+        say("error", f"[{retailer}] Fatal error: {e}")
+        bail_reason = "fatal"
+        meta["bail"] = bail_reason
+        meta["steps_log"] = SL.path
+        report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+        _write_run_report(base_dir, report)
+        return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
+    
+    finally:
+        # DIAGNOSTIC: Check cookie persistence after run (only if ctx is alive)
+        if ctx:
+            try:
+                ctx_alive = not CLOSED.get("ctx", False)
+            except Exception:
+                ctx_alive = False
+
+            if ctx_alive:
+                try:
+                    post_cookies = _cookie_names(ctx)
+                    print(f"[cookies] post-run walmart.com: {len(post_cookies)} names={post_cookies[:8]}")
+                    SL.log("cookies_post", count=len(post_cookies), names=post_cookies[:8])
+                    cookies_info["post_count"] = len(post_cookies)
+                    cookies_info["post_names"] = post_cookies[:12]
+                except Exception as e:
+                    print(f"[cookies] post-run failed: {e}")
+
             # Save trace for debugging silent exits
-            try:
-                trace_path = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_trace.zip"))
-                ctx.tracing.stop(path=trace_path)
-                print(f"[trace] saved → {trace_path}")
-            except Exception as e:
-                print(f"[trace] stop failed: {e}")
-            
-            try:
-                ctx.close()
-            except Exception:
-                pass
+            if ctx:
+                try:
+                    trace_path = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_trace.zip"))
+                    ctx.tracing.stop(path=trace_path)
+                    print(f"[trace] saved → {trace_path}")
+                    artifacts["trace_zip"] = trace_path
+                except Exception as e:
+                    print(f"[trace] stop failed: {e}")
+
+            if ctx:
+                try:
+                    ctx.close()
+                except Exception:
+                    pass
             if browser:
                 try:
                     browser.close()
@@ -1352,6 +2137,19 @@ def search_and_capture(
     
     # Add step log path to meta
     meta["steps_log"] = SL.path if SL.path else None
+    
+    # Write run report
+    outcome = "success" if html_saved > 0 else "fail"
+    report = _build_report(keyword, outcome, None, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+    paths = _write_run_report(base_dir, report)
+    if paths:
+        SL.log("run_report_paths", **paths)
+    
     SL.log("run_complete", html_saved=html_saved, shots_count=len(shots), assets_count=len(assets))
+    
+    # Final summary
+    summary = MT.summary()
+    SL.log("run_summary", run_id=RUN_ID, **summary)
+    SL.log("run_end", run_id=RUN_ID, html_saved=html_saved, shots_count=len(shots), assets_count=len(assets))
     
     return CaptureResult(html_saved=html_saved, shots=shots, assets=assets, meta=meta)

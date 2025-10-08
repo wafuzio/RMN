@@ -180,8 +180,12 @@ class KeywordInputApp:
         """Initialize the application"""
         self.root = root
         self.root.title("Retail Ad Monitor")
-        self.root.geometry("720x900")
-        self.root.minsize(720, 800)
+        self.root.geometry("900x740")
+        self.root.minsize(760, 600)
+
+        # Set up grid layout for main window: [row 0 = scrollable content | row 1 = fixed footer]
+        self.root.rowconfigure(0, weight=1)
+        self.root.columnconfigure(0, weight=1)
         
         self.placeholder_text = "Enter keywords (one per line)"
         
@@ -261,10 +265,51 @@ class KeywordInputApp:
         
         # Set up the main frame
         main_frame = ttk.Frame(root, padding=20, style='App.TFrame')
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame.grid(row=0, column=0, sticky="nsew")
+        main_frame.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(0, weight=1)
+
+        # Create a canvas for scrolling
+        canvas = tk.Canvas(main_frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Place canvas + scrollbar into the grid (this is what was missing)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+
+        # Create scrollable frame inside canvas
+        scrollable_frame = ttk.Frame(canvas)
+
+        # Create window in canvas for scrollable content and keep a reference
+        self._sf_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+
+        # Make the canvas height track contents and the width match canvas
+        def _on_canvas_configure(e):
+            canvas.itemconfigure(self._sf_window, width=e.width)
+        canvas.bind("<Configure>", _on_canvas_configure)
+
+        # Keep the scrollregion updated when the inner frame changes size
+        def _on_inner_configure(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        scrollable_frame.bind("<Configure>", _on_inner_configure)
+
+        # Mouse wheel support (mac/Win/Linux)
+        def _on_mousewheel(event):
+            if getattr(event, "num", None) == 4 or event.delta > 0:
+                canvas.yview_scroll(-1, "units")
+            else:
+                canvas.yview_scroll(1, "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)  # Win/mac
+        canvas.bind_all("<Button-4>", _on_mousewheel)   # Linux up
+        canvas.bind_all("<Button-5>", _on_mousewheel)   # Linux down
+
+        # Store references
+        self.canvas = canvas
+        self.scrollable_frame = scrollable_frame
 
         # Client/Product field + New button
-        client_frame = ttk.Frame(main_frame, style='Card.TFrame')
+        client_frame = ttk.Frame(scrollable_frame, style='Card.TFrame')
         client_frame.pack(fill=tk.X, pady=(0, 15))
 
         ttk.Label(client_frame, text="Client/Product:", style='TLabel').pack(side=tk.LEFT)
@@ -302,7 +347,7 @@ class KeywordInputApp:
         print(f"Registered adapters: {self._retailer_by_name}")
         
         # Multi-select retailer picker
-        retailer_frame = ttk.LabelFrame(main_frame, text="Select Retailers", style='Card.TLabelframe', padding=10)
+        retailer_frame = ttk.LabelFrame(scrollable_frame, text="Select Retailers", style='Card.TLabelframe', padding=10)
         retailer_frame.pack(fill=tk.X, padx=20, pady=(10, 5))
         
         # Determine which retailers are unavailable (not registered)
@@ -312,6 +357,37 @@ class KeywordInputApp:
         self.retailer_picker = RetailerPicker(retailer_frame, unavailable=unavailable, columns=4)
         self.retailer_picker.pack(fill=tk.X, padx=5, pady=5)
         
+        # --- Debug Options (restored) ---
+        debug_frame = ttk.LabelFrame(scrollable_frame, text="Debug Options", style='Card.TLabelframe', padding=10)
+        debug_frame.pack(fill=tk.X, padx=20, pady=(6, 10))
+
+        self.debug_vars = {}
+        self.debug_vars['break_on_px']        = tk.BooleanVar(value=False)
+        self.debug_vars['break_on_blocked']   = tk.BooleanVar(value=False)
+        self.debug_vars['line_trace']         = tk.BooleanVar(value=False)
+        self.debug_vars['pdb_on_exception']   = tk.BooleanVar(value=True)
+        self.debug_vars['open_run_folder']    = tk.BooleanVar(value=True)
+
+        ttk.Checkbutton(debug_frame, text="Break on PX",        variable=self.debug_vars['break_on_px']).grid(row=0, column=0, sticky="w", padx=(0,20))
+        ttk.Checkbutton(debug_frame, text="Break on /blocked",  variable=self.debug_vars['break_on_blocked']).grid(row=0, column=1, sticky="w", padx=(0,20))
+        ttk.Checkbutton(debug_frame, text="Line trace (typing)",variable=self.debug_vars['line_trace']).grid(row=0, column=2, sticky="w", padx=(0,20))
+        ttk.Checkbutton(debug_frame, text="PDB on exception",   variable=self.debug_vars['pdb_on_exception']).grid(row=0, column=3, sticky="w")
+
+        paths_frame = ttk.Frame(debug_frame, style='Card.TFrame')
+        paths_frame.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(10, 0))
+        paths_frame.columnconfigure(0, weight=1)
+        paths_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(paths_frame, text="Profile dir:", style='TLabel').grid(row=0, column=0, sticky="w", pady=(0,5))
+        self.profile_dir_var = tk.StringVar(value=os.path.expanduser("~/ChromeProfiles/walmart"))
+        ttk.Entry(paths_frame, textvariable=self.profile_dir_var, width=50).grid(row=1, column=0, sticky="ew", padx=(0,10))
+
+        ttk.Label(paths_frame, text="Output root:", style='TLabel').grid(row=0, column=1, sticky="w", pady=(0,5))
+        self.output_root_var = tk.StringVar(value=os.path.expanduser("~/Documents/Amazon_Scrape/output/walmart"))
+        ttk.Entry(paths_frame, textvariable=self.output_root_var, width=50).grid(row=1, column=1, sticky="ew")
+
+        ttk.Checkbutton(debug_frame, text="Open run folder when done", variable=self.debug_vars['open_run_folder']).grid(row=2, column=0, columnspan=2, sticky="w", pady=(5,0))
+        
         # Pre-select Kroger and Instacart by default
         if "Kroger" in self.retailer_picker.vars:
             self.retailer_picker.vars["Kroger"].set(True)
@@ -320,7 +396,7 @@ class KeywordInputApp:
         
         # Instructions
         instructions = ttk.Label(
-            main_frame,
+            scrollable_frame,
             text="Enter keywords to scrape (one per line):",
             style='Body.TLabel'
         )
@@ -330,7 +406,7 @@ class KeywordInputApp:
         # Get current theme colors
         palette = PALETTE[self.theme]
         
-        self.keyword_input = scrolledtext.ScrolledText(main_frame, height=5)
+        self.keyword_input = scrolledtext.ScrolledText(scrollable_frame, height=5)
         self.keyword_input.pack(fill=tk.X, expand=False, pady=(0, 15))
         self.keyword_input.configure(
             background=palette["field_bg"], 
@@ -351,7 +427,7 @@ class KeywordInputApp:
         self.keyword_input.bind("<FocusOut>", self.on_keyword_focus_out)
         
         # Schedule frame
-        schedule_frame = ttk.Labelframe(main_frame, text="Schedule Settings", padding=10, style='Card.TLabelframe')
+        schedule_frame = ttk.Labelframe(scrollable_frame, text="Schedule Settings", padding=10, style='Card.TLabelframe')
         schedule_frame.pack(fill=tk.X, pady=(0, 15))
 
         # Number of runs per day
@@ -426,46 +502,46 @@ class KeywordInputApp:
         self.schedule_button.pack(side=tk.LEFT, padx=(0, 10))
         self.schedule_button.state(['disabled'])
         
-        
-        # Buttons frame
-        button_frame = ttk.Frame(main_frame, style='App.TFrame')
-        button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 10))
-        
+        # Fixed footer with Scrape / Clear buttons (always visible)
+        footer = ttk.Frame(self.root)
+        footer.grid(row=1, column=0, sticky="ew", pady=(4, 8))
+        footer.columnconfigure(0, weight=1)
+
         # Start scraping button
         self.scrape_button = ttk.Button(
-            button_frame,
+            footer,
             text="Start Scraping",
             command=self.start_scraping,
             style='Primary.TButton'
         )
-        self.scrape_button.pack(side=tk.LEFT, padx=(0, 10))
+        self.scrape_button.pack(side=tk.RIGHT, padx=(8, 12))
 
         # Clear button
         self.clear_button = ttk.Button(
-            button_frame,
+            footer,
             text="Clear",
             command=self.clear_keywords,
             style='Danger.TButton'
         )
-        self.clear_button.pack(side=tk.LEFT)
-        
-        # --- App log console (non-modal) ---
-        log_frame = ttk.LabelFrame(main_frame, text="Activity", style='Card.TLabelframe', padding=8)
-        log_frame.pack(fill=tk.BOTH, expand=False, pady=(10, 0))
-        
-        self.app_log = scrolledtext.ScrolledText(log_frame, height=8, wrap="word")
-        self.app_log.pack(fill=tk.BOTH, expand=True)
-        self.app_log.configure(font=("Inter", 10), state="disabled")
-        
-        # Status label with daemon status
+        self.clear_button.pack(side=tk.RIGHT)
+
+        # Status label in footer
         daemon_text = "✅ Daemon running" if self.daemon_status else "⚠️ Daemon stopped"
         self.status_label = ttk.Label(
-            main_frame,
+            footer,
             text=f"Ready to scrape | {daemon_text}",
             style='Body.TLabel'
         )
-        self.status_label.pack(side=tk.BOTTOM, anchor="w", pady=(0, 10))
-        
+        self.status_label.pack(side=tk.LEFT, padx=(12, 0))
+
+        # --- App log console (scrollable content) ---
+        log_frame = ttk.LabelFrame(scrollable_frame, text="Activity", style='Card.TLabelframe', padding=8)
+        log_frame.pack(fill=tk.BOTH, expand=False, pady=(10, 0))
+
+        self.app_log = scrolledtext.ScrolledText(log_frame, height=8, wrap="word")
+        self.app_log.pack(fill=tk.BOTH, expand=True)
+        self.app_log.configure(font=("Inter", 10), state="disabled")
+
         # Initialize save button state
         self.refresh_save_button_state()
     
@@ -742,6 +818,26 @@ class KeywordInputApp:
             profile_dir=profile_dir,  # Already validated above, can be None
             script_dir=os.path.dirname(os.path.abspath(__file__)),
         )
+
+        # Set up GUI callback for activity logging (required for Walmart scraper)
+        ctx.emit = lambda kind, msg, rn=retailer_name: self.step(rn, msg, kind)
+        
+        # Pass DebugConfig to the core through the adapter
+        try:
+            from walmart_search_and_capture import DebugConfig
+            ctx.debug = DebugConfig(
+                break_on_px      = self.debug_vars['break_on_px'].get(),
+                break_on_blocked = self.debug_vars['break_on_blocked'].get(),
+                line_trace       = self.debug_vars['line_trace'].get(),
+                pdb_on_exception = self.debug_vars['pdb_on_exception'].get(),
+            )
+        except Exception:
+            ctx.debug = None
+
+        # Profile dir (do NOT add /Default; PW/Chrome will manage Default inside)
+        ctx.profile_dir = os.path.expanduser(self.profile_dir_var.get().strip())
+        os.environ["WALMART_PROFILE_DIR"] = ctx.profile_dir  # optional: legacy paths still read env
+        
         output_dir = ctx.output_dir  # keep your existing variable name for reuse
         runs_dir = ctx.runs_dir
         
@@ -810,7 +906,15 @@ class KeywordInputApp:
                     # Show we're fetching with timing
                     with self.timed_step(retailer_name, f"Fetch '{keyword}'"):
                         # Use adapter for all retailers
-                        ok = adapter.search_and_capture(keyword, ctx)
+                        res = adapter.search_and_capture(keyword, ctx)
+                    
+                    # Normalize result (supports both bool and dict)
+                    if isinstance(res, bool):
+                        ok, bail, reason = res, False, None
+                    else:
+                        ok = bool(res.get('ok'))
+                        bail = bool(res.get('bail'))
+                        reason = res.get('reason')
                     
                     if ok:
                         self.step(retailer_name, f"HTML captured ({i+1}/{len(keywords)})")
@@ -826,6 +930,12 @@ class KeywordInputApp:
                         scraped = True
                         success_count += 1
                         break
+                    
+                    # Not ok; decide whether to retry
+                    if bail:
+                        msg = f"Bailing (no retries): {reason or 'non-retryable'}"
+                        self.step(retailer_name, msg, "warn")
+                        break  # Stop retrying immediately
                     else:
                         raise RuntimeError("search_and_capture returned False")
 

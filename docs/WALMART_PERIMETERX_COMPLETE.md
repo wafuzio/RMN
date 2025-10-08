@@ -1,8 +1,12 @@
 # Complete PerimeterX Bypass Strategy for Walmart
 
+## ⚠️ Current Status: STILL BEING FLAGGED (0% Success Rate)
+
+Despite implementing comprehensive evasion techniques, we are still being detected by PerimeterX. This document details what we've implemented and what we're debugging.
+
 ## Overview
 
-Walmart uses **PerimeterX** - one of the most sophisticated bot detection systems. It uses machine learning on multiple signals to calculate a trust score. This document details our comprehensive bypass strategy.
+Walmart uses **PerimeterX** - one of the most sophisticated bot detection systems. It uses machine learning on multiple signals to calculate a trust score. This document details our bypass strategy and current debugging efforts.
 
 ## ⚠️ CRITICAL: The --no-sandbox Banner
 
@@ -73,6 +77,50 @@ Walmart uses **PerimeterX** - one of the most sophisticated bot detection system
 ### 6. Cookie-Based Trust
 - **What they check**: Session cookies, cookie age, cookie patterns
 - **Our solution**: 24-hour cookie refresh cycle, persistent profile
+
+## What We've Implemented (Still Being Flagged)
+
+### ✅ Human Behavior Simulation
+- **Variable keystroke delays**: 80-220ms per character with occasional pauses
+- **Micro-mouse movements**: Subtle attention movements during typing (5-15 steps, ±10px jitter)
+- **Drift reading**: Mouse drift during result scanning (2-3 seconds)
+- **Back-scroll peek**: 35% chance of scrolling back up briefly
+- **Random product hover**: Hover on random product tiles
+- **Dwell times**: 600-1200ms pause after typing before submit, 2.2-3.5s before first scroll
+
+### ✅ Auto CAPTCHA Solver
+- **Press-and-hold detection**: Detects PX "Press and Hold" widget
+- **Adaptive timing**: 6.8-10.2s hold duration (varies by widget readiness)
+- **Focus click**: Initial click with 40-120ms delay
+- **Steady hold**: Mouse down → wait → mouse up (no jitter)
+- **Auto-transition detection**: Waits for PX beacon or modal vanish
+
+### ✅ Comprehensive Forensics
+- **Run reports**: Every run produces run_report.json + run_report.md
+- **Timings**: to_home_ms, after_submit_px_ms, results_ready_ms
+- **Environment**: User-Agent, WebGL vendor/renderer
+- **Cookies**: Pre/post counts and names (persistence check)
+- **PX stats**: Tries, cycles, cleared status
+- **Network forensics**: req_failed, resp_doc, route_errors
+- **Artifacts**: steps.jsonl, trace.zip, screenshots, HTML, meta.json
+
+### ✅ Bail System
+- **Non-retryable detection**: Stops blind retries on px_locked, hard_block, fatal
+- **Adapter returns**: `{'ok': bool, 'bail': bool, 'reason': str}`
+- **GUI integration**: Stops retrying immediately when bail=True
+
+### ✅ Resilient Navigation
+- **3-tier fallback**: domcontentloaded (30s) → commit+search (15s) → networkidle (10s)
+- **Forensics on timeout**: Saves HTML/PNG if homepage times out
+- **Search box detection**: Treats page as ready when search input visible
+
+### ✅ Debug Tools
+- **Break on PX modal**: GUI checkbox to pause execution when PX appears
+- **Break on /blocked**: GUI checkbox to pause on redirect to blocked page
+- **Line trace**: Microsecond-precision event logging
+- **Playwright trace**: trace.zip with screenshots and network activity
+- **steps.jsonl**: Complete event log with timestamps
+- **run_report.md**: Quick diagnosis (timings, PX stats, network errors)
 
 ## Implementation Details
 
@@ -341,15 +389,64 @@ python3 keyword_input.py
 - ✅ Off-peak hours (less detection)
 - ✅ CAPTCHA solving service (for full automation)
 
-## Troubleshooting
+## Troubleshooting & Debugging
 
-### Still Getting CAPTCHA?
+### Current Issues (As of 2025-10-08)
+
+**We are still being flagged by PerimeterX despite all evasion techniques.** Here's what to check:
+
+### Analyze Run Reports
+
+Every run produces diagnostic files in `output/walmart/<keyword>/runs/<timestamp>/`:
+
+1. **run_report.md** - Quick diagnosis:
+   ```bash
+   cat output/walmart/*/runs/*/run_report.md
+   ```
+   - Check `outcome`: success/fail/bail
+   - Check `bail_reason`: px_locked/hard_block/fatal
+   - Check `timings.after_submit_px_ms`: How fast PX appeared
+   - Check `network.route_errors`: Should be 0 (was causing timeouts)
+
+2. **steps.jsonl** - Detailed event log:
+   ```bash
+   python3 view_debug_logs.py
+   ```
+   - Look for `px_trip` events (when PX first detected)
+   - Check `after_submit` timing (instant PX = reputation issue)
+   - Check `route_error` events (should be 0 now)
+
+3. **trace.zip** - Playwright trace viewer:
+   ```bash
+   playwright show-trace output/walmart/*/runs/*/walmart_*_trace.zip
+   ```
+   - Visual timeline of all actions
+   - Network requests and responses
+   - Screenshots at each step
+
+### Still Getting CAPTCHA/Blocked?
 
 1. **Check GPU**: Must be consumer-grade (Intel Iris, AMD Radeon, NVIDIA GTX)
+   - Look in run_report.md → Environment → webgl_renderer
+   - Should NOT be SwiftShader or professional GPU
+
 2. **Check Proxy**: Must be residential, not datacenter
-3. **Check Timing**: Delays should be random (80-200ms keystrokes)
+   - Datacenter IPs are instantly flagged
+   - Test: `curl -x $WALMART_PROXY_SERVER https://www.walmart.com/`
+
+3. **Check Timing**: 
+   - Look at `timings.after_submit_px_ms` in run_report.md
+   - < 500ms = Reputation issue (IP/profile flagged)
+   - > 2000ms = Behavior issue (detected during interaction)
+
 4. **Check Profile**: Must be authenticated with fresh cookies
+   - Look at `cookies.pre_count` in run_report.md
+   - Should have 15-20 cookies from previous runs
+   - 0 cookies = Profile not persisting
+
 5. **Check Pattern**: Should visit homepage, not direct search
+   - Look for `home_goto_phase_final` in steps.jsonl
+   - Should be "domcontentloaded" or "commit+search"
 
 ### Proxy Not Working?
 
@@ -388,9 +485,39 @@ python3 scripts/manual_walmart_setup.py
 - Playwright Stealth: https://github.com/berstend/puppeteer-extra/tree/master/packages/puppeteer-extra-plugin-stealth
 - WebGL Fingerprinting: https://browserleaks.com/webgl
 
+## Next Steps to Try
+
+Based on run_report.md analysis, consider:
+
+1. **Residential Proxies** (if not using):
+   - Bright Data, Smartproxy, Oxylabs
+   - Datacenter IPs are instantly flagged
+   - Cost: $5-15/GB
+
+2. **Longer Dwell Times**:
+   - Increase pre-submit dwell to 2-3 seconds
+   - Increase homepage idle to 5-10 seconds
+   - More random product interactions
+
+3. **Profile Aging**:
+   - Let profile sit for 24-48 hours between runs
+   - Manual browsing sessions to build trust
+   - Multiple authenticated profiles
+
+4. **Request Pattern Analysis**:
+   - Check trace.zip for suspicious patterns
+   - Look for missing requests (images, fonts, etc.)
+   - Verify all sec-ch-ua headers match
+
+5. **Consider CAPTCHA Solving Service**:
+   - 2Captcha, Anti-Captcha, CapSolver
+   - $1-3 per 1000 CAPTCHAs
+   - Integrate with auto-solver
+
 ## See Also
 
 - `docs/WALMART_PROXY_SETUP.md` - Proxy configuration guide
-- `docs/Walmart_ad_html.md` - Ad selectors
+- `docs/reference/Walmart_ad_html.md` - Ad selectors
 - `scripts/manual_walmart_setup.py` - Profile setup
 - `walmart_search_and_capture.py` - Main implementation
+- `view_debug_logs.py` - Analyze steps.jsonl files
