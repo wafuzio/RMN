@@ -25,6 +25,7 @@ RETAILER_SUBDIRS = {
     "kroger": ["TOA", "Skyscraper", "Carousel", "Display_Ads", "Main", "runs"],
     "instacart": ["Shoppable_Display_Ads", "Shoppable_Video_Ads", "Display_Ads", "Main", "runs"],
     "amazon": ["TOA", "Skyscraper", "Carousel", "Main", "runs"],
+    "walmart": ["Top_Banner", "SBA", "Tile_Takeover", "SBV", "Main", "runs"],
 }
 
 def allowed_subdirs(retailer: str) -> list[str]:
@@ -81,6 +82,17 @@ output/amazon/<client>/
 ├── TOA/              # Top of Ad (banner ads)
 ├── Skyscraper/       # Vertical sidebar ads
 ├── Carousel/         # Product carousels
+├── Main/             # Main search results
+└── runs/             # Run artifacts (JSON, HTML)
+```
+
+### Walmart
+```
+output/walmart/<client>/
+├── Top_Banner/       # Top banner ads (a.ad, a.adctr)
+├── SBA/              # Sponsored Brand Ads ([data-testid="sba-container"])
+├── Tile_Takeover/    # Tile takeover ads ([data-testid="tile-take-over"])
+├── SBV/              # Sponsored Brand Video ([data-testid="search-video-in-grid"])
 ├── Main/             # Main search results
 └── runs/             # Run artifacts (JSON, HTML)
 ```
@@ -171,7 +183,7 @@ python3 -c "
 from utils.path_taxonomy import allowed_subdirs
 import os
 
-for retailer in ['kroger', 'instacart', 'amazon']:
+for retailer in ['kroger', 'instacart', 'amazon', 'walmart']:
     retailer_dir = f'output/{retailer}'
     if not os.path.isdir(retailer_dir):
         continue
