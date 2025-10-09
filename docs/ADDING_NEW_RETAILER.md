@@ -745,4 +745,298 @@ If you encounter issues:
 3. Test each component individually
 4. Review the Instacart integration as a reference
 
-**Last Updated**: 2025-10-02
+---
+
+## Best Practices & Lessons Learned
+
+### Profile Handoff: Ensure Both Phases Use Same Session
+
+**Problem**: Search phase and image extraction phase may use different browser sessions, causing authentication failures or CDN rejections.
+
+**Solution**: Inject `ctx.profile_dir` into environment variables in your adapter's `search_and_capture()` method:
+
+```python
+def search_and_capture(self, keyword: str, ctx) -> bool:
+    # Import the scraper function
+    from newretailer_search_and_capture import search_and_capture
+    
+    # CRITICAL: Inject profile dir into environment so scraper uses same session
+    if ctx.profile_dir and os.path.isdir(ctx.profile_dir):
+        os.environ["NEWRETAILER_PROFILE_DIR"] = ctx.profile_dir
+        print(f"Injected NEWRETAILER_PROFILE_DIR into env: {ctx.profile_dir}")
+    else:
+        print("⚠️ ctx.profile_dir missing or invalid; scraper may run without cookies")
+    
+    # Call scraper
+    return search_and_capture(keyword, ctx.output_dir)
+```
+
+**Why this matters**:
+- When app is launched from Finder, shell environment variables aren't inherited
+- Without this, search phase runs without cookies but extractor has them
+- Results in login prompts, HTTP/2 resets, or incomplete ad assets
+
+### Organic Search vs Direct Navigation
+
+**Problem**: Direct URL navigation (`page.goto(search_url)`) can trigger bot detection or break session state.
+
+**Solution**: Use organic search interaction when possible:
+
+```python
+# BAD: Direct navigation (can trigger bot detection)
+search_url = f'https://www.retailer.com/search?q={keyword}'
+page.goto(search_url)
+
+# GOOD: Organic search (mimics human behavior)
+# 1. Go to homepage first
+page.goto('https://www.retailer.com/store/{store}')
+
+# 2. Wait for page to be ready
+page.wait_for_load_state("load")
+page.wait_for_selector("[data-testid='search-bar-input']", timeout=5000)
+
+# 3. Click search input
+search_input = page.locator('input[placeholder*="Search"]').first
+search_input.click()
+
+# 4. Type keyword with human-like delays
+search_input.fill(keyword)  # or .type(keyword, delay=100)
+
+# 5. Press Enter
+page.keyboard.press("Enter")
+
+# 6. Wait for navigation
+page.wait_for_url('**/s?k=**', timeout=10000)
+```
+
+**Key points**:
+- Use `.fill()` for speed or `.type(keyword, delay=100)` for human-like typing
+- Wait for actual UI elements, not just `domcontentloaded`
+- Handle cookie banners and search toggles if present
+- Always have a fallback to direct navigation if organic search fails
+
+### Cookie Seeding for Image Extraction
+
+**Problem**: Image extractor needs cookies to download ad assets, but may not have access to search URL.
+
+**Solution**: Always include `url` and `retailer` fields in your run_results JSON:
+
+```python
+# In your search_and_capture script, when building ad_data:
+search_url = page.url  # Get final URL after navigation
+
+ad_data = {
+    "keyword": keyword,
+    "timestamp": timestamp,
+    "retailer": "newretailer",  # For downstream tools
+    "url": search_url,          # Primary URL for extractors
+    "srp_url": search_url,      # Alias for compatibility
+    "ads": []
+}
+```
+
+**In your extractor** (if using custom extractor):
+```python
+def load_srp_url(json_path: str) -> str:
+    """Load SRP URL from JSON for cookie seeding."""
+    try:
+        data = json.loads(Path(json_path).read_text())
+        # Try common field names (prioritize explicit url fields)
+        for k in ("url", "srp_url", "source_url", "page_url"):
+            val = data.get(k)
+            if isinstance(val, str) and val.strip():
+                return val
+    except Exception as e:
+        print(f"[warn] Could not load SRP URL from JSON: {e}")
+    return ""
+
+# Use retailer-aware fallback
+def retailer_homepage(retailer: str) -> str:
+    return {
+        "kroger": "https://www.kroger.com/",
+        "amazon": "https://www.amazon.com/",
+        "instacart": "https://www.instacart.com/",
+        "walmart": "https://www.walmart.com/",
+        "newretailer": "https://www.newretailer.com/",
+    }.get(retailer, "about:blank")
+
+# Seed cookies
+srp_url = load_srp_url(json_path)
+retailer = infer_retailer_from_output(output_dir)
+
+seed_candidates = [srp_url] if srp_url else []
+seed_candidates.append(retailer_homepage(retailer))
+
+for seed in seed_candidates:
+    page.goto(seed, wait_until="commit", timeout=60000)
+    # Check if cookies were set
+    if len(context.cookies(retailer_domain)) > 0:
+        break
+```
+
+**Never hardcode fallback URLs** - use retailer-aware helpers instead.
+
+### Robust Image Counting
+
+**Problem**: Image extraction may save files to different folders or timing edge cases cause zero counts.
+
+**Solution**: Use forgiving time windows and check multiple folder names:
+
+```python
+def extract_images(self, json_path: str, html_path: str, ctx) -> dict:
+    import glob
+    from datetime import datetime
+    
+    # ... run extractor subprocess ...
+    
+    # Count images with a forgiving window (5 min back)
+    slack_seconds = 300
+    horizon = pair_start - slack_seconds
+    
+    def recent_pngs(leaf: str) -> list:
+        d = os.path.join(ctx.output_dir, leaf)
+        return [
+            p for p in glob.glob(os.path.join(d, "*.png"))
+            if os.path.getmtime(p) >= horizon
+        ]
+    
+    # Check multiple folder names (retailer-specific + legacy)
+    toa_files = []
+    toa_files += recent_pngs("Ad_Type_1")
+    toa_files += recent_pngs("TOA")  # Legacy fallback
+    toa_files += recent_pngs("Main")  # Some extractors use this
+    
+    sky_files = []
+    sky_files += recent_pngs("Ad_Type_2")
+    sky_files += recent_pngs("Skyscraper")  # Legacy fallback
+    
+    # Log what we counted for debugging
+    with open(log_path, 'a') as lf:
+        lf.write(f"\nCounted files (since {datetime.fromtimestamp(horizon).isoformat()}):\n")
+        lf.write(f"  TOA-like: {len(toa_files)}\n")
+        for p in sorted(toa_files)[:10]:
+            lf.write(f"    - {p}\n")
+        lf.write(f"  Skyscraper-like: {len(sky_files)}\n")
+        for p in sorted(sky_files)[:10]:
+            lf.write(f"    - {p}\n")
+    
+    return {
+        "toa": len(toa_files),
+        "sky": len(sky_files),
+        "car": 0,
+        "log": log_path,
+    }
+```
+
+**Key points**:
+- Use 5-minute slack window (300 seconds) instead of 1-2 seconds
+- Check multiple folder names (retailer-specific + legacy + Main)
+- Log counted files to extractor log for debugging
+- Return counts even if zero (don't raise exceptions)
+
+### Interactive Login Handling
+
+**Problem**: Session may expire during scraping, requiring user to log in again.
+
+**Solution**: Detect login modals and pause for interactive login:
+
+```python
+def _is_login_modal_visible(page):
+    """Check if login modal is visible."""
+    login_selectors = [
+        ".login-modal",
+        "[data-testid='authModal']",
+        "div:has-text('Sign In')",
+    ]
+    try:
+        for sel in login_selectors:
+            el = page.query_selector(sel)
+            if el and el.is_visible():
+                return True
+        return False
+    except Exception:
+        return False
+
+def _prompt_user_login(page, log, max_wait_sec=300):
+    """Bring browser to front and wait for user to complete login."""
+    try:
+        page.bring_to_front()
+    except Exception:
+        pass
+    
+    log("⚠️ Login required: Please complete login in the visible browser window.")
+    log(f"Timeout in {max_wait_sec} seconds.")
+    
+    deadline = time.time() + max_wait_sec
+    last_report = 0
+    while time.time() < deadline:
+        if not _is_login_modal_visible(page):
+            log("✅ Login modal no longer visible — continuing.")
+            return True
+        
+        now = time.time()
+        if now - last_report >= 10:
+            remaining = int(deadline - now)
+            log(f"Waiting for login to complete... ({remaining}s remaining)")
+            last_report = now
+        page.wait_for_timeout(1000)
+    
+    log("❌ Login prompt timeout")
+    return False
+
+# Use in your search script:
+if _is_login_modal_visible(page):
+    if not _prompt_user_login(page, log):
+        return False
+```
+
+**Benefits**:
+- Graceful handling of expired sessions
+- User can complete 2FA or CAPTCHA
+- Script auto-resumes after login
+- Clear progress updates every 10 seconds
+
+### Deterministic Wait Strategies
+
+**Problem**: `domcontentloaded` fires too early, causing scripts to proceed before page is ready.
+
+**Solution**: Wait for specific UI elements or load states:
+
+```python
+def _wait_until_page_ready(page, log, timeout_ms=15000):
+    """Wait for page to be fully loaded and ready."""
+    # 1. Wait for full load event
+    try:
+        page.wait_for_load_state("load", timeout=timeout_ms)
+        log("Page: load state reached")
+    except Exception as e:
+        log(f"Page: load state wait failed: {e}")
+    
+    # 2. Wait for specific UI elements
+    selectors = [
+        "[data-testid='main-content']",
+        "input[type='search']",
+        "header",
+    ]
+    for sel in selectors:
+        try:
+            page.wait_for_selector(sel, timeout=4000)
+            log(f"Page: ready selector found: {sel}")
+            return
+        except Exception:
+            pass
+    
+    # 3. Fallback: short settle delay
+    page.wait_for_timeout(3000)
+    log("Page: fallback settle delay used")
+```
+
+**Key points**:
+- Prefer `"load"` over `"domcontentloaded"`
+- Wait for actual UI elements, not just DOM ready
+- Have a fallback settle delay
+- Log each step for debugging
+
+---
+
+**Last Updated**: 2025-10-09
