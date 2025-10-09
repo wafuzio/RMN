@@ -1,12 +1,14 @@
 # Complete PerimeterX Bypass Strategy for Walmart
 
-## ⚠️ Current Status: STILL BEING FLAGGED (0% Success Rate)
+## ⚠️ Current Status: BLOCKED AT SEARCH SUBMISSION (0% Success Rate)
 
-Despite implementing comprehensive evasion techniques, we are still being detected by PerimeterX. This document details what we've implemented and what we're debugging.
+**Last Updated**: 2025-10-08 22:13
+
+**Current Failure Mode**: We can successfully load walmart.com homepage with a fresh profile, but immediately trigger PX hard block when submitting search query. This indicates search submission behavior is the primary detection vector.
 
 ## Overview
 
-Walmart uses **PerimeterX** - one of the most sophisticated bot detection systems. It uses machine learning on multiple signals to calculate a trust score. This document details our bypass strategy and current debugging efforts.
+Walmart uses **PerimeterX (PX)** + **Akamai Bot Manager** - two of the most sophisticated bot detection systems working in tandem. They use machine learning on multiple signals to calculate a trust score. This document details our current implementation and known issues.
 
 ## ⚠️ CRITICAL: The --no-sandbox Banner
 
@@ -17,66 +19,81 @@ Walmart uses **PerimeterX** - one of the most sophisticated bot detection system
 - **VERIFY**: No `PW_CHROMIUM_NO_SANDBOX` or `CHROME_NO_SANDBOX` env vars set
 - **RUN AS**: Non-root user (root forces --no-sandbox on Linux)
 
-## PerimeterX Detection Methods
+## PerimeterX Detection Vectors (What They Check)
 
-### 0. Machine Learning (Behavior Analysis)
+### 1. Browser Fingerprint Consistency
 - **What they check**:
-  - Page visit patterns (chaotic vs. linear)
-  - Connection speed and rate (slow/random vs. fast/consistent)
-  - Resource loading patterns
-  - Trust score evolution over time
-- **Our solution**: 
-  - Randomized viewport (5 options)
-  - Randomized timezone (4 options)
-  - Variable wait strategies (networkidle/domcontentloaded/load)
-  - Chaotic timing (1.5-4.5s reading time)
-  - Non-obvious browsing (20% category visits)
+  - User-Agent vs WebGL renderer mismatch
+  - User-Agent vs Client Hints (sec-ch-ua) mismatch
+  - JA3 TLS fingerprint vs declared browser
+  - navigator.webdriver flag
+  - Missing or unusual navigator properties
+- **Our implementation**: 
+  - ✅ Real Chrome via `channel='chrome'` (correct JA3)
+  - ✅ GPU args: `--use-angle=metal`, `--enable-gpu-rasterization`, `--ignore-gpu-blocklist`
+  - ✅ `ignore_default_args=['--enable-automation']` to prevent webdriver flag
+  - ✅ UNMASKED WebGL logging for verification
+  - ✅ Fingerprint guard: bails on SwiftShader, warns on WebKit masked
+  - ✅ Navigator diagnostics logged (webdriver, plugins, hardwareConcurrency, etc.)
 
-### 1. IP Address Analysis
-- **What they check**: IP reputation, datacenter detection, request patterns
-- **Our solution**: Residential proxy support via environment variables
-
-### 2. JavaScript Fingerprinting
-- **What they check**: 
-  - Browser properties (navigator, plugins, languages)
-  - WebGL rendering (GPU vendor/renderer)
-  - Canvas fingerprinting
-  - Hardware specs (CPU cores, memory)
-  - Battery API
-  - Connection info
-- **Our solution**: Comprehensive JavaScript patching (13+ properties spoofed)
-
-### 3. User Input Tracking (Behavioral Biometrics)
+### 2. Request Routing & Network Behavior
 - **What they check**:
-  - Mouse movement patterns (curves, speed, acceleration)
-  - Keystroke timing (delays between keys)
-  - Hover events
-  - Scroll behavior
-- **Our solution**: Ghost-cursor implementation with Bezier curves, variable keystroke timing
+  - Playwright routing fingerprints (touching PX/RUM/TAP endpoints)
+  - Missing resource requests (images, fonts, CSS)
+  - Request timing patterns
+  - Header order and presence
+- **Our implementation**:
+  - ✅ Routing narrowed to Google-only (not `**/*`)
+  - ✅ PX/RUM/TAP endpoints are listen-only (no route.continue() interference)
+  - ✅ sec-ch-ua headers logged on first navigation
+  - ✅ UA-CH missing warning
+  - ⚠️  **CONCERN**: Search submission may have unusual request pattern
 
-### 4. Request Pattern Analysis
+### 3. Profile & Cookie Reputation
 - **What they check**:
-  - Direct navigation to search (suspicious)
-  - No homepage visit (bot-like)
-  - Perfect timing (too consistent)
-- **Our solution**: Human-like browsing pattern (homepage → scroll → category → search)
+  - Bot Manager cookies (adblocked, ak_bmsc, bm_mi, bm_sv, bm_sz, abck)
+  - Cookie persistence and age
+  - Profile history and trust score
+- **Our implementation**:
+  - ✅ Persistent Chrome profile required (enforced)
+  - ✅ Suspicious cookie detection (6 Bot Manager flags)
+  - ✅ Profile health logging (Cookies, Network Persistent State, Preferences)
+  - ✅ Clean profile setup script
+  - ⚠️  **ISSUE**: Old profiles had poisoned cookies - must use fresh profile
 
-### 5. TLS Fingerprinting (JA3)
-- **What they check**: 
-  - JA3 fingerprint (TLS handshake pattern)
-  - Cipher suites negotiation
-  - TLS version and extensions
-  - HTTP/2 support
-- **Critical**: Playwright's Chromium has **WRONG JA3** fingerprint
-- **Our solution**: 
-  - Use real Chrome (`channel='chrome'`) for correct JA3
-  - Proper cipher suite configuration
-  - HTTP/2 enabled
-  - **NEVER use Chromium** - instant detection!
+### 4. Playwright Stealth Detection
+- **What they check**:
+  - Stealth plugin mutations (navigator, permissions, plugins, fonts)
+  - Common bot-kit flags (--disable-blink-features=AutomationControlled)
+  - Playwright-specific signatures
+- **Our implementation**:
+  - ✅ Stealth DISABLED by default for Walmart (env var to enable)
+  - ✅ No bot-kit flags (colleague confirmed --disable-blink-features is a red flag)
+  - ✅ Real Chrome signals instead of spoofing
+  - ✅ Stealth skip logged
 
-### 6. Cookie-Based Trust
-- **What they check**: Session cookies, cookie age, cookie patterns
-- **Our solution**: 24-hour cookie refresh cycle, persistent profile
+### 5. Search Submission Behavior (PRIMARY DETECTION VECTOR)
+- **What they check**:
+  - Programmatic form submission vs Enter key
+  - Timing between typing and submission
+  - Mouse position during submission
+  - Focus state of search box
+- **Our implementation**:
+  - ⚠️  **LIKELY ISSUE**: Using `search_box.press("Enter")` which may be detectable
+  - ⚠️  **LIKELY ISSUE**: Programmatic navigation to `/search` URL after button click
+  - ❌ **NOT IMPLEMENTED**: Natural Enter key with proper focus/blur events
+  - ❌ **NOT IMPLEMENTED**: Mouse click on search button (more human-like)
+
+### 6. Page Evaluation Timing
+- **What they check**:
+  - Immediate page.evaluate() calls after navigation
+  - Evaluation context lifecycle
+  - Timing of diagnostic checks
+- **Our implementation**:
+  - ✅ eval_safe wrapper prevents crashes
+  - ✅ Bail-on-blocked check before evals
+  - ✅ Logs eval_error with label, URL, error
+  - ✅ No fatal "Page.evaluate:" crashes
 
 ## What We've Implemented (Still Being Flagged)
 
@@ -95,14 +112,17 @@ Walmart uses **PerimeterX** - one of the most sophisticated bot detection system
 - **Steady hold**: Mouse down → wait → mouse up (no jitter)
 - **Auto-transition detection**: Waits for PX beacon or modal vanish
 
-### ✅ Comprehensive Forensics
-- **Run reports**: Every run produces run_report.json + run_report.md
+### ✅ Comprehensive Diagnostics & Forensics
+- **Run reports**: Every run produces run_report.json + run_report.md with diag section
 - **Timings**: to_home_ms, after_submit_px_ms, results_ready_ms
-- **Environment**: User-Agent, WebGL vendor/renderer
-- **Cookies**: Pre/post counts and names (persistence check)
+- **Environment**: User-Agent, WebGL vendor/renderer, UNMASKED WebGL
+- **Navigator diagnostics**: webdriver, plugins, hardwareConcurrency, deviceMemory, userAgentData
+- **Nav headers**: sec-ch-ua, sec-ch-ua-mobile, sec-ch-ua-platform logged on first request
+- **Cookies**: Pre/post counts and names (persistence check), suspicious cookie detection
 - **PX stats**: Tries, cycles, cleared status
 - **Network forensics**: req_failed, resp_doc, route_errors
 - **Artifacts**: steps.jsonl, trace.zip, screenshots, HTML, meta.json
+- **Diag summary in Markdown**: Quick human triage without opening JSON
 
 ### ✅ Bail System
 - **Non-retryable detection**: Stops blind retries on px_locked, hard_block, fatal
@@ -121,6 +141,66 @@ Walmart uses **PerimeterX** - one of the most sophisticated bot detection system
 - **Playwright trace**: trace.zip with screenshots and network activity
 - **steps.jsonl**: Complete event log with timestamps
 - **run_report.md**: Quick diagnosis (timings, PX stats, network errors)
+- **eval_safe wrapper**: Prevents "Page.evaluate:" crashes, logs eval errors with context
+- **Bail-on-blocked guard**: Stops execution immediately if /blocked detected after homepage
+
+## 🔴 Known Issues & Current Blockers
+
+### Issue #1: Search Submission Triggers Immediate Block
+**Status**: BLOCKING - 100% failure rate  
+**Symptom**: Homepage loads successfully, but search submission triggers instant 307 → /blocked  
+**Evidence**:
+- `resp_doc: 307` on search URL
+- `hard_block` logged immediately after search
+- No PX challenge modal - straight to blocked page
+
+**Likely Causes**:
+1. **Programmatic form submission** - Using `search_box.press("Enter")` may be detectable
+2. **Programmatic navigation fallback** - Code navigates to `/search?q=...` URL if button click fails
+3. **Missing human signals** - No mouse position, focus/blur events during submission
+4. **Timing pattern** - Consistent timing between typing and submission
+
+**Next Steps to Try**:
+- [ ] Use keyboard.press("Enter") instead of element.press("Enter")
+- [ ] Add mouse movement to search button before Enter
+- [ ] Ensure proper focus state before submission
+- [ ] Add variable delay (1-3s) after last keystroke
+- [ ] Remove programmatic navigation fallback
+- [ ] Test with manual Enter key in headed mode
+
+### Issue #2: webdriver=True in Navigator Diagnostics
+**Status**: INVESTIGATING  
+**Symptom**: `navigator.webdriver=True` logged in some runs  
+**Evidence**: `[diag] {'webdriver': True, ...}` in console output
+
+**Expected**: Should be `False` with `ignore_default_args=['--enable-automation']`
+
+**Possible Causes**:
+1. `ignore_default_args` not being applied correctly
+2. Playwright version issue
+3. Chrome channel launch failure (falling back to Chromium)
+
+**Next Steps**:
+- [ ] Verify Chrome channel launch success ("✅ Using real Chrome" in logs)
+- [ ] Test with fresh Playwright installation
+- [ ] Check if persistent context applies ignore_default_args correctly
+
+### Issue #3: Profile Environment Variable Not Respected by GUI
+**Status**: CONFIRMED  
+**Symptom**: GUI uses old profile path despite `WALMART_PROFILE_DIR` env var  
+**Evidence**: 
+```
+export WALMART_PROFILE_DIR="/Users/dan.maguire/ChromeProfiles/walmart_clean2"
+# But logs show:
+[profile] WALMART_PROFILE_DIR='/Users/dan.maguire/ChromeProfiles/walmart'
+```
+
+**Impact**: Cannot test with clean profile via GUI
+
+**Next Steps**:
+- [ ] Verify GUI reads environment variables on startup
+- [ ] Test with command-line adapter directly
+- [ ] Add profile path selector to GUI
 
 ## Implementation Details
 
@@ -391,9 +471,9 @@ python3 keyword_input.py
 
 ## Troubleshooting & Debugging
 
-### Current Issues (As of 2025-10-08)
+### Current Status (As of 2025-10-08 22:13)
 
-**We are still being flagged by PerimeterX despite all evasion techniques.** Here's what to check:
+**We can load homepage but are blocked at search submission (100% failure rate).** This indicates the search submission behavior is the primary detection vector, not the initial fingerprint.
 
 ### Analyze Run Reports
 
@@ -485,13 +565,50 @@ python3 scripts/manual_walmart_setup.py
 - Playwright Stealth: https://github.com/berstend/puppeteer-extra/tree/master/packages/puppeteer-extra-plugin-stealth
 - WebGL Fingerprinting: https://browserleaks.com/webgl
 
-## Next Steps to Try
+## Next Steps to Try (Priority Order)
 
-Based on run_report.md analysis, consider:
+### 🔴 Priority 1: Fix Search Submission Behavior
+**Current blocker** - This is why we're getting blocked:
+
+1. **Replace programmatic Enter with natural keyboard event**:
+   - Change from `search_box.press("Enter")` to `page.keyboard.press("Enter")`
+   - Ensure search box has focus before pressing Enter
+   - Add proper focus/blur event sequence
+
+2. **Remove programmatic navigation fallback**:
+   - Delete the `page.goto(search_url)` fallback after button click
+   - This is a clear bot signal
+
+3. **Add human-like submission delay**:
+   - Variable 1-3s delay after last keystroke before submission
+   - Random chance (30%) to pause and re-read query before submitting
+
+4. **Test with manual Enter in headed mode**:
+   - Verify that manual Enter key works without block
+   - If manual works, confirms our submission method is the issue
+
+### 🟡 Priority 2: Verify Fingerprint is Clean
+
+1. **Test with fresh profile** (walmart_clean2):
+   - Run `./scripts/setup_clean_walmart_profile.sh walmart_clean2`
+   - Manually age profile (2-3 minutes browsing)
+   - Verify no suspicious cookies in pre-run
+
+2. **Confirm webdriver=False**:
+   - Check navigator_diag in run_report.md
+   - Should show `webdriver: False`
+   - If True, investigate ignore_default_args
+
+3. **Verify UNMASKED WebGL shows ANGLE/Metal**:
+   - Check webgl_unmasked in run_report.md
+   - Should NOT show SwiftShader
+   - Should show ANGLE or Metal renderer
+
+### 🟢 Priority 3: Consider Additional Mitigations
 
 1. **Residential Proxies** (if not using):
    - Bright Data, Smartproxy, Oxylabs
-   - Datacenter IPs are instantly flagged
+   - Datacenter IPs may be flagged
    - Cost: $5-15/GB
 
 2. **Longer Dwell Times**:
@@ -503,16 +620,6 @@ Based on run_report.md analysis, consider:
    - Let profile sit for 24-48 hours between runs
    - Manual browsing sessions to build trust
    - Multiple authenticated profiles
-
-4. **Request Pattern Analysis**:
-   - Check trace.zip for suspicious patterns
-   - Look for missing requests (images, fonts, etc.)
-   - Verify all sec-ch-ua headers match
-
-5. **Consider CAPTCHA Solving Service**:
-   - 2Captcha, Anti-Captcha, CapSolver
-   - $1-3 per 1000 CAPTCHAs
-   - Integrate with auto-solver
 
 ## See Also
 

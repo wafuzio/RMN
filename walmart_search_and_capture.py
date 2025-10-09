@@ -285,6 +285,27 @@ def _write_run_report(base_dir: str, report: dict):
         for k,v in art.items():
             if v:
                 add(f"- {k}: {v}")
+        
+        # Diagnostics summary for quick PX blame analysis
+        diag = report.get("diag", {})
+        if any(diag.values()):
+            add("")
+            add("## Diagnostics")
+            if diag.get("navigator"):
+                nd = diag["navigator"]
+                add(f"- webdriver: {nd.get('webdriver')} plugins: {nd.get('pluginsLength')} hwc: {nd.get('hardwareConcurrency')} deviceMemory: {nd.get('deviceMemory')}")
+            if diag.get("webglUnmasked"):
+                wu = diag["webglUnmasked"]
+                add(f"- webgl_unmasked_vendor: {wu.get('unmaskedVendor')} ")
+                add(f"- webgl_unmasked_renderer: {wu.get('unmaskedRenderer')}")
+            if diag.get("navHeaders"):
+                nh = diag["navHeaders"]
+                add(f"- sec-ch-ua: {nh.get('sec-ch-ua')}")
+                add(f"- sec-ch-ua-mobile: {nh.get('sec-ch-ua-mobile')}")
+                add(f"- sec-ch-ua-platform: {nh.get('sec-ch-ua-platform')}")
+            if diag.get("suspiciousCookies"):
+                add(f"- suspicious_cookies: {diag.get('suspiciousCookies')}")
+        
         try:
             with open(mpath, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines))
@@ -297,7 +318,15 @@ def _write_run_report(base_dir: str, report: dict):
 
 
 def _build_report(keyword, outcome, bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL):
-    """Helper to build report dict."""
+    """Helper to build report dict with diagnostics for PX troubleshooting."""
+    # Build diagnostics section for quick PX blame analysis
+    diag = {
+        "navigator": env_info.get("navigator_diag"),
+        "webglUnmasked": env_info.get("webgl", {}).get("unmasked"),
+        "navHeaders": env_info.get("nav_headers"),
+        "suspiciousCookies": cookies_info.get("suspicious", []),
+    }
+    
     return {
         "keyword": keyword,
         "outcome": outcome,
@@ -309,6 +338,7 @@ def _build_report(keyword, outcome, bail_reason, started_at, timings, env_info, 
         "px": px_stats,
         "network": net_counters,
         "artifacts": {**artifacts, "steps_log": SL.path if SL else None},
+        "diag": diag,  # Quick diagnosis: webdriver, plugins, sec-ch-ua, etc.
     }
 
 
@@ -449,11 +479,20 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
     Uses persistent context when profile_dir is provided.
     Uses persistent Chrome (channel=chrome) for maximum stealth.
     """
+    # CRITICAL: Walmart requires persistent profile (defense-in-depth)
+    if not profile_dir:
+        raise RuntimeError("Walmart requires a persistent Chrome profile; non-persistent context is disabled.")
+    
     if net_counters is None:
         net_counters = {"req_failed": 0, "resp_doc": 0, "route_errors": 0}
-    # CRITICAL: NO args that trigger Chrome banners (PerimeterX flags them instantly)
-    # Empty args = cleanest Chrome = best trust score
-    args = []
+    # CRITICAL: GPU acceleration args for proper WebGL fingerprint
+    # Empty args = software rendering = "WebKit WebGL" = instant PX block
+    # These args ensure Chrome uses real GPU (ANGLE/Metal on macOS)
+    args = [
+        '--use-angle=metal',  # Force ANGLE→Metal backend on macOS
+        '--enable-gpu-rasterization',  # Prefer GPU raster
+        '--ignore-gpu-blocklist',  # Don't let Chrome silently disable GPU
+    ]
     
     if profile_dir:
         # DIAGNOSTIC: Verify we're using the same profile path every run
@@ -470,7 +509,7 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
             'locale': 'en-US',
             'timezone_id': timezone,  # STABLE per profile
             'args': args,
-            'ignore_default_args': ['--enable-automation'],
+            'ignore_default_args': ['--enable-automation'],  # Prevents navigator.webdriver=true
             'chromium_sandbox': True,  # CRITICAL: Force sandbox ON (removes banner)
         }
         
@@ -483,15 +522,14 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
             ctx = playwright.chromium.launch_persistent_context(**launch_options)
             print(f"✅ Using real Chrome (correct JA3 fingerprint)")
         except Exception as e:
-            # WARNING: Chromium has wrong JA3 fingerprint!
-            print(f"⚠️  Chrome launch failed ({e})")
-            print(f"⚠️  Falling back to Chromium - JA3 fingerprint will be WRONG!")
-            print(f"⚠️  PerimeterX will likely detect this as a bot!")
-            print(f"⚠️  Install Chrome: brew install --cask google-chrome")
-            del launch_options['channel']
-            if proxy_config:
-                launch_options['proxy'] = proxy_config
-            ctx = playwright.chromium.launch_persistent_context(**launch_options)
+            # CRITICAL: Do NOT fall back to Chromium - bail instead
+            # Chromium has wrong JA3/CH fingerprint = instant PX detection
+            print(f"❌ Chrome channel launch failed ({e})")
+            print(f"❌ Real Chrome not available - aborting to avoid PX fingerprint mismatch")
+            print(f"❌ Install Chrome: brew install --cask google-chrome")
+            if CURRENT_SL:
+                CURRENT_SL.log("chrome_channel_failed", error=str(e), fatal=True)
+            raise RuntimeError(f"Real Chrome not available; aborting to avoid PX fingerprint mismatch: {e}")
         
         # Only set Accept-Language; let Chrome generate sec-* and UA dynamically
         ctx.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
@@ -536,32 +574,28 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
         ctx.on("response", _resp_doc)
         page.on("pageerror", _page_error)
         
-        # --- BEGIN: off-domain guard rails ---
-        def _guard_nav(route):
+        # --- BEGIN: off-domain guard rails (NARROW - Google only) ---
+        # CRITICAL: Do NOT route PX/RUM/TAP endpoints - PX detects routing fingerprints
+        # Only route Google top-level navigations to prevent accidental redirects
+        def _guard_google_nav(route):
             req = route.request
             try:
-                url = req.url
-                lu = url.lower()
                 if req.is_navigation_request():
-                    if CURRENT_SL:
-                        CURRENT_SL.log("route_nav", url=url, resource=req.resource_type, method=req.method)
-                    # Block only top-level Google navigations
-                    if "//google." in lu or "//www.google." in lu:
+                    u = req.url.lower()
+                    if "//google." in u or "//www.google." in u:
                         if CURRENT_SL:
-                            CURRENT_SL.log("route_abort", url=url, reason="google_top_nav")
+                            CURRENT_SL.log("route_abort", url=req.url, reason="google_top_nav")
                         return route.abort()
-                # Default: continue
                 return route.continue_()
             except Exception as e:
-                # Do not let route errors kill the run — log and best-effort continue
                 if CURRENT_SL:
                     CURRENT_SL.log("route_error", url=req.url, err=str(e))
                 net_counters["route_errors"] += 1
-                try:
-                    return route.continue_()
-                except Exception:
-                    pass
-        ctx.route("**/*", _guard_nav)
+                return route.continue_()
+        
+        # Route ONLY Google domains (not "**/*" - that touches PX/RUM endpoints)
+        ctx.route("*://www.google.*/**", _guard_google_nav)
+        ctx.route("*://google.*/**", _guard_google_nav)
         # --- END: off-domain guard rails ---
         
         # PX beacons (requests)
@@ -593,8 +627,15 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
                     import pdb; pdb.set_trace()
         ctx.on("request", _log_blocked_nav)
         
-        # Apply stealth after page exists
-        apply_stealth(page)
+        # Apply stealth ONLY if explicitly enabled (PX detects stealth mutations)
+        # For Walmart, stealth is OFF by default - use real Chrome + coherent signals instead
+        if os.environ.get("WALMART_ENABLE_STEALTH") == "1":
+            apply_stealth(page)
+            if CURRENT_SL:
+                CURRENT_SL.log("stealth_applied", enabled=True)
+        else:
+            if CURRENT_SL:
+                CURRENT_SL.log("stealth_skipped", reason="px_detection_risk")
         
         return None, ctx, page, True
     
@@ -604,9 +645,11 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
         ignore_default_args=["--enable-automation"],
         chromium_sandbox=True,  # CRITICAL: Force sandbox ON
     )
+    # CRITICAL: Never override UA - decouples UA/JA3/CH from browser's real fingerprint
+    # For Walmart, this branch should never run (persistent profile required)
     ctx = browser.new_context(
         viewport={"width": 1366, "height": 768},
-        user_agent=HEADERS["user-agent"],
+        # user_agent removed - let Chrome use its real UA
         locale="en-US",
     )
     page = ctx.new_page()
@@ -1061,6 +1104,19 @@ def _wait_px_cookie(ctx, timeout_ms=8000):
 def _on_blocked(url: str) -> bool:
     """Check if URL is the /blocked route."""
     return "walmart.com/blocked" in (url or "").lower()
+
+
+def eval_safe(page, script, label, SL=None):
+    """
+    Safe page.evaluate wrapper that logs errors instead of crashing.
+    Prevents "Page.evaluate:" fatal errors when page is redirecting/blocked.
+    """
+    try:
+        return page.evaluate(script)
+    except Exception as e:
+        if SL:
+            SL.log("eval_error", label=label, url=page.url, error=str(e))
+        return None
 
 def _decoded_target_from_blocked(url: str):
     """Extract and decode redirect target from blocked URL."""
@@ -1665,6 +1721,15 @@ def search_and_capture(
             SL.log("cookies_pre", count=len(pre_cookies), names=pre_cookies[:8])
             cookies_info["pre_count"] = len(pre_cookies)
             cookies_info["pre_names"] = pre_cookies[:12]
+            
+            # Flag suspicious cookies (Akamai/BotManager flags indicate scrutiny)
+            suspicious = [n for n in pre_cookies if n.lower() in (
+                "adblocked", "ak_bmsc", "bm_mi", "bm_sv", "bm_sz", "abck"
+            )]
+            if suspicious:
+                SL.log("cookie_suspicious", names=suspicious)
+                say("warn", f"[{retailer}] ⚠️  Suspicious cookies present: {suspicious}")
+                cookies_info["suspicious"] = suspicious
 
             # CRITICAL: Verify cookie persistence for debugging
             if len(pre_cookies) == 0:
@@ -1704,6 +1769,33 @@ def search_and_capture(
             # CRITICAL: Establish session with human-like browsing pattern
             say("info", f"[{retailer}] Establishing session (human-like pattern)")
             
+            # Log sec-ch-ua headers on FIRST navigation (before homepage - PX checks these)
+            nav_headers_logged = {"done": False}
+            def _log_first_nav_headers(req):
+                if nav_headers_logged["done"]:
+                    return
+                try:
+                    if req.is_navigation_request() and req.resource_type == "document" and "walmart.com" in req.url:
+                        hdrs = req.headers
+                        wanted = {
+                            "sec-ch-ua": hdrs.get("sec-ch-ua"),
+                            "sec-ch-ua-mobile": hdrs.get("sec-ch-ua-mobile"),
+                            "sec-ch-ua-platform": hdrs.get("sec-ch-ua-platform"),
+                            "user-agent": hdrs.get("user-agent"),
+                        }
+                        SL.log("nav_headers", url=req.url, **wanted)
+                        print(f"[nav_headers] {wanted}")
+                        env_info["nav_headers"] = wanted
+                        nav_headers_logged["done"] = True
+                        
+                        # Warn if UA-CH is missing on first nav
+                        if not any(wanted.values()):
+                            SL.log("ua_ch_missing", url=req.url)
+                            say("warn", f"[{retailer}] ⚠️  UA-CH headers missing on first nav; PX may flag this")
+                except Exception:
+                    pass
+            ctx.on("request", _log_first_nav_headers)
+            
             # 1. Visit homepage (like real users) - resilient navigation
             phase = _goto_home(page, SL)
             SL.log("home_goto_phase_final", phase=phase)
@@ -1711,11 +1803,29 @@ def search_and_capture(
             # Timing: to homepage
             timings["to_home_ms"] = int((time.time() - SL.t0) * 1000)
             
+            # CRITICAL: Bail fast if blocked on first navigation (prevents eval errors)
+            if _on_blocked(page.url):
+                SL.log("hard_block", where="initial_home", url=page.url, reason="blocked_on_first_nav")
+                say("error", f"[{retailer}] ❌ Hard blocked on first navigation")
+                say("error", f"  URL: {page.url}")
+                say("error", f"  This indicates IP/profile reputation issue or Bot Manager flag")
+                
+                bail_reason = "hard_block"
+                meta["bail"] = bail_reason
+                meta["steps_log"] = SL.path
+                report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                _write_run_report(base_dir, report)
+                return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
+            
             # DIAGNOSTIC: Log User-Agent (should be stable across runs)
-            ua = page.evaluate("() => navigator.userAgent")
-            print(f"[ua] {ua}")
-            SL.log("user_agent", ua=ua)
-            env_info["ua"] = ua
+            ua = eval_safe(page, "() => navigator.userAgent", "ua", SL=SL)
+            if ua:
+                print(f"[ua] {ua}")
+                SL.log("user_agent", ua=ua)
+                env_info["ua"] = ua
+            else:
+                print(f"[ua] eval failed - page may be redirecting")
+                env_info["ua"] = None
             
             # Cache UA for requests library (video downloads)
             BROWSER_UA["ua"] = ua
@@ -1726,19 +1836,111 @@ def search_and_capture(
             
             # Log WebGL info (sanity check GPU isn't SwiftShader)
             try:
-                vendor = page.evaluate("""() => {
+                vendor = eval_safe(page, """() => {
                     const c=document.createElement('canvas');
                     const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
                     return gl ? gl.getParameter(gl.VENDOR) : null;
-                }""")
-                renderer = page.evaluate("""() => {
+                }""", "webgl_vendor", SL=SL)
+                renderer = eval_safe(page, """() => {
                     const c=document.createElement('canvas');
                     const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
                     return gl ? gl.getParameter(gl.RENDERER) : null;
-                }""")
+                }""", "webgl_renderer", SL=SL)
+                
+                # Get UNMASKED WebGL info (real GPU string - PX checks this)
+                unmasked = eval_safe(page, """() => {
+                    const c=document.createElement('canvas');
+                    const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+                    if (!gl) return null;
+                    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+                    return ext ? {
+                        unmaskedVendor: gl.getParameter(ext.UNMASKED_VENDOR_WEBGL),
+                        unmaskedRenderer: gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
+                    } : null;
+                }""", "webgl_unmasked", SL=SL)
+                
                 SL.log("webgl", vendor=vendor, renderer=renderer)
                 print(f"[webgl] vendor={vendor}, renderer={renderer}")
-                env_info["webgl"] = {"vendor": vendor, "renderer": renderer}
+                if unmasked:
+                    SL.log("webgl_unmasked", **unmasked)
+                    print(f"[webgl_unmasked] {unmasked}")
+                
+                env_info["webgl"] = {"vendor": vendor, "renderer": renderer, "unmasked": unmasked}
+                
+                # CRITICAL: Fingerprint verification guard (use UNMASKED when available)
+                # Masked WebGL can show "WebKit" in real Chrome - UNMASKED is the key differentiator
+                is_chrome_ua = ua and " Chrome/" in ua
+                
+                # Extract unmasked values (may be None if extension unavailable)
+                def _string(s):
+                    return (s or "").lower()
+                
+                unmasked_vendor = (unmasked or {}).get("unmaskedVendor") if isinstance(unmasked, dict) else None
+                unmasked_renderer = (unmasked or {}).get("unmaskedRenderer") if isinstance(unmasked, dict) else None
+                
+                # Heuristics for UNMASKED values
+                unmasked_ok = False
+                unmasked_bad = False
+                if unmasked_vendor or unmasked_renderer:
+                    # OK: ANGLE (Chromium), Google Inc., Metal (macOS)
+                    if "angle" in _string(unmasked_renderer) or "google" in _string(unmasked_vendor) or "metal" in _string(unmasked_renderer):
+                        unmasked_ok = True
+                    # BAD: SwiftShader (software renderer)
+                    if "swiftshader" in _string(unmasked_renderer):
+                        unmasked_bad = True
+                
+                # Decision logic
+                if is_chrome_ua and unmasked_bad:
+                    # FATAL: SwiftShader with Chrome UA = software rendering
+                    SL.log("fingerprint_mismatch", ua=ua, vendor=vendor, renderer=renderer, unmasked=unmasked, fatal=True)
+                    say("error", f"[{retailer}] ❌ FATAL: SwiftShader software renderer detected (will trip PX)")
+                    say("error", f"  UA: {ua}")
+                    say("error", f"  Unmasked: {unmasked}")
+                    
+                    bail_reason = "fingerprint_mismatch"
+                    meta["bail"] = bail_reason
+                    meta["steps_log"] = SL.path
+                    report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                    _write_run_report(base_dir, report)
+                    return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
+                    
+                elif is_chrome_ua and (unmasked_vendor or unmasked_renderer):
+                    # UNMASKED present - trust it more than masked
+                    if not unmasked_ok:
+                        SL.log("fingerprint_warning", reason="unmasked_unknown", ua=ua, vendor=vendor, renderer=renderer, unmasked=unmasked)
+                        say("warn", f"[{retailer}] ⚠️  Unmasked WebGL is unusual; proceeding cautiously")
+                        say("warn", f"  Unmasked: {unmasked}")
+                else:
+                    # UNMASKED missing; masked shows WebKit often in real Chrome - warn only
+                    if ("webkit" in _string(vendor)) or ("webkit" in _string(renderer)):
+                        SL.log("fingerprint_warning", reason="masked_webkit", ua=ua, vendor=vendor, renderer=renderer)
+                        say("warn", f"[{retailer}] ⚠️  Masked WebGL looks WebKit; no UNMASKED info. Not bailing.")
+                        say("warn", f"  Masked: {vendor} / {renderer}")
+                
+            except Exception:
+                pass
+            
+            # Log navigator diagnostics (webdriver, plugins, etc) - pinpoint bot signals
+            try:
+                diag = eval_safe(page, """() => ({
+                    webdriver: navigator.webdriver,
+                    languages: navigator.languages,
+                    language: navigator.language,
+                    platform: navigator.platform,
+                    hardwareConcurrency: navigator.hardwareConcurrency,
+                    deviceMemory: navigator.deviceMemory || null,
+                    vendor: navigator.vendor,
+                    pluginsLength: (navigator.plugins||[]).length,
+                    userAgentData: (navigator.userAgentData ? {
+                        brands: navigator.userAgentData.brands || null,
+                        platform: navigator.userAgentData.platform || null,
+                        mobile: navigator.userAgentData.mobile || null
+                    } : null)
+                })""", "navigator_diag", SL=SL)
+                if diag:
+                    SL.log("navigator_diag", **diag)
+                    print(f"[diag] {diag}")
+                    env_info["navigator_diag"] = diag
             except Exception:
                 pass
             
