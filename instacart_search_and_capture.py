@@ -12,6 +12,95 @@ from datetime import datetime
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 
+def _wait_until_home_ready(page, log, timeout_ms=15000):
+    """Wait for homepage to be fully loaded and ready."""
+    try:
+        page.wait_for_load_state("load", timeout=timeout_ms)
+        log("Home: load state reached")
+    except Exception as e:
+        log(f"Home: load state wait skipped/failed: {e}")
+    
+    selectors = [
+        "[data-testid='search-bar-input']",
+        "input[placeholder*='Search']",
+        "[role='search'] input",
+        "header",
+    ]
+    for sel in selectors:
+        try:
+            page.wait_for_selector(sel, timeout=4000)
+            log(f"Home: ready selector found: {sel}")
+            return
+        except Exception:
+            pass
+    
+    page.wait_for_timeout(3000)
+    log("Home: fallback settle delay used")
+
+
+def _is_login_modal_visible(page):
+    """Check if Instacart login modal is visible."""
+    # Known auth modal selectors seen on Instacart
+    SELS = [
+        ".ReactModalPortal .AuthModal__Overlay",
+        "[data-testid='authModalWrapper']",
+    ]
+    try:
+        for sel in SELS:
+            el = page.query_selector(sel)
+            if el and el.is_visible():
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def _prompt_user_login(page, log, max_wait_sec=300):
+    """
+    When a login modal is present, bring the browser to the foreground,
+    instruct the user to complete login, and wait until the modal disappears.
+    Returns True if login modal disappears, False on timeout.
+    """
+    try:
+        page.bring_to_front()
+    except Exception:
+        pass
+    
+    log("⚠️ Login required: A login modal is visible.")
+    log("Please complete the Instacart login in the visible browser window.")
+    log("After you finish, the scraper will continue automatically.")
+    log(f"Timeout in {max_wait_sec} seconds.")
+    
+    deadline = time.time() + max_wait_sec
+    last_report = 0
+    while time.time() < deadline:
+        if not _is_login_modal_visible(page):
+            log("✅ Login modal no longer visible — continuing.")
+            return True
+        # Report every ~10 seconds so logs show progress
+        now = time.time()
+        if now - last_report >= 10:
+            remaining = int(deadline - now)
+            log(f"Waiting for login to complete... ({remaining}s remaining)")
+            last_report = now
+        page.wait_for_timeout(1000)
+    
+    log("❌ Login prompt timeout — no change detected. You may need to re-run auth:")
+    log("   ./scripts/setup_instacart_profile.sh")
+    return False
+
+
+def _handle_login_if_needed(page, log, max_wait_sec=300):
+    """Check for login modal and prompt user if visible. Returns True if OK to continue."""
+    try:
+        if _is_login_modal_visible(page):
+            return _prompt_user_login(page, log, max_wait_sec=max_wait_sec)
+        return True
+    except Exception as e:
+        log(f"Login check failed: {e}")
+        return False
+
+
 def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool:
     """
     Search Instacart for a keyword and capture the results.
@@ -101,49 +190,121 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             # Visit homepage (organic navigation)
             log("Loading homepage...")
             page.goto(f'https://www.instacart.com/store/{store}', wait_until='domcontentloaded', timeout=15000)
-            time.sleep(2)
             
-            # Find and click search input (organic interaction)
-            log(f"Searching for: {keyword}")
-            try:
-                # Instacart search input selectors
-                search_input = page.locator('input[placeholder*="Search"], input[type="search"], input[aria-label*="Search"]').first
-                search_input.click()
-                time.sleep(0.5)
-                
-                # Type keyword with human-like delays
-                search_input.type(keyword, delay=100)
-                time.sleep(0.5)
-                
-                # Press Enter to submit (organic form submission)
-                page.keyboard.press("Enter")
-                log("   Submitted search via Enter key")
-                
-                # Wait for navigation to search results
-                page.wait_for_url('**/s?k=**', timeout=10000)
-                log("   Navigated to search results")
-                
-            except Exception as e:
-                log(f"   Search box interaction failed: {e}")
-                log("   Falling back to direct navigation...")
-                # Fallback to direct navigation if search box not found
-                search_url = f'https://www.instacart.com/store/{store}/s?k={keyword}'
-                page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
+            # Don't rush off the home page
+            _wait_until_home_ready(page, log, timeout_ms=15000)
             
-            # Wait for content to load
-            time.sleep(5)
-            search_url = page.url
-            
-            # Check if we're logged in - look for login modal
-            login_modal = page.query_selector('.ReactModalPortal .AuthModal__Overlay, [data-testid="authModalWrapper"]')
-            if login_modal and login_modal.is_visible():
-                print("❌ Login modal detected - session expired")
-                print("   Please re-authenticate by running:")
-                print("   ./scripts/setup_instacart_profile.sh")
+            # If a login modal is present on home, pause for interactive login
+            if not _handle_login_if_needed(page, log, max_wait_sec=300):
                 context.close()
                 return False
             
-            print("✅ Authenticated session active")
+            # Organic search interaction (robust version)
+            log(f"Searching for: {keyword}")
+            try:
+                # 0) Cookie banner can block the header — dismiss if present (best-effort)
+                cookie_ctas = [
+                    "button:has-text('Accept')",
+                    "button:has-text('Agree')",
+                    "[data-testid*='accept']",
+                    "button[aria-label*='Accept']",
+                ]
+                for cta in cookie_ctas:
+                    try:
+                        if page.locator(cta).first.is_visible():
+                            log(f"   Dismissing cookie banner via {cta}")
+                            page.locator(cta).first.click(timeout=1000)
+                            page.wait_for_timeout(300)
+                            break
+                    except Exception:
+                        pass
+                
+                # 1) Some variants gate the input behind a search-toggle button
+                toggle_selectors = [
+                    "button[aria-label*='Search']",
+                    "[data-testid='search-bar-button']",
+                    "[data-testid='search-input-toggle']",
+                    "button:has(svg[aria-label='Search'])",
+                ]
+                for tsel in toggle_selectors:
+                    try:
+                        if page.locator(tsel).first.is_visible():
+                            log(f"   Clicking search toggle: {tsel}")
+                            page.locator(tsel).first.click(timeout=1500)
+                            page.wait_for_timeout(300)
+                            break
+                    except Exception:
+                        pass
+                
+                # 2) Broad input/combobox selector (covers most site variants)
+                search_selector = (
+                    "[data-testid='search-bar-input'], "
+                    "input[type='search'], "
+                    "input[placeholder*='Search'], "
+                    "input[aria-label*='Search'], "
+                    "[role='search'] input, "
+                    "[contenteditable='true'][role='combobox']"
+                )
+                search_input = page.locator(search_selector).filter(
+                    has_not=page.locator("[aria-hidden='true']")
+                ).first
+                
+                log("   Looking for search input...")
+                search_input.wait_for(state="visible", timeout=6000)
+                log("   Search input found and visible")
+                
+                # 3) Ensure it's interactable
+                try:
+                    search_input.scroll_into_view_if_needed(timeout=1500)
+                except Exception:
+                    pass
+                search_input.click(timeout=2000)
+                log("   Clicked search input")
+                
+                # 4) Type/fill and submit
+                try:
+                    search_input.fill("")  # clear if anything prefilled
+                except Exception:
+                    pass
+                search_input.fill(keyword)
+                log(f"   Filled keyword: {keyword}")
+                page.wait_for_timeout(200)
+                search_input.press("Enter")
+                log("   Pressed Enter on input")
+                
+                # 5) Wait for results URL
+                page.wait_for_url("**/s?k=**", timeout=12000)
+                log("   ✅ Navigated to search results via organic search")
+                
+            except Exception as e:
+                log(f"   ❌ Search box interaction failed: {type(e).__name__}: {e}")
+                try:
+                    # Drop a screenshot so we can see what blocked us
+                    shot = os.path.join(runs_dir, "home_before_fallback.png")
+                    page.screenshot(path=shot, full_page=False)
+                    log(f"   Saved debug screenshot: {shot}")
+                except Exception:
+                    pass
+                log("   Falling back to direct navigation...")
+                search_url = f"https://www.instacart.com/store/{store}/s?k={keyword}"
+                page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
+                log("   Direct navigation completed")
+            
+            # Some flows can trigger the auth modal on the results page — handle again
+            if not _handle_login_if_needed(page, log, max_wait_sec=300):
+                context.close()
+                return False
+            
+            # Prefer to see ad containers; fallback to a short settle delay
+            try:
+                page.wait_for_selector("div.e-1qzz7bi, div.e-1hv1sre", timeout=8000)
+                log("Search: ad containers detected")
+            except Exception:
+                log("Search: ad containers not detected within 8s; using short settle delay")
+                page.wait_for_timeout(3000)
+            
+            search_url = page.url
+            log("✅ Authenticated session active")
             
             # Get page content
             html_content = page.content()

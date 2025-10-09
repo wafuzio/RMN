@@ -45,6 +45,15 @@ class InstacartAdapter(RetailerAdapter):
             store = os.environ.get('INSTACART_STORE', 'publix')
             log(f"Store: {store}")
             
+            # NEW: Ensure scraper sees the same profile/store even when launched from the app
+            if ctx.profile_dir and os.path.isdir(ctx.profile_dir):
+                os.environ["INSTACART_PROFILE_DIR"] = ctx.profile_dir
+                log(f"Injected INSTACART_PROFILE_DIR into env: {ctx.profile_dir}")
+            else:
+                log("⚠️ ctx.profile_dir missing or invalid; scraper may run without cookies")
+            
+            os.environ.setdefault("INSTACART_STORE", store)
+            
             log("Calling search_and_capture...")
             result = search_and_capture(keyword, ctx.output_dir, store=store)
             log(f"Result: {result}")
