@@ -30,19 +30,24 @@ This document catalogs recurring problems across retailers and their proven solu
 **Cause:** No session cookies or missing Referer header.
 
 **Fix:**
-1. **Seed cookies from srp_url:**
+1. **Seed cookies from srp_url (retailer-aware):**
    ```python
-   seed_candidates = [
-       srp_url,  # from JSON
-       "https://www.<retailer>.com/search?query=milk",
-       "https://www.<retailer>.com/",
-   ]
-   for seed in [u for u in seed_candidates if u]:
+   # Load SRP URL from JSON
+   srp_url = load_srp_url(json_path)
+   retailer = infer_retailer_from_output(output_dir)
+   
+   # Build seed candidates (NO hardcoded URLs!)
+   seed_candidates = [srp_url] if srp_url else []
+   seed_candidates.append(retailer_homepage(retailer))
+   
+   for seed in seed_candidates:
        page.goto(seed, wait_until="commit", timeout=60000)
        page.wait_for_timeout(1200)
        if len(context.cookies(domain)) > 0:
            break
    ```
+   
+   **⚠️ NEVER hardcode fallback URLs** - use retailer-aware helpers instead.
 
 2. **Set Referer + UA headers:**
    ```python
@@ -71,32 +76,38 @@ This document catalogs recurring problems across retailers and their proven solu
 
 ---
 
-## JSON missing source_url
+## JSON missing source_url / url / retailer
 
-**Cause:** Writer did not persist SRP URL when saving run results.
+**Cause:** Writer did not persist SRP URL and retailer when saving run results.
 
-**Fix:** Write `"source_url": page.url` in run_results JSON:
+**Fix:** Write `url`, `srp_url`, and `retailer` in run_results JSON:
 
 ```python
-# In scraper (e.g., kroger_search_and_capture.py)
+# In scraper (e.g., kroger_search_and_capture.py, instacart_search_and_capture.py)
+search_url = page.url  # Get final URL after navigation
+
 run_results = {
     "count": len(ads),
     "keyword": keyword,
     "search_term": search_term,
     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     "source_file": html_path,
-    "source_url": page.url,  # ← ADD THIS
+    "retailer": "kroger",      # ← ADD THIS (for downstream tools)
+    "url": search_url,         # ← ADD THIS (primary for extractors)
+    "srp_url": search_url,     # ← ADD THIS (alias for compatibility)
     "results": results,
 }
 ```
 
 **Why it matters:**
-- Extractor uses it for Referer header
+- Extractor uses `url`/`srp_url` for Referer header
 - Extractor uses it for cookie seeding
-- Without it, falls back to generic URLs
+- `retailer` enables retailer-aware fallbacks
+- Without these, extractor falls back to generic homepage
 
-**Log indicator:**
+**Log indicators:**
 - `[session] srp_url=<none>`
+- `⚠️ No SRP URL found in JSON; seeding cookies with retailer homepage`
 
 ---
 
@@ -314,6 +325,191 @@ page.goto(image_url, wait_until="domcontentloaded", timeout=30000)
    ```bash
    cat logs/app_launcher_boot.log
    ```
+
+---
+
+## Profile not passed from adapter to scraper
+
+**Cause:** When app launched from Finder, environment variables aren't inherited. Search phase runs without cookies.
+
+**Symptoms:**
+- Login prompts appear even after authentication
+- Search works from terminal, fails from app
+- Different sessions for search vs extraction
+
+**Fix:** Inject `ctx.profile_dir` into environment in adapter's `search_and_capture()`:
+
+```python
+# In retailers/<retailer>/adapter.py
+def search_and_capture(self, keyword: str, ctx) -> bool:
+    from retailer_search_and_capture import search_and_capture
+    
+    # CRITICAL: Inject profile dir so scraper uses same session
+    if ctx.profile_dir and os.path.isdir(ctx.profile_dir):
+        os.environ["RETAILER_PROFILE_DIR"] = ctx.profile_dir
+        print(f"Injected RETAILER_PROFILE_DIR into env: {ctx.profile_dir}")
+    else:
+        print("⚠️ ctx.profile_dir missing; scraper may run without cookies")
+    
+    return search_and_capture(keyword, ctx.output_dir)
+```
+
+**Why it matters:**
+- Ensures both search and extraction use same cookie jar
+- Prevents HTTP/2 resets and CDN rejections
+- Critical for app bundle launches
+
+**See:** `docs/ADDING_NEW_RETAILER.md` → Profile Handoff
+
+---
+
+## Organic search fails, direct navigation used
+
+**Cause:** Search input selector too narrow or page not ready.
+
+**Symptoms:**
+- Logs show "Search box interaction failed"
+- "Falling back to direct navigation"
+- May trigger bot detection or login modals
+
+**Fix:** Use broad selectors and wait for page readiness:
+
+```python
+# 1. Wait for page to be ready
+page.goto(homepage_url, wait_until='domcontentloaded')
+page.wait_for_load_state("load")  # More conservative
+
+# 2. Use broad selector union
+search_selector = (
+    "[data-testid='search-bar-input'], "
+    "input[type='search'], "
+    "input[placeholder*='Search'], "
+    "input[aria-label*='Search'], "
+    "[role='search'] input"
+)
+search_input = page.locator(search_selector).first
+
+# 3. Wait for visibility
+search_input.wait_for(state="visible", timeout=6000)
+
+# 4. Click, fill, submit
+search_input.click()
+search_input.fill(keyword)
+page.keyboard.press("Enter")
+
+# 5. Wait for navigation
+page.wait_for_url('**/s?k=**', timeout=12000)
+```
+
+**Additional checks:**
+- Dismiss cookie banners first
+- Click search toggle if input is gated
+- Scroll input into view if needed
+- Always have fallback to direct navigation
+
+**See:** `docs/ADDING_NEW_RETAILER.md` → Organic Search vs Direct Navigation
+
+---
+
+## Image extraction reports zero counts
+
+**Cause:** Time window too strict or checking wrong folder names.
+
+**Symptoms:**
+- "Extraction incomplete: No TOA/Skyscraper produced"
+- Images exist in filesystem but adapter reports 0
+- Works sometimes, fails other times (timing issue)
+
+**Fix:** Use forgiving time window and check multiple folders:
+
+```python
+def extract_images(self, json_path: str, html_path: str, ctx) -> dict:
+    # ... run extractor subprocess ...
+    
+    # Use 5-minute slack window (not 1-2 seconds!)
+    slack_seconds = 300
+    horizon = pair_start - slack_seconds
+    
+    def recent_pngs(leaf: str) -> list:
+        d = os.path.join(ctx.output_dir, leaf)
+        return [
+            p for p in glob.glob(os.path.join(d, "*.png"))
+            if os.path.getmtime(p) >= horizon
+        ]
+    
+    # Check multiple folder names (retailer-specific + legacy + Main)
+    toa_files = []
+    toa_files += recent_pngs("Shoppable_Display_Ads")  # Instacart
+    toa_files += recent_pngs("Top_Banner")             # Walmart
+    toa_files += recent_pngs("TOA")                    # Kroger/legacy
+    toa_files += recent_pngs("Main")                   # Some extractors
+    
+    # Log what we counted for debugging
+    with open(log_path, 'a') as lf:
+        lf.write(f"\nCounted files (since {datetime.fromtimestamp(horizon).isoformat()}):\n")
+        lf.write(f"  TOA-like: {len(toa_files)}\n")
+        for p in sorted(toa_files)[:10]:
+            lf.write(f"    - {p}\n")
+    
+    return {"toa": len(toa_files), "sky": len(sky_files), "car": 0, "log": log_path}
+```
+
+**Debug:**
+```bash
+# Check what files actually exist
+find output/<retailer>/<client> -name "*.png" -mtime -1 -ls
+
+# Check extractor log for counted files
+tail -50 logs/<retailer>/image_extract_*.log
+```
+
+**See:** `docs/ADDING_NEW_RETAILER.md` → Robust Image Counting
+
+---
+
+## Login modal appears after authentication
+
+**Cause:** Direct URL navigation breaks session state or triggers bot detection.
+
+**Symptoms:**
+- Login modal on search results page
+- Works with manual browsing, fails in automation
+- Session cookies present but modal still appears
+
+**Fix:** Use organic search instead of direct navigation (see "Organic search fails" above).
+
+**Alternative:** Add interactive login handling:
+
+```python
+def _is_login_modal_visible(page):
+    login_selectors = [".login-modal", "[data-testid='authModal']"]
+    for sel in login_selectors:
+        el = page.query_selector(sel)
+        if el and el.is_visible():
+            return True
+    return False
+
+def _prompt_user_login(page, log, max_wait_sec=300):
+    page.bring_to_front()
+    log("⚠️ Login required: Please complete login in the browser window.")
+    
+    deadline = time.time() + max_wait_sec
+    while time.time() < deadline:
+        if not _is_login_modal_visible(page):
+            log("✅ Login completed — continuing.")
+            return True
+        page.wait_for_timeout(1000)
+    
+    log("❌ Login timeout")
+    return False
+
+# Use after navigation
+if _is_login_modal_visible(page):
+    if not _prompt_user_login(page, log):
+        return False
+```
+
+**See:** `docs/ADDING_NEW_RETAILER.md` → Interactive Login Handling
 
 ---
 
