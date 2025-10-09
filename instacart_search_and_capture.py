@@ -98,21 +98,41 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             
             page = context.pages[0] if context.pages else context.new_page()
             
-            # Pre-visit homepage to refresh session cookies
-            log("Refreshing session...")
+            # Visit homepage (organic navigation)
+            log("Loading homepage...")
             page.goto(f'https://www.instacart.com/store/{store}', wait_until='domcontentloaded', timeout=15000)
             time.sleep(2)
             
-            # Navigate to search page
-            # URL pattern: https://www.instacart.com/store/{store}/s?k={keyword}
-            search_url = f'https://www.instacart.com/store/{store}/s?k={keyword}'
-            log(f"   URL: {search_url}")
-            
-            # Navigate (don't wait for networkidle - Instacart has lots of dynamic content)
-            page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
+            # Find and click search input (organic interaction)
+            log(f"Searching for: {keyword}")
+            try:
+                # Instacart search input selectors
+                search_input = page.locator('input[placeholder*="Search"], input[type="search"], input[aria-label*="Search"]').first
+                search_input.click()
+                time.sleep(0.5)
+                
+                # Type keyword with human-like delays
+                search_input.type(keyword, delay=100)
+                time.sleep(0.5)
+                
+                # Press Enter to submit (organic form submission)
+                page.keyboard.press("Enter")
+                log("   Submitted search via Enter key")
+                
+                # Wait for navigation to search results
+                page.wait_for_url('**/s?k=**', timeout=10000)
+                log("   Navigated to search results")
+                
+            except Exception as e:
+                log(f"   Search box interaction failed: {e}")
+                log("   Falling back to direct navigation...")
+                # Fallback to direct navigation if search box not found
+                search_url = f'https://www.instacart.com/store/{store}/s?k={keyword}'
+                page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
             
             # Wait for content to load
             time.sleep(5)
+            search_url = page.url
             
             # Check if we're logged in - look for login modal
             login_modal = page.query_selector('.ReactModalPortal .AuthModal__Overlay, [data-testid="authModalWrapper"]')

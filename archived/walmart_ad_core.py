@@ -1,8 +1,7 @@
 # archived/walmart_ad_core.py
 from __future__ import annotations
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
-from dataclasses import dataclass
+from urllib.parse import urlparse, parse_qs, unquote
 from typing import Dict, Any, List
 
 # Walmart ad module selectors (align with your scraper)
@@ -17,25 +16,41 @@ def _text(el):
     except Exception:
         return ""
 
-def _attrs(el, names):
-    out = {}
-    for n in names:
-        try:
-            v = el.get(n) or ""
-            if v:
-                out[n] = v
-        except Exception:
-            pass
-    return out
-
 def _first_img_src(el):
+    # Try common lazy-image attributes in priority order
     try:
         img = el.select_one("img")
-        if img and img.get("src"):
-            return img["src"]
+        if not img:
+            return None
+        for attr in ("src", "data-src", "data-original", "data-lazy", "data-srcset", "srcset"):
+            v = img.get(attr)
+            if not v:
+                continue
+            # srcset may have multiple URLs; take the first
+            if attr.endswith("srcset"):
+                first = v.split(",")[0].strip().split(" ")[0]
+                if first:
+                    return first
+            else:
+                return v
     except Exception:
         pass
     return None
+
+def _first_video_src(el):
+    # Look for <video> or <source> inside SBV module
+    try:
+        src = None
+        s = el.select_one("video source[src]") or el.select_one("source[src]")
+        if s and s.get("src"):
+            src = s["src"]
+        if not src:
+            v = el.select_one("video")
+            if v and v.get("src"):
+                src = v["src"]
+        return src
+    except Exception:
+        return None
 
 def _first_link(el):
     try:
@@ -47,17 +62,34 @@ def _first_link(el):
     return None
 
 def _normalize_url(href: str) -> str:
-    # Keep as-is; your scraper's rd= resolver happens earlier if you prefer.
+    """
+    Walmart redirectors:
+      - https://www.walmart.com/sp/track?...&rd=
+      - https://www.walmart.com/dad/trk/... (encrypted)
+    Prefer rd= when present; otherwise return the original href.
+    """
+    try:
+        u = urlparse(href or "")
+        qs = parse_qs(u.query)
+        if "rd" in qs and qs["rd"]:
+            return unquote(qs["rd"][0])
+    except Exception:
+        pass
     return href or ""
 
 def _extract_block(soup, selector, ad_type) -> List[Dict[str, Any]]:
     items = []
-    for el in soup.select(selector):
-        d: Dict[str, Any] = {"type": ad_type}
+    for idx, el in enumerate(soup.select(selector), start=1):
+        d: Dict[str, Any] = {"type": ad_type, "pos": idx}
         d["text"] = _text(el)
         d["img"]  = _first_img_src(el)
+
         href = _first_link(el)
         d["href"] = _normalize_url(href) if href else None
+
+        if ad_type == "sbv":
+            d["video"] = _first_video_src(el)
+
         items.append(d)
     return items
 

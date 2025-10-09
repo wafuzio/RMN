@@ -65,6 +65,52 @@ class WalmartAdapter(RetailerAdapter):
 
         return {'ok': ok, 'bail': bail, 'reason': bail_reason, 'result': result}
 
+    def collect_pairs_for_run(self, ctx, run_start_ts: float):
+        """Collect JSON/HTML pairs from the most recent run."""
+        import glob
+        # Use ctx.runs_dir if available, otherwise fall back to output_dir/runs
+        runs = getattr(ctx, "runs_dir", None) or os.path.join(ctx.output_dir, "runs")
+        print(f"[walmart adapter] collect_pairs_for_run: searching in {runs}")
+        jsons = sorted([p for p in glob.glob(os.path.join(runs, "run_results_*.json"))
+                        if os.path.getmtime(p) >= run_start_ts - 2],
+                       key=os.path.getmtime)
+        print(f"[walmart adapter] found {len(jsons)} run_results JSON files")
+        pairs = []
+        for j in jsons:
+            h = j.replace("run_results_", "search_results_").replace(".json", ".html")
+            if os.path.exists(h):
+                pairs.append((j, h))
+                print(f"[walmart adapter] paired: {os.path.basename(j)} + {os.path.basename(h)}")
+            else:
+                print(f"[walmart adapter] missing HTML for: {os.path.basename(j)}")
+        print(f"[walmart adapter] returning {len(pairs)} pairs")
+        return pairs
+
+    def extract_images(self, json_path: str, html_path: str, ctx) -> Dict[str, Any]:
+        """
+        Extract images from Walmart HTML (screenshots already captured during scrape).
+        Returns: {"toa": int, "sky": int, "car": int, "log": str|None}
+        """
+        # Walmart captures screenshots during search_and_capture, so no additional extraction needed
+        # Just return counts based on what's in the runs directory
+        import glob
+        runs_dir = os.path.dirname(json_path)
+        
+        # Count existing screenshots by type
+        toa_count = len(glob.glob(os.path.join(runs_dir, "*_top_banner_*.png")))
+        sba_count = len(glob.glob(os.path.join(runs_dir, "*_sba_*.png")))
+        tile_count = len(glob.glob(os.path.join(runs_dir, "*_tile_takeover_*.png")))
+        sbv_count = len(glob.glob(os.path.join(runs_dir, "*_sbv_*.png")))
+        
+        total = toa_count + sba_count + tile_count + sbv_count
+        
+        return {
+            "toa": toa_count,
+            "sky": sba_count + tile_count,  # Map to "sky" for GUI compatibility
+            "car": sbv_count,  # Map to "car" for GUI compatibility
+            "log": None
+        }
+
 
 # Register on import
 register(WalmartAdapter())

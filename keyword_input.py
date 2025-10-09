@@ -887,7 +887,8 @@ class KeywordInputApp:
             self.status_label.config(text=f"Scraping {i+1}/{len(keywords)}: {keyword}")
             self.root.update()
 
-            max_retries = 3
+            # Force single-shot runs globally (no retries)
+            max_retries = 1
             retry_count = 0
             scraped = False
 
@@ -964,7 +965,8 @@ class KeywordInputApp:
         self.status_label.config(text="Processing saved HTML files...")
         self.root.update()
 
-        max_retries = 3
+        # Force single-shot runs globally (no retries)
+        max_retries = 1
         retry_count = 0
         post_success = False
         last_error = ""
