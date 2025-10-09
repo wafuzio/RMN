@@ -14,10 +14,88 @@ import requests
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from bs4 import BeautifulSoup
 from archived.kroger_ad_core import extract_ads_from_html, extract_common_words_and_phrases
 from urllib.parse import urljoin
+
+
+def _load_core_for_retailer(retailer: str):
+    """Load the appropriate ad_core module for the given retailer."""
+    retailer = (retailer or "").lower()
+    if retailer == "walmart":
+        from archived import walmart_ad_core as core
+        return core
+    # default to Kroger
+    from archived import kroger_ad_core as core
+    return core
+
+
+def process_html_to_run_results(runs_root: str, retailer: str, html_paths: List[str]) -> List[str]:
+    """
+    Parse the given HTML file(s) for `retailer`, write Kroger-shaped run_results JSON(s),
+    and return the list of created JSON file paths.
+    
+    This is a simplified version for Walmart that mirrors Kroger's JSON structure.
+    """
+    created = []
+    core = _load_core_for_retailer(retailer)
+
+    for html_path in html_paths:
+        try:
+            with open(html_path, "r", encoding="utf-8") as f:
+                html = f.read()
+        except Exception as e:
+            # skip unreadable files
+            continue
+
+        # Derive keyword & timestamp from filename if present, else fallback
+        base = os.path.basename(html_path)
+        # expected: search_results_{clean_kw}_{run_ts}.html
+        parts = base.replace(".html","").split("_")
+        # safe fallback
+        keyword = "search"
+        run_ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+        if len(parts) >= 3 and parts[0] == "search" and parts[1] == "results":
+            # join keyword parts except "search","results" and last timestamp
+            if len(parts) > 3:
+                keyword = "_".join(parts[2:-1])
+            else:
+                keyword = parts[2]
+            run_ts = parts[-1]
+        
+        # Build a core-level single result
+        result = core.extract_ads_from_html(
+            html=html,
+            keyword=keyword.replace("_"," "),
+            timestamp=run_ts,
+            source_file=html_path,
+        )
+
+        # Build the top-level Kroger-shaped JSON with a single results entry
+        clean_kw = (result.get('search_term') or result.get('keyword') or 'search').replace(' ', '_').lower()
+        results_path = os.path.join(runs_root, f"run_results_{clean_kw}_{run_ts}.json")
+
+        run_results = {
+            "count": result.get('count', 0),
+            "keyword": result.get('keyword'),
+            "search_term": result.get('search_term'),
+            "timestamp": result.get('timestamp'),
+            "source_file": result.get('source_file'),
+            "results": [result],
+            "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        try:
+            with open(results_path, "w", encoding="utf-8") as f:
+                json.dump(run_results, f, indent=2)
+            created.append(results_path)
+        except Exception:
+            continue
+
+    return created
+
 
 # Import for TOA image capture
 try:

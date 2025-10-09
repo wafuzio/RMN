@@ -10,6 +10,7 @@ import collections
 import sys
 import random
 import inspect
+import re
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -521,6 +522,17 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
                 launch_options['proxy'] = proxy_config
             ctx = playwright.chromium.launch_persistent_context(**launch_options)
             print(f"✅ Using real Chrome (correct JA3 fingerprint)")
+            
+            # CRITICAL: Force navigator.webdriver to be undefined (not true)
+            # With persistent context, ignore_default_args doesn't reliably clear it
+            # This minimal init script prevents PX from seeing webdriver=true
+            ctx.add_init_script("""
+                // Make navigator.webdriver be undefined rather than true
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+            """)
+            
         except Exception as e:
             # CRITICAL: Do NOT fall back to Chromium - bail instead
             # Chromium has wrong JA3/CH fingerprint = instant PX detection
@@ -1106,6 +1118,30 @@ def _on_blocked(url: str) -> bool:
     return "walmart.com/blocked" in (url or "").lower()
 
 
+def _wait_for_search_transition(page, timeout_ms=20000):
+    """
+    Wait for any of:
+      - URL contains '/search' (supports pushState, no navigation event)
+      - Results DOM appears (any selector in RESULT_READY_SELECTORS)
+    Returns: 'url' | 'dom' | None
+    """
+    deadline = time.time() + timeout_ms/1000.0
+    while time.time() < deadline:
+        try:
+            if re.search(r"/search(?:\?|$)", page.url):
+                return "url"
+        except Exception:
+            pass
+        for sel in RESULT_READY_SELECTORS:
+            try:
+                if page.locator(sel).count() > 0:
+                    return "dom"
+            except Exception:
+                pass
+        time.sleep(0.2)
+    return None
+
+
 def eval_safe(page, script, label, SL=None):
     """
     Safe page.evaluate wrapper that logs errors instead of crashing.
@@ -1666,12 +1702,42 @@ def search_and_capture(
         if 'session=' in proxy_config.get('server', ''):
             SL.log("proxy_config", server=proxy_config['server'], has_session=True)
     
-    # Cookie diagnostic helper
+    # Cookie diagnostic helpers
     def _cookie_names(ctx):
         try:
             return sorted(set(c["name"] for c in ctx.cookies("https://www.walmart.com/")))
         except:
             return []
+    
+    def _cookie_snapshot(ctx):
+        """Multi-domain cookie snapshot to diagnose domain/partition issues."""
+        try:
+            by_www = ctx.cookies("https://www.walmart.com/")
+        except Exception:
+            by_www = []
+        try:
+            by_root = ctx.cookies("https://walmart.com/")
+        except Exception:
+            by_root = []
+        try:
+            all_c = ctx.cookies()
+        except Exception:
+            all_c = []
+        
+        names_www = sorted({c.get("name") for c in by_www})
+        names_root = sorted({c.get("name") for c in by_root})
+        names_all = sorted({c.get("name") for c in all_c})
+        
+        return {
+            "by_www": names_www[:12],
+            "by_root": names_root[:12],
+            "all": names_all[:12],
+            "counts": {
+                "by_www": len(names_www),
+                "by_root": len(names_root),
+                "all": len(names_all),
+            }
+        }
     
     # Initialize browser/context/page to None to prevent UnboundLocalError
     page: Optional[Page] = None
@@ -1941,6 +2007,19 @@ def search_and_capture(
                     SL.log("navigator_diag", **diag)
                     print(f"[diag] {diag}")
                     env_info["navigator_diag"] = diag
+                    
+                    # CRITICAL: Bail if webdriver is still true (init script failed)
+                    if diag.get("webdriver"):
+                        SL.log("fingerprint_mismatch", webdriver=True, fatal=True)
+                        say("error", f"[{retailer}] ❌ webdriver=true detected — aborting to avoid PX hard block")
+                        
+                        bail_reason = "fingerprint_mismatch"
+                        meta["bail"] = bail_reason
+                        meta["steps_log"] = SL.path
+                        report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                        _write_run_report(base_dir, report)
+                        return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
+                        
             except Exception:
                 pass
             
@@ -2008,6 +2087,10 @@ def search_and_capture(
                     search_box.click()
                     random_delay(0.2, 0.4)
                     
+                    # CRITICAL: Longer dwell before typing to add entropy
+                    # Reduces "home → submit in ~4s" uniformity that PX detects
+                    time.sleep(random.uniform(2.0, 4.0))
+                    
                     # Human typing with natural delays
                     say("info", f"[{retailer}] Typing keyword: {keyword}")
                     human_type(search_box, keyword)
@@ -2019,82 +2102,94 @@ def search_and_capture(
                     if random.random() < 0.4:
                         micro_mouse_attention(page, around=(5, 9), jitter=6)
                     
-                    # Prefer clicking the search button (varies per build)
-                    clicked = False
+                    # Prefer submitting with a real transition (nav OR url OR DOM)
+                    submitted = False
+                    submit_start = time.time()
+                    SL.log("submit_wait_begin", ts=submit_start)
+                    
+                    def _log_after_submit(tag):
+                        px_now = _still_px_modal(page)
+                        ms_since_submit = int((time.time() - submit_start) * 1000)
+                        cookies_now = sorted(set(c["name"] for c in page.context.cookies("https://www.walmart.com/")))
+                        SL.log("after_submit", method=tag, px_visible=bool(px_now),
+                               ms_since_submit=ms_since_submit, url=page.url, cookies=cookies_now[:6])
+                    
+                    # 1) Try a visible search button
+                    btn = None
                     for btn_sel in [
                         'button[aria-label="Search"]',
                         'button[type="submit"]',
                         '[data-automation-id="global-search-submit"]',
-                        'button:has(svg[aria-hidden="true"])'  # fallback icon button
+                        'button:has(svg[aria-hidden="true"])'
                     ]:
-                        btn = page.locator(btn_sel).first
-                        if btn.count() > 0:
-                            # small move then click; not too precise
-                            try:
-                                box = btn.bounding_box()
-                                if box:
-                                    mx = box["x"] + box["width"] * random.uniform(0.35, 0.65)
-                                    my = box["y"] + box["height"] * random.uniform(0.35, 0.65)
-                                    page.mouse.move(mx, my, steps=random.randint(6, 12))
-                                random_delay(0.05, 0.12)
-                                # Track submit for forensics
-                                SUBMIT["method"] = "button"
-                                SUBMIT["t"] = time.time()
-                                btn.click()
-                                clicked = True
-                                say("info", f"[{retailer}] Clicked search button")
-                                break
-                            except:
-                                continue
+                        candidate = page.locator(btn_sel).first
+                        if candidate.count() > 0:
+                            btn = candidate
+                            break
                     
-                    if not clicked:
-                        # Try typeahead suggestion click before Enter fallback
-                        if random.random() < 0.35:
-                            sug = page.locator('[data-automation-id="typeahead"] li, [data-testid="typeahead-suggestion"]').first
-                            if sug.count() > 0:
-                                try:
-                                    sug.click()
-                                    page.wait_for_load_state('domcontentloaded')
-                                    search_typed = True
-                                    say("info", f"[{retailer}] Clicked typeahead suggestion")
-                                    clicked = True
-                                except:
-                                    pass
+                    if btn and btn.count() > 0:
+                        try:
+                            box = btn.bounding_box()
+                            if box:
+                                mx = box["x"] + box["width"] * random.uniform(0.35, 0.65)
+                                my = box["y"] + box["height"] * random.uniform(0.35, 0.65)
+                                page.mouse.move(mx, my, steps=random.randint(6, 12))
+                            random_delay(0.05, 0.12)
+                        except:
+                            pass
                         
-                        if not clicked:
-                            # Final fallback to Enter
-                            say("info", f"[{retailer}] Pressing Enter (button not found)")
-                            # Track submit for forensics
-                            SUBMIT["method"] = "enter"
-                            SUBMIT["t"] = time.time()
-                            search_box.press("Enter")
+                        SUBMIT["method"] = "button"; SUBMIT["t"] = submit_start
+                        try:
+                            btn.click()
+                            trans = _wait_for_search_transition(page, timeout_ms=20000)  # 20s SPA-friendly wait
+                            if trans:
+                                submitted = True
+                                _log_after_submit(f"button:{trans}")
+                        except Exception:
+                            pass
                     
-                    if not search_typed:
-                        page.wait_for_load_state('domcontentloaded')
-                        _nav_mark_done(SL=SL)
-                        # After submit, sample PX status and log timing
-                        px_now = _still_px_modal(page)
-                        ms_since_submit = int((time.time() - (SUBMIT.get("t") or time.time())) * 1000)
-                        cookies_now = sorted(set(c["name"] for c in page.context.cookies("https://www.walmart.com/")))
-                        SL.log("after_submit", method=SUBMIT.get("method","?"), px_visible=bool(px_now),
-                               ms_since_submit=ms_since_submit, url=page.url, cookies=cookies_now[:6])
-                        timings["after_submit_px_ms"] = ms_since_submit if px_now else None
-                        if px_now and DEBUG.break_on_px:
-                            print("\n🔴 PX appeared right after submit")
-                            import pdb; pdb.set_trace()
+                    # 2) Fallback: press Enter (use page.keyboard, not element.press), allow a second Enter
+                    if not submitted:
+                        try:
+                            search_box.focus()
+                        except Exception:
+                            try:
+                                search_box.click()
+                            except:
+                                pass
+                        SUBMIT["method"] = "enter"; SUBMIT["t"] = submit_start
+                        try:
+                            page.keyboard.press("Enter")
+                            trans = _wait_for_search_transition(page, timeout_ms=20000)
+                            if not trans:
+                                time.sleep(random.uniform(0.25, 0.6))  # sometimes first Enter just closes typeahead
+                                page.keyboard.press("Enter")
+                                trans = _wait_for_search_transition(page, timeout_ms=20000)
+                            if trans:
+                                submitted = True
+                                _log_after_submit(f"enter:{trans}")
+                        except Exception:
+                            pass
+                    
+                    SL.log("submit_wait_end", elapsed_ms=int((time.time()-submit_start)*1000))
+                    
+                    # 3) No transition? Bail (do NOT goto /search)
+                    if not submitted:
+                        SL.log("submit_no_nav", note="No form-driven navigation or SPA transition after button/enter")
+                        say("error", f"[{retailer}] No navigation after button/enter; bailing to avoid PX trip")
+                        bail_reason = "search_submit_no_nav"
+                        meta["bail"] = bail_reason
+                        meta["steps_log"] = SL.path
+                        report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                        _write_run_report(base_dir, report)
+                        return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
+                    
                     search_typed = True
                     say("info", f"[{retailer}] Search completed via typing")
                 else:
                     say("warn", f"[{retailer}] Search box not found, using direct navigation")
             except Exception as e:
                 say("warn", f"[{retailer}] Search typing failed: {e}")
-            
-            # Fallback: direct navigation if typing failed
-            if not search_typed:
-                say("info", f"[{retailer}] Direct navigation to search URL")
-                page.goto(url, wait_until="domcontentloaded")
-                _nav_mark_done(SL=SL)
-                say("info", f"[{retailer}] Navigation completed")
             
             # Check for PX challenge after search navigation
             if _still_px_modal(page):
@@ -2217,8 +2312,11 @@ def search_and_capture(
                     _write_run_report(base_dir, report)
                     return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
             
-            # Save HTML
-            html_path = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_search.html"))
+            # Save HTML with Kroger-style filename (standardized for GUI)
+            run_ts_file = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            clean_kw_for_file = (keyword or "search").replace(" ", "_").lower()
+            html_path = os.path.join(base_dir, f"search_results_{clean_kw_for_file}_{run_ts_file}.html")
+            
             try:
                 content = page.content()
                 with open(html_path, "w", encoding="utf-8") as f:
@@ -2228,6 +2326,25 @@ def search_and_capture(
                 say("info", f"[{retailer}] HTML captured (1/1)")
             except Exception as e:
                 say("warn", f"[{retailer}] HTML save failed: {e}")
+            
+            # Post-process saved HTML into Kroger-shaped run_results JSON
+            try:
+                # Add project root to import path if needed
+                project_root = os.path.dirname(os.path.abspath(__file__))
+                if project_root not in sys.path:
+                    sys.path.insert(0, project_root)
+                from process_saved_html import process_html_to_run_results
+                created_json = process_html_to_run_results(
+                    runs_root=base_dir,
+                    retailer="walmart",
+                    html_paths=[html_path],
+                )
+                if created_json:
+                    SL.log("run_results_created", files=created_json)
+                    say("info", f"[{retailer}] Created run_results JSON: {len(created_json)} file(s)")
+            except Exception as e:
+                SL.log("run_results_post_process_error", error=str(e))
+                say("warn", f"[{retailer}] run_results post-process failed: {e}")
             
             # 1) Programmatic banners
             n, s = _capture_elements(page, base_dir, keyword, "top_banner", SELECTORS["top_banner"], meta, SL=SL)
@@ -2304,11 +2421,23 @@ def search_and_capture(
 
             if ctx_alive:
                 try:
+                    # Multi-domain cookie snapshot to diagnose domain/partition issues
+                    snap = _cookie_snapshot(ctx)
+                    SL.log("cookies_post_multi", 
+                           by_www_count=snap["counts"]["by_www"],
+                           by_root_count=snap["counts"]["by_root"],
+                           all_count=snap["counts"]["all"],
+                           by_www_names=snap["by_www"],
+                           by_root_names=snap["by_root"],
+                           all_names=snap["all"])
+                    
+                    # Keep original for back-compat metrics
                     post_cookies = _cookie_names(ctx)
                     print(f"[cookies] post-run walmart.com: {len(post_cookies)} names={post_cookies[:8]}")
+                    print(f"[cookies] multi-domain: www={snap['counts']['by_www']}, root={snap['counts']['by_root']}, all={snap['counts']['all']}")
                     SL.log("cookies_post", count=len(post_cookies), names=post_cookies[:8])
-                    cookies_info["post_count"] = len(post_cookies)
-                    cookies_info["post_names"] = post_cookies[:12]
+                    cookies_info["post_count"] = snap["counts"]["by_www"]
+                    cookies_info["post_names"] = snap["by_www"]
                 except Exception as e:
                     print(f"[cookies] post-run failed: {e}")
 
