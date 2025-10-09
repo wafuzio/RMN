@@ -45,14 +45,35 @@ DEFAULT_HEADERS = {
 }
 
 
+def infer_retailer_from_output(output_dir: str) -> str:
+    """Infer retailer from output directory path (output/<retailer>/...)."""
+    parts = os.path.normpath(output_dir).split(os.sep)
+    try:
+        idx = parts.index("output")
+        return parts[idx + 1]
+    except Exception:
+        return ""
+
+
+def retailer_homepage(retailer: str) -> str:
+    """Return homepage URL for the given retailer."""
+    return {
+        "kroger": "https://www.kroger.com/",
+        "amazon": "https://www.amazon.com/",
+        "instacart": "https://www.instacart.com/",
+        "walmart": "https://www.walmart.com/",
+    }.get(retailer, "about:blank")
+
+
 def load_srp_url(run_json_path: str) -> str:
     """Load the SRP URL from the run JSON to use as referer and for cookie seeding."""
     try:
         data = json.loads(pathlib.Path(run_json_path).read_text())
-        # Try common field names
-        for k in ("source_url", "srp_url", "page_url", "url"):
-            if k in data:
-                return data[k]
+        # Try common field names (prioritize explicit url fields)
+        for k in ("url", "srp_url", "source_url", "page_url"):
+            val = data.get(k)
+            if isinstance(val, str) and val.strip():
+                return val
     except Exception as e:
         print(f"[warn] Could not load SRP URL from JSON: {e}")
     return ""
@@ -355,6 +376,10 @@ def process_images(
     srp_url = load_srp_url(args.json) or ""
     print(f"[session] srp_url={srp_url or '<none>'}")
     
+    # Infer retailer from output directory for fallback homepage
+    retailer = infer_retailer_from_output(output_dir)
+    print(f"[session] retailer={retailer or '<unknown>'}")
+    
     if bypass_locks:
         print("⚠️ Bypassing browser lock as requested")
         # Run without the browser lock
@@ -394,14 +419,22 @@ def process_images(
                     page.set_default_timeout(15000)
                     page.set_default_navigation_timeout(45000)
                     
-                    # Seed cookies robustly - try multiple URLs
-                    seed_candidates = [
-                        srp_url,
-                        "https://www.kroger.com/search?query=milk",  # lighter than root
-                        "https://www.kroger.com/",  # root as last resort
-                    ]
+                    # Seed cookies robustly - try SRP URL first, then retailer homepage
+                    seed_candidates = [srp_url] if srp_url else []
+                    seed_candidates.append(retailer_homepage(retailer))
+                    
+                    # Optional override for devs
+                    override_seed = os.environ.get("SEED_URL_OVERRIDE")
+                    if override_seed:
+                        seed_candidates.insert(0, override_seed)
+                    
+                    if not srp_url:
+                        print("⚠️ No SRP URL found in JSON; seeding cookies with retailer homepage")
+                    else:
+                        print(f"Seeding cookies from SRP URL: {srp_url}")
+                    
                     cookies_ok = False
-                    for seed in [u for u in seed_candidates if u]:
+                    for seed in seed_candidates:
                         try:
                             print(f"[session] Seeding cookies from: {seed}")
                             page.goto(seed, wait_until="commit", timeout=60000)  # commit is more reliable
@@ -431,15 +464,23 @@ def process_images(
                         user_agent=REAL_UA,
                     )
                     
-                    # Seed cookies robustly - try multiple URLs
-                    seed_candidates = [
-                        srp_url,
-                        "https://www.kroger.com/search?query=milk",  # lighter than root
-                        "https://www.kroger.com/",  # root as last resort
-                    ]
+                    # Seed cookies robustly - try SRP URL first, then retailer homepage
+                    seed_candidates = [srp_url] if srp_url else []
+                    seed_candidates.append(retailer_homepage(retailer))
+                    
+                    # Optional override for devs
+                    override_seed = os.environ.get("SEED_URL_OVERRIDE")
+                    if override_seed:
+                        seed_candidates.insert(0, override_seed)
+                    
+                    if not srp_url:
+                        print("⚠️ No SRP URL found in JSON; seeding cookies with retailer homepage")
+                    else:
+                        print(f"Seeding cookies from SRP URL: {srp_url}")
+                    
                     cookies_ok = False
                     tmp = context.new_page()
-                    for seed in [u for u in seed_candidates if u]:
+                    for seed in seed_candidates:
                         try:
                             print(f"[session] Seeding cookies from: {seed}")
                             tmp.goto(seed, wait_until="commit", timeout=60000)  # commit is more reliable
@@ -583,14 +624,22 @@ def process_images(
                         page.set_default_timeout(15000)
                         page.set_default_navigation_timeout(45000)
                         
-                        # Seed cookies robustly - try multiple URLs
-                        seed_candidates = [
-                            srp_url,
-                            "https://www.kroger.com/search?query=milk",  # lighter than root
-                            "https://www.kroger.com/",  # root as last resort
-                        ]
+                        # Seed cookies robustly - try SRP URL first, then retailer homepage
+                        seed_candidates = [srp_url] if srp_url else []
+                        seed_candidates.append(retailer_homepage(retailer))
+                        
+                        # Optional override for devs
+                        override_seed = os.environ.get("SEED_URL_OVERRIDE")
+                        if override_seed:
+                            seed_candidates.insert(0, override_seed)
+                        
+                        if not srp_url:
+                            print("⚠️ No SRP URL found in JSON; seeding cookies with retailer homepage")
+                        else:
+                            print(f"Seeding cookies from SRP URL: {srp_url}")
+                        
                         cookies_ok = False
-                        for seed in [u for u in seed_candidates if u]:
+                        for seed in seed_candidates:
                             try:
                                 print(f"[session] Seeding cookies from: {seed}")
                                 page.goto(seed, wait_until="commit", timeout=60000)  # commit is more reliable

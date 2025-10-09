@@ -77,12 +77,24 @@ def process_html_to_run_results(runs_root: str, retailer: str, html_paths: List[
         clean_kw = (result.get('search_term') or result.get('keyword') or 'search').replace(' ', '_').lower()
         results_path = os.path.join(runs_root, f"run_results_{clean_kw}_{run_ts}.json")
 
+        # Build search URL from keyword for cookie seeding
+        keyword_for_url = result.get('search_term') or result.get('keyword') or ''
+        if retailer == "kroger":
+            search_url = f"https://www.kroger.com/search?query={keyword_for_url.replace(' ', '+')}" if keyword_for_url else ""
+        elif retailer == "walmart":
+            search_url = f"https://www.walmart.com/search?q={keyword_for_url.replace(' ', '+')}" if keyword_for_url else ""
+        else:
+            search_url = ""
+
         run_results = {
             "count": result.get('count', 0),
             "keyword": result.get('keyword'),
             "search_term": result.get('search_term'),
             "timestamp": result.get('timestamp'),
             "source_file": result.get('source_file'),
+            "retailer": retailer,  # Add retailer for downstream tools
+            "url": search_url,  # Primary URL for extractors
+            "srp_url": search_url,  # Alias for compatibility
             "results": [result],
             "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
@@ -424,12 +436,19 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
             print(f"⚠️ Could not place HTML into runs/: {e}")
 
         # Build run-level JSON with top-level metadata and a single results entry
+        # Build search URL from keyword for cookie seeding (Kroger-specific function)
+        keyword_for_url = result.get('search_term') or result.get('keyword') or ''
+        search_url = f"https://www.kroger.com/search?query={keyword_for_url.replace(' ', '+')}" if keyword_for_url else ""
+        
         run_results = {
             "count": result.get('count', 0),
             "keyword": result.get('keyword'),
             "search_term": result.get('search_term'),
             "timestamp": result.get('timestamp'),
             "source_file": result.get('source_file'),
+            "retailer": "kroger",  # Add retailer for downstream tools
+            "url": search_url,  # Primary URL for extractors
+            "srp_url": search_url,  # Alias for compatibility
             "results": [result],
             "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
