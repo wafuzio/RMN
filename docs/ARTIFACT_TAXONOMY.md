@@ -76,6 +76,12 @@ output/instacart/<client>/
 └── runs/                     # Run artifacts (JSON, HTML)
 ```
 
+**⚠️ CURRENT ISSUE:** Instacart JSON structure doesn't match other retailers:
+- Uses `title` field instead of `brand`
+- Missing `image_path` fields - images are saved but not referenced in JSON
+- API workaround: Flask API now maps `title` → `brand` for compatibility
+- **TODO:** Update Instacart scraper to add image path references to JSON
+
 ### Amazon
 ```
 output/amazon/<client>/
@@ -96,6 +102,8 @@ output/walmart/<client>/
 ├── Main/             # Main search results
 └── runs/             # Run artifacts (JSON, HTML)
 ```
+
+**⚠️ CURRENT ISSUE:** Walmart scraper is putting ALL images inside `runs/<timestamp>/` subdirectories instead of organizing them into ad type folders. Images should be moved to their respective folders (Top_Banner/, SBA/, etc.) and only JSON/HTML/logs should remain in runs/.
 
 ### Default (New Retailers)
 ```
@@ -313,6 +321,117 @@ def test_taxonomy_enforcement():
         assert "Skyscraper" not in created
         assert "Carousel" not in created
 ```
+
+---
+
+## Known Issues & Workarounds
+
+### Issue 1: Walmart Images in runs/ Directory
+
+**Problem:** Walmart scraper saves all images inside `runs/<timestamp>/` subdirectories:
+```
+runs/20251010150112/
+├── walmart_packaged_deli_meat_sba_1.png      ❌ Should be in SBA/
+├── walmart_packaged_deli_meat_sbv_1.png      ❌ Should be in SBV/
+├── walmart_packaged_deli_meat_sbv_1.mp4      ❌ Should be in SBV/
+├── walmart_packaged_deli_meat_tile_takeover_1.png  ❌ Should be in Tile_Takeover/
+├── run_results_*.json                        ✅ Correct location
+├── run_report.json                           ✅ Correct location
+└── run_report.md                             ✅ Correct location
+```
+
+**Expected:**
+```
+SBA/walmart_packaged_deli_meat_sba_1.png
+SBV/walmart_packaged_deli_meat_sbv_1.png
+SBV/walmart_packaged_deli_meat_sbv_1.mp4
+Tile_Takeover/walmart_packaged_deli_meat_tile_takeover_1.png
+runs/20251010150112/
+├── run_results_*.json
+├── run_report.json
+└── run_report.md
+```
+
+**Root Cause:** Walmart scraper doesn't use the taxonomy-aware path functions.
+
+**Fix Required:** Update `walmart_search_and_capture.py` to:
+1. Use `core.paths.output_dir_for()` to get base directory
+2. Save images to ad-type-specific folders (SBA/, SBV/, etc.)
+3. Update JSON to reference correct image paths
+4. Keep only JSON/HTML/logs in runs/
+
+**Workaround:** Flask API uses fuzzy matching to find images in runs/ subdirectories.
+
+---
+
+### Issue 2: Instacart Missing Image Paths in JSON
+
+**Problem:** Instacart JSON doesn't reference saved images:
+```json
+{
+  "type": "Shoppable Display Ad",
+  "title": "Applegate Breakfast Favorites",
+  "selector": "div.e-1qzz7bi",
+  "id": "0199cfb9-116c-7219-ac43-e90ad4342dcb"
+  // ❌ No image_path field
+}
+```
+
+Images exist: `Shoppable_Display_Ads/ShoppableDisplayAd_packaged_deli_meat_20251010_150339_1.png`
+
+**Expected:**
+```json
+{
+  "type": "Shoppable Display Ad",
+  "title": "Applegate Breakfast Favorites",
+  "image_path": "Shoppable_Display_Ads/ShoppableDisplayAd_packaged_deli_meat_20251010_150339_1.png"
+}
+```
+
+**Root Cause:** Instacart scraper saves images but doesn't update JSON with paths.
+
+**Fix Required:** Update Instacart scraper to:
+1. Add `image_path` field to JSON when images are saved
+2. Optionally: Add `brand` field (currently uses `title`)
+
+**Workaround:** Flask API maps `title` → `brand` for compatibility.
+
+---
+
+### Issue 3: Kroger Missing Image Paths for Some Ads
+
+**Problem:** Kroger JSON has UUID-based paths that don't match actual saved files:
+```json
+{
+  "type": "Skyscraper",
+  "image_url": "https://www.kroger.com/.../beb69322-77c6-4d0c-b131-a7f6390328c6.jpg",
+  "skyscraper_image_path": "output/runs/Skyscraper/skyscraper_beb69322-..._ice_cream_cones_2025-10-09_08-56-54.jpg"
+}
+```
+
+Actual file: `Skyscraper/skyscraper_ice_cream_cones_2025-10-09_08-56-21_1.png`
+
+**Root Cause:** Path in JSON is outdated or incorrect.
+
+**Workaround:** Flask API uses fuzzy matching by ad type to find images.
+
+---
+
+## Compliance Checklist
+
+When adding or updating a scraper, ensure:
+
+- [ ] Uses `core.paths.output_dir_for()` to get base directory
+- [ ] Saves images to ad-type-specific folders (not runs/)
+- [ ] Updates JSON with correct `image_path` references
+- [ ] Uses `brand` field (not retailer-specific field names)
+- [ ] Saves only JSON/HTML/logs to runs/ directory
+- [ ] Follows naming convention: `<ad_type>_<keyword>_<timestamp>_<index>.<ext>`
+- [ ] Tests with `utils.path_taxonomy.allowed_subdirs()` to verify folders
+
+---
+
+**Last Updated:** 2025-10-10
 
 ## References
 

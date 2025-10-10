@@ -1,0 +1,49 @@
+import { cn } from "@/lib/utils";
+import { Retailer } from "@/lib/api";
+import { RetailerLogo } from "@/components/dashboard/RetailerLogo";
+
+const RETAILERS: { id: Retailer; label: string; }[] = [
+  { id: "kroger", label: "Kroger" },
+  { id: "amazon", label: "Amazon" },
+  { id: "instacart", label: "Instacart" },
+  { id: "walmart", label: "Walmart" },
+];
+
+export function RetailerSelector({ value, onChange, enabledRetailers }: { value: Retailer[]; onChange: (r: Retailer[])=>void; enabledRetailers: Set<string>; }) {
+  const toggleRetailer = (retailer: Retailer) => {
+    if (value.includes(retailer)) {
+      // Remove if already selected (but keep at least one)
+      if (value.length > 1) {
+        onChange(value.filter(r => r !== retailer));
+      }
+    } else {
+      // Add to selection
+      onChange([...value, retailer]);
+    }
+  };
+
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-1" role="group" aria-label="Select retailers">
+      {RETAILERS.map(r => {
+        const selected = value.includes(r.id);
+        const enabled = enabledRetailers.has(r.id);
+        return (
+          <button
+            key={r.id}
+            onClick={() => enabled && toggleRetailer(r.id)}
+            aria-pressed={selected}
+            aria-label={r.label}
+            className={cn(
+              "relative w-[120px] h-[80px] card-surface flex items-center justify-center rounded-xl select-none",
+              "transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+              enabled ? "hover:scale-[1.03]" : "opacity-40 cursor-not-allowed",
+              selected ? "ring-4 ring-[#3b82f6] shadow-[0_0_0_3px_rgba(59,130,246,0.4)] opacity-100" : "opacity-40",
+            )}
+          >
+            <RetailerLogo retailer={r.id} className="max-h-10 w-auto object-contain" />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
