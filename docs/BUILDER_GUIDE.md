@@ -612,6 +612,145 @@ Amazon_Scrape/
 
 ---
 
+## API Connection Status Map
+
+### ✅ Working Endpoints
+
+| Endpoint | Status | Notes |
+|----------|--------|-------|
+| `GET /health` | ✅ Working | Returns healthy status + 3 retailers |
+| `GET /api/retailers` | ✅ Working | Returns: kroger, instacart, walmart |
+| `GET /api/clients?retailer=<retailer>` | ✅ Working | All retailers return client lists |
+| `GET /api/runs?retailer=<retailer>&client=<client>` | ✅ Working | Handles nested directories (Walmart) |
+| `GET /api/terms?retailer=<retailer>&client=<client>` | ✅ Working | Scans all JSON structures |
+| `GET /api/ads/cards` | ✅ Working | Returns paginated ad cards |
+| `GET /api/image/<retailer>/<client>/<path:filename>` | ✅ Working | Serves images with path support |
+
+### 📊 Data Availability by Retailer
+
+#### Kroger (blue_bunny)
+- **Total Cards:** 193
+- **Images Available:** 2 files (1 Skyscraper, 1 Main screenshot)
+- **Issue:** 193 ad entries but only 2 actual images saved
+  - TOA: 1 ad, 0 images ❌
+  - Skyscraper: 2 ads, 1 image (50%) ⚠️
+  - CuratedCarousel: 190 ads, 190 image paths in JSON ✅ (but pointing to same file)
+
+#### Instacart (land_o_frost)
+- **Total Cards:** 14
+- **Images Available:** 7 files
+- **Migration Status:** ✅ Complete (5 images linked)
+  - Shoppable Display Ad: 2/2 with images ✅
+  - Display Ad: 1/1 with images ✅
+  - Shoppable Video Ad: 0/1 with images ❌
+  - Sponsored Label: 0/4 with images ❌
+
+#### Walmart (land_o_frost)
+- **Total Cards:** 6
+- **Images Available:** 8 files (including videos)
+- **Migration Status:** ✅ Complete (8 files moved)
+  - SBA: 2/2 with images ✅
+  - SBV: 2/2 with images ✅
+  - Tile Takeover: 2/2 with images ✅
+
+---
+
+## Troubleshooting Image Display Issues
+
+### Issue 1: Kroger - Multiple Ads, Few Images
+
+**Problem:** 193 ad cards but only 2 actual image files saved.
+
+**Root Cause:** Scraper is creating JSON entries for all ads but only downloading a few images.
+
+**Evidence:**
+```bash
+# JSON has 193 ads
+cat output/kroger/blue_bunny/runs/*.json | jq '.results[0].ads | length'
+# Output: 193
+
+# But only 2 image files exist
+find output/kroger/blue_bunny -name "*.png" -o -name "*.jpg" | wc -l
+# Output: 2
+```
+
+**Why Images Don't Show:**
+- TOA ads: No image saved at all
+- Skyscraper ads: 1 image for 2 ads (fuzzy matching returns same file)
+- Carousel ads: All 190 point to same carousel screenshot
+
+**Fix Required:** Update Kroger scraper to actually download/screenshot all ad images, not just create JSON entries.
+
+---
+
+### Issue 2: Instacart - Some Ad Types Have No Images
+
+**Problem:** Shoppable Video Ads and Sponsored Labels have no images.
+
+**Root Cause:** These ad types may not have downloadable images, or scraper doesn't capture them.
+
+**Evidence:**
+```json
+{
+  "type": "Shoppable Video Ad",
+  "title": "New York Bakery",
+  "selector": "div.e-1qzz7bi"
+  // No image_path field
+}
+```
+
+**Why Images Don't Show:**
+- Shoppable Video Ads: Likely video-only (no thumbnail saved)
+- Sponsored Labels: Text-only ads (no image to capture)
+
+**Fix Options:**
+1. Extract video thumbnails for Shoppable Video Ads
+2. Mark text-only ads in UI (don't show "No image" placeholder)
+3. Capture screenshots of ad containers
+
+---
+
+### Issue 3: Walmart - All Working ✅
+
+**Status:** Walmart images display correctly after migration.
+
+**Success Factors:**
+- Migration script moved all images to correct folders
+- JSON updated with `image_paths` mapping
+- API uses mapping to serve images
+- All ad types have images
+
+---
+
+## Image Display Checklist
+
+When debugging "No image" issues:
+
+1. **Check if image file exists:**
+   ```bash
+   find output/<retailer>/<client> -name "*.png" -o -name "*.jpg"
+   ```
+
+2. **Check JSON has image path:**
+   ```bash
+   cat output/<retailer>/<client>/runs/*.json | jq '.ads[] | select(.image_path)'
+   ```
+
+3. **Test API endpoint:**
+   ```bash
+   curl -I "http://localhost:5006/api/image/<retailer>/<client>/<filename>"
+   ```
+
+4. **Check fuzzy matching:**
+   - API tries to match by ad type if exact filename not found
+   - Multiple ads may get same image if only one file exists
+
+5. **Verify taxonomy compliance:**
+   - Images should be in ad-type folders (TOA/, SBA/, etc.)
+   - Not in runs/ subdirectories (except Walmart pre-migration)
+
+---
+
 ## Tips & Best Practices
 
 1. **Always use the restart script** - Prevents duplicate processes
