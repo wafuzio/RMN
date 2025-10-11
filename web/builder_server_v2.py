@@ -182,16 +182,25 @@ def api_runs():
             "count": 0
         })
     
-    # Find all run_results JSON files
-    files = sorted([
-        f for f in os.listdir(rdir)
-        if f.startswith("run_results_") and f.endswith(".json")
-    ], reverse=True)
+    # Find all run_results JSON files (handle both flat and nested structures)
+    files = []
+    for item in os.listdir(rdir):
+        item_path = os.path.join(rdir, item)
+        if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+            files.append((item, item_path))
+        elif os.path.isdir(item_path):
+            # Check subdirectories (Walmart structure)
+            for subitem in os.listdir(item_path):
+                if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                    files.append((subitem, os.path.join(item_path, subitem)))
+    
+    # Sort by filename (most recent first)
+    files = sorted(files, key=lambda x: x[0], reverse=True)
     
     runs = []
-    for fn in files[:200]:  # Limit to 200 most recent
+    for fn, fpath in files[:200]:  # Limit to 200 most recent
         try:
-            with open(os.path.join(rdir, fn), "r", encoding="utf-8") as f:
+            with open(fpath, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
             # Extract timestamp from various possible fields
@@ -240,17 +249,28 @@ def api_terms():
     terms = set()
     
     if os.path.isdir(rdir):
-        for fn in os.listdir(rdir):
-            if not fn.startswith("run_results_"):
-                continue
-            try:
-                with open(os.path.join(rdir, fn), "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                kw = (data.get("keyword") or data.get("search_term") or data.get("term") or "").strip()
-                if kw:
-                    terms.add(kw)
-            except Exception:
-                pass
+        # Handle both flat and nested structures
+        for item in os.listdir(rdir):
+            item_path = os.path.join(rdir, item)
+            files_to_check = []
+            
+            if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                files_to_check.append(item_path)
+            elif os.path.isdir(item_path):
+                # Check subdirectories (Walmart structure)
+                for subitem in os.listdir(item_path):
+                    if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                        files_to_check.append(os.path.join(item_path, subitem))
+            
+            for fpath in files_to_check:
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    kw = (data.get("keyword") or data.get("search_term") or data.get("term") or "").strip()
+                    if kw:
+                        terms.add(kw)
+                except Exception:
+                    pass
     
     return jsonify({
         "retailer": retailer,
@@ -301,17 +321,26 @@ def api_ads_cards():
             "total_cards": 0
         })
     
-    # Get all run files (newest first)
-    files = sorted([
-        f for f in os.listdir(rdir)
-        if f.startswith("run_results_") and f.endswith(".json")
-    ], reverse=True)
+    # Get all run files (newest first) - handle both flat and nested structures
+    files = []
+    for item in os.listdir(rdir):
+        item_path = os.path.join(rdir, item)
+        if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+            files.append((item, item_path))
+        elif os.path.isdir(item_path):
+            # Check subdirectories (Walmart structure)
+            for subitem in os.listdir(item_path):
+                if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                    files.append((subitem, os.path.join(item_path, subitem)))
+    
+    # Sort by filename (most recent first)
+    files = sorted(files, key=lambda x: x[0], reverse=True)
     
     # Collect all cards
     all_cards = []
-    for fn in files:
+    for fn, fpath in files:
         try:
-            with open(os.path.join(rdir, fn), "r", encoding="utf-8") as f:
+            with open(fpath, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
             run_kw = (data.get("keyword") or data.get("search_term") or "").lower()
@@ -328,6 +357,9 @@ def api_ads_cards():
                 for result in data.get("results", []):
                     ads.extend(result.get("ads", []))
             
+            # Get image_paths mapping if available (from migration)
+            image_paths_map = data.get("image_paths", {})
+            
             # Convert each ad to a card
             for idx, ad in enumerate(ads):
                 # Determine image filename - prioritize local saved paths over remote URLs
@@ -343,6 +375,17 @@ def api_ads_cards():
                 # Fallback to extracting from image_url if no path field found
                 if not filename and ad.get("image_url"):
                     filename = os.path.basename(str(ad.get("image_url")))
+                
+                # For Walmart: try to match ad type to image_paths mapping
+                if not filename and image_paths_map and retailer == "walmart":
+                    ad_type = ad.get("type", "").lower()
+                    keyword = data.get("keyword", data.get("search_term", "")).replace(" ", "_")
+                    
+                    # Try to find matching image in map
+                    for old_name, new_path in image_paths_map.items():
+                        if ad_type in old_name.lower() and keyword.split("_")[0] in old_name.lower():
+                            filename = new_path
+                            break
                 
                 # Build API image URL
                 image_api = f"/api/image/{retailer}/{client}/{filename}" if filename else ""
@@ -386,12 +429,13 @@ def api_ads_cards():
         "total_cards": len(all_cards)
     })
 
-@app.route("/api/image/<retailer>/<client>/<filename>", methods=["GET"])
+@app.route("/api/image/<retailer>/<client>/<path:filename>", methods=["GET"])
 def api_image(retailer, client, filename):
     """
     Serve ad image by trying all allowed subdirectories for the retailer
     
     This abstracts the folder differences (TOA vs Sponsored_Product vs Main)
+    Filename can include subdirectory path (e.g., "SBA/image.png")
     """
     retailer = retailer.lower()
     
@@ -401,13 +445,19 @@ def api_image(retailer, client, filename):
     except ValueError:
         return jsonify({"error": f"unknown retailer: {retailer}"}), 404
     
+    # If filename includes a path, try that first
+    if "/" in filename:
+        p = os.path.join(OUTPUT_ROOT, retailer, client, filename)
+        if os.path.exists(p):
+            return send_from_directory(os.path.dirname(p), os.path.basename(p))
+    
     # Priority order: specific ad types first, then Main, then runs
     priority_order = [
         leaf for leaf in leaves
         if leaf not in ["Main", "runs"]
     ] + ["Main"]
     
-    # First try exact filename match
+    # Try exact filename match in each directory
     for leaf in priority_order:
         p = os.path.join(OUTPUT_ROOT, retailer, client, leaf, filename)
         if os.path.exists(p):
