@@ -566,12 +566,16 @@ def extract_ads_from_html(html, client=None, search_term=None):
                 # Store the raw HTML for image capture
                 raw_html = str(div)
                 ad = extractor.extract(raw_html)
-                if not ad:
+                
+                # Check if extractor returned empty or incomplete data
+                needs_fallback = not ad or (ad.get('type') == 'TOA' and not ad.get('image_url') and not ad.get('href'))
+                
+                if needs_fallback:
                     # Fallback TOA capture to avoid losing the unit entirely
-                    log("TOA extractor returned None; using fallback capture")
-                    ad = {
-                        'type': 'TOA'
-                    }
+                    log("TOA extractor returned None or incomplete data; using fallback capture")
+                    if not ad:
+                        ad = {'type': 'TOA'}
+                    
                     # Try to extract image URL
                     img = div.select_one('img')
                     if img and img.get('src'):
@@ -582,20 +586,35 @@ def extract_ads_from_html(html, client=None, search_term=None):
                     if link and link.get('href'):
                         ad['href'] = link.get('href')
                     
-                    # Try to extract headline/message
-                    title = div.select_one('h2, h3, [class*="header"], [class*="headline"]')
-                    if title:
-                        ad['message'] = title.get_text(strip=True)
+                    # Try to extract headline/message from alt text if no message
+                    if not ad.get('message'):
+                        if img and img.get('alt'):
+                            # Parse alt text for message (e.g., "Advertisement: Message. Brand. Details.")
+                            alt_text = img.get('alt', '')
+                            if 'Advertisement:' in alt_text:
+                                # Extract the part after "Advertisement:"
+                                message_part = alt_text.split('Advertisement:', 1)[1].strip()
+                                ad['message'] = message_part
+                            else:
+                                ad['message'] = alt_text
+                    
+                    # Try to extract headline/message from elements
+                    if not ad.get('message'):
+                        title = div.select_one('h2, h3, [class*="header"], [class*="headline"]')
+                        if title:
+                            ad['message'] = title.get_text(strip=True)
                     
                     # Try to extract description/subtext
-                    desc = div.select_one('.espot-subText, [class*="subtext"], p, span')
-                    if desc:
-                        ad['description'] = desc.get_text(strip=True)
+                    if not ad.get('description'):
+                        desc = div.select_one('.espot-subText, [class*="subtext"], p, span')
+                        if desc:
+                            ad['description'] = desc.get_text(strip=True)
                     
                     # Try to extract CTA
-                    cta = div.select_one('.espot-linkText, a[role="button"], button')
-                    if cta:
-                        ad['cta'] = cta.get_text(strip=True)
+                    if not ad.get('cta'):
+                        cta = div.select_one('.espot-linkText, a[role="button"], button')
+                        if cta:
+                            ad['cta'] = cta.get_text(strip=True)
                 
                 # Include the raw HTML in the results so downstream image tooling works
                 ad['html'] = raw_html
