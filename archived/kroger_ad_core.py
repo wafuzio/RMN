@@ -80,9 +80,6 @@ try:
 except LookupError:
     nltk.download('punkt', quiet=True)
 
-# Make sure image directory exists
-os.makedirs("images", exist_ok=True)
-
 # Import all extractors to ensure they're registered
 import ad_extractors.toa_extractor
 import ad_extractors.skyscraper_extractor
@@ -617,6 +614,11 @@ def extract_ads_from_html(html, client=None, search_term=None):
                     log("Skipping skyscraper div misclassified as StandardTOA to avoid double-counting")
                     continue
                 
+                # Check if this div contains a StandardTOA inside it
+                if div.select_one('div[data-testid="StandardTOA"]'):
+                    log("Skipping skyscraper container that contains StandardTOA to avoid double-counting")
+                    continue
+                
                 filtered_skyscraper_divs.append(div)
             
             skyscraper_divs = filtered_skyscraper_divs
@@ -645,6 +647,9 @@ def extract_ads_from_html(html, client=None, search_term=None):
                     # Skip if the div itself is a StandardTOA
                     if div.get("data-testid") == "StandardTOA":
                         continue
+                    # Skip if contains StandardTOA
+                    if div.select_one('div[data-testid="StandardTOA"]'):
+                        continue
                     filtered_divs.append(div)
                 skyscraper_divs = filtered_divs
             
@@ -657,6 +662,9 @@ def extract_ads_from_html(html, client=None, search_term=None):
                     # Skip if the div itself is a StandardTOA
                     if div.get("data-testid") == "StandardTOA":
                         continue
+                    # Skip if contains StandardTOA
+                    if div.select_one('div[data-testid="StandardTOA"]'):
+                        continue
                     filtered_divs.append(div)
                 skyscraper_divs = filtered_divs
                 
@@ -667,6 +675,9 @@ def extract_ads_from_html(html, client=None, search_term=None):
                 for div in fallback_divs:
                     # Skip if the div itself is a StandardTOA
                     if div.get("data-testid") == "StandardTOA":
+                        continue
+                    # Skip if contains StandardTOA
+                    if div.select_one('div[data-testid="StandardTOA"]'):
                         continue
                     filtered_divs.append(div)
                 skyscraper_divs = filtered_divs

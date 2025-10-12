@@ -66,6 +66,7 @@ def process_html_to_run_results(runs_root: str, retailer: str, html_paths: List[
             run_ts = parts[-1]
         
         # Build a core-level single result
+        # Advertiser extraction now happens directly in walmart_ad_core.py
         result = core.extract_ads_from_html(
             html=html,
             keyword=keyword.replace("_"," "),
@@ -118,7 +119,28 @@ except ImportError:
     HAS_PIL = False
 
 # Constants
-DEFAULT_DIR = "output"
+DEFAULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
+
+
+def parse_output_segments(p: Path) -> tuple[Optional[str], Optional[str]]:
+    """
+    Given a path, return (retailer, client) if path contains output/<retailer>/<client>/...
+    Otherwise (None, None).
+    """
+    parts = list(p.resolve().parts)
+    try:
+        idx = parts.index("output")
+    except ValueError:
+        return None, None
+    
+    retailer = parts[idx + 1] if idx + 1 < len(parts) else None
+    client = parts[idx + 2] if idx + 2 < len(parts) else None
+    
+    # Harden: ignore when 'runs' or None is in either slot
+    if retailer in (None, "runs") or client in (None, "runs"):
+        return None, None
+    
+    return retailer, client
 
 def extract_toa_images(json_file, html_file=None, client_name=None, output_override=None):
     """
@@ -258,25 +280,27 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
     
     processed = 0
 
-    def detect_client_from_path(html_path: str, fallback_output_dir: Optional[str]) -> Optional[str]:
+    def detect_client_from_path_local(html_path: str, fallback_output_dir: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+        """
+        Return (retailer, client) parsed from html_path or fallback_output_dir.
+        """
         try:
-            p = Path(html_path).resolve()
-            parts = list(p.parts)
-            if "output" in parts:
-                idx = parts.index("output")
-                if idx + 1 < len(parts):
-                    return parts[idx + 1]
+            r, c = parse_output_segments(Path(html_path))
+            if r and c:
+                return r, c
         except Exception:
             pass
-        # Fallback to output_dir if it already points to output/<client>
+        
+        # Try fallback_output_dir if it already points under output/<retailer>/<client>
         try:
             if fallback_output_dir:
-                op = Path(fallback_output_dir).resolve()
-                if op.name != "output" and op.parent.name == "output":
-                    return op.name
+                r, c = parse_output_segments(Path(fallback_output_dir))
+                if r and c:
+                    return r, c
         except Exception:
             pass
-        return None
+        
+        return None, None
 
     def find_runs_root_from_html(html_path: str) -> Optional[str]:
         try:
@@ -289,45 +313,42 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
         except Exception:
             return None
 
-    def compute_runs_root(client_name: Optional[str], output_dir: Optional[str]) -> str:
-        base_out = output_dir or DEFAULT_DIR
-        if client_name:
-            base = Path(base_out).resolve()
-            # Check if output_dir already includes the client name at the end
-            # Handles both: output/<client> and output/<retailer>/<client>
-            if base.name == client_name:
-                return str(base / "runs")
-            # Otherwise, join output/<client>/runs relative to base_out
-            return str(Path(base_out).resolve() / client_name / "runs")
-        # No client detected; fallback to output/runs
-        return str(Path(base_out).resolve() / "runs")
+    def compute_client_root_local(retailer: Optional[str], client: Optional[str], output_dir: Optional[str]) -> str:
+        """
+        Return absolute path to output/<retailer>/<client>.
+        If unknown, return output_dir or DEFAULT_DIR as last resort.
+        """
+        base = Path(output_dir or DEFAULT_DIR).resolve()
+        if retailer and client:
+            # If base already is .../output/<retailer>/<client>, return as-is
+            parts = list(base.parts)
+            try:
+                idx = parts.index("output")
+                if idx + 2 < len(parts) and parts[idx + 1] == retailer and parts[idx + 2] == client:
+                    return str(base)
+            except ValueError:
+                pass
+            return str(Path(DEFAULT_DIR).resolve() / retailer / client)
+        # Fall back to whatever output_dir is, or DEFAULT_DIR
+        return str(base)
 
-    def compute_client_root(client_name: Optional[str], output_dir: Optional[str], html_path: str) -> str:
-        """Return absolute path to output/<client> root for images."""
-        p = Path(html_path).resolve()
-        parts = list(p.parts)
-        if "output" in parts:
-            idx = parts.index("output")
-            if idx + 1 < len(parts):
-                return str(Path(*parts[: idx + 2]))
-        if output_dir:
-            base = Path(output_dir).resolve()
-            if base.name != "output" and base.parent.name == "output":
-                return str(base)
-            if client_name:
-                return str(base / client_name)
-        # Fallback to DEFAULT_DIR
-        return str(Path(DEFAULT_DIR).resolve() / (client_name or ""))
+    def compute_runs_root_local(retailer: Optional[str], client: Optional[str], output_dir: Optional[str]) -> str:
+        """
+        Return absolute path to output/<retailer>/<client>/runs when retailer/client known,
+        else fall back to <output_dir or DEFAULT>/runs.
+        """
+        client_root = compute_client_root_local(retailer, client, output_dir)
+        return str(Path(client_root) / "runs")
 
-    def normalize_output_layout(client_name: Optional[str], output_dir: Optional[str], html_path: str):
+    def normalize_output_layout(retailer: Optional[str], client: Optional[str], output_dir: Optional[str], html_path: str):
         """Normalize folder layout:
         - Ensure no ad-type subfolders live under runs/; move them to top-level client folder.
         - Move any top-level search_results_*.html into runs/.
         Safe to run repeatedly.
         """
         try:
-            client_root = compute_client_root(client_name, output_dir, html_path)
-            runs_root = compute_runs_root(client_name, output_dir)
+            client_root = compute_client_root_local(retailer, client, output_dir)
+            runs_root = compute_runs_root_local(retailer, client, output_dir)
             os.makedirs(client_root, exist_ok=True)
             os.makedirs(runs_root, exist_ok=True)
 
@@ -398,10 +419,10 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
         if not result:
             continue
         
-        # Derive client and whether HTML is already within runs/
-        client_name = detect_client_from_path(html_file, output_dir)
+        # Derive retailer and client from path
+        retailer, client = detect_client_from_path_local(html_file, output_dir)
         # Normalize layout before proceeding (idempotent)
-        normalize_output_layout(client_name, output_dir, html_file)
+        normalize_output_layout(retailer, client, output_dir, html_file)
         existing_runs_root = find_runs_root_from_html(html_file)
         in_runs_folder = bool(existing_runs_root)
         run_ts = parse_run_timestamp_from_filename(os.path.basename(html_file))
@@ -410,7 +431,7 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
             continue
         
         # Compute the correct runs/ root
-        runs_root = existing_runs_root or compute_runs_root(client_name, output_dir)
+        runs_root = existing_runs_root or compute_runs_root_local(retailer, client, output_dir)
         os.makedirs(runs_root, exist_ok=True)
 
         # Build per-run JSON filename with keyword + timestamp
@@ -422,7 +443,7 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
             new_html_path = os.path.join(runs_root, os.path.basename(html_file))
             src_dir = os.path.dirname(os.path.abspath(html_file))
             dst_dir = os.path.abspath(runs_root)
-            client_root = compute_client_root(client_name, output_dir, html_file)
+            client_root = compute_client_root_local(retailer, client, output_dir)
             if src_dir != dst_dir:
                 # Move when source is already under output/<client> (including existing runs) to avoid duplicates
                 if src_dir.startswith(os.path.abspath(client_root)):
@@ -470,7 +491,7 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
         # Trigger screenshot extraction for this HTML file.
         # Always run the extractor so fresh scrapes consistently produce images.
         target_html = result.get('source_file') or html_file
-        client_root = compute_client_root(client_name, output_dir, html_file)
+        client_root = compute_client_root_local(retailer, client, output_dir)
         extract_toa_images(results_path, target_html, client_name=None, output_override=client_root)
     
     print(f"✅ Processed {processed} specific file(s)")

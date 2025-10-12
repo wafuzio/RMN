@@ -103,7 +103,7 @@ output/walmart/<client>/
 └── runs/             # Run artifacts (JSON, HTML)
 ```
 
-**⚠️ CURRENT ISSUE:** Walmart scraper is putting ALL images inside `runs/<timestamp>/` subdirectories instead of organizing them into ad type folders. Images should be moved to their respective folders (Top_Banner/, SBA/, etc.) and only JSON/HTML/logs should remain in runs/.
+**✅ RESOLVED:** Walmart scraper now correctly saves images to ad-type folders (Top_Banner/, SBA/, SBV/, Tile_Takeover/) with standardized naming. Only JSON/HTML/logs remain in runs/.
 
 ### Default (New Retailers)
 ```
@@ -326,41 +326,30 @@ def test_taxonomy_enforcement():
 
 ## Known Issues & Workarounds
 
-### Issue 1: Walmart Images in runs/ Directory
+### Issue 1: Walmart Images in runs/ Directory ✅ RESOLVED
 
-**Problem:** Walmart scraper saves all images inside `runs/<timestamp>/` subdirectories:
-```
-runs/20251010150112/
-├── walmart_packaged_deli_meat_sba_1.png      ❌ Should be in SBA/
-├── walmart_packaged_deli_meat_sbv_1.png      ❌ Should be in SBV/
-├── walmart_packaged_deli_meat_sbv_1.mp4      ❌ Should be in SBV/
-├── walmart_packaged_deli_meat_tile_takeover_1.png  ❌ Should be in Tile_Takeover/
-├── run_results_*.json                        ✅ Correct location
-├── run_report.json                           ✅ Correct location
-└── run_report.md                             ✅ Correct location
-```
+**Status:** Fixed as of 2025-10-12
 
-**Expected:**
+**Solution Implemented:**
+- Updated `walmart_search_and_capture.py` to extract client name and root from run directory path
+- Modified `_capture_elements()` to accept `client_name`, `client_root`, and `timestamp` parameters
+- Images now saved directly to ad-type folders (SBA/, SBV/, Tile_Takeover/, Top_Banner/)
+- Standardized filename format: `walmart__<ad_type>__<client>__<search_term>__D<YYYY-MM-DD>_T<HH-MM.SS>_<index>.<ext>`
+- Only JSON/HTML/logs remain in runs/ directory
+
+**Current Structure:**
 ```
-SBA/walmart_packaged_deli_meat_sba_1.png
-SBV/walmart_packaged_deli_meat_sbv_1.png
-SBV/walmart_packaged_deli_meat_sbv_1.mp4
-Tile_Takeover/walmart_packaged_deli_meat_tile_takeover_1.png
-runs/20251010150112/
+SBA/walmart__sba__client_name__search_term__D2025-10-12_T12-34.56_1.png
+SBV/walmart__sbv__client_name__search_term__D2025-10-12_T12-35.01_1.png
+SBV/walmart__sbv__client_name__search_term__D2025-10-12_T12-35.01_1.mp4
+Tile_Takeover/walmart__tile_takeover__client_name__search_term__D2025-10-12_T12-34.58_1.png
+Top_Banner/walmart__top_banner__client_name__search_term__D2025-10-12_T12-34.57_1.png
+runs/20251012123456/
 ├── run_results_*.json
 ├── run_report.json
-└── run_report.md
+├── run_report.md
+└── search_results_*.html
 ```
-
-**Root Cause:** Walmart scraper doesn't use the taxonomy-aware path functions.
-
-**Fix Required:** Update `walmart_search_and_capture.py` to:
-1. Use `core.paths.output_dir_for()` to get base directory
-2. Save images to ad-type-specific folders (SBA/, SBV/, etc.)
-3. Update JSON to reference correct image paths
-4. Keep only JSON/HTML/logs in runs/
-
-**Workaround:** Flask API uses fuzzy matching to find images in runs/ subdirectories.
 
 ---
 
@@ -426,15 +415,48 @@ When adding or updating a scraper, ensure:
 - [ ] Updates JSON with correct `image_path` references
 - [ ] Uses `brand` field (not retailer-specific field names)
 - [ ] Saves only JSON/HTML/logs to runs/ directory
-- [ ] Follows naming convention: `<ad_type>_<keyword>_<timestamp>_<index>.<ext>`
+- [ ] Follows naming convention: `<retailer>__<advertiser>__<ad_type>__<client>__<search_term>__D<YYYY-MM-DD>_T<HH-MM.SS>_<index>.<ext>`
 - [ ] Tests with `utils.path_taxonomy.allowed_subdirs()` to verify folders
 
 ---
 
-**Last Updated:** 2025-10-10
+**Last Updated:** 2025-10-12
+
+## Standardized Filename Format
+
+All retailers now use a consistent filename format:
+
+```
+<retailer>__<advertiser>__<ad_type>__<client>__<search_term>__D<YYYY-MM-DD>_T<HH-MM.SS>_<index>.<ext>
+```
+
+**Components:**
+- `<retailer>`: kroger, walmart, instacart, amazon
+- `<advertiser>`: advertiser/brand name (e.g., popsicle, unilever) - extracted from ad
+- `<ad_type>`: sba, sbv, skyscraper, toa, carousel, tile_takeover, etc.
+- `<client>`: client name (e.g., blue_bunny, taxonomy_test)
+- `<search_term>`: sanitized search keyword (e.g., ice_cream_cones)
+- `D<YYYY-MM-DD>`: date with dashes (e.g., D2025-10-12)
+- `T<HH-MM.SS>`: time with dashes and dot (e.g., T12-34.56)
+- `<index>`: 1, 2, 3, etc.
+- `<ext>`: png, jpg, mp4
+
+**Examples:**
+```
+kroger__unilever__skyscraper__blue_bunny__ice_cream_cones__D2025-10-09_T08-56.21_1.png
+walmart__popsicle__sba__taxonomy_test__ice_pop__D2025-10-12_T12-34.56_1.png
+instacart__nestle__shoppable_display_ad__bomb_pop__ice_pop__D2025-10-12_T14-22.33_1.png
+```
+
+**Implementation:**
+- Utility: `filename_utils.py` - `generate_ad_filename()` function
+- Double underscores (`__`) separate major fields
+- Single underscores (`_`) within field values
+- All components sanitized (lowercase, special chars replaced)
 
 ## References
 
+- `filename_utils.py` - Standardized filename generation
 - `utils/path_taxonomy.py` - Taxonomy definitions
 - `core/paths.py` - Path creation with enforcement
 - `scripts/maintenance/cleanup_taxonomy.py` - Cleanup tool

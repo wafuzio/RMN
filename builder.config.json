@@ -1,7 +1,7 @@
 {
-  "command": "python3 -m pip install -r requirements.txt && python3 web/builder_server.py",
-  "setup": "echo 'No setup required'",
-  "serverUrl": "http://localhost:5006",
+  "command": "python3 web/builder_server_v2.py",
+  "setup": "python3 -m pip install -r requirements.txt",
+  "serverUrl": "http://localhost:3000",
   "authenticateProxy": false,
   "commitMode": "commits"
 }

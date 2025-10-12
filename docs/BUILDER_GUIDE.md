@@ -657,29 +657,31 @@ Amazon_Scrape/
 
 ## Troubleshooting Image Display Issues
 
-### Issue 1: Kroger - Multiple Ads, Few Images
+### Issue 1: Kroger - Carousel Naming Convention
 
-**Problem:** 193 ad cards but only 2 actual image files saved.
+**Problem:** Carousel images use inconsistent naming with ad copy text embedded in filename.
 
-**Root Cause:** Scraper is creating JSON entries for all ads but only downloading a few images.
-
-**Evidence:**
-```bash
-# JSON has 193 ads
-cat output/kroger/blue_bunny/runs/*.json | jq '.results[0].ads | length'
-# Output: 193
-
-# But only 2 image files exist
-find output/kroger/blue_bunny -name "*.png" -o -name "*.jpg" | wc -l
-# Output: 2
+**Current Pattern:**
+```
+carousel_don_t_skimp_on_flavor_black_forest_ham_2025-10-10_15-02-21.png
+carousel_stack_your_dream_sandwich_packaged_deli_meat_2025-10-10_15-03-21.png
 ```
 
-**Why Images Don't Show:**
-- TOA ads: No image saved at all
-- Skyscraper ads: 1 image for 2 ads (fuzzy matching returns same file)
-- Carousel ads: All 190 point to same carousel screenshot
+**Expected Pattern (like Skyscraper):**
+```
+carousel_black_forest_ham_2025-10-10_15-02-21_1.png
+carousel_packaged_deli_meat_2025-10-10_15-03-21_1.png
+```
 
-**Fix Required:** Update Kroger scraper to actually download/screenshot all ad images, not just create JSON entries.
+**Root Cause:** Line 667 in `kroger_search_and_capture.py` uses `safe_header` (ad copy) instead of index number.
+
+**Fix Applied:** Changed filename generation to use index number:
+```python
+# Old: filename = f"carousel_{safe_header}_{safe_term2}_{ts2}.png"
+# New: filename = f"carousel_{safe_term2}_{ts2}_{i+1}.png"
+```
+
+**Impact:** Future scrapes will use systematic naming. Existing files need manual rename or re-scrape.
 
 ---
 

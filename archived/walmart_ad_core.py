@@ -77,6 +77,42 @@ def _normalize_url(href: str) -> str:
         pass
     return href or ""
 
+def _extract_advertiser(el):
+    """Extract advertiser/brand name from ad element."""
+    try:
+        import re
+        from urllib.parse import unquote
+        
+        # Method 1: Try to find "Sponsored by [Brand]" text (works for SBA)
+        text = _text(el)
+        match = re.search(r'Sponsored by\s+(.+?)(?:\s+Shop now|\s+Add\s|\s+\$)', text, re.IGNORECASE)
+        if match:
+            advertiser = match.group(1).strip()
+            return advertiser
+        
+        # Method 2: Extract from product URL for SBV (e.g., /ip/Claussen-Pickles-...)
+        href = _first_link(el)
+        if href:
+            # First decode the rd= parameter if present (Walmart tracking URL)
+            rd_match = re.search(r'rd=([^&]+)', href)
+            if rd_match:
+                href = unquote(rd_match.group(1))
+            
+            # Extract brand from /ip/{Brand}-{Product}/ID pattern
+            ip_match = re.search(r'/ip/([^-/]+)', href)
+            if ip_match:
+                brand = ip_match.group(1).replace('-', ' ')
+                return brand.strip()
+            
+            # Method 3: Fallback to facet parameter
+            brand_match = re.search(r'facet[^&]*brand[^&]*[:%]([^&%]+)', href, re.IGNORECASE)
+            if brand_match:
+                advertiser = brand_match.group(1).replace('%20', ' ').replace('+', ' ')
+                return advertiser.strip()
+    except Exception:
+        pass
+    return None
+
 def _extract_block(soup, selector, ad_type) -> List[Dict[str, Any]]:
     items = []
     for idx, el in enumerate(soup.select(selector), start=1):
@@ -89,6 +125,29 @@ def _extract_block(soup, selector, ad_type) -> List[Dict[str, Any]]:
 
         if ad_type == "sbv":
             d["video"] = _first_video_src(el)
+        
+        # Extract advertiser
+        advertiser = _extract_advertiser(el)
+        
+        # For tile_takeover, if no brand advertiser found, it's Walmart promotional content
+        if ad_type == "tile_takeover" and not advertiser:
+            # Check if it's a Walmart promo (category/browse pages) vs brand ad
+            text = _text(el)
+            href_check = href or ""
+            
+            # If has "Sponsored" text or ad tracking, try harder to find brand
+            has_sponsored = "Sponsored" in text
+            has_ad_tracking = any(x in href_check for x in ['adsRedirect=true', 'adUid=', 'adcampaignid='])
+            
+            if has_sponsored or has_ad_tracking:
+                # This is likely a brand ad, but we couldn't extract the brand
+                # Leave advertiser as None so it can be investigated
+                pass
+            else:
+                # No sponsored indicators - this is Walmart promotional content
+                d["advertiser"] = "Walmart"
+        elif advertiser:
+            d["advertiser"] = advertiser
 
         items.append(d)
     return items

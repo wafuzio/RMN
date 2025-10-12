@@ -519,3 +519,41 @@ if _is_login_modal_visible(page):
 - **Taxonomy:** `docs/ARTIFACT_TAXONOMY.md`
 - **Playwright:** `docs/PLAYWRIGHT_BOOTSTRAP.md`
 - **Devlog:** `docs/DEVLOG.md`
+
+
+## Taxonomy Fix checklist
+
+### Instacart
+
+html saves to runs
+json saves but is empty
+
+no ads save, no main screengrab saves
+
+all of these were previously working
+
+folders are created correctly
+
+### Walmart
+
+EVERYTHING saves in the runs folder
+
+SBA image is extracted but in runs folder
+
+json only seems to include the SBA
+
+no screengrab is saved
+
+folders are created correctly
+
+### Kroger
+
+Folders are created correctly
+
+screengrab is working correctly
+
+skyscraper ad is captured
+
+html and json are in the right place
+
+none of the other ads are patured

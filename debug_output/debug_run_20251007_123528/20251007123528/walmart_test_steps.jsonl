@@ -1,0 +1,34 @@
+{"ts": 1759858528.366625, "t": 0.0, "event": "run_start", "run_id": "1759858528366-7431", "keyword": "test", "preflight": {"base_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/debug_output/debug_run_20251007_123528/20251007123528", "profile_dir": "/Users/dan.maguire/ChromeProfiles/walmart"}}
+{"ts": 1759858528.36676, "t": 0.0, "event": "milestone", "run_id": "1759858528366-7431", "name": "preflight_ok", "ok": true, "note": ""}
+{"ts": 1759858528.7958112, "t": 0.429, "event": "step_start", "name": "launch_context"}
+{"ts": 1759858536.1420789, "t": 7.775, "event": "milestone", "run_id": "1759858528366-7431", "name": "launch_context", "ok": true, "note": ""}
+{"ts": 1759858536.1423512, "t": 7.776, "event": "step_end", "name": "launch_context", "dur": 7.346}
+{"ts": 1759858536.1439989, "t": 7.777, "event": "profile_health", "Cookies": {"exists": true, "size": 57344}, "Network Persistent State": {"exists": true, "size": 10716}, "Preferences": {"exists": true, "size": 36661}}
+{"ts": 1759858536.1498811, "t": 7.783, "event": "cookies_pre", "count": 30, "names": ["ACID", "AID", "__cf_bm", "_intlbu", "_m", "_pxhd", "_pxvid", "_shcc"]}
+{"ts": 1759858536.152044, "t": 7.785, "event": "log", "level": "info", "msg": "[Walmart] Establishing session (human-like pattern)"}
+{"ts": 1759858536.610508, "t": 8.244, "event": "px_trip", "reason": "nav_to_blocked", "stack": [{"file": "_impl_to_api_mapping.py", "line": 123, "func": "wrapper_func", "code": "return handler("}, {"file": "asyncio.py", "line": 79, "func": "_emit_run", "code": "coro: Any = f(*args, **kwargs)"}, {"file": "base.py", "line": 196, "func": "_call_handlers", "code": "self._emit_run(f, args, kwargs)"}]}
+{"ts": 1759858537.32307, "t": 8.956, "event": "user_agent", "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+{"ts": 1759858537.352395, "t": 8.986, "event": "px_status", "where": "home", "challenged": true, "url": "https://www.walmart.com/blocked?url=Lw==&uuid=08c9ef96-a3a4-11f0-a2a4-69c736ad6202&vid=1476abcb-a2ba-11f0-b658-a0ab6433ee50&g=b"}
+{"ts": 1759858538.782837, "t": 10.416, "event": "px_try", "cycle": 1, "try_num": 1}
+{"ts": 1759858538.789712, "t": 10.423, "event": "log", "level": "warn", "msg": "[Walmart] PX try 1/3 (cycle 1) — steady hold"}
+{"ts": 1759858539.793535, "t": 11.427, "event": "px_widget_ready", "t_ready": 1.0, "box": {"x": 576, "y": 218, "width": 288, "height": 102}}
+{"ts": 1759858540.408107, "t": 12.041, "event": "px_hold_plan", "duration": 7.67}
+{"ts": 1759858540.408544, "t": 12.042, "event": "log", "level": "info", "msg": "[Walmart] Steady hold 7.67s (ready in 1.00s)"}
+{"ts": 1759858549.586366, "t": 21.22, "event": "px_auto_wait_start", "timeout": 4.0}
+{"ts": 1759858549.588383, "t": 21.222, "event": "px_beacon_detected", "url": "https://collector-pxu6b0qd2s.px-cloud.net/assets/js/bundle"}
+{"ts": 1759858549.74448, "t": 21.378, "event": "px_auto_ok", "reason": "beacon_seen"}
+{"ts": 1759858549.7574358, "t": 21.391, "event": "px_beacon_detected", "url": "https://collector-pxu6b0qd2s.px-cloud.net/assets/js/bundle"}
+{"ts": 1759858549.780601, "t": 21.414, "event": "px_cleared_ts"}
+{"ts": 1759858549.7846248, "t": 21.418, "event": "px_hold_done", "cookies_present": true, "cookie_names": ["__cf_bm", "_intlbu", "_m", "_px3", "_pxde", "_pxhd"], "cleared": false, "url": "https://www.walmart.com/blocked?url=Lw==&uuid=08c9ef96-a3a4-11f0-a2a4-69c736ad6202&vid=1476abcb-a2ba-11f0-b658-a0ab6433ee50&g=b", "auto_ok": true}
+{"ts": 1759858549.789252, "t": 21.423, "event": "log", "level": "info", "msg": "[Walmart] cookies:True cleared:False names:['__cf_bm', '_intlbu', '_m', '_px3', '_pxde', '_pxhd', '_pxvid', '_shcc']"}
+{"ts": 1759858551.166455, "t": 22.8, "event": "px_result_try", "cycle": 1, "try_num": 1, "ok": false, "cleared": false}
+{"ts": 1759858551.266478, "t": 22.9, "event": "px_beacon_detected", "url": "https://collector-pxu6b0qd2s.px-cloud.net/assets/js/bundle"}
+{"ts": 1759858551.992866, "t": 23.626, "event": "px_retry_policy", "cycle": 1, "try_num": 1, "policy": "cooldown"}
+{"ts": 1759858551.9959512, "t": 23.629, "event": "px_cooldown", "seconds": 17.6}
+{"ts": 1759858551.9994502, "t": 23.633, "event": "log", "level": "warn", "msg": "[Walmart] PX still not cleared — cooling down 17.6s"}
+{"ts": 1759858569.563918, "t": 41.197, "event": "log", "level": "success", "msg": "[Walmart] ✅ Unblocked on homepage"}
+{"ts": 1759858569.564408, "t": 41.198, "event": "px_result", "where": "home", "ok": true}
+{"ts": 1759858571.302131, "t": 42.936, "event": "log", "level": "info", "msg": "[Walmart] Typing search query"}
+{"ts": 1759858571.30906, "t": 42.942, "event": "log", "level": "warn", "msg": "[Walmart] Search typing failed: Locator.count: Target page, context or browser has been closed"}
+{"ts": 1759858571.313905, "t": 42.947, "event": "log", "level": "info", "msg": "[Walmart] Direct navigation to search URL"}
+{"ts": 1759858571.321713, "t": 42.955, "event": "cookies_post", "count": 40, "names": ["ACID", "AID", "TS012768cf", "TS016ef4c8", "TS01f89308", "TS2a5e0c5c027", "TS8cb5a80e027", "__cf_bm"]}

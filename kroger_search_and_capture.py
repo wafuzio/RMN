@@ -662,9 +662,9 @@ def search_and_capture(search_term=None, output_dir=None):
                                     print(f"⚠️ Skipping carousel {i+1} - empty header text")
                                     continue
                                 ts2 = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                                safe_header = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in header_text.lower())[:30]
                                 safe_term2 = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in search_term.lower())
-                                filename = f"carousel_{safe_header}_{safe_term2}_{ts2}.png"
+                                # Use index number instead of header text for consistent naming
+                                filename = f"carousel_{safe_term2}_{ts2}_{i+1}.png"
                                 filepath = os.path.join(carousel_dir, filename)
                                 try:
                                     box = carousel.bounding_box()

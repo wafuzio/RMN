@@ -40,5 +40,21 @@
   ],
   "wmt": [
     "cheese crackers"
+  ],
+  "batteries": [
+    "AAA batteries"
+  ],
+  "land o frost": [
+    "black forest ham",
+    "packaged deli meat"
+  ],
+  "taxonomy test": [
+    "light potato chips"
+  ],
+  "tax test wmt": [
+    "blue bunnt"
+  ],
+  "tax test wmt 2": [
+    "ice pop"
   ]
 }

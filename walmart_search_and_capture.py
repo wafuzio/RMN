@@ -17,6 +17,14 @@ from datetime import datetime
 from typing import List, Dict, Optional, Callable, Tuple
 from urllib.parse import urlparse, parse_qs, unquote, quote_plus
 from playwright.sync_api import sync_playwright, Page, BrowserContext, Browser
+
+# Import standardized filename generation
+try:
+    from filename_utils import generate_ad_filename
+except ImportError:
+    # Fallback if filename_utils not available
+    def generate_ad_filename(retailer, ad_type, client, search_term, timestamp, index=1, extension='png'):
+        return f"{retailer}_{ad_type}_{client}_{search_term}_{timestamp}_{index}.{extension}"
 # --- BEGIN: debug configuration ---
 @dataclass
 class DebugConfig:
@@ -673,7 +681,7 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
     return browser, ctx, page, False
 
 
-def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, meta: Dict, SL=None) -> Tuple[int, List[str]]:
+def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, meta: Dict, SL=None, client_name: str = None, client_root: str = None, timestamp: str = None) -> Tuple[int, List[str]]:
     shots: List[str] = []
     loc = page.locator(css)
     count = loc.count()
@@ -700,9 +708,80 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
             # Use native wheel scroll instead of programmatic scrollIntoView
             _bring_into_view(page, item, SL=SL)
             time.sleep(0.2)
-            out = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_{label}_{i+1}.png"))
+            
+            # Generate standardized filename and save to ad-type folder
+            try:
+                print(f"[CONDITION CHECK] client_name={client_name}, client_root={client_root}, timestamp={timestamp}, label={label}")
+                if client_name and client_root and timestamp:
+                    print(f"[USING STANDARDIZED] label={label}, index={i+1}")
+                    
+                    # Extract advertiser/brand name from the ad element
+                    advertiser = None
+                    try:
+                        # Try to find "Sponsored by [Brand]" text
+                        sponsored_text = item.locator('text=/Sponsored by/i').first
+                        if sponsored_text.count() > 0:
+                            full_text = sponsored_text.text_content()
+                            # Extract brand name after "Sponsored by"
+                            import re
+                            match = re.search(r'Sponsored by\s+(.+)', full_text, re.IGNORECASE)
+                            if match:
+                                advertiser = match.group(1).strip()
+                        
+                        # Fallback: try to extract from URL facet parameter
+                        if not advertiser:
+                            links = item.locator('a[href*="facet"]').all()
+                            for link in links[:3]:  # Check first few links
+                                href = link.get_attribute('href') or ''
+                                brand_match = re.search(r'facet[^&]*brand[^&]*[:%]([^&%]+)', href, re.IGNORECASE)
+                                if brand_match:
+                                    advertiser = brand_match.group(1).replace('%20', ' ').replace('+', ' ')
+                                    break
+                    except Exception as e:
+                        if SL: SL.log("advertiser_extraction_error", error=str(e), label=label, index=i+1)
+                    
+                    # Map label to ad type folder name
+                    ad_type_map = {
+                        'sba': 'SBA',
+                        'sbv': 'SBV',
+                        'tile_takeover': 'Tile_Takeover',
+                        'top_banner': 'Top_Banner'
+                    }
+                    ad_type_folder = ad_type_map.get(label, label.title())
+                    ad_folder = os.path.join(client_root, ad_type_folder)
+                    print(f"[DEBUG] client_root={client_root}, ad_type_folder={ad_type_folder}, ad_folder={ad_folder}, advertiser={advertiser}")
+                    os.makedirs(ad_folder, exist_ok=True)
+                    
+                    # Generate standardized filename
+                    filename = generate_ad_filename(
+                        retailer='walmart',
+                        ad_type=label,
+                        client=client_name,
+                        search_term=keyword,
+                        timestamp=timestamp,
+                        index=i+1,
+                        extension='png',
+                        advertiser=advertiser
+                    )
+                    out = os.path.join(ad_folder, filename)
+                    if SL: SL.log("standardized_filename", path=out, client_root=client_root, ad_folder=ad_folder, advertiser=advertiser)
+                else:
+                    # Fallback to old naming (for backward compatibility)
+                    out = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_{label}_{i+1}.png"))
+                    if SL: SL.log("fallback_filename", path=out, reason="missing_params", client_name=client_name, client_root=client_root, timestamp=timestamp)
+            except Exception as e:
+                # If standardized naming fails, fall back to old naming
+                if SL: SL.log("filename_generation_error", error=str(e), label=label, index=i+1)
+                out = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_{label}_{i+1}.png"))
+            
             item.screenshot(path=out)
             shots.append(out)
+            
+            # Store advertiser in metadata with ad type and index
+            if advertiser:
+                ad_key = f"{label}_{i+1}"  # e.g., "sba_1", "tile_takeover_2"
+                meta.setdefault("advertisers", {})[ad_key] = advertiser
+            
             # attempt to store a landing URL
             try:
                 ahref = item.locator("a[href]").first
@@ -1592,6 +1671,33 @@ def search_and_capture(
     except Exception as e:
         # We have no logger yet, so raise a crisp error that the GUI can surface
         raise RuntimeError(f"Base directory preflight failed: {e}")
+    
+    # Extract client name and timestamp from paths for standardized filenames
+    # run_dir format: output/walmart/[client_name]/runs/[timestamp]
+    # We always extract from run_dir since base_dir might already be the runs dir
+    client_name = None
+    client_root = None
+    run_timestamp = None
+    try:
+        # Extract timestamp from run_dir (format: YYYYMMDDHHMMSS)
+        run_timestamp = os.path.basename(run_dir)
+        
+        # Get client root by going up from run_dir
+        # run_dir = .../client/runs/timestamp or .../client/timestamp
+        parent = os.path.dirname(run_dir)
+        if os.path.basename(parent) == "runs":
+            # Structure: client/runs/timestamp
+            client_root = os.path.dirname(parent)
+        else:
+            # Structure: client/timestamp (legacy)
+            client_root = parent
+        
+        client_name = os.path.basename(client_root)
+    except Exception as e:
+        print(f"[ERROR] Failed to extract client info: {e}")
+        pass  # Will use fallback naming if extraction fails
+    
+    print(f"[EXTRACTION] client_name={client_name}, client_root={client_root}, run_timestamp={run_timestamp}")
 
     # 3) WALMART_PROFILE_DIR must exist and be writable (stable persistent profile)
     resolved_profile = profile_dir or os.environ.get(PROFILE_ENV)
@@ -2347,19 +2453,19 @@ def search_and_capture(
                 say("warn", f"[{retailer}] run_results post-process failed: {e}")
             
             # 1) Programmatic banners
-            n, s = _capture_elements(page, base_dir, keyword, "top_banner", SELECTORS["top_banner"], meta, SL=SL)
+            n, s = _capture_elements(page, base_dir, keyword, "top_banner", SELECTORS["top_banner"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] Top banner found ({n})")
             
             # 2) SBA
-            n, s = _capture_elements(page, base_dir, keyword, "sba", SELECTORS["sba"], meta, SL=SL)
+            n, s = _capture_elements(page, base_dir, keyword, "sba", SELECTORS["sba"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] SBA found ({n})")
             
             # 3) Tile takeover
-            n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta, SL=SL)
+            n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] Tile takeover found ({n})")
@@ -2373,14 +2479,80 @@ def search_and_capture(
                 try:
                     mod.scroll_into_view_if_needed()
                     time.sleep(0.2)
-                    out = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_sbv_{i+1}.png"))
+                    
+                    # Extract advertiser for SBV
+                    advertiser = None
+                    try:
+                        # Try to find "Sponsored by [Brand]" text
+                        sponsored_text = mod.locator('text=/Sponsored by/i').first
+                        if sponsored_text.count() > 0:
+                            full_text = sponsored_text.text_content()
+                            match = re.search(r'Sponsored by\s+(.+)', full_text, re.IGNORECASE)
+                            if match:
+                                advertiser = match.group(1).strip()
+                        
+                        # Fallback: try to extract from URL facet parameter
+                        if not advertiser:
+                            links = mod.locator('a[href*="facet"]').all()
+                            for link in links[:3]:
+                                href = link.get_attribute('href') or ''
+                                brand_match = re.search(r'facet[^&]*brand[^&]*[:%]([^&%]+)', href, re.IGNORECASE)
+                                if brand_match:
+                                    advertiser = brand_match.group(1).replace('%20', ' ').replace('+', ' ')
+                                    break
+                    except Exception:
+                        pass
+                    
+                    # Generate standardized filename and save to SBV folder
+                    if client_name and client_root and run_timestamp:
+                        sbv_folder = os.path.join(client_root, "SBV")
+                        os.makedirs(sbv_folder, exist_ok=True)
+                        
+                        # PNG screenshot
+                        png_filename = generate_ad_filename(
+                            retailer='walmart',
+                            ad_type='sbv',
+                            client=client_name,
+                            search_term=keyword,
+                            timestamp=run_timestamp,
+                            index=i+1,
+                            extension='png',
+                            advertiser=advertiser
+                        )
+                        out = os.path.join(sbv_folder, png_filename)
+                    else:
+                        # Fallback to old naming
+                        out = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_sbv_{i+1}.png"))
+                    
                     mod.screenshot(path=out)
                     shots.append(out)
+                    
+                    # Store advertiser in metadata with ad type and index
+                    if advertiser:
+                        ad_key = f"sbv_{i+1}"  # e.g., "sbv_1", "sbv_2"
+                        meta.setdefault("advertisers", {})[ad_key] = advertiser
+                    
+                    # Try to download video
                     v = mod.locator("video").first
                     if v.count() > 0:
                         src = v.get_attribute("src") or ""
                         if src and src.startswith(("http://", "https://")):
-                            vpath = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_sbv_{i+1}.mp4"))
+                            # Generate video filename
+                            if client_name and client_root and run_timestamp:
+                                mp4_filename = generate_ad_filename(
+                                    retailer='walmart',
+                                    ad_type='sbv',
+                                    client=client_name,
+                                    search_term=keyword,
+                                    timestamp=run_timestamp,
+                                    index=i+1,
+                                    extension='mp4',
+                                    advertiser=advertiser
+                                )
+                                vpath = os.path.join(sbv_folder, mp4_filename)
+                            else:
+                                vpath = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_sbv_{i+1}.mp4"))
+                            
                             if _download(src, vpath):
                                 vids_saved += 1
                                 assets.append(vpath)
@@ -2389,6 +2561,64 @@ def search_and_capture(
                     continue
             if vcount:
                 say("info", f"[{retailer}] SBV found (videos {vids_saved})")
+            
+            # 5) Full-page screenshot to Main folder
+            try:
+                # Incremental scroll to load lazy images throughout the page
+                try:
+                    # Get page height
+                    page_height = page.evaluate("document.body.scrollHeight")
+                    viewport_height = page.evaluate("window.innerHeight")
+                    
+                    # Scroll in increments, pausing to let images load
+                    scroll_position = 0
+                    scroll_increment = viewport_height * 0.75  # Scroll 75% of viewport at a time
+                    
+                    while scroll_position < page_height:
+                        page.evaluate(f"window.scrollTo(0, {scroll_position})")
+                        time.sleep(0.8)  # Pause to let lazy images load
+                        scroll_position += scroll_increment
+                    
+                    # Final scroll to absolute bottom
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    time.sleep(1.0)  # Longer pause at bottom
+                except Exception as e:
+                    if SL: SL.log("fullpage_scroll_error", error=str(e))
+                
+                # Scroll back to top for clean screenshot
+                try:
+                    page.evaluate("window.scrollTo(0, 0)")
+                    time.sleep(0.5)  # Let header settle
+                except Exception:
+                    pass
+                
+                if client_root and run_timestamp:
+                    main_folder = os.path.join(client_root, "Main")
+                    os.makedirs(main_folder, exist_ok=True)
+                    
+                    # Generate full-page screenshot filename
+                    fullpage_filename = generate_ad_filename(
+                        retailer='walmart',
+                        ad_type='main',
+                        client=client_name,
+                        search_term=keyword,
+                        timestamp=run_timestamp,
+                        index=1,
+                        extension='png'
+                    )
+                    fullpage_path = os.path.join(main_folder, fullpage_filename)
+                else:
+                    # Fallback to runs directory
+                    fullpage_path = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_fullpage.png"))
+                
+                # Take full-page screenshot
+                page.screenshot(path=fullpage_path, full_page=True)
+                shots.append(fullpage_path)
+                say("info", f"[{retailer}] Full-page screenshot saved")
+                if SL: SL.log("fullpage_screenshot", path=fullpage_path)
+            except Exception as e:
+                say("warn", f"[{retailer}] Full-page screenshot failed: {e}")
+                if SL: SL.log("fullpage_screenshot_error", error=str(e))
             
             # Save meta.json (links/videos)
             try:

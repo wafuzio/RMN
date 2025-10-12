@@ -22,9 +22,10 @@ TAXONOMY = {
         "runs",
     },
     "amazon": {
-        "TOA",
-        "Skyscraper",
-        "Carousel",
+        "Sponsored_Brand_Video",
+        "Sponsored_Product",
+        "Featured_Brand",
+        "Sponsored_Carousel",
         "Main",
         "runs",
     },

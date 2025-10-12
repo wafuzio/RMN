@@ -9,7 +9,7 @@ from core.retailers import RetailerAdapter, register
 class AmazonAdapter(RetailerAdapter):
     slug = "amazon"
     display_name = "Amazon"
-    profile_env = "AMZ_PROFILE_DIR"   # set this in your shell or GUI
+    profile_env = "AMAZON_PROFILE_DIR"   # set this in your shell or GUI
 
     def _search_url(self, keyword: str, page: int = 1) -> str:
         q = urllib.parse.quote(keyword.strip())
@@ -82,9 +82,10 @@ class AmazonAdapter(RetailerAdapter):
     def extract_images(self, json_path: str, html_path: str, ctx) -> Dict:
         """
         Navigate live to the search URL again (using the same profile) and capture:
-        - Top-of-search Sponsored Brands / Video banner → TOA
-        - Right-rail Sponsored Display (if present) → Skyscraper
-        - Sponsored Products top strip / first row → Carousel
+        - Sponsored Brand Video → Sponsored_Brand_Video
+        - Sponsored Products → Sponsored_Product
+        - Featured from Amazon brands → Featured_Brand
+        - Sponsored Carousel → Sponsored_Carousel
 
         Returns {"toa": n, "sky": n, "car": n, "log": path}
         """
@@ -117,60 +118,69 @@ class AmazonAdapter(RetailerAdapter):
             # Ensure main slot is present
             page.locator("div.s-main-slot").first.wait_for(timeout=6500)
 
-            # 1) TOA: Sponsored Brands banner (headline) or video at top
-            # These selectors are starting points; we'll refine them with live pages.
-            toa_candidates = [
-                "div.s-main-slot div:has(span:has-text('Sponsored')):nth-match(1)",
-                "div[data-component-type='sbv-result']",
-                "div[data-component-type='s-searchgrid-carousel']",
+            # 1) Sponsored Brand Video - Video ads at top of search
+            sbv_dir = os.path.join(ctx.output_dir, "Sponsored_Brand_Video")
+            os.makedirs(sbv_dir, exist_ok=True)
+            sbv_candidates = [
+                "div.AdHolder[data-cel-widget*='sb-video-product-collection']",
+                "[cel_widget_id*='sb-video-product-collection']",
             ]
-            toa_dir = os.path.join(ctx.output_dir, "TOA"); os.makedirs(toa_dir, exist_ok=True)
-            hit = False
-            for sel in toa_candidates:
+            for sel in sbv_candidates:
                 loc = page.locator(sel).first
                 if loc.count() > 0:
-                    out = os.path.join(toa_dir, f"amazon_toa_{ctx.client}_{ts}.png")
+                    out = os.path.join(sbv_dir, f"amazon_sbv_{ctx.client}_{ts}.png")
                     if safe_screenshot(loc, out):
-                        counts["toa"] += 1
-                        hit = True
+                        counts["toa"] += 1  # Keep toa count for backward compatibility
                         break
-            # If nothing matched, grab the very top viewport as a fallback "top-of-search"
-            if not hit:
-                out = os.path.join(toa_dir, f"amazon_toa_{ctx.client}_{ts}.png")
-                page.screenshot(path=out, clip={"x": 0, "y": 0, "width": 1400, "height": 500})
-                counts["toa"] += 1
 
-            # 2) Skyscraper (right rail sponsored display) – shown on some pages
-            sky_dir = os.path.join(ctx.output_dir, "Skyscraper"); os.makedirs(sky_dir, exist_ok=True)
-            sky_candidates = [
-                "#rhf",                      # Rare Amazon right-hand feature area
-                "div#ad-left-1",             # placeholder examples
-                "div#ad-right-1",
+            # 2) Sponsored Products - Individual sponsored product listings
+            sp_dir = os.path.join(ctx.output_dir, "Sponsored_Product")
+            os.makedirs(sp_dir, exist_ok=True)
+            sp_candidates = [
+                "div.s-result-item:has(.puis-sponsored-label-text)",
+                "[data-component-type='sp-sponsored-result']",
             ]
-            for sel in sky_candidates:
+            sp_count = 0
+            for sel in sp_candidates:
+                locs = page.locator(sel).all()
+                for i, loc in enumerate(locs[:5]):  # Capture first 5 sponsored products
+                    out = os.path.join(sp_dir, f"amazon_sp_{ctx.client}_{ts}_{i}.png")
+                    if safe_screenshot(loc, out):
+                        sp_count += 1
+                if sp_count > 0:
+                    counts["sky"] = sp_count  # Keep sky count for backward compatibility
+                    break
+
+            # 3) Sponsored Carousel - Featured product carousels
+            sc_dir = os.path.join(ctx.output_dir, "Sponsored_Carousel")
+            os.makedirs(sc_dir, exist_ok=True)
+            sc_candidates = [
+                "div[cel_widget_id*='FEATURED_ASINS_LIST']",
+                "div[data-cel-widget*='FEATURED_ASINS_LIST']",
+            ]
+            for sel in sc_candidates:
                 loc = page.locator(sel).first
                 if loc.count() > 0:
-                    out = os.path.join(sky_dir, f"amazon_sky_{ctx.client}_{ts}.png")
+                    out = os.path.join(sc_dir, f"amazon_carousel_{ctx.client}_{ts}.png")
                     if safe_screenshot(loc, out):
-                        counts["sky"] += 1
+                        counts["car"] += 1  # Keep car count for backward compatibility
                         break
-
-            # 3) Carousel: top-of-search Sponsored Products strip / first row
-            car_dir = os.path.join(ctx.output_dir, "Carousel"); os.makedirs(car_dir, exist_ok=True)
-            car_candidates = [
-                "div[data-component-type='sp-sponsored-result'] >> nth=0..5",
-                "div.s-main-slot div:has(span:has-text('Sponsored'))",
+            
+            # 4) Featured Brand - "Featured from Amazon brands" products
+            fb_dir = os.path.join(ctx.output_dir, "Featured_Brand")
+            os.makedirs(fb_dir, exist_ok=True)
+            fb_candidates = [
+                ".puis-label-popover:has-text('Featured from Amazon brands')",
             ]
-            # Strategy: screenshot the first sponsored product row (up to a reasonable width)
-            try:
-                first_sp = page.locator("div[data-component-type='sp-sponsored-result']").first
-                if first_sp.count() > 0:
-                    row = first_sp.locator("xpath=ancestor::div[contains(@class,'s-main-slot')]")
-                    out = os.path.join(car_dir, f"amazon_car_{ctx.client}_{ts}.png")
-                    if safe_screenshot(row, out):
-                        counts["car"] += 1
-            except Exception:
-                pass
+            fb_count = 0
+            for sel in fb_candidates:
+                # Find parent product containers
+                locs = page.locator(f"div.s-result-item:has({sel})").all()
+                for i, loc in enumerate(locs[:3]):  # Capture first 3 featured brands
+                    out = os.path.join(fb_dir, f"amazon_featured_{ctx.client}_{ts}_{i}.png")
+                    if safe_screenshot(loc, out):
+                        fb_count += 1
+                break
 
         except Exception as e:
             with open(log_path, "a", encoding="utf-8") as lf:
