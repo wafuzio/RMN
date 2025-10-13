@@ -7,7 +7,6 @@ from typing import Iterable
 
 TAXONOMY = {
     "kroger": {
-        "Display_Ads",
         "Carousel",
         "Skyscraper",
         "TOA",

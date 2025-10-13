@@ -12,25 +12,24 @@ Supported ad types: TOA, Skyscraper, Carousel, etc. (anything with image_url)
 
 import os
 import sys
-
-# Add project root to path for imports like browser_lock
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
-
-import re
 import json
-import time
 import argparse
-import urllib.request
-import urllib.error
-from urllib.parse import urljoin
-from typing import List, Dict, Any, Optional
+import time
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+from urllib.parse import urlparse
+
+# Add project root to path for imports
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from filename_utils import generate_ad_filename
+from extractors.ocr_brand_detector import detect_brands_from_image
 
 from playwright.sync_api import sync_playwright, BrowserContext
 from browser_lock import single_browser_lock, FileLock
 import pathlib
-
 # Real browser user agent
 REAL_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -275,8 +274,9 @@ def extract_image_urls_from_json(
         # If html_file is specified, only accept matching source_file
         if html_file_norm:
             src = _normalize_path(result.get("source_file", ""))
-            # Compare full path or basename
-            if not (src == html_file_norm or os.path.basename(src) == os.path.basename(html_file_norm)):
+            # Compare full path or basename (case-insensitive for cross-platform compatibility)
+            if not (src.lower() == html_file_norm.lower() or 
+                    os.path.basename(src).lower() == os.path.basename(html_file_norm).lower()):
                 continue
 
         search_term = result.get("search_term", result.get("keyword", "unknown"))
@@ -309,6 +309,13 @@ def extract_image_urls_from_json(
             keyword = result.get("keyword", "unknown")
             clean_search_term = (search_term or keyword).replace(" ", "_").lower()
 
+            # Handle advertisers (can be array or single string for backwards compatibility)
+            advertisers = ad.get("advertisers")
+            if not advertisers:
+                # Fallback to old 'advertiser' field for backwards compatibility
+                advertiser_single = ad.get("advertiser")
+                advertisers = [advertiser_single] if advertiser_single else None
+            
             image_urls.append({
                 "url": image_url,
                 "keyword": keyword,
@@ -317,6 +324,8 @@ def extract_image_urls_from_json(
                 "alt_text": ad.get("message", "") or "",
                 "source_file": result.get("source_file", ""),
                 "ad_type": ad_type_raw,
+                "advertisers": advertisers,  # Array of brand names (can be None)
+                "retailer": data.get("retailer", "kroger"),  # Retailer name from top-level JSON
                 "id": image_url.split('/')[-1].split('.')[0] if '/' in image_url else None
             })
 
@@ -528,12 +537,24 @@ def process_images(
                     # Timestamp (prefer fixed)
                     timestamp = fixed_timestamp or datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-                    # Legacy-safe file type prefix
+                    # Get ad metadata
                     ad_type_raw = image_info.get("ad_type") or "toa"
                     file_type = legacy_type_token(ad_type_raw)
-
-                    # Filename and target dir (legacy prefixes preserved)
-                    filename = f"{file_type}_{clean_search_term}_{timestamp}_{i+1}.png"
+                    retailer = image_info.get("retailer", "kroger")
+                    advertisers = image_info.get("advertisers") or ["unknown"]
+                    
+                    # Generate filename using new taxonomy
+                    # Pass advertisers as list (can be single or multiple brands)
+                    filename = generate_ad_filename(
+                        retailer=retailer,
+                        ad_type=ad_type_raw,
+                        client=client,
+                        search_term=keyword,
+                        timestamp=timestamp,
+                        index=i+1,
+                        extension='png',
+                        advertiser=advertisers  # Pass as list
+                    )
                     target_dir = _choose_dir(file_type)
                     output_path = os.path.join(target_dir, filename)
 
@@ -542,7 +563,7 @@ def process_images(
                         print("🌐 Downloading image")
                         ok = False
                         
-                        # Fast path: try context.request once with short timeout (Kroger CDN often blocks this)
+                        # Fast path: try context.request once with short timeout
                         try:
                             resp = page.context.request.get(image_url, timeout=5000)
                             if resp.ok:
@@ -554,26 +575,52 @@ def process_images(
                         except Exception as e:
                             print(f"[fast] context.request failed or timed out: {e}")
                         
-                        # Robust path: navigation (works reliably for Kroger CDN)
+                        # Fallback: direct urllib download with proper referer (Kroger blocks browser navigation)
                         if not ok:
-                            try:
-                                print("[nav] Opening image URL in browser tab...")
-                                page.goto(image_url, wait_until="commit", timeout=30000)
-                                page.wait_for_timeout(300)
-                                page.screenshot(path=output_path, full_page=False)
-                                print(f"✅ [nav] Screenshot saved to: {output_path}")
+                            print("[urllib] Trying direct download with referer...")
+                            ok = direct_download_image(image_url, output_path, referer=srp_url or "https://www.kroger.com/", retries=3)
+                            if ok:
+                                print(f"✅ [urllib] Direct download successful")
                                 saved_count += 1
-                                ok = True
-                            except Exception as e:
-                                print(f"❌ [nav] Navigation failed: {e}")
-                                # Last resort: direct urllib download
-                                print("[urllib] Trying direct download...")
-                                ok = direct_download_image(image_url, output_path, referer=srp_url or "https://www.kroger.com/", retries=3)
-                                if ok:
-                                    print(f"✅ [urllib] Direct download successful")
-                                    saved_count += 1
-                                else:
-                                    print(f"❌ All download methods failed for: {image_url}")
+                            else:
+                                print(f"❌ All download methods failed for: {image_url}")
+                        
+                        # OCR brand detection for co-branded ads
+                        if ok and os.path.exists(output_path):
+                            try:
+                                print("🔍 Running OCR brand detection...")
+                                detected_brands = detect_brands_from_image(output_path)
+                                
+                                if detected_brands and len(detected_brands) > 1:
+                                    print(f"✓ Co-branded ad detected: {' + '.join(detected_brands)}")
+                                    
+                                    # Update the image_info with detected brands for JSON update
+                                    image_info['advertisers'] = detected_brands
+                                    
+                                    # Regenerate filename with all detected brands
+                                    new_filename = generate_ad_filename(
+                                        retailer=retailer,
+                                        ad_type=ad_type_raw,
+                                        client=client,
+                                        search_term=keyword,
+                                        timestamp=timestamp,
+                                        index=i+1,
+                                        extension='png',
+                                        advertiser=detected_brands  # Use OCR-detected brands
+                                    )
+                                    new_output_path = os.path.join(target_dir, new_filename)
+                                    
+                                    # Rename file if different
+                                    if new_output_path != output_path:
+                                        os.rename(output_path, new_output_path)
+                                        print(f"✓ Renamed to: {new_filename}")
+                                        output_path = new_output_path
+                                elif detected_brands and len(detected_brands) == 1:
+                                    print(f"✓ Single brand confirmed: {detected_brands[0]}")
+                                    # Update with single detected brand
+                                    image_info['advertisers'] = detected_brands
+                            except Exception as ocr_err:
+                                print(f"⚠️ OCR detection skipped: {ocr_err}")
                     except Exception as e:
                         print(f"❌ Image download error: {e}")
 
@@ -719,12 +766,24 @@ def process_images(
                         # Timestamp (prefer fixed)
                         timestamp = fixed_timestamp or datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-                        # Legacy-safe file type prefix
+                        # Get ad metadata
                         ad_type_raw = image_info.get("ad_type") or "toa"
                         file_type = legacy_type_token(ad_type_raw)
-
-                        # Filename and target dir (legacy prefixes preserved)
-                        filename = f"{file_type}_{clean_search_term}_{timestamp}_{i+1}.png"
+                        retailer = image_info.get("retailer", "kroger")
+                        advertisers = image_info.get("advertisers") or ["unknown"]
+                        
+                        # Generate filename using new taxonomy
+                        # Pass advertisers as list (can be single or multiple brands)
+                        filename = generate_ad_filename(
+                            retailer=retailer,
+                            ad_type=ad_type_raw,
+                            client=client,
+                            search_term=keyword,
+                            timestamp=timestamp,
+                            index=i+1,
+                            extension='png',
+                            advertiser=advertisers  # Pass as list
+                        )
                         target_dir = _choose_dir(file_type)
                         output_path = os.path.join(target_dir, filename)
 

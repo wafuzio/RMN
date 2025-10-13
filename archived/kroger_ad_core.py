@@ -65,6 +65,82 @@ def log(msg: str): logging.info(msg)
 log(f"Diagnostics dir: {DIAG_DIR}")
 log(f"Log file: {LOG_PATH}")
 
+def _extract_kroger_advertiser(ad_dict):
+    """Extract advertiser/brand name from Kroger ad."""
+    import re
+    from urllib.parse import unquote
+    
+    # Method 1: Extract from message text (e.g., "P&G. Buy 2 Save $10..." or "JOTS Herdez Taco Tuesday")
+    message = ad_dict.get('message', '')
+    if message:
+        # Pattern 1: "from [Brand]" pattern (e.g., "Frozen snacks from Kraft") - check this FIRST
+        # Match 1-2 capitalized words after "from"
+        from_match = re.search(r'\bfrom\s+([A-Z][A-Za-z0-9&\'-]+(?:\s+[A-Z][A-Za-z0-9&\'-]+)?)', message)
+        if from_match:
+            brand = from_match.group(1).strip()
+            brand_lower = brand.lower()
+            
+            # Reject common slogan patterns (possessive/generic phrases, not brand names)
+            # "Our/Your/The [Place]" are slogans, but "Market Kitchen" or "Kraft Heinz" are brands
+            slogan_patterns = [
+                r'^(our|your|the)\s+(table|kitchen|home|family|heart|farm|field|garden)$',
+                r'^(our|your)\s+',  # Anything starting with "Our" or "Your" is likely a slogan
+            ]
+            is_slogan = any(re.match(pattern, brand_lower) for pattern in slogan_patterns)
+            
+            # Accept if: not a slogan, not a promotional word, and reasonable length
+            if (not is_slogan and 
+                brand_lower not in ['buy', 'save', 'get', 'shop', 'new', 'sale'] and 
+                len(brand.split()) <= 2):
+                return brand
+        
+        # Pattern 2: Brand followed by period at start (e.g., "P&G. Buy...")
+        match = re.match(r'^([A-Z][A-Za-z0-9&\s\'-]+?)\.', message)
+        if match:
+            brand = match.group(1).strip()
+            # Filter out common promotional words and check it's not too long (likely not just a brand)
+            if brand and brand.lower() not in ['buy', 'save', 'get', 'shop', 'new', 'sale', 'jots'] and len(brand.split()) <= 3:
+                return brand
+        
+        # Pattern 2: Extract brand name from middle of message (e.g., "JOTS Herdez Taco Tuesday")
+        # Look for capitalized words that aren't common promotional terms
+        words = message.split()
+        for i, word in enumerate(words):
+            # Skip promotional words and common food category words
+            if word.lower() in ['jots', 'advertisement', 'frozen', 'snacks', 'from', 'shop', 'now', 'buy', 'save', 'get', 'new', 'sale', 'taco', 'tuesday', 'monday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']:
+                continue
+            # Check if word starts with capital and is likely a brand
+            if word and word[0].isupper() and len(word) > 2:
+                # Check if next word is also capitalized AND not a category word (multi-word brand like "Kraft Heinz")
+                if i + 1 < len(words) and words[i+1] and words[i+1][0].isupper() and len(words[i+1]) > 2:
+                    next_word_lower = words[i+1].lower()
+                    if next_word_lower not in ['taco', 'tuesday', 'monday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'snacks', 'frozen']:
+                        return f"{word} {words[i+1]}"
+                return word
+    
+    # Method 2: Extract from href parameter (e.g., /pr/kpm-pg-9 or /brand/...)
+    href = ad_dict.get('href', '')
+    if href:
+        # Check for /brand/ in URL
+        if '/brand/' in href:
+            brand_part = href.split('/brand/')[-1].split('?')[0].split('/')[0]
+            brand = unquote(brand_part).replace('-', ' ').replace('_', ' ')
+            return brand.title()
+        
+        # Check for brand in query parameters
+        brand_match = re.search(r'[?&]brand=([^&]+)', href, re.IGNORECASE)
+        if brand_match:
+            brand = unquote(brand_match.group(1)).replace('+', ' ')
+            return brand.title()
+    
+    # Method 3: For Kroger promotional content (no brand sponsor)
+    # If no brand found and it's a TOA/Skyscraper, it's likely Kroger's own promo
+    ad_type = ad_dict.get('type', '')
+    if ad_type in ['TOA', 'Skyscraper'] and not message:
+        return 'Kroger'
+    
+    return None
+
 # Import ad extractors
 from ad_extractors import get_all_extractors, get_extractor
 
@@ -616,6 +692,11 @@ def extract_ads_from_html(html, client=None, search_term=None):
                         if cta:
                             ad['cta'] = cta.get_text(strip=True)
                 
+                # Extract advertiser(s) - store as array for consistency
+                advertiser = _extract_kroger_advertiser(ad)
+                if advertiser:
+                    ad['advertisers'] = [advertiser]  # Array format for future co-brand support
+                
                 # Include the raw HTML in the results so downstream image tooling works
                 ad['html'] = raw_html
                 results.append(ad)
@@ -728,10 +809,20 @@ def extract_ads_from_html(html, client=None, search_term=None):
                     if link and link.get('href'):
                         ad['href'] = link.get('href')
                     
-                    # Try to extract message/title
+                    # Try to extract message/title from elements
                     title = div.select_one('h2') or div.select_one('.espot-header')
                     if title:
                         ad['message'] = title.get_text(strip=True)
+                    
+                    # If no message, try alt text from image
+                    if not ad.get('message') and img and img.get('alt'):
+                        alt_text = img.get('alt', '')
+                        if 'Advertisement:' in alt_text:
+                            # Extract the part after "Advertisement:"
+                            message_part = alt_text.split('Advertisement:', 1)[1].strip()
+                            ad['message'] = message_part
+                        else:
+                            ad['message'] = alt_text
                     
                     # Try to extract description
                     desc = div.select_one('.espot-subText') or div.select_one('span')
@@ -742,6 +833,11 @@ def extract_ads_from_html(html, client=None, search_term=None):
                     cta = div.select_one('.espot-linkText')
                     if cta:
                         ad['cta'] = cta.get_text(strip=True)
+                
+                # Extract advertiser(s) - store as array for consistency
+                advertiser = _extract_kroger_advertiser(ad)
+                if advertiser:
+                    ad['advertisers'] = [advertiser]  # Array format for future co-brand support
                 
                 # Don't include the raw HTML in the results
                 # ad['html'] = raw_html  # Removed to reduce JSON size

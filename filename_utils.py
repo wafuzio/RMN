@@ -13,11 +13,12 @@ from datetime import datetime
 from typing import Optional
 
 
-def sanitize_component(text: str, max_length: int = 50) -> str:
+def sanitize_component(text: str, max_length: int = 50, preserve_ampersand: bool = False) -> str:
     """
     Sanitize a filename component:
     - Convert to lowercase
     - Replace spaces and special chars with underscores
+    - Optionally preserve & for brand names (e.g., P&G)
     - Remove consecutive underscores
     - Trim to max_length
     """
@@ -25,7 +26,11 @@ def sanitize_component(text: str, max_length: int = 50) -> str:
         return "unknown"
     
     # Convert to lowercase and replace spaces/special chars
-    sanitized = re.sub(r'[^a-z0-9]+', '_', text.lower())
+    # Preserve & if requested (for brand names like P&G)
+    if preserve_ampersand:
+        sanitized = re.sub(r'[^a-z0-9&]+', '_', text.lower())
+    else:
+        sanitized = re.sub(r'[^a-z0-9]+', '_', text.lower())
     
     # Remove leading/trailing underscores and consecutive underscores
     sanitized = re.sub(r'_+', '_', sanitized).strip('_')
@@ -87,14 +92,17 @@ def generate_ad_filename(
     timestamp,
     index: int = 1,
     extension: str = 'png',
-    advertiser: str = None
+    advertiser = None  # Can be str or list
 ) -> str:
     """
     Generate standardized ad filename.
     
-    Format: [retailer]__[advertiser]__[ad_type]__[client]__[search_term]__D[YYYY-MM-DD]_T[HH-MM.SS]_[index].[ext]
+    Format: [retailer]__[advertiser(s)]__[ad_type]__[client]__[search_term]__D[YYYY-MM-DD]_T[HH-MM.SS]_[index].[ext]
     
-    Note: Double underscores (__) separate major fields, single underscores (_) within fields.
+    Note: 
+    - Double underscores (__) separate major fields
+    - Single underscores (_) within fields
+    - Plus signs (+) separate multiple advertisers (co-branded ads)
     
     Args:
         retailer: 'kroger', 'walmart', 'instacart', 'amazon'
@@ -104,15 +112,22 @@ def generate_ad_filename(
         timestamp: datetime object or timestamp string
         index: ad index (1, 2, 3, etc.)
         extension: file extension without dot ('png', 'jpg', 'mp4')
-        advertiser: advertiser/brand name (e.g., 'popsicle', 'unilever') - optional
+        advertiser: advertiser/brand name(s) - can be:
+            - str: single advertiser (e.g., 'popsicle')
+            - list: multiple advertisers (e.g., ['herdez', 'jennie-o'])
+            - None: no advertiser
     
     Returns:
         Standardized filename string
     
-    Example:
+    Examples:
         >>> generate_ad_filename('walmart', 'sba', 'taxonomy_test', 'ice pop', 
         ...                      '2025-10-12_12-34-56', 1, 'png', 'popsicle')
         'walmart__popsicle__sba__taxonomy_test__ice_pop__D2025-10-12_T12-34.56_1.png'
+        
+        >>> generate_ad_filename('kroger', 'toa', 'cheese_dip', 'cheese dip',
+        ...                      '2025-10-12_19-20-33', 1, 'png', ['herdez', 'jennie-o'])
+        'kroger__herdez+jennie-o__toa__cheese_dip__cheese_dip__D2025-10-12_T19-20.33_1.png'
     """
     # Sanitize components
     retailer_clean = sanitize_component(retailer, max_length=20)
@@ -120,8 +135,21 @@ def generate_ad_filename(
     client_clean = sanitize_component(client, max_length=30)
     search_term_clean = sanitize_component(search_term, max_length=50)
     
-    # Sanitize advertiser if provided
-    advertiser_clean = sanitize_component(advertiser, max_length=30) if advertiser else None
+    # Handle advertiser (can be string, list, or None)
+    advertiser_clean = None
+    if advertiser:
+        if isinstance(advertiser, list):
+            # Multiple advertisers: sanitize each and join with +
+            # Preserve & in brand names (e.g., P&G)
+            sanitized_advertisers = [
+                sanitize_component(adv, max_length=30, preserve_ampersand=True) 
+                for adv in advertiser if adv
+            ]
+            if sanitized_advertisers:
+                advertiser_clean = '+'.join(sanitized_advertisers)
+        else:
+            # Single advertiser
+            advertiser_clean = sanitize_component(advertiser, max_length=30, preserve_ampersand=True)
     
     # Parse timestamp
     date_str, time_str = parse_timestamp(timestamp)
