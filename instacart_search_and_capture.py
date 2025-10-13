@@ -314,13 +314,16 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                 f.write(html_content)
             print(f"💾 HTML saved: {html_file}")
             
-            # Extract ad data for JSON
+            # Extract ad data for JSON (matching Kroger structure)
             ad_data = {
                 "keyword": keyword,
+                "search_term": keyword,
                 "store": store,
                 "timestamp": timestamp,
+                "retailer": "instacart",
                 "url": search_url,
-                "ads": []
+                "source_file": html_file,
+                "results": [{"ads": []}]  # Nested structure like Kroger
             }
             
             # Find all ad containers
@@ -368,15 +371,43 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                         try:
                             title_elem = elem.query_selector('h2, [role="heading"]')
                             if title_elem:
-                                ad_info["title"] = title_elem.inner_text()
+                                title = title_elem.inner_text()
+                                ad_info["title"] = title
+                                # Extract advertiser from title (matching Kroger structure)
+                                if title:
+                                    advertiser = None
+                                    # Method 1: "Brand - Description" format
+                                    if ' - ' in title:
+                                        parts = title.split(' - ')
+                                        if parts and parts[0]:
+                                            advertiser = parts[0].strip()
+                                    # Method 2: Look for capitalized brand names in title
+                                    # e.g., "Unleash spooky Goldfish® fun" → "Goldfish"
+                                    # e.g., "Amara Organic Smoothie Melts" → "Amara"
+                                    elif not advertiser:
+                                        # Look for capitalized words (potential brand names)
+                                        words = title.split()
+                                        for word in words:
+                                            # Remove ® and ™ symbols
+                                            clean_word = word.replace('®', '').replace('™', '').strip()
+                                            # Check if word is capitalized and not a common word
+                                            if (clean_word and clean_word[0].isupper() and 
+                                                clean_word.lower() not in ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by', 'as', 'is', 'was', 'are', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'unleash', 'love', 'what', 'you', 'your', 'our', 'refrigerated', 'organic', 'spooky', 'fun']):
+                                                advertiser = clean_word
+                                                break
+                                    
+                                    if advertiser:
+                                        ad_info["advertisers"] = [advertiser]
                         except:
                             pass
                         
-                        ad_data["ads"].append(ad_info)
+                        ad_data["results"][0]["ads"].append(ad_info)
                     except Exception as e:
                         print(f"⚠️  Could not extract data from {ad_type} #{i}: {e}")
             
-            print(f"📊 Found {len(ad_data['ads'])} ad units")
+            ad_count = len(ad_data['results'][0]['ads'])
+            ad_data['count'] = ad_count
+            print(f"📊 Found {ad_count} ad units")
             
             # Save JSON
             with open(json_file, 'w', encoding='utf-8') as f:

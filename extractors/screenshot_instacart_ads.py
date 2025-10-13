@@ -41,7 +41,12 @@ def screenshot_instacart_ads(json_path: str, html_path: str, output_dir: str, pr
     with open(json_path, 'r', encoding='utf-8') as f:
         ad_data = json.load(f)
     
-    ads = ad_data.get('ads', [])
+    # Support both old flat structure and new Kroger-style nested structure
+    if 'results' in ad_data and ad_data['results']:
+        ads = ad_data['results'][0].get('ads', [])
+    else:
+        ads = ad_data.get('ads', [])
+    
     url = ad_data.get('url')
     
     print(f"   Found {len(ads)} ads in JSON")
