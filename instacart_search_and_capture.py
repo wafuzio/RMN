@@ -328,10 +328,11 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             
             # Find all ad containers
             # Note: div.e-1qzz7bi includes both Shoppable Display Ads and Shoppable Video Ads
+            # Sponsored Label ads are excluded as they are not actual ad units (just product labels)
             ad_selectors = {
                 'Shoppable Display Ad': 'div.e-1qzz7bi',
                 'Display Ad': 'div.e-1hv1sre',
-                'Sponsored Label': 'div.e-cwus85',
+                # 'Sponsored Label': 'div.e-cwus85',  # Excluded - not actual ad units
             }
             
             for ad_type, selector in ad_selectors.items():

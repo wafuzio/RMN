@@ -601,12 +601,17 @@ def api_ads_cards():
             
             # Convert each ad to a card
             for idx, ad in enumerate(ads):
-                # Filter out non-featured tile takeovers for Walmart
                 ad_type = (ad.get("type") or ad.get("ad_type") or "").lower()
+                
+                # Filter out non-featured tile takeovers for Walmart
                 if retailer == "walmart" and "tile" in ad_type:
                     # Only include featured tile takeovers
                     if not ad.get("featured", False):
                         continue
+                
+                # Filter out Sponsored Label ads for Instacart (not actual ad units)
+                if retailer == "instacart" and "sponsored label" in ad_type:
+                    continue
                 
                 # Determine image filename - prioritize local saved paths over remote URLs
                 filename = ""
