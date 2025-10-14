@@ -73,6 +73,7 @@ class KrogerAdapter(RetailerAdapter):
             "--json", json_path,
             "--html", html_path,
             "--output", ctx.output_dir,
+            "--client", ctx.client,  # Explicit client to prevent derivation from path
             # Removed --headless for Kroger: navigation works better in headed mode
             "--no-lock",
             "--time-window", "45",

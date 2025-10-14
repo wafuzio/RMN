@@ -363,7 +363,11 @@ def process_images(
     saved_count = 0
 
     # Base output root
-    base_dir = os.path.join(output_dir, client) if client else output_dir
+    # If output_dir already ends with the client name, don't add it again
+    if client and not output_dir.endswith(os.path.sep + client):
+        base_dir = os.path.join(output_dir, client)
+    else:
+        base_dir = output_dir
 
     # Per-type folders
     toa_dir = os.path.join(base_dir, "TOA")
@@ -928,7 +932,7 @@ def main() -> int:
         saved = process_images(
             image_urls=image_urls,
             output_dir=args.output,
-            client=args.client,
+            client=client_for_lock,  # Use derived client, not args.client
             headless=args.headless,
             fixed_timestamp=fixed_ts,
             bypass_locks=args.no_lock,
@@ -941,7 +945,7 @@ def main() -> int:
             saved = process_images(
                 image_urls=image_urls,
                 output_dir=args.output,
-                client=args.client,
+                client=client_for_lock,  # Use derived client, not args.client
                 headless=args.headless,
                 fixed_timestamp=fixed_ts,
                 bypass_locks=False,

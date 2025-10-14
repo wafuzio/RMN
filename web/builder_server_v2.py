@@ -18,8 +18,9 @@ import os
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, make_response
 from pathlib import Path
+from urllib.parse import unquote
 import json
 import glob
 from datetime import datetime
@@ -41,23 +42,59 @@ API_KEY = os.environ.get("API_KEY")  # For future POST endpoints
 # Security & CORS
 # ============================================================================
 
-@app.after_request
-def after_request(resp):
-    """Handle CORS with environment-driven allowlist"""
+def _is_allowed_origin(origin: str) -> bool:
+    """Check if origin is allowed for CORS with credentials"""
+    if not origin:
+        return False
+    if origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1"):
+        return True
+    if origin.startswith("https://") and "ngrok" in origin:
+        return True
+    if ALLOWED_ORIGINS:
+        return origin in ALLOWED_ORIGINS
+    return False  # strict when ALLOWED_ORIGINS set
+
+@app.route("/api/<path:_any>", methods=["OPTIONS"])
+def cors_preflight(_any):
+    """Handle CORS preflight requests for all /api/* routes"""
     origin = request.headers.get("Origin", "")
+    resp = make_response(("", 204))
     
-    # Development: allow localhost
-    if not ALLOWED_ORIGINS or origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1"):
-        resp.headers["Access-Control-Allow-Origin"] = origin or "*"
-    elif origin in ALLOWED_ORIGINS:
+    # Origin + credentials must be set here
+    if _is_allowed_origin(origin):
         resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
         resp.headers["Vary"] = "Origin"
     else:
-        # Allow Builder.io and ngrok domains
+        # If you really must allow everyone, do not send credentials with *
         resp.headers["Access-Control-Allow-Origin"] = "*"
+        # No credentials header with '*'
     
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization,ngrok-skip-browser-warning"
-    resp.headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
+    # Echo requested headers; otherwise Chrome rejects
+    acrh = request.headers.get("Access-Control-Request-Headers", "")
+    resp.headers["Access-Control-Allow-Headers"] = acrh or "Content-Type,Authorization,ngrok-skip-browser-warning"
+    resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+    resp.headers["Access-Control-Max-Age"] = "86400"
+    return resp
+
+@app.after_request
+def after_request(resp):
+    """Handle CORS on every response (including 204 OPTIONS)"""
+    origin = request.headers.get("Origin", "")
+    
+    if _is_allowed_origin(origin):
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        resp.headers["Vary"] = "Origin"
+    else:
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        # Do NOT set credentials when using '*'
+    
+    # Echo preflight-requested headers if present; else defaults
+    acrh = request.headers.get("Access-Control-Request-Headers", "")
+    resp.headers["Access-Control-Allow-Headers"] = acrh or "Content-Type,Authorization,ngrok-skip-browser-warning"
+    resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+    resp.headers["Access-Control-Max-Age"] = "86400"
     return resp
 
 def require_api_key():
@@ -70,6 +107,81 @@ def require_api_key():
 # ============================================================================
 # Path Helpers (Retailer-Aware)
 # ============================================================================
+
+# Ad type to leaf folder mapping
+LEAF_MAP = {
+    "toa": "TOA",
+    "skyscraper": "Skyscraper",
+    "carousel": "Carousel",
+    "curatedcarousel": "Carousel",  # normalize synonyms
+    "sponsored_carousel": "Carousel",
+    "banner": "Display_Ads",
+    "display_ads": "Display_Ads",
+    "hero": "Hero",
+    "sba": "SBA",
+    "sponsored_brand": "SBA",
+    "sbv": "SBV",
+    "sponsored_brand_video": "SBV",
+    "tile_takeover": "Tile_Takeover",
+    "sponsored_product": "Sponsored_Product",
+    "sponsored_products": "Sponsored_Product",
+}
+
+# Extension preference order
+EXT_PREF = [".png", ".jpg", ".jpeg", ".webp"]
+
+def _safe_join(*parts) -> str:
+    """Safely join path parts and prevent directory traversal"""
+    p = os.path.normpath(os.path.join(*parts))
+    output_norm = os.path.normpath(OUTPUT_ROOT)
+    if not p.startswith(output_norm):
+        raise ValueError("path escape detected")
+    return p
+
+def leaf_for(ad_type: str) -> str:
+    """
+    Map ad_type to the correct leaf folder name.
+    Normalizes variations and synonyms to canonical folder names.
+    """
+    key = (ad_type or "").strip().lower().replace(" ", "").replace("_", "")
+    return LEAF_MAP.get(key, "Display_Ads")
+
+def find_image_rel(output_root: str, retailer: str, client: str, leaf_hint: str, basename: str) -> str | None:
+    """
+    Find the correct relative path for an image file.
+    
+    Returns: Relative path like 'Carousel/foo.jpg', or None if not found.
+    
+    Strategy:
+    1. Try the hinted leaf with preferred extensions
+    2. Try all allowed leaves with all extensions for this basename
+    """
+    # Get allowed subdirs for this retailer
+    try:
+        allowed_leaves = allowed_subdirs(retailer)
+    except ValueError:
+        allowed_leaves = ["TOA", "Skyscraper", "Carousel", "Display_Ads", "SBA", "SBV", "Tile_Takeover"]
+    
+    # 1) Try the hinted leaf with preferred extensions
+    for ext in EXT_PREF:
+        try:
+            cand = _safe_join(output_root, retailer, client, leaf_hint, basename + ext)
+            if os.path.isfile(cand):
+                return f"{leaf_hint}/{basename}{ext}"
+        except (ValueError, OSError):
+            continue
+    
+    # 2) Try all leaves/extensions for this basename
+    for leaf in allowed_leaves:
+        for ext in EXT_PREF:
+            try:
+                cand = _safe_join(output_root, retailer, client, leaf, basename + ext)
+                if os.path.isfile(cand):
+                    return f"{leaf}/{basename}{ext}"
+            except (ValueError, OSError):
+                continue
+    
+    return None
 
 def list_retailers():
     """List all retailers with output directories"""
@@ -113,6 +225,33 @@ def subdir(retailer, client, leaf):
     """Get subdirectory for retailer/client"""
     return os.path.join(OUTPUT_ROOT, retailer, client, leaf)
 
+def subdir_for(retailer: str, ad_type: str) -> str:
+    """
+    Map ad type to the correct subdirectory for a retailer.
+    Returns empty string if no mapping found (fallback to search).
+    """
+    r = (retailer or "").lower()
+    t = (ad_type or "").strip().lower()
+    if r == "kroger":
+        if "skyscraper" in t: return "Skyscraper"
+        if "toa" in t: return "TOA"
+        if "carousel" in t: return "Carousel"
+        if "display" in t: return "Display_Ads"
+    elif r == "instacart":
+        if "shoppable video" in t: return "Shoppable_Video_Ads"
+        if "shoppable display" in t: return "Shoppable_Display_Ads"
+        if "display" in t: return "Display_Ads"
+    elif r == "amazon":
+        if "skyscraper" in t: return "Skyscraper"
+        if "toa" in t or "sponsored brand" in t: return "TOA"
+        if "carousel" in t or "sponsored product" in t: return "Carousel"
+    elif r == "walmart":
+        if "sbv" in t or "video" in t: return "SBV"
+        if "sba" in t or "brand" in t: return "SBA"
+        if "tile" in t or "takeover" in t: return "Tile_Takeover"
+        if "top" in t or "banner" in t: return "Top_Banner"
+    return ""  # fallback: let /api/image search allowed subdirs
+
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -129,8 +268,15 @@ def index():
             "GET /api/clients?retailer=<retailer>": "List clients for a retailer",
             "GET /api/runs?retailer=<retailer>&client=<client>": "List runs for a client",
             "GET /api/terms?retailer=<retailer>&client=<client>": "List search terms for a client",
-            "GET /api/ads/cards?retailer=<retailer>&client=<client>&term=<term>&page=1&page_size=24": "Get ad cards",
+            "GET /api/advertisers?retailer=<retailer>&client=<client>": "List all advertisers/brands for a client",
+            "GET /api/ads/cards?retailer=<retailer>&client=<client>&term=<term>&advertiser=<brand>&page=1&page_size=24": "Get ad cards with filtering",
             "GET /api/image/<retailer>/<client>/<filename>": "Serve ad image"
+        },
+        "features": {
+            "co_branded_ads": "Supports multiple advertisers per ad (e.g., Herdez + Jennie-O)",
+            "filename_parsing": "Extracts advertisers from new taxonomy: retailer__advertiser(s)__ad_type__...",
+            "advertiser_filtering": "Filter ads by brand name using ?advertiser=<brand>",
+            "advertiser_array": "Each ad card includes 'advertisers' array for multi-brand support"
         },
         "environment": {
             "SCRAPER_HOME": SCRAPER_HOME,
@@ -139,6 +285,11 @@ def index():
             "API_KEY_SET": bool(API_KEY)
         }
     })
+
+@app.route("/api/ping", methods=["GET"])
+def api_ping():
+    """Simple ping endpoint for CORS testing and health checks"""
+    return jsonify({"ok": True, "timestamp": datetime.now().isoformat()})
 
 @app.route("/api/retailers", methods=["GET"])
 def api_retailers():
@@ -279,6 +430,70 @@ def api_terms():
         "count": len(terms)
     })
 
+@app.route("/api/advertisers", methods=["GET"])
+def api_advertisers():
+    """
+    List all unique advertisers/brands for a client
+    
+    Query params:
+    - retailer (required): retailer slug
+    - client (required): client name
+    """
+    retailer = (request.args.get("retailer") or "").strip().lower()
+    client = (request.args.get("client") or "").strip()
+    
+    if not (retailer and client):
+        return jsonify({"error": "retailer and client parameters required"}), 400
+    
+    rdir = runs_dir(retailer, client)
+    advertisers = set()
+    
+    if os.path.isdir(rdir):
+        for item in os.listdir(rdir):
+            item_path = os.path.join(rdir, item)
+            files_to_check = []
+            
+            if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                files_to_check.append(item_path)
+            elif os.path.isdir(item_path):
+                # Check subdirectories (Walmart structure)
+                for subitem in os.listdir(item_path):
+                    if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                        files_to_check.append(os.path.join(item_path, subitem))
+            
+            for fpath in files_to_check:
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    
+                    # Extract advertisers from all ads
+                    ads = []
+                    if "results" in data:
+                        for result in data["results"]:
+                            ads.extend(result.get("ads", []))
+                    else:
+                        ads = data.get("ads", [])
+                    
+                    for ad in ads:
+                        # Get advertisers array
+                        ad_advertisers = ad.get("advertisers", [])
+                        if ad_advertisers:
+                            advertisers.update(ad_advertisers)
+                        else:
+                            # Fallback to legacy fields
+                            legacy = ad.get("brand") or ad.get("advertiser")
+                            if legacy:
+                                advertisers.add(legacy)
+                except Exception:
+                    pass
+    
+    return jsonify({
+        "retailer": retailer,
+        "client": client,
+        "advertisers": sorted(advertisers),
+        "count": len(advertisers)
+    })
+
 @app.route("/api/ads/cards", methods=["GET"])
 def api_ads_cards():
     """
@@ -288,12 +503,14 @@ def api_ads_cards():
     - retailer (required): retailer slug
     - client (required): client name
     - term (optional): filter by search term
+    - advertiser (optional): filter by advertiser/brand name
     - page (optional): page number (default 1)
     - page_size (optional): items per page (default 24, max 100)
     """
     retailer = (request.args.get("retailer") or "").strip().lower()
     client = (request.args.get("client") or "").strip()
     term = (request.args.get("term") or "").strip().lower()
+    advertiser_filter = (request.args.get("advertiser") or "").strip().lower()
     
     try:
         page = max(int(request.args.get("page", 1)), 1)
@@ -357,6 +574,28 @@ def api_ads_cards():
                 for result in data.get("results", []):
                     ads.extend(result.get("ads", []))
             
+            # WALMART FALLBACK: If no ads found in JSON, create synthetic ads from image files
+            if not ads and retailer == "walmart":
+                # Look for image files in the same directory as the JSON
+                json_dir = os.path.dirname(fpath)
+                try:
+                    for img_file in os.listdir(json_dir):
+                        if img_file.endswith(('.png', '.jpg', '.jpeg')):
+                            # Parse ad type from filename: walmart_keyword_adtype_N.png
+                            parts = img_file.replace('.png', '').replace('.jpg', '').split('_')
+                            ad_type = parts[-2] if len(parts) >= 3 else "unknown"
+                            
+                            # Create synthetic ad
+                            ads.append({
+                                "type": ad_type,
+                                "ad_type": ad_type,
+                                "brand": "Unknown",
+                                "screenshot_path": os.path.join(os.path.basename(json_dir), img_file),
+                                "image_url": "",
+                            })
+                except Exception as e:
+                    print(f"Error creating synthetic Walmart ads: {e}")
+            
             # Get image_paths mapping if available (from migration)
             image_paths_map = data.get("image_paths", {})
             
@@ -364,17 +603,28 @@ def api_ads_cards():
             for idx, ad in enumerate(ads):
                 # Determine image filename - prioritize local saved paths over remote URLs
                 filename = ""
+                has_local_path = False
                 
                 # Try various path fields first (these point to actual saved files)
-                for path_field in ["skyscraper_image_path", "carousel_image_path", "main_image_path", 
+                for path_field in ["skyscraper_image_path", "carousel_image_path", "main_image_path",
                                    "image_path", "screenshot_path", "filename"]:
-                    if ad.get(path_field):
-                        filename = os.path.basename(str(ad.get(path_field)))
-                        break
+                    p = ad.get(path_field)
+                    if not p:
+                        continue
+                    p = str(p).lstrip("./")
+                    # Keep retailer subfolder if path is relative (contains '/')
+                    if "/" in p and not os.path.isabs(p):
+                        filename = p  # e.g., "Skyscraper/file.png" or "SBA/file.png"
+                    else:
+                        filename = os.path.basename(p)
+                    has_local_path = True
+                    break
                 
                 # Fallback to extracting from image_url if no path field found
+                # BUT mark it as not having a local path so we can search for taxonomy files
                 if not filename and ad.get("image_url"):
                     filename = os.path.basename(str(ad.get("image_url")))
+                    has_local_path = False  # This is a remote CDN URL, not a local file
                 
                 # For Walmart: try to match ad type to image_paths mapping
                 if not filename and image_paths_map and retailer == "walmart":
@@ -387,11 +637,97 @@ def api_ads_cards():
                             filename = new_path
                             break
                 
-                # Build API image URL
-                image_api = f"/api/image/{retailer}/{client}/{filename}" if filename else ""
+                # FALLBACK: If we don't have a local path, search for taxonomy-named files on disk
+                # This handles cases where screenshot script saved images but didn't update JSON
+                # OR when JSON only has remote CDN URLs (image_url) but local files exist
+                if not has_local_path:
+                    ad_type_hint = ad.get("type") or ad.get("ad_type") or ""
+                    leaf = subdir_for(retailer, ad_type_hint)
+                    if leaf:
+                        # Look for files matching the taxonomy pattern in this ad type folder
+                        search_dir = os.path.join(OUTPUT_ROOT, retailer, client, leaf)
+                        if os.path.isdir(search_dir):
+                            try:
+                                # Get keyword for matching
+                                kw = (data.get("keyword") or data.get("search_term") or "").lower().replace(" ", "_")
+                                # List files and find matches
+                                files = os.listdir(search_dir)
+                                for f in files:
+                                    # Match pattern: retailer__*__ad_type__*__keyword__*
+                                    if f.startswith(f"{retailer}__") and kw in f.lower():
+                                        filename = os.path.join(leaf, f)
+                                        break
+                            except Exception:
+                                pass
                 
-                # Extract brand - handle different JSON structures
-                brand = ad.get("brand") or ad.get("title") or "Unknown"
+                # Build API image URL using deterministic path resolution
+                image_api = ""
+                if filename:
+                    # If filename already includes subdir (e.g., "Skyscraper/foo.png"), use as-is
+                    if "/" in filename:
+                        filename_for_url = filename
+                    else:
+                        # Use find_image_rel to locate the actual file on disk
+                        ad_type_hint = ad.get("type") or ad.get("ad_type") or ""
+                        leaf_hint = leaf_for(ad_type_hint)
+                        
+                        # Extract basename without extension for searching
+                        basename_no_ext = os.path.splitext(filename)[0]
+                        
+                        # Find the actual relative path
+                        rel_path = find_image_rel(OUTPUT_ROOT, retailer, client, leaf_hint, basename_no_ext)
+                        
+                        if rel_path:
+                            filename_for_url = rel_path
+                        else:
+                            # File not found on disk - still include the ad but with empty image_url
+                            # This preserves the ad data even if screenshot failed
+                            print(f"⚠️  Ad has missing image file: {filename}")
+                            filename_for_url = None
+                    
+                    if filename_for_url:
+                        image_api = f"/api/image/{retailer}/{client}/{filename_for_url}"
+                        # Add ngrok bypass param so images load without interstitial (images can't set headers)
+                        sep = "&" if "?" in image_api else "?"
+                        image_api += f"{sep}ngrok-skip-browser-warning=true"
+                    else:
+                        image_api = ""  # Empty string indicates missing image
+                
+                # Extract advertisers - handle new array format and legacy fields
+                advertisers = ad.get("advertisers")  # New array format
+                if not advertisers:
+                    # Fallback to legacy fields
+                    legacy_brand = ad.get("brand") or ad.get("advertiser") or ad.get("title")
+                    advertisers = [legacy_brand] if legacy_brand else []
+                
+                # Campaign slogan detection - words that indicate this is NOT a brand name
+                campaign_keywords = {'halloween', 'christmas', 'holiday', 'summer', 'spring', 'fall', 'winter',
+                                    'grab', 'get', 'buy', 'save', 'shop', 'now', 'better', 'best', 'new', 'fresh',
+                                    'treats', 'deals', 'sale', 'special', 'limited', 'exclusive', 'discover',
+                                    'shop now', 'buy now', 'save now', 'learn more', 'click here'}
+                
+                # If advertisers look like campaign slogans, prefer filename parsing
+                looks_like_slogan = False
+                if advertisers:
+                    for adv in advertisers:
+                        if adv and any(keyword in adv.lower() for keyword in campaign_keywords):
+                            looks_like_slogan = True
+                            break
+                
+                # If no advertisers OR looks like slogan, try parsing from filename
+                if (not advertisers or looks_like_slogan) and filename:
+                    # New taxonomy: retailer__advertiser(s)__ad_type__client__search_term__timestamp_index.ext
+                    # Advertisers can be: single (herdez) or multiple (herdez+jennie_o)
+                    parts = filename.split('__')
+                    if len(parts) >= 2:
+                        advertiser_segment = parts[1]
+                        # Split on + for co-branded ads
+                        parsed_advertisers = advertiser_segment.split('+')
+                        # Clean up (remove underscores, capitalize)
+                        advertisers = [adv.replace('_', ' ').title() for adv in parsed_advertisers if adv and adv != 'unknown']
+                
+                # Format brand string for display
+                brand = ' + '.join(advertisers) if advertisers else "Unknown"
                 
                 # Extract message/headline
                 message = ad.get("message") or ad.get("headline") or ad.get("description") or ""
@@ -402,6 +738,7 @@ def api_ads_cards():
                     "keyword": data.get("keyword") or data.get("search_term"),
                     "ad_type": ad.get("type") or ad.get("ad_type"),
                     "brand": brand,
+                    "advertisers": advertisers,  # NEW: array of advertisers for filtering
                     "message": message,
                     "image_url": image_api,
                     "run_file": fn,
@@ -412,6 +749,16 @@ def api_ads_cards():
         except Exception as e:
             print(f"Error processing {fn}: {e}")
             pass
+    
+    # Filter by advertiser if specified
+    if advertiser_filter:
+        filtered_cards = []
+        for card in all_cards:
+            # Check if any advertiser in the array matches the filter
+            advertisers = card.get("advertisers", [])
+            if any(advertiser_filter in adv.lower() for adv in advertisers):
+                filtered_cards.append(card)
+        all_cards = filtered_cards
     
     # Paginate
     start = (page - 1) * page_size
@@ -426,66 +773,64 @@ def api_ads_cards():
         "page": page,
         "page_size": page_size,
         "has_more": has_more,
-        "total_cards": len(all_cards)
+        "total_cards": len(all_cards),
+        "filters": {
+            "term": term or None,
+            "advertiser": advertiser_filter or None
+        }
     })
 
 @app.route("/api/image/<retailer>/<client>/<path:filename>", methods=["GET"])
 def api_image(retailer, client, filename):
     """
-    Serve ad image by trying all allowed subdirectories for the retailer
+    Serve ad image with leaf-agnostic fallback.
     
-    This abstracts the folder differences (TOA vs Sponsored_Product vs Main)
-    Filename can include subdirectory path (e.g., "SBA/image.png")
+    Strategy:
+    1. Try exact path as requested
+    2. Fallback: search all allowed subfolders by basename
+    3. Try extension variants (.jpg, .jpeg, .png)
     """
     retailer = retailer.lower()
     
-    # Try all allowed subdirs for this retailer
+    # Decode and normalize filename
+    clean = unquote(filename).lstrip("/").replace("\\", "/")
+    base = os.path.basename(clean)
+    
+    # Get allowed subdirs for this retailer
     try:
         leaves = allowed_subdirs(retailer)
     except ValueError:
         return jsonify({"error": f"unknown retailer: {retailer}"}), 404
     
-    # If filename includes a path, try that first
-    if "/" in filename:
-        p = os.path.join(OUTPUT_ROOT, retailer, client, filename)
-        if os.path.exists(p):
-            return send_from_directory(os.path.dirname(p), os.path.basename(p))
+    # 1) Try exact path as requested
+    try:
+        exact = _safe_join(OUTPUT_ROOT, retailer, client, clean)
+        if os.path.isfile(exact):
+            return send_from_directory(os.path.dirname(exact), os.path.basename(exact))
+    except (ValueError, OSError):
+        pass
     
-    # Priority order: specific ad types first, then Main, then runs
-    priority_order = [
-        leaf for leaf in leaves
-        if leaf not in ["Main", "runs"]
-    ] + ["Main"]
-    
-    # Try exact filename match in each directory
-    for leaf in priority_order:
-        p = os.path.join(OUTPUT_ROOT, retailer, client, leaf, filename)
-        if os.path.exists(p):
-            return send_from_directory(os.path.dirname(p), os.path.basename(p))
-    
-    # If exact match fails, try fuzzy matching by ad type and keyword
-    # Extract ad type from directory name in filename or from filename itself
-    filename_lower = filename.lower()
-    for leaf in priority_order:
-        dir_path = os.path.join(OUTPUT_ROOT, retailer, client, leaf)
-        if not os.path.isdir(dir_path):
-            continue
-        
-        # List all files in this directory
+    # 2) Fallback: search all allowed subfolders for basename
+    for leaf in leaves:
         try:
-            files = os.listdir(dir_path)
-            # Try to find a file that matches the ad type pattern
-            ad_type_prefix = leaf.lower().replace("_", "")
-            for f in files:
-                f_lower = f.lower()
-                # Match if file starts with ad type and has similar naming pattern
-                if f_lower.startswith(ad_type_prefix) or ad_type_prefix in f_lower:
-                    # Return the first match (could be improved with better matching)
-                    return send_from_directory(dir_path, f)
-        except Exception:
+            alt = _safe_join(OUTPUT_ROOT, retailer, client, leaf, base)
+            if os.path.isfile(alt):
+                return send_from_directory(os.path.dirname(alt), os.path.basename(alt))
+        except (ValueError, OSError):
             continue
     
-    return jsonify({"error": "image not found"}), 404
+    # 3) Extension variants (jpg/jpeg/png) if needed
+    name, ext = os.path.splitext(base)
+    for leaf in leaves:
+        for ext2 in (".jpg", ".jpeg", ".png", ".webp"):
+            try:
+                alt2 = _safe_join(OUTPUT_ROOT, retailer, client, leaf, name + ext2)
+                if os.path.isfile(alt2):
+                    return send_from_directory(os.path.dirname(alt2), os.path.basename(alt2))
+            except (ValueError, OSError):
+                continue
+    
+    return jsonify({"error": "image not found", "requested": clean}), 404
 
 @app.route("/api/logo/<retailer>", methods=["GET"])
 def api_logo(retailer):
@@ -570,6 +915,98 @@ def legacy_get_client_ads(client):
 # ============================================================================
 # Health & Status
 # ============================================================================
+
+@app.route("/api/debug/resolve", methods=["GET"])
+def debug_resolve():
+    """
+    Debug endpoint to pinpoint image path mismatches.
+    
+    Returns detailed info about whether the requested path exists,
+    and if not, where the file actually lives (leaf mismatch, extension variant, etc.)
+    """
+    retailer = (request.args.get("retailer") or "").lower().strip()
+    client = (request.args.get("client") or "").strip()
+    filename = (request.args.get("filename") or "").strip()
+    
+    if not (retailer and client and filename):
+        return jsonify({"error": "retailer, client, filename required"}), 400
+    
+    # Decode and normalize
+    rel = unquote(filename).lstrip("/").replace("\\", "/")
+    base = os.path.basename(rel)
+    
+    try:
+        leaves = allowed_subdirs(retailer)
+    except ValueError:
+        return jsonify({"error": f"unknown retailer: {retailer}"}), 404
+    
+    tried = []
+    
+    # 1) Try exact path as requested
+    try:
+        exact = _safe_join(OUTPUT_ROOT, retailer, client, rel)
+        tried.append(exact)
+        if os.path.isfile(exact):
+            st = os.stat(exact)
+            return jsonify({
+                "exists": True,
+                "where": "exact",
+                "path": exact,
+                "leaf": os.path.basename(os.path.dirname(exact)),
+                "size": st.st_size,
+                "requested": rel
+            })
+    except (ValueError, OSError):
+        pass
+    
+    # 2) Try other leaves with same basename (leaf mismatch)
+    for leaf in leaves:
+        try:
+            alt = _safe_join(OUTPUT_ROOT, retailer, client, leaf, base)
+            tried.append(alt)
+            if os.path.isfile(alt):
+                st = os.stat(alt)
+                return jsonify({
+                    "exists": True,
+                    "where": "leaf_mismatch",
+                    "path": alt,
+                    "leaf": leaf,
+                    "size": st.st_size,
+                    "requested": rel,
+                    "note": f"Requested path had wrong leaf folder"
+                })
+        except (ValueError, OSError):
+            continue
+    
+    # 3) Try extension variants
+    name, ext = os.path.splitext(base)
+    for leaf in leaves:
+        for ext2 in (".jpg", ".jpeg", ".png", ".webp"):
+            try:
+                alt2 = _safe_join(OUTPUT_ROOT, retailer, client, leaf, name + ext2)
+                tried.append(alt2)
+                if os.path.isfile(alt2):
+                    st = os.stat(alt2)
+                    return jsonify({
+                        "exists": True,
+                        "where": "ext_variant",
+                        "path": alt2,
+                        "leaf": leaf,
+                        "size": st.st_size,
+                        "requested": rel,
+                        "note": f"Found with extension {ext2} instead of {ext}"
+                    })
+            except (ValueError, OSError):
+                continue
+    
+    # 4) Not found anywhere
+    return jsonify({
+        "exists": False,
+        "path_requested": rel,
+        "tried": tried[:20],  # Show first 20 attempts
+        "allowed_subdirs": leaves,
+        "note": "File not found on disk - may not have been scraped or filename differs"
+    }), 404
 
 @app.route("/health", methods=["GET"])
 def health():

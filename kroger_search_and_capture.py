@@ -629,9 +629,9 @@ def search_and_capture(search_term=None, output_dir=None):
                 toa_divs = page.query_selector_all('div[data-testid="StandardTOA"]')
                 print(f"🔍 Found {len(toa_divs)} TOA ads on the page")
 
-                # Carousel capture (first only)
+                # Carousel capture (FEATURED carousels only - matches HTML parser logic)
                 carousel_selectors = [
-                    'div.CuratedCarousel, div[class*="Carousel"]:has(.kds-Heading--xl)'
+                    'div.CuratedCarousel'  # Primary selector that matches HTML parser
                 ]
                 carousel_dir = os.path.join(output_dir, "Carousel")
                 os.makedirs(carousel_dir, exist_ok=True)
@@ -645,6 +645,16 @@ def search_and_capture(search_term=None, output_dir=None):
                         print(f"🎠 Found {len(carousels)} carousel elements with selector: {selector}")
                         for i, carousel in enumerate(carousels):
                             try:
+                                # CRITICAL: Only capture FEATURED/SPONSORED carousels
+                                # Check for featured flag (matches HTML parser logic)
+                                featured_flag = carousel.query_selector('.CuratedCarousel__featuredFlag, [data-testid="carousel-featured-flag"]')
+                                if not featured_flag:
+                                    # Also check for "Featured" text
+                                    featured_text = carousel.evaluate('el => el.textContent.includes("Featured")')
+                                    if not featured_text:
+                                        print(f"⚠️ Skipping carousel {i+1} - not a featured/sponsored carousel")
+                                        continue
+                                
                                 page.add_style_tag(content="""
                                     header, .Header, .kds-Header, [data-testid=\"header\"], .kds-StickyHeader,
                                     .SearchFilters, .search-page-filters, [class*=\"sticky\"] { display: none !important; }
@@ -654,11 +664,11 @@ def search_and_capture(search_term=None, output_dir=None):
                                 header = carousel.query_selector(
                                     '.CuratedCarousel__header, h2, .header, .kds-Heading, .headerSection-header, [class*="header"], [class*="title"]'
                                 )
-                                if not header and len(carousels) > 1:
+                                if not header:
                                     print(f"⚠️ Skipping carousel {i+1} - no header found")
                                     continue
                                 header_text = header.text_content().strip() if header else "main_carousel"
-                                if not header_text and len(carousels) > 1:
+                                if not header_text:
                                     print(f"⚠️ Skipping carousel {i+1} - empty header text")
                                     continue
                                 ts2 = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

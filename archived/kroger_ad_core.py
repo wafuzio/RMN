@@ -98,8 +98,11 @@ def _extract_kroger_advertiser(ad_dict):
         match = re.match(r'^([A-Z][A-Za-z0-9&\s\'-]+?)\.', message)
         if match:
             brand = match.group(1).strip()
-            # Filter out common promotional words and check it's not too long (likely not just a brand)
-            if brand and brand.lower() not in ['buy', 'save', 'get', 'shop', 'new', 'sale', 'jots'] and len(brand.split()) <= 3:
+            brand_lower = brand.lower()
+            # Filter out common promotional words/phrases and check it's not too long
+            cta_phrases = ['shop now', 'buy now', 'save now', 'get now', 'learn more', 'see more', 'click here']
+            is_cta = brand_lower in cta_phrases or brand_lower in ['buy', 'save', 'get', 'shop', 'new', 'sale', 'jots']
+            if brand and not is_cta and len(brand.split()) <= 3:
                 return brand
         
         # Pattern 2: Extract brand name from middle of message (e.g., "JOTS Herdez Taco Tuesday")
@@ -132,6 +135,34 @@ def _extract_kroger_advertiser(ad_dict):
         if brand_match:
             brand = unquote(brand_match.group(1)).replace('+', ' ')
             return brand.title()
+        
+        # Extract brand from keyword parameter (e.g., keyword=DuncanHinesDollyHalloweenBaking2025)
+        keyword_match = re.search(r'[?&]keyword=([^&]+)', href, re.IGNORECASE)
+        if keyword_match:
+            keyword = unquote(keyword_match.group(1))
+            # Split camelCase/PascalCase into words
+            words = re.findall(r'[A-Z][a-z]+', keyword)
+            
+            if words:
+                # Filter out promotional/seasonal words
+                promo_words = {'Halloween', 'Christmas', 'Holiday', 'Summer', 'Spring', 'Fall', 'Winter',
+                              'Baking', 'Cooking', 'Sale', 'Deal', 'Special', 'Limited', 'New', 'Fresh',
+                              'Buy', 'Save', 'Get', 'Shop', 'Now', 'More', 'Best', 'Great', 'Super'}
+                
+                # Collect brand words (first consecutive capitalized words before hitting a promo word)
+                brand_words = []
+                for word in words:
+                    if word in promo_words:
+                        break  # Stop at first promotional word
+                    brand_words.append(word)
+                    if len(brand_words) >= 2:  # Limit to 2 words for brand name
+                        break
+                
+                if brand_words:
+                    brand = ' '.join(brand_words)
+                    # Validate it's not just a single promotional word that slipped through
+                    if len(brand_words) >= 1 and brand.lower() not in ['buy', 'save', 'get', 'shop', 'new', 'sale']:
+                        return brand
     
     # Method 3: For Kroger promotional content (no brand sponsor)
     # If no brand found and it's a TOA/Skyscraper, it's likely Kroger's own promo
@@ -845,11 +876,11 @@ def extract_ads_from_html(html, client=None, search_term=None):
                 
         # For CuratedCarousel ads
         elif ad_type == "CuratedCarousel":
-            # Look for carousel ads with multiple selectors
+            # Look for carousel CONTAINERS only (not individual product tiles)
+            # Use specific selectors that match the carousel wrapper, not child elements
             carousel_divs = soup.select('div.CuratedCarousel.py-32.bg-accent-more-subtle') or \
-                          soup.select('div.CuratedCarousel') or \
-                          soup.select('div[class*="Carousel"]') or \
-                          soup.select('div[data-testid*="carousel"]')
+                          soup.select('div.CuratedCarousel:not([class*="__"])') or \
+                          []
             
             log(f"[{ad_type} Ads Found] {len(carousel_divs)}")
             

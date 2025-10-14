@@ -185,8 +185,8 @@ def extract_toa_images(json_file, html_file=None, client_name=None, output_overr
         if output_override:
             out_abs = os.path.abspath(output_override)
             cmd.extend(["--output", out_abs])
-        # Else, add client name if provided (legacy layout under output/<client>/)
-        elif client_name:
+        # Add client name if provided (helps prevent incorrect derivation from paths)
+        if client_name:
             cmd.extend(["--client", client_name])
 
         print(f"\n📷 Extracting TOA images using extractors/screenshot_toa_image.py...")
@@ -492,7 +492,8 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
         # Always run the extractor so fresh scrapes consistently produce images.
         target_html = result.get('source_file') or html_file
         client_root = compute_client_root_local(retailer, client, output_dir)
-        extract_toa_images(results_path, target_html, client_name=None, output_override=client_root)
+        # Pass client explicitly to prevent incorrect derivation from path
+        extract_toa_images(results_path, target_html, client_name=client, output_override=client_root)
     
     print(f"✅ Processed {processed} specific file(s)")
     return True
