@@ -681,7 +681,13 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
     return browser, ctx, page, False
 
 
-def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, meta: Dict, SL=None, client_name: str = None, client_root: str = None, timestamp: str = None) -> Tuple[int, List[str]]:
+def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, meta: Dict, SL=None, client_name: str = None, client_root: str = None, timestamp: str = None, filter_fn=None) -> Tuple[int, List[str]]:
+    """
+    Capture ad elements with optional filtering.
+    
+    Args:
+        filter_fn: Optional function(item) -> bool to filter elements before capturing
+    """
     shots: List[str] = []
     loc = page.locator(css)
     count = loc.count()
@@ -705,6 +711,11 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
 
         item = loc.nth(i)
         try:
+            # Apply filter if provided
+            if filter_fn and not filter_fn(item):
+                if SL: SL.log("element_filtered", label=label, index=i+1)
+                continue
+            
             # Use native wheel scroll instead of programmatic scrollIntoView
             _bring_into_view(page, item, SL=SL)
             time.sleep(0.2)
@@ -718,17 +729,77 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                     # Extract advertiser/brand name from the ad element
                     advertiser = None
                     try:
-                        # Try to find "Sponsored by [Brand]" text
+                        import re
+                        
+                        # Method 1: Try to find "Sponsored by [Brand]" text (works for SBA)
                         sponsored_text = item.locator('text=/Sponsored by/i').first
                         if sponsored_text.count() > 0:
                             full_text = sponsored_text.text_content()
-                            # Extract brand name after "Sponsored by"
-                            import re
                             match = re.search(r'Sponsored by\s+(.+)', full_text, re.IGNORECASE)
                             if match:
                                 advertiser = match.group(1).strip()
                         
-                        # Fallback: try to extract from URL facet parameter
+                        # Method 2: For SBV/video ads, try multiple extraction strategies
+                        if not advertiser and label == 'sbv':
+                            # Strategy 2a: Try to find brand in video title/description text
+                            try:
+                                video_text = item.inner_text()
+                                # Look for common patterns like "Brand Name - Product" or "Brand Name:"
+                                brand_match = re.search(r'^([A-Z][a-zA-Z\s&\']+?)(?:\s*[-:]\s*|\s+presents)', video_text, re.MULTILINE)
+                                if brand_match:
+                                    advertiser = brand_match.group(1).strip()
+                            except:
+                                pass
+                            
+                            # Strategy 2b: Extract from video URL or tracking URL
+                            if not advertiser:
+                                try:
+                                    # Look for any link within the video container
+                                    video_link = item.locator('a').first
+                                    if video_link.count() > 0:
+                                        href = video_link.get_attribute('href') or ''
+                                        # Extract product name from URL (handles both direct and redirect URLs)
+                                        # Pattern: /ip/Brand-Product-Name/12345 or rd=...%2Fip%2FBrand-Product-Name%2F...
+                                        product_match = re.search(r'(?:/ip/|%2Fip%2F)([^/]+?)(?:/|%2F|$)', href)
+                                        if product_match:
+                                            product_slug = product_match.group(1)
+                                            # URL decode and get first word (usually the brand)
+                                            product_slug = product_slug.replace('%20', ' ').replace('-', ' ')
+                                            brand_parts = product_slug.split()
+                                            if brand_parts:
+                                                # Capitalize properly (e.g., "claussen" -> "Claussen")
+                                                advertiser = brand_parts[0].title()
+                                except:
+                                    pass
+                            
+                            # Strategy 2c: Extract from product carousel within video ad
+                            if not advertiser:
+                                try:
+                                    # SBV ads contain product items - look inside them
+                                    # First, try to find product items within the SBV container
+                                    product_items = item.locator('[data-item-id]').all()
+                                    if product_items and len(product_items) > 0:
+                                        # Get first product item
+                                        first_product = product_items[0]
+                                        
+                                        # Try product brand element
+                                        brand_elem = first_product.locator('[data-automation-id="product-brand"]').first
+                                        if brand_elem.count() > 0:
+                                            advertiser = brand_elem.inner_text().strip()
+                                        
+                                        # Alternative: extract from product title
+                                        if not advertiser:
+                                            product_title = first_product.locator('[data-automation-id="product-title"]').first
+                                            if product_title.count() > 0:
+                                                title_text = product_title.inner_text().strip()
+                                                # First word is usually the brand (e.g., "Breyers Chocolate Ice Cream")
+                                                brand_parts = title_text.split()
+                                                if brand_parts:
+                                                    advertiser = brand_parts[0]
+                                except:
+                                    pass
+                        
+                        # Method 3: Try to extract from URL facet parameter
                         if not advertiser:
                             links = item.locator('a[href*="facet"]').all()
                             for link in links[:3]:  # Check first few links
@@ -737,8 +808,22 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                                 if brand_match:
                                     advertiser = brand_match.group(1).replace('%20', ' ').replace('+', ' ')
                                     break
+                        
+                        # Method 4: For tile takeovers, extract from product brand
+                        if not advertiser and label == 'tile_takeover':
+                            # Try to find brand in product listings within the tile
+                            brand_elem = item.locator('[data-automation-id="product-brand"]').first
+                            if brand_elem.count() > 0:
+                                advertiser = brand_elem.inner_text().strip()
+                        
+                        # Final fallback: Use "unknown" if we couldn't extract brand
+                        # This ensures filename generation doesn't fail and frontend hooks work
+                        if not advertiser:
+                            advertiser = "unknown"
+                            if SL: SL.log("advertiser_fallback", label=label, index=i+1, reason="no_extraction_method_succeeded")
                     except Exception as e:
                         if SL: SL.log("advertiser_extraction_error", error=str(e), label=label, index=i+1)
+                        advertiser = "unknown"  # Ensure we have a value even on error
                     
                     # Map label to ad type folder name
                     ad_type_map = {
@@ -2464,11 +2549,21 @@ def search_and_capture(
             if n:
                 say("info", f"[{retailer}] SBA found ({n})")
             
-            # 3) Tile takeover
-            n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp)
+            # 3) Tile takeover (only capture SPONSORED tile takeovers)
+            def is_sponsored_tile(item):
+                """Filter to only capture sponsored/featured tile takeovers"""
+                try:
+                    # Look for "Sponsored" indicator in the tile
+                    text = item.inner_text().lower()
+                    return 'sponsored' in text or 'featured' in text or 'ad' in text
+                except:
+                    # If we can't determine, skip it (safer to miss than capture organic)
+                    return False
+            
+            n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, filter_fn=is_sponsored_tile)
             shots.extend(s)
             if n:
-                say("info", f"[{retailer}] Tile takeover found ({n})")
+                say("info", f"[{retailer}] Sponsored tile takeover found ({n})")
             
             # 4) SBV (screenshot module + attempt mp4 download)
             sbv_mod = page.locator(SELECTORS["sbv"])
@@ -2480,10 +2575,10 @@ def search_and_capture(
                     mod.scroll_into_view_if_needed()
                     time.sleep(0.2)
                     
-                    # Extract advertiser for SBV
+                    # Extract advertiser for SBV (using comprehensive extraction)
                     advertiser = None
                     try:
-                        # Try to find "Sponsored by [Brand]" text
+                        # Method 1: Try to find "Sponsored by [Brand]" text
                         sponsored_text = mod.locator('text=/Sponsored by/i').first
                         if sponsored_text.count() > 0:
                             full_text = sponsored_text.text_content()
@@ -2491,7 +2586,55 @@ def search_and_capture(
                             if match:
                                 advertiser = match.group(1).strip()
                         
-                        # Fallback: try to extract from URL facet parameter
+                        # Method 2: Extract from video title/description text
+                        if not advertiser:
+                            try:
+                                video_text = mod.inner_text()
+                                # Look for common patterns like "Brand Name - Product" or "Brand Name:"
+                                brand_match = re.search(r'^([A-Z][a-zA-Z\s&\']+?)(?:\s*[-:]\s*|\s+presents)', video_text, re.MULTILINE)
+                                if brand_match:
+                                    advertiser = brand_match.group(1).strip()
+                            except:
+                                pass
+                        
+                        # Method 3: Extract from video URL or tracking URL (matches HTML parser logic)
+                        if not advertiser:
+                            try:
+                                video_link = mod.locator('a').first
+                                if video_link.count() > 0:
+                                    href = video_link.get_attribute('href') or ''
+                                    # Extract brand from /ip/{Brand}-{Product}/ID pattern
+                                    ip_match = re.search(r'/ip/([^-/]+)', href)
+                                    if ip_match:
+                                        brand = ip_match.group(1).replace('_', ' ')
+                                        advertiser = brand.strip().title()
+                            except:
+                                pass
+                        
+                        # Method 4: Extract from product carousel within video ad
+                        if not advertiser:
+                            try:
+                                products = mod.locator('[data-testid^="item-stack-"]').all()
+                                if products:
+                                    first_product = products[0]
+                                    # Try product brand element
+                                    brand_elem = first_product.locator('[data-automation-id="product-brand"]').first
+                                    if brand_elem.count() > 0:
+                                        advertiser = brand_elem.inner_text().strip()
+                                    
+                                    # Alternative: extract from product title
+                                    if not advertiser:
+                                        product_title = first_product.locator('[data-automation-id="product-title"]').first
+                                        if product_title.count() > 0:
+                                            title_text = product_title.inner_text().strip()
+                                            # First word is usually the brand
+                                            brand_parts = title_text.split()
+                                            if brand_parts:
+                                                advertiser = brand_parts[0]
+                            except:
+                                pass
+                        
+                        # Method 5: Extract from URL facet parameter
                         if not advertiser:
                             links = mod.locator('a[href*="facet"]').all()
                             for link in links[:3]:
@@ -2500,8 +2643,12 @@ def search_and_capture(
                                 if brand_match:
                                     advertiser = brand_match.group(1).replace('%20', ' ').replace('+', ' ')
                                     break
-                    except Exception:
-                        pass
+                        
+                        # Final fallback: Use "unknown" if we couldn't extract brand
+                        if not advertiser:
+                            advertiser = "unknown"
+                    except Exception as e:
+                        advertiser = "unknown"  # Ensure we have a value even on error
                     
                     # Generate standardized filename and save to SBV folder
                     if client_name and client_root and run_timestamp:

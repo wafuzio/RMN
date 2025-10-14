@@ -601,6 +601,13 @@ def api_ads_cards():
             
             # Convert each ad to a card
             for idx, ad in enumerate(ads):
+                # Filter out non-featured tile takeovers for Walmart
+                ad_type = (ad.get("type") or ad.get("ad_type") or "").lower()
+                if retailer == "walmart" and "tile" in ad_type:
+                    # Only include featured tile takeovers
+                    if not ad.get("featured", False):
+                        continue
+                
                 # Determine image filename - prioritize local saved paths over remote URLs
                 filename = ""
                 has_local_path = False
@@ -643,22 +650,35 @@ def api_ads_cards():
                 if not has_local_path:
                     ad_type_hint = ad.get("type") or ad.get("ad_type") or ""
                     leaf = subdir_for(retailer, ad_type_hint)
+                    print(f"🔍 [{retailer}] Searching for image: ad_type={ad_type_hint}, leaf={leaf}")
                     if leaf:
                         # Look for files matching the taxonomy pattern in this ad type folder
                         search_dir = os.path.join(OUTPUT_ROOT, retailer, client, leaf)
+                        print(f"🔍 [{retailer}] Search dir: {search_dir}, exists={os.path.isdir(search_dir)}")
                         if os.path.isdir(search_dir):
                             try:
                                 # Get keyword for matching
                                 kw = (data.get("keyword") or data.get("search_term") or "").lower().replace(" ", "_")
-                                # List files and find matches
+                                # For Walmart: strip date suffix if present (e.g., "ice_cream_cones_2025-10-14" -> "ice_cream_cones")
+                                if retailer == "walmart" and "_20" in kw:
+                                    kw = kw.split("_20")[0]  # Remove date suffix
+                                # List files and find matches (prefer image extensions over videos)
                                 files = os.listdir(search_dir)
-                                for f in files:
+                                print(f"🔍 [{retailer}] Found {len(files)} files in {leaf}/, keyword={kw}")
+                                # Sort files to prefer .png, .jpg, .jpeg, .webp over .mp4
+                                image_exts = ('.png', '.jpg', '.jpeg', '.webp')
+                                files_sorted = sorted(files, key=lambda f: (not f.endswith(image_exts), f))
+                                for f in files_sorted:
                                     # Match pattern: retailer__*__ad_type__*__keyword__*
-                                    if f.startswith(f"{retailer}__") and kw in f.lower():
+                                    # Only match image files (not videos)
+                                    if f.startswith(f"{retailer}__") and kw in f.lower() and f.endswith(image_exts):
                                         filename = os.path.join(leaf, f)
+                                        print(f"✅ [{retailer}] Matched image: {filename}")
                                         break
-                            except Exception:
-                                pass
+                                if not filename:
+                                    print(f"⚠️  [{retailer}] No matching image found for keyword={kw} in {leaf}/")
+                            except Exception as e:
+                                print(f"❌ [{retailer}] Error searching for images: {e}")
                 
                 # Build API image URL using deterministic path resolution
                 image_api = ""
