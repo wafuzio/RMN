@@ -2575,43 +2575,12 @@ def search_and_capture(
                     mod.scroll_into_view_if_needed()
                     time.sleep(0.2)
                     
-                    # Extract advertiser for SBV (using comprehensive extraction)
+                    # Extract advertiser for SBV
+                    # Priority: Use first product in carousel (matches HTML parser logic)
                     advertiser = None
                     try:
-                        # Method 1: Try to find "Sponsored by [Brand]" text
-                        sponsored_text = mod.locator('text=/Sponsored by/i').first
-                        if sponsored_text.count() > 0:
-                            full_text = sponsored_text.text_content()
-                            match = re.search(r'Sponsored by\s+(.+)', full_text, re.IGNORECASE)
-                            if match:
-                                advertiser = match.group(1).strip()
-                        
-                        # Method 2: Extract from video title/description text
-                        if not advertiser:
-                            try:
-                                video_text = mod.inner_text()
-                                # Look for common patterns like "Brand Name - Product" or "Brand Name:"
-                                brand_match = re.search(r'^([A-Z][a-zA-Z\s&\']+?)(?:\s*[-:]\s*|\s+presents)', video_text, re.MULTILINE)
-                                if brand_match:
-                                    advertiser = brand_match.group(1).strip()
-                            except:
-                                pass
-                        
-                        # Method 3: Extract from video URL or tracking URL (matches HTML parser logic)
-                        if not advertiser:
-                            try:
-                                video_link = mod.locator('a').first
-                                if video_link.count() > 0:
-                                    href = video_link.get_attribute('href') or ''
-                                    # Extract brand from /ip/{Brand}-{Product}/ID pattern
-                                    ip_match = re.search(r'/ip/([^-/]+)', href)
-                                    if ip_match:
-                                        brand = ip_match.group(1).replace('_', ' ')
-                                        advertiser = brand.strip().title()
-                            except:
-                                pass
-                        
-                        # Method 4: Extract from product carousel within video ad
+                        # Method 1: Extract from first product in carousel (MOST RELIABLE)
+                        # This matches the HTML parser's approach
                         if not advertiser:
                             try:
                                 products = mod.locator('[data-testid^="item-stack-"]').all()
@@ -2631,10 +2600,21 @@ def search_and_capture(
                                             brand_parts = title_text.split()
                                             if brand_parts:
                                                 advertiser = brand_parts[0]
+                                    
+                                    # Alternative: extract from first product link URL (matches HTML parser)
+                                    if not advertiser:
+                                        product_link = first_product.locator('a[href*="/ip/"]').first
+                                        if product_link.count() > 0:
+                                            href = product_link.get_attribute('href') or ''
+                                            # Extract brand from /ip/{Brand}-{Product}/ID pattern
+                                            ip_match = re.search(r'/ip/([^-/]+)', href)
+                                            if ip_match:
+                                                brand = ip_match.group(1).replace('-', ' ').replace('_', ' ')
+                                                advertiser = brand.strip().title()
                             except:
                                 pass
                         
-                        # Method 5: Extract from URL facet parameter
+                        # Method 2: Extract from URL facet parameter (fallback)
                         if not advertiser:
                             links = mod.locator('a[href*="facet"]').all()
                             for link in links[:3]:
