@@ -43,20 +43,25 @@ https://www.instacart.com/store/publix/s?k=eggs
 ### **Ad Types Detected**
 1. **Shoppable Display Ad** (`div.e-1qzz7bi`)
    - Static image ads with product carousels
-   - Mapped to: `TOA` folder
+   - Screenshots captured during same page load as data extraction
+   - Folder: `Shoppable_Display_Ads/`
 
 2. **Shoppable Video Ad** (`div.e-1qzz7bi` with video player)
    - Video ads with product carousels
    - Automatically detected by presence of video player element
-   - Mapped to: `TOA` folder
+   - Screenshots captured during same page load as data extraction
+   - Folder: `Shoppable_Video_Ads/`
 
-3. **Display Ad** (`div.e-1hv1sre`)
+3. **Shoppable Recipe Ad** (`div.e-1yrpusx`)
+   - Recipe cards with "Sponsored" label and brand logo
+   - Includes recipe title, URL, and brand information
+   - Screenshots captured during same page load as data extraction
+   - Folder: `Shoppable_Recipe_Ads/`
+
+4. **Display Ad** (`div.e-1hv1sre`)
    - Horizontal brand strips at top of search results
-   - Mapped to: `Skyscraper` folder
-
-4. **Sponsored Label** (`div.e-cwus85`)
-   - "Sponsored" text indicators appearing on all ad types
-   - Mapped to: `Carousel` folder
+   - Screenshots captured during same page load as data extraction
+   - Folder: `Display_Ads/`
 
 ### Wait Strategy
 - Uses `domcontentloaded` instead of `networkidle` (Instacart has heavy dynamic content)
@@ -125,11 +130,19 @@ Common store slugs (configurable via `INSTACART_STORE`):
 ```
 output/instacart/<client>/
 ├── runs/
-│   ├── search_results_YYYYMMDD_HHMMSS.html
-│   └── run_results_YYYYMMDD_HHMMSS.json
-├── TOA/              # Shoppable Display Ads
-├── Skyscraper/       # Top Banner Ads
-└── Carousel/         # Product carousels and sponsored labels
+│   ├── search_results_<keyword>_YYYY-MM-DD_HH-MM-SS.html
+│   └── run_results_<keyword>_YYYY-MM-DD_HH-MM-SS.json
+├── Shoppable_Display_Ads/    # Static display ads with products
+├── Shoppable_Video_Ads/      # Video ads with products
+├── Shoppable_Recipe_Ads/     # Recipe cards with brand sponsors
+├── Display_Ads/              # Horizontal brand strips
+└── Main/                     # Full-page screenshots
+
+output/brand_logos/
+├── brand_logo_database.json  # Centralized brand logo metadata
+├── boiron.png
+├── stonyfield_organic.png
+└── nestle.jpg
 
 logs/instacart/
 ├── keyword_input.log
@@ -148,30 +161,63 @@ logs/instacart/
    - Registered with GUI
    - Updated documentation
 
+## Recent Improvements (October 2025)
+
+### 1. **Synchronized Screenshot Capture**
+- **Problem**: Screenshots were taken in separate page loads, causing mismatches with HTML/JSON data
+- **Solution**: Integrated screenshot capture directly into `instacart_search_and_capture.py`
+- **Result**: All artifacts (HTML, JSON, screenshots) now from the same page load
+
+### 2. **CDP Static Full-Page Screenshots**
+- **Problem**: `page.screenshot(full_page=True)` caused viewport resizing, triggering DOM reflow
+- **Solution**: Use Chrome DevTools Protocol's `Page.captureScreenshot` with `captureBeyondViewport=true`
+- **Result**: Single-pass full-page capture without viewport manipulation
+
+### 3. **Anti-Detection & Ad Loading**
+- **Stable User Agent**: Mainstream Chrome UA to avoid automation fingerprinting
+- **Consent Handling**: Broader selectors to dismiss consent banners on results page
+- **Ad Creative Dwell Time**: Wait 1200ms for images/video to load (viewability gates)
+- **Synthetic Dwell**: Emulate human behavior on direct navigation fallback
+
+### 4. **Brand Logo Database**
+- **Centralized Storage**: `output/brand_logos/` with metadata database
+- **Content-Based Deduplication**: Identical images from different URLs share one file
+- **Clean Naming**: `brand.png`, `brand_2.png` (no cryptic hashes)
+- **JSON Enrichment**: `brand_logo` field automatically added to each ad
+
+### 5. **Recipe Ad Support**
+- **New Ad Type**: Shoppable Recipe Ads with sponsored brand logos
+- **Extraction**: Recipe title, URL, brand, and logo
+- **Screenshots**: Captured during same page load as other ads
+
 ## Known Limitations
 1. **Store Selection**: Currently requires manual configuration via environment variable
-2. **Image Extraction**: Uses existing extractor scripts (may need Instacart-specific tuning)
-3. **Ad Selectors**: Based on current HTML patterns (may change with Instacart UI updates)
+2. **Ad Selectors**: Based on current HTML patterns (may change with Instacart UI updates)
+3. **Lazy Loading**: Some below-fold ads may require additional scroll warmup
 
 ## Next Steps (Optional)
 - [ ] Add GUI store selector for Instacart
-- [ ] Create Instacart-specific image extractor with optimized selectors
 - [ ] Add support for additional ad placements (e.g., in-grid sponsored products)
-- [ ] Implement ad performance tracking (impressions, clicks)
 - [ ] Add multi-store testing capability
+- [ ] Implement perceptual hashing for even better logo deduplication
 
 ## Success Criteria ✅
 - [x] Instacart appears in GUI retailer dropdown
 - [x] Authentication persists across sessions
 - [x] Search returns valid HTML and JSON
-- [x] 8+ ads detected consistently
+- [x] Multiple ad types detected (Display, Video, Recipe)
 - [x] Ad metadata extracted correctly
+- [x] Screenshots synchronized with data extraction
+- [x] Full-page screenshots without viewport resize
+- [x] Brand logos extracted and deduplicated
+- [x] JSON enriched with brand logo paths
+- [x] Anti-detection measures implemented
 - [x] No impact on existing Kroger/Amazon functionality
 - [x] Documentation complete and up-to-date
 - [x] End-to-end testing successful
 
 ---
 
-**Status**: ✅ **COMPLETE** - Instacart adapter is fully functional and ready for production use.
+**Status**: ✅ **COMPLETE** - Instacart adapter is fully functional with production-grade screenshot capture, brand logo management, and anti-detection measures.
 
-**Last Updated**: 2025-10-02
+**Last Updated**: 2025-10-16

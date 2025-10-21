@@ -13,71 +13,181 @@ import time
 import logging
 import subprocess
 import threading
-from datetime import datetime
+import calendar
+import signal
+from datetime import datetime, timedelta
 from pathlib import Path
 import glob
 
-# --- Single-instance lock (PID file) ---
-LOCKFILE = "/tmp/scheduler_daemon.lock"
+# Import shared schedule library
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from schedules.schedules_lib import scan_schedules, now_in_tz
 
-def _pid_is_running(pid: int) -> bool:
-    """Cross-platform-ish check if a PID is alive.
-    On macOS/Linux, os.kill(pid, 0) raises if process doesn't exist.
-    Returns True if process appears alive, False otherwise.
+# --- Time parsing and normalization helpers ---
+
+def _parse_time_12h(tup):
     """
-    try:
-        if pid <= 0:
-            return False
-        # signal 0 does not actually send a signal
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        # No such process
-        return False
-    except PermissionError:
-        # We don't have permission, but the process likely exists
-        return True
-    except Exception:
-        return False
+    Accepts ["8","00","AM"] or ["12","05","AM"] or ["10","00","PM"] and returns "HH:MM" 24h zero-padded.
+    Also accepts already-formatted "8:00" or "08:00".
+    """
+    if isinstance(tup, str):
+        # tolerate "8:00" / "08:00"
+        parts = tup.strip().split(":")
+        if len(parts) == 2:
+            hh, mm = parts
+            hh = int(hh)
+            mm = int(mm)
+            return f"{hh:02d}:{mm:02d}"
+        raise ValueError(f"Unrecognized time string: {tup}")
 
-def check_single_instance():
-    """Ensure only one scheduler_daemon.py is running at a time."""
-    if os.path.exists(LOCKFILE):
-        pid = None
-        try:
-            with open(LOCKFILE, "r") as f:
-                pid_str = f.read().strip()
-                pid = int(pid_str) if pid_str else None
-        except Exception:
-            pid = None
+    if not isinstance(tup, (list, tuple)) or len(tup) < 2:
+        raise ValueError(f"Unrecognized time tuple: {tup}")
 
-        if pid and _pid_is_running(pid):
-            print(f"\u26a0\ufe0f Scheduler daemon already running with PID {pid}")
-            sys.exit(1)
-        else:
-            # stale lock, remove it
+    # ["8","00","AM"] or ["8","00"] (assume 24h if no AM/PM)
+    hh = int(tup[0])
+    mm = int(tup[1])
+    ampm = tup[2].strip().upper() if len(tup) >= 3 else None
+
+    if ampm in ("AM","PM"):
+        if ampm == "AM":
+            if hh == 12: hh = 0
+        else:  # PM
+            if hh != 12: hh += 12
+
+    return f"{hh:02d}:{mm:02d}"
+
+def _normalize_days(days):
+    """
+    Accept "Monday" or "monday" or ["Mon", ...] → return a set of lowercase full names ("monday"...)
+    """
+    full = []
+    for d in days:
+        s = str(d).strip().lower()
+        # Expand abbreviations if needed
+        mapping = {
+            'mon': 'monday','tue':'tuesday','wed':'wednesday','thu':'thursday',
+            'thur':'thursday','fri':'friday','sat':'saturday','sun':'sunday'
+        }
+        full.append(mapping.get(s[:3], s))
+    return set(full)
+
+def _load_schedule_config(cfg_path):
+    """
+    Supports both schemas:
+    - {"schedule": {"monday":["08:00","14:00"], ...}, "retailer": "...", "client": "..."}
+    - {"days":[...], "times":[["8","00","AM"],...], "retailer":"...", "client":"..."}
+    Returns:
+      {
+        "retailer": "...",
+        "client": "...",
+        "days": set(["monday",...]),
+        "times": set(["08:00","14:00",...]),
+        "keywords": [...],
+        "raw_path": cfg_path,
+        "log_dir": os.path.dirname(cfg_path)
+      }
+    """
+    with open(cfg_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    retailer = data.get("retailer","").strip().lower()
+    client = data.get("client","").strip()
+    keywords = data.get("keywords", [])
+
+    times = set()
+    days = set()
+
+    if "schedule" in data and isinstance(data["schedule"], dict):
+        # Old schema
+        for day, tlist in data["schedule"].items():
+            days.add(str(day).strip().lower())
+            for t in tlist:
+                times.add(_parse_time_12h(t))
+    else:
+        # New schema
+        days = _normalize_days(data.get("days", []))
+        for t in data.get("times", []):
+            times.add(_parse_time_12h(t))
+
+    return {
+        "retailer": retailer,
+        "client": client,
+        "days": days,
+        "times": times,
+        "keywords": keywords,
+        "raw_path": cfg_path,
+        "log_dir": os.path.dirname(cfg_path)
+    }
+
+def _now_local():
+    """Return (datetime, day_name_lowercase, HH:MM)"""
+    now = datetime.now()
+    day = calendar.day_name[now.weekday()].lower()  # e.g., "thursday"
+    hhmm = now.strftime("%H:%M")
+    return now, day, hhmm
+
+def _sleep_until_next_minute():
+    """Sleep until the next minute boundary (aligned to :00 seconds)"""
+    now = datetime.now()
+    nxt = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
+    sleep_time = max(0.0, (nxt - now).total_seconds())
+    time.sleep(sleep_time)
+
+def _running_lock_dir(schedule):
+    """Get lock directory for a schedule (next to config file)"""
+    return os.path.join(schedule["log_dir"], "locks")
+
+def _run_with_lock(schedule, fn):
+    """
+    Execute fn() with a lock file to prevent concurrent runs.
+    Returns True if executed, False if skipped due to lock.
+    """
+    ldir = _running_lock_dir(schedule)
+    os.makedirs(ldir, exist_ok=True)
+    lock = os.path.join(ldir, "run.lock")
+    
+    if os.path.exists(lock):
+        # Check if stale (older than 30 minutes)
+        age = time.time() - os.path.getmtime(lock)
+        if age > 1800:  # 30 minutes
             try:
-                os.remove(LOCKFILE)
-            except FileNotFoundError:
+                os.remove(lock)
+            except:
                 pass
-
-    # write our PID
+        else:
+            print(f"⏭️  Skipping (active lock): {lock}")
+            return False
+    
+    # Acquire lock
     try:
-        with open(LOCKFILE, "w") as f:
-            f.write(str(os.getpid()))
-    except Exception:
-        # If we cannot create the lockfile, better to abort than risk duplicates
-        print("\u26a0\ufe0f Unable to create scheduler lockfile; aborting to prevent duplicates")
-        sys.exit(1)
-
-def cleanup_lockfile():
+        with open(lock, "w") as f:
+            f.write(f"pid={os.getpid()} ts={datetime.now().isoformat()}\n")
+    except Exception as e:
+        print(f"⚠️  Could not acquire lock: {e}")
+        return False
+    
+    # Execute with lock
     try:
-        if os.path.exists(LOCKFILE):
-            os.remove(LOCKFILE)
-    except Exception:
-        pass
+        fn()
+    finally:
+        try:
+            os.remove(lock)
+        except:
+            pass
+    
+    return True
+
+# Old single-instance lock functions removed - now handled by scheduler_entry.py
 
 class SchedulerDaemon:
+    # Retailer script mapping (scripts live at project root)
+    SCRIPT_MAP = {
+        "kroger": "kroger_search_and_capture.py",
+        "instacart": "instacart_search_and_capture.py",
+        "walmart": "walmart_search_and_capture.py",
+        "amazon": "amazon_search_and_capture.py",
+    }
+    
     def __init__(self):
         """Initialize the scheduler daemon"""
         # Code directory (where scripts live)
@@ -91,6 +201,12 @@ class SchedulerDaemon:
         self.running = False
         self.threads = {}
         self.last_run_times = {}  # Track last run times to avoid duplicates
+        self.inflight = {}  # run_key -> thread for async jobs
+        
+        # Configurable timeouts and concurrency
+        self.keyword_timeout = int(os.environ.get("SCHEDULER_KEYWORD_TIMEOUT", "180"))  # 3 minutes default
+        self.job_budget = int(os.environ.get("SCHEDULER_JOB_BUDGET_SEC", "600"))  # 10 minutes per job
+        self.max_concurrent = int(os.environ.get("SCHEDULER_MAX_CONCURRENCY", "2"))  # 2 concurrent retailers
         
         # Set up logging
         self.setup_logging()
@@ -137,20 +253,28 @@ class SchedulerDaemon:
         self.execution_logger.propagate = False  # Don't propagate to root logger
         
     def find_all_client_schedules(self):
-        """Find all client schedule configuration files"""
+        """Find all client schedule configuration files from schedules/ (preferred) or output/ (legacy)"""
         self.execution_logger.debug("FUNCTION_ENTRY: find_all_client_schedules()")
         schedule_files = []
         
-        if not self.output_dir.exists():
-            self.execution_logger.debug(f"OUTPUT_DIR_NOT_EXISTS: {self.output_dir}")
-            return schedule_files
-            
-        # Look for schedule_config.json files in all client directories
-        pattern = str(self.output_dir / "*" / "schedule_config.json")
-        self.execution_logger.debug(f"GLOB_PATTERN: {pattern}")
-        schedule_files = glob.glob(pattern)
+        # NEW: Check schedules/ directory first (preferred location)
+        schedules_dir = self.root_dir / "schedules"
+        if schedules_dir.exists():
+            pattern = str(schedules_dir / "*.json")
+            self.execution_logger.debug(f"GLOB_PATTERN_NEW: {pattern}")
+            new_files = [f for f in glob.glob(pattern) if not f.endswith("master_schedule.json")]
+            schedule_files.extend(new_files)
+            self.execution_logger.debug(f"FOUND_NEW_SCHEDULE_FILES: {len(new_files)} files")
         
-        self.execution_logger.debug(f"FOUND_SCHEDULE_FILES: {len(schedule_files)} files - {schedule_files}")
+        # LEGACY: Fall back to output/<retailer>/<client>/schedule_config.json
+        if self.output_dir.exists():
+            pattern = str(self.output_dir / "*" / "*" / "schedule_config.json")
+            self.execution_logger.debug(f"GLOB_PATTERN_LEGACY: {pattern}")
+            legacy_files = glob.glob(pattern)
+            schedule_files.extend(legacy_files)
+            self.execution_logger.debug(f"FOUND_LEGACY_SCHEDULE_FILES: {len(legacy_files)} files")
+        
+        self.execution_logger.debug(f"TOTAL_SCHEDULE_FILES: {len(schedule_files)} files - {schedule_files}")
         return schedule_files
         
     def load_schedule_config(self, config_file):
@@ -194,53 +318,33 @@ class SchedulerDaemon:
             
         return []
         
-    def is_scheduled_time(self, schedule_config):
-        """Check if current time matches any scheduled time"""
-        now = datetime.now()
-        current_hour = now.hour
-        current_minute = now.minute
-        current_day = now.strftime("%A")
-        
-        # Check if today is a scheduled day
-        scheduled_days = schedule_config.get("days", [])
-        if current_day not in scheduled_days:
-            return False
-            
-        # Check each scheduled time
-        times = schedule_config.get("times", [])
-        for hour_str, minute_str, ampm in times:
-            try:
-                hour_12 = int(hour_str)
-                minute = int(minute_str)
-                
-                # Convert to 24-hour format
-                scheduled_hour = hour_12
-                if ampm == "PM" and hour_12 < 12:
-                    scheduled_hour += 12
-                elif ampm == "AM" and hour_12 == 12:
-                    scheduled_hour = 0
-                    
-                # Check if it's time to run (within a 1-minute window)
-                if current_hour == scheduled_hour and current_minute == minute:
-                    return True
-                    
-            except (ValueError, TypeError):
-                continue
-                
-        return False
+    # Legacy is_scheduled_time() removed - now using _load_schedule_config() + _now_local() in monitor loop
         
     def create_run_key(self, client_name, schedule_time):
         """Create a unique key for tracking run times"""
         now = datetime.now()
         return f"{client_name}_{now.strftime('%Y-%m-%d_%H:%M')}"
         
-    def run_scraper_for_client(self, client_name, client_dir, keywords):
-        """Run the scraper for a specific client"""
-        self.execution_logger.debug(f"FUNCTION_ENTRY: run_scraper_for_client(client={client_name}, dir={client_dir}, keywords={keywords})")
+    def run_scraper_for_client(self, retailer: str, client_name: str, client_dir: str, keywords):
+        """Run the scraper for a specific client with retailer-aware script dispatch"""
+        self.execution_logger.debug(f"FUNCTION_ENTRY: run_scraper_for_client(retailer={retailer}, client={client_name}, dir={client_dir}, keywords={len(keywords)})")
         
         try:
-            self.logger.info(f"Starting scheduled scrape for client: {client_name}")
-            self.execution_logger.info(f"SCRAPE_START: Client={client_name}, Keywords={len(keywords)}")
+            # Get retailer script
+            script = self.SCRIPT_MAP.get(retailer)
+            if not script:
+                self.logger.error(f"[{retailer}] Unsupported retailer for client {client_name}")
+                self.execution_logger.error(f"UNSUPPORTED_RETAILER: {retailer}")
+                return
+            
+            script_path = self.code_dir / script
+            if not script_path.exists():
+                self.logger.error(f"[{retailer}] Scraper script not found: {script_path}")
+                self.execution_logger.error(f"SCRIPT_NOT_FOUND: {script_path}")
+                return
+            
+            self.logger.info(f"Starting scheduled scrape for client: {client_name} (retailer: {retailer}, keywords: {len(keywords)})")
+            self.execution_logger.info(f"SCRAPE_START: Retailer={retailer}, Client={client_name}, Keywords={len(keywords)}")
             
             # Create keywords file for this run
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -251,52 +355,93 @@ class SchedulerDaemon:
                 f.write("\n".join(keywords))
             self.execution_logger.debug(f"KEYWORDS_FILE_WRITTEN: {len(keywords)} keywords")
                 
-            # Run scraper for each keyword
+            # Run scraper for each keyword with job budget enforcement
             success_count = 0
+            job_start = time.time()
+            
             for i, keyword in enumerate(keywords, 1):
-                self.execution_logger.info(f"KEYWORD_SCRAPE_START: [{i}/{len(keywords)}] '{keyword}'")
+                # Check job budget
+                if time.time() - job_start > self.job_budget:
+                    self.logger.warning(f"[{retailer}] Job budget ({self.job_budget}s) exceeded for {client_name}; stopping early")
+                    self.execution_logger.warning(f"JOB_BUDGET_EXCEEDED: Retailer={retailer}, Client={client_name} after {i-1}/{len(keywords)} keywords")
+                    break
                 
-                cmd = [
-                    sys.executable,
-                    str(self.code_dir / "archived" / "kroger_search_and_capture.py"),
-                    "--search",
-                    keyword,
-                    "--output-dir",
-                    str(client_dir)
-                ]
+                self.logger.info(f"[{retailer}] START keyword '{keyword}' for {client_name}")
+                self.execution_logger.info(f"KEYWORD_SCRAPE_START: Retailer={retailer}, Client={client_name}, Keyword=[{i}/{len(keywords)}] '{keyword}'")
+                
+                # Build command based on retailer
+                if retailer == "kroger":
+                    cmd = [
+                        sys.executable,
+                        str(script_path),
+                        "--search",
+                        keyword,
+                        "--output-dir",
+                        str(client_dir)
+                    ]
+                else:
+                    # Instacart, Walmart, Amazon use positional keyword arg
+                    cmd = [
+                        sys.executable,
+                        str(script_path),
+                        keyword,
+                        "--output-dir",
+                        str(client_dir)
+                    ]
                 
                 self.execution_logger.debug(f"SUBPROCESS_CMD: {' '.join(cmd)}")
                 
                 try:
-                    self.execution_logger.debug(f"SUBPROCESS_START: archived/kroger_search_and_capture.py for '{keyword}'")
-                    result = subprocess.run(
+                    self.execution_logger.debug(f"SUBPROCESS_START: {script} for '{keyword}'")
+                    
+                    # Launch in its own process group so we can kill all children on timeout
+                    proc = subprocess.Popen(
                         cmd,
-                        capture_output=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                         text=True,
-                        timeout=300  # 5 minute timeout per keyword
+                        start_new_session=True  # puts child in a new process group
                     )
                     
-                    self.execution_logger.debug(f"SUBPROCESS_RETURN_CODE: {result.returncode}")
-                    if result.stdout:
-                        self.execution_logger.debug(f"SUBPROCESS_STDOUT: {result.stdout[:500]}...")
-                    if result.stderr:
-                        self.execution_logger.debug(f"SUBPROCESS_STDERR: {result.stderr[:500]}...")
+                    stdout, stderr = proc.communicate(timeout=self.keyword_timeout)
+                    rc = proc.returncode
                     
-                    if result.returncode == 0:
+                    self.execution_logger.debug(f"SUBPROCESS_RETURN_CODE: {rc}")
+                    if stdout:
+                        self.execution_logger.debug(f"SUBPROCESS_STDOUT: {stdout[:500]}...")
+                    if stderr:
+                        self.execution_logger.debug(f"SUBPROCESS_STDERR: {stderr[:500]}...")
+                    
+                    if rc == 0:
                         success_count += 1
-                        self.logger.info(f"Successfully scraped keyword '{keyword}' for {client_name}")
-                        self.execution_logger.info(f"KEYWORD_SCRAPE_SUCCESS: '{keyword}'")
+                        self.logger.info(f"[{retailer}] SUCCESS keyword '{keyword}' for {client_name}")
+                        self.execution_logger.info(f"KEYWORD_SCRAPE_SUCCESS: Retailer={retailer}, Client={client_name}, Keyword='{keyword}'")
                     else:
-                        self.logger.error(f"Failed to scrape keyword '{keyword}' for {client_name}: {result.stderr}")
-                        self.execution_logger.error(f"KEYWORD_SCRAPE_FAILED: '{keyword}' - {result.stderr}")
+                        self.logger.error(f"[{retailer}] FAIL keyword '{keyword}' for {client_name}: rc={rc}")
+                        self.execution_logger.error(f"KEYWORD_SCRAPE_FAILED: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', rc={rc}")
                         
                 except subprocess.TimeoutExpired:
-                    self.logger.error(f"Timeout scraping keyword '{keyword}' for {client_name}")
-                    self.execution_logger.error(f"KEYWORD_SCRAPE_TIMEOUT: '{keyword}' after 300s")
+                    # Kill the whole process group (the scraper and any Chromium children)
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except Exception:
+                        pass
+                    try:
+                        stdout, stderr = proc.communicate()
+                    except:
+                        pass
+                    self.logger.error(f"[{retailer}] TIMEOUT keyword '{keyword}' for {client_name} after {self.keyword_timeout}s")
+                    self.execution_logger.error(f"KEYWORD_SCRAPE_TIMEOUT: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', Timeout={self.keyword_timeout}s")
                 except Exception as e:
-                    self.logger.error(f"Error scraping keyword '{keyword}' for {client_name}: {e}")
-                    self.execution_logger.error(f"KEYWORD_SCRAPE_EXCEPTION: '{keyword}' - {e}")
+                    self.logger.error(f"[{retailer}] ERROR keyword '{keyword}' for {client_name}: {e}")
+                    self.execution_logger.error(f"KEYWORD_SCRAPE_EXCEPTION: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', Error={e}")
                     
+            # Skip post-processing if no successful scrapes
+            if success_count == 0:
+                self.logger.info(f"[{retailer}] Skipping HTML post-processing for {client_name} (0 successes)")
+                self.execution_logger.info(f"HTML_PROCESSING_SKIPPED: Retailer={retailer}, Client={client_name}")
+                return
+            
             # Process only newest HTMLs missing images (per-run, no mixing)
             self.execution_logger.info(f"HTML_PROCESSING_START: {client_dir} (latest-missing)")
             try:
@@ -330,110 +475,161 @@ class SchedulerDaemon:
                     self.execution_logger.debug(f"HTML_PROCESS_STDERR: {result.stderr[:500]}...")
                 
                 if result.returncode == 0:
-                    self.logger.info(f"Successfully processed HTML files for {client_name}")
-                    self.execution_logger.info(f"HTML_PROCESSING_SUCCESS: {client_name}")
+                    self.logger.info(f"[{retailer}] Successfully processed HTML files for {client_name}")
+                    self.execution_logger.info(f"HTML_PROCESSING_SUCCESS: Retailer={retailer}, Client={client_name}")
                 else:
-                    self.logger.error(f"Failed to process HTML files for {client_name}: {result.stderr}")
-                    self.execution_logger.error(f"HTML_PROCESSING_FAILED: {client_name} - {result.stderr}")
+                    self.logger.error(f"[{retailer}] Failed to process HTML files for {client_name}: {result.stderr}")
+                    self.execution_logger.error(f"HTML_PROCESSING_FAILED: Retailer={retailer}, Client={client_name}, Error={result.stderr}")
                     
             except Exception as e:
-                self.logger.error(f"Error processing HTML files for {client_name}: {e}")
-                self.execution_logger.error(f"HTML_PROCESSING_EXCEPTION: {client_name} - {e}")
+                self.logger.error(f"[{retailer}] Error processing HTML files for {client_name}: {e}")
+                self.execution_logger.error(f"HTML_PROCESSING_EXCEPTION: Retailer={retailer}, Client={client_name}, Error={e}")
                 
-            self.logger.info(f"Completed scheduled scrape for {client_name}: {success_count}/{len(keywords)} keywords successful")
-            self.execution_logger.info(f"SCRAPE_COMPLETE: Client={client_name}, Success={success_count}/{len(keywords)}")
+            self.logger.info(f"[{retailer}] Completed scheduled scrape for {client_name}: {success_count}/{len(keywords)} keywords successful")
+            self.execution_logger.info(f"SCRAPE_COMPLETE: Retailer={retailer}, Client={client_name}, Success={success_count}/{len(keywords)}")
             
         except Exception as e:
-            self.logger.error(f"Error in scheduled scrape for {client_name}: {e}")
-            self.execution_logger.error(f"SCRAPE_EXCEPTION: Client={client_name} - {e}")
+            self.logger.error(f"[{retailer}] Error in scheduled scrape for {client_name}: {e}")
+            self.execution_logger.error(f"SCRAPE_EXCEPTION: Retailer={retailer}, Client={client_name}, Error={e}")
+    
+    def _start_job_async(self, schedule, keywords):
+        """Launch a scrape job asynchronously with concurrency and lock management"""
+        # Cap concurrency across retailers
+        active = sum(1 for t in self.inflight.values() if t.is_alive())
+        if active >= self.max_concurrent:
+            self.logger.info(f"Concurrency cap reached ({active}/{self.max_concurrent}); delaying {schedule['client']}")
+            return False
+
+        # Per-client lock (same lock file)
+        ldir = _running_lock_dir(schedule)
+        os.makedirs(ldir, exist_ok=True)
+        lock = os.path.join(ldir, "run.lock")
+        if os.path.exists(lock):
+            age = time.time() - os.path.getmtime(lock)
+            if age <= 1800:  # 30 minutes
+                self.logger.info(f"⏭️  Skipping {schedule['client']} (active lock): {lock}")
+                return False
+            try:
+                os.remove(lock)
+            except Exception:
+                pass
+        
+        # Acquire lock
+        with open(lock, "w") as f:
+            f.write(f"pid={os.getpid()} ts={datetime.now().isoformat()}\n")
+
+        retailer = schedule["retailer"]
+        client_name = schedule["client"]
+        client_dir = schedule["log_dir"]
+        
+        # Enforce max runs limit
+        max_runs = int(schedule.get("runs", 0) or 0)
+        if max_runs > 0 and len(keywords) > max_runs:
+            keywords = keywords[:max_runs]
+            self.execution_logger.info(f"KEYWORDS_TRUNCATED: Retailer={retailer}, Client={client_name} to {max_runs}")
+
+        def worker():
+            try:
+                self.run_scraper_for_client(retailer, client_name, client_dir, keywords)
+            finally:
+                try:
+                    os.remove(lock)
+                except:
+                    pass
+
+        run_key = f"{client_name}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}"
+        t = threading.Thread(target=worker, name=f"run-{retailer}-{client_name}", daemon=True)
+        t.start()
+        self.inflight[run_key] = t
+        self.logger.info(f"Started async job for {client_name} (retailer: {retailer}, thread={t.name})")
+        return True
             
     def monitor_schedules(self):
-        """Main monitoring loop"""
+        """Main monitoring loop - uses new helper functions for robust time matching"""
         self.logger.info("Scheduler daemon started - monitoring client schedules")
         self.execution_logger.info("DAEMON_START: Monitoring loop initiated")
         
         while self.running:
             try:
-                self.execution_logger.debug("MONITOR_LOOP_ITERATION: Starting new monitoring cycle")
+                # 0) Clean up finished threads
+                finished = [k for k, t in list(self.inflight.items()) if not t.is_alive()]
+                for k in finished:
+                    self.inflight.pop(k, None)
+                if finished:
+                    self.execution_logger.debug(f"THREAD_CLEANUP: removed {len(finished)} finished job(s)")
                 
-                # Find all client schedule files
-                schedule_files = self.find_all_client_schedules()
-                self.execution_logger.debug(f"MONITOR_SCHEDULES_FOUND: {len(schedule_files)} schedule files")
+                # 1) Load all schedules using shared library (new schedules/ + legacy output/)
+                schedules = scan_schedules(self.root_dir)
                 
-                for schedule_file in schedule_files:
-                    self.execution_logger.debug(f"PROCESSING_SCHEDULE_FILE: {schedule_file}")
-                    
-                    config = self.load_schedule_config(schedule_file)
-                    if not config:
-                        self.execution_logger.debug(f"SKIPPING_INVALID_CONFIG: {schedule_file}")
+                # 2) Get current time
+                now = datetime.now()
+                today = now.strftime("%A").lower()  # monday, tuesday, etc.
+                hhmm = now.strftime("%H:%M")  # 24-hour format
+                
+                self.logger.info(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] tick: {today} {hhmm} | {len(schedules)} schedule(s)")
+                self.execution_logger.debug(f"MONITOR_TICK: day={today}, time={hhmm}, schedules={len(schedules)}")
+                
+                # 3) Check each schedule for due jobs
+                for s in schedules:
+                    # Respect 'enabled' flag
+                    if not s.enabled:
                         continue
-                        
-                    # Extract client info
-                    client_dir = Path(schedule_file).parent
-                    client_name = config.get("client", client_dir.name)
-                    self.execution_logger.debug(f"CLIENT_INFO: name={client_name}, dir={client_dir}")
                     
-                    # Respect 'enabled' flag in config (default True if missing)
-                    if not config.get("enabled", True):
-                        self.execution_logger.debug(f"CLIENT_DISABLED: {client_name} is disabled; skipping")
-                        continue
+                    # Use timezone if specified
+                    if s.tz:
+                        check_time = now_in_tz(s.tz)
+                        check_today = check_time.strftime("%A").lower()
+                        check_hhmm = check_time.strftime("%H:%M")
+                    else:
+                        check_today = today
+                        check_hhmm = hhmm
+                    
+                    # Check if today and time match
+                    if check_today in s.days and check_hhmm in s.times:
+                        client_name = s.client
+                        retailer = s.retailer
+                        self.logger.info(f"→ DUE: [{retailer}] {client_name} @ {check_hhmm} ({s.source_path})")
+                        self.execution_logger.info(f"SCHEDULE_MATCH: [{retailer}] {client_name} @ {check_hhmm}")
                         
-                    # Check if it's time to run
-                    self.execution_logger.debug(f"TIME_CHECK_START: {client_name}")
-                    if self.is_scheduled_time(config):
-                        self.execution_logger.info(f"SCHEDULE_MATCH: {client_name} is scheduled to run now")
+                        # Check for keywords
+                        keywords = s.keywords
+                        if not keywords:
+                            # Fallback to client_history.json
+                            keywords = self.load_client_keywords(s.output_dir)
+                            self.execution_logger.debug(f"KEYWORDS_SOURCE: client_history.json ({len(keywords)})")
+                        else:
+                            self.execution_logger.debug(f"KEYWORDS_SOURCE: schedule ({len(keywords)})")
                         
-                        run_key = self.create_run_key(client_name, datetime.now())
-                        self.execution_logger.debug(f"RUN_KEY_CREATED: {run_key}")
+                        if not keywords:
+                            self.logger.warning(f"[{retailer}] No keywords found for {client_name}")
+                            self.execution_logger.warning(f"NO_KEYWORDS_FOUND: [{retailer}] {client_name}")
+                            continue
                         
-                        # Avoid duplicate runs within the same minute
+                        # Create run key for duplicate prevention
+                        run_key = f"{retailer}_{client_name}_{now.strftime('%Y-%m-%d_%H:%M')}"
                         if run_key in self.last_run_times:
                             self.execution_logger.debug(f"DUPLICATE_RUN_PREVENTED: {run_key}")
                             continue
-                            
-                        self.last_run_times[run_key] = datetime.now()
-                        self.execution_logger.debug(f"RUN_KEY_REGISTERED: {run_key}")
                         
-                        # Load keywords for this client
-                        self.execution_logger.debug(f"LOADING_KEYWORDS: {client_name}")
-                        # Prefer explicit keywords from schedule_config if provided
-                        cfg_keywords = config.get("keywords") or []
-                        if isinstance(cfg_keywords, list) and len(cfg_keywords) > 0:
-                            keywords = cfg_keywords
-                            self.execution_logger.debug(f"KEYWORDS_SOURCE: schedule_config.json ({len(keywords)})")
+                        self.last_run_times[run_key] = now
+                        
+                        # Convert Schedule object to dict for _start_job_async
+                        schedule_dict = {
+                            "retailer": retailer,
+                            "client": client_name,
+                            "log_dir": s.output_dir,
+                            "keywords": keywords
+                        }
+                        
+                        # Launch async job with concurrency control
+                        started = self._start_job_async(schedule_dict, keywords)
+                        if started:
+                            self.execution_logger.info(f"SCRAPE_LAUNCHED_ASYNC: [{retailer}] {client_name}")
                         else:
-                            keywords = self.load_client_keywords(client_dir)
-                            self.execution_logger.debug(f"KEYWORDS_SOURCE: client_history.json ({len(keywords)})")
-                        if not keywords:
-                            self.logger.warning(f"No keywords found for client {client_name}")
-                            self.execution_logger.warning(f"NO_KEYWORDS_FOUND: {client_name}")
-                            continue
-                        
-                        self.execution_logger.info(f"KEYWORDS_LOADED: {client_name} has {len(keywords)} keywords")
-                            
-                        # Start scraping in a separate thread
-                        thread_key = f"{client_name}_{datetime.now().strftime('%H%M')}"
-                        self.execution_logger.debug(f"THREAD_KEY: {thread_key}")
-                        
-                        if thread_key not in self.threads or not self.threads[thread_key].is_alive():
-                            self.execution_logger.info(f"THREAD_START: Creating new thread for {client_name}")
-                            
-                            thread = threading.Thread(
-                                target=self.run_scraper_for_client,
-                                args=(client_name, client_dir, keywords),
-                                daemon=True
-                            )
-                            thread.start()
-                            self.threads[thread_key] = thread
-                            
-                            self.execution_logger.info(f"THREAD_CREATED: {thread_key} started successfully")
-                        else:
-                            self.execution_logger.debug(f"THREAD_ALREADY_RUNNING: {thread_key}")
-                    else:
-                        self.execution_logger.debug(f"NO_SCHEDULE_MATCH: {client_name} not scheduled now")
-                            
-                # Clean up old run time entries (keep only last hour)
-                cutoff_time = datetime.now().replace(minute=0, second=0, microsecond=0)
+                            self.execution_logger.info(f"SCRAPE_NOT_STARTED: [{retailer}] {client_name} (lock or concurrency)")
+                
+                # 5) Clean up old run time entries (keep only last 2 hours)
+                cutoff_time = now - timedelta(hours=2)
                 old_count = len(self.last_run_times)
                 self.last_run_times = {
                     k: v for k, v in self.last_run_times.items() 
@@ -448,9 +644,9 @@ class SchedulerDaemon:
                 self.logger.error(f"Error in monitoring loop: {e}")
                 self.execution_logger.error(f"MONITOR_LOOP_EXCEPTION: {e}")
                 
-            # Check every 30 seconds
-            self.execution_logger.debug("MONITOR_SLEEP: Waiting 30 seconds before next cycle")
-            time.sleep(30)
+            # 6) Sleep until next minute boundary (aligned)
+            self.execution_logger.debug("MONITOR_SLEEP: Waiting until next minute boundary")
+            _sleep_until_next_minute()
             
     def start(self):
         """Start the scheduler daemon"""
@@ -464,10 +660,7 @@ class SchedulerDaemon:
 
 
 def main():
-    """Main entry point"""
-    # Ensure only a single instance runs
-    check_single_instance()
-
+    """Main entry point - single-instance enforcement handled by scheduler_entry.py"""
     daemon = SchedulerDaemon()
     try:
         daemon.start()
@@ -477,8 +670,6 @@ def main():
     except Exception as e:
         daemon.logger.error(f"Fatal error: {e}")
         sys.exit(1)
-    finally:
-        cleanup_lockfile()
 
 
 if __name__ == "__main__":

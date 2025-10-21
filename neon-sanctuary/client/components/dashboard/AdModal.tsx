@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { Ad } from "./AdCard";
@@ -7,6 +7,7 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
+        <DialogTitle className="sr-only">{ad ? `${ad.brand} ad details` : "Ad details"}</DialogTitle>
         {ad && (
           <div className="grid md:grid-cols-2 gap-6">
             <div className="rounded-lg overflow-hidden">

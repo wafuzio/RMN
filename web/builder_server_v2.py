@@ -18,11 +18,13 @@ import os
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from flask import Flask, jsonify, request, send_from_directory, make_response
+from flask import Flask, jsonify, request, send_from_directory, make_response, send_file, Response, abort
 from pathlib import Path
 from urllib.parse import unquote
 import json
 import glob
+import mimetypes
+import requests
 from datetime import datetime
 from utils.path_taxonomy import allowed_subdirs
 
@@ -90,6 +92,9 @@ def after_request(resp):
         resp.headers["Access-Control-Allow-Origin"] = "*"
         # Do NOT set credentials when using '*'
     
+    # CORP header to prevent ORB blocking
+    resp.headers.setdefault("Cross-Origin-Resource-Policy", "cross-origin")
+    
     # Echo preflight-requested headers if present; else defaults
     acrh = request.headers.get("Access-Control-Request-Headers", "")
     resp.headers["Access-Control-Allow-Headers"] = acrh or "Content-Type,Authorization,ngrok-skip-browser-warning"
@@ -145,6 +150,28 @@ def leaf_for(ad_type: str) -> str:
     """
     key = (ad_type or "").strip().lower().replace(" ", "").replace("_", "")
     return LEAF_MAP.get(key, "Display_Ads")
+
+def _image_response(filepath: str):
+    """
+    Serve an image file with proper MIME type and CORS/CORP headers.
+    Prevents ORB (Opaque Response Blocking) by ensuring correct headers.
+    """
+    mime = mimetypes.guess_type(filepath)[0] or "application/octet-stream"
+    
+    # Only serve real images
+    if not mime.startswith("image/"):
+        return jsonify({"error": "not an image", "path": filepath, "mime": mime}), 415
+    
+    resp = make_response(send_file(filepath, mimetype=mime, conditional=True))
+    
+    # CORS/CORP hardening for images
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    
+    # Cache for performance (optional but recommended)
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    
+    return resp
 
 def find_image_rel(output_root: str, retailer: str, client: str, leaf_hint: str, basename: str) -> str | None:
     """
@@ -831,7 +858,7 @@ def api_image(retailer, client, filename):
     try:
         exact = _safe_join(OUTPUT_ROOT, retailer, client, clean)
         if os.path.isfile(exact):
-            return send_from_directory(os.path.dirname(exact), os.path.basename(exact))
+            return _image_response(exact)
     except (ValueError, OSError):
         pass
     
@@ -840,22 +867,52 @@ def api_image(retailer, client, filename):
         try:
             alt = _safe_join(OUTPUT_ROOT, retailer, client, leaf, base)
             if os.path.isfile(alt):
-                return send_from_directory(os.path.dirname(alt), os.path.basename(alt))
+                return _image_response(alt)
         except (ValueError, OSError):
             continue
     
     # 3) Extension variants (jpg/jpeg/png) if needed
-    name, ext = os.path.splitext(base)
+    name, _ext = os.path.splitext(base)
     for leaf in leaves:
-        for ext2 in (".jpg", ".jpeg", ".png", ".webp"):
+        for ext2 in (".png", ".jpg", ".jpeg", ".webp"):
             try:
                 alt2 = _safe_join(OUTPUT_ROOT, retailer, client, leaf, name + ext2)
                 if os.path.isfile(alt2):
-                    return send_from_directory(os.path.dirname(alt2), os.path.basename(alt2))
+                    return _image_response(alt2)
             except (ValueError, OSError):
                 continue
     
+    # IMPORTANT: Keep this as a real 404 for API routes (don't let SPA catch-all override)
     return jsonify({"error": "image not found", "requested": clean}), 404
+
+@app.route("/proxy-image")
+def proxy_image():
+    """
+    Proxy for absolute image URLs (e.g., historical ngrok URLs).
+    Fetches the image server-side with proper headers and returns it with CORS/CORP.
+    """
+    url = request.args.get("url")
+    if not url:
+        return jsonify(error="missing url"), 400
+    
+    try:
+        upstream = requests.get(url, stream=True, timeout=15, headers={
+            'ngrok-skip-browser-warning': 'true'
+        })
+        if not upstream.ok:
+            abort(upstream.status_code)
+        
+        ct = upstream.headers.get('Content-Type', '')
+        if not ct.startswith('image/'):
+            return jsonify(error='upstream not image', content_type=ct), 415
+        
+        resp = Response(upstream.iter_content(64 * 1024), status=200, mimetype=ct)
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Cross-Origin-Resource-Policy'] = 'cross-origin'
+        resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        return resp
+    except requests.RequestException as e:
+        return jsonify(error='upstream request failed', details=str(e)), 502
 
 @app.route("/api/logo/<retailer>", methods=["GET"])
 def api_logo(retailer):
@@ -888,10 +945,7 @@ def api_logo(retailer):
         filename = logo_map[retailer_lower]
         logo_path = os.path.join(ASSETS_ROOT, "logos", filename)
         if os.path.exists(logo_path):
-            return send_from_directory(
-                os.path.join(ASSETS_ROOT, "logos"),
-                filename
-            )
+            return _image_response(logo_path)
     
     # Try common patterns
     patterns = [
@@ -905,10 +959,7 @@ def api_logo(retailer):
     for pattern in patterns:
         logo_path = os.path.join(ASSETS_ROOT, "logos", pattern)
         if os.path.exists(logo_path):
-            return send_from_directory(
-                os.path.join(ASSETS_ROOT, "logos"),
-                pattern
-            )
+            return _image_response(logo_path)
     
     return jsonify({"error": f"logo not found for {retailer}"}), 404
 
@@ -1041,6 +1092,23 @@ def health():
         "timestamp": datetime.now().isoformat(),
         "retailers_available": len(list_retailers())
     })
+
+# ============================================================================
+# Error Handlers
+# ============================================================================
+
+@app.errorhandler(404)
+def not_found(e):
+    """
+    Handle 404 errors - prevent SPA catch-all from serving HTML for API routes.
+    This ensures API 404s stay as JSON 404s and don't get rewritten to index.html.
+    """
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "not found", "path": request.path}), 404
+    
+    # For non-API routes, you could serve SPA index.html here if needed
+    # return send_from_directory("client/dist", "index.html"), 200
+    return jsonify({"error": "not found"}), 404
 
 # ============================================================================
 # Main

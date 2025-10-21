@@ -50,26 +50,30 @@ The Instacart adapter maps Instacart ad placements to the existing output folder
 
 ## Ad Types Detected
 
-Based on HTML analysis, the adapter detects:
+The adapter uses **semantic selectors** (not hashed CSS classes) to detect:
 
-1. **Shoppable Display Ad** (`div.e-1qzz7bi`)
+1. **Shoppable Display Ad**
    - Static image ads with product carousels
-   - Brand logo + headline + "Sponsored" label
-   - Large format placement in search results
+   - Detected by: `data-testid="shoppable-list-sliding-carousel"` + Advertisement image
+   - May include: h2 header, "Sponsored" label (can be split across spans), hero image
+   - Examples: GoodPop, Icy Hot, C4, Trolli
 
-2. **Shoppable Video Ad** (`div.e-1qzz7bi` with video player)
+2. **Shoppable Video Ad**
    - Video ads with product carousels
-   - Brand logo + headline + "Sponsored" label
-   - Automatically detected by presence of video player element
+   - Detected by: carousel + `<video>` element or "Play Video" button
+   - Includes: h2 header, "Sponsored" label, video player, product carousel
+   - Examples: Dreyers, Dairy Farmers of America
+   - Video files: Downloads MP4 (direct) or saves HLS URL (.m3u8)
 
-3. **Display Ad** (`div.e-1hv1sre`)
-   - Horizontal brand strips
-   - Compact header with product carousel
-   - Appears at top of search results
+3. **Ad Container Selection**
+   - Finds the **outermost ancestor** containing all ad elements
+   - Ensures complete capture: header + hero/video + carousel
+   - Handles multiple ad formats (with/without headers)
+   - Adds 20px padding to include visual borders
 
-4. **Sponsored Label** (`div.e-cwus85`)
-   - "Sponsored" text indicators
-   - Appears on all ad types
+4. **Sponsored Label Detection**
+   - Handles split text: `<span>Spons</span><span> ored</span>`
+   - Uses regex: `r"Spons\s*ored"` with `inner_text()` fallback
 
 ## Store Configuration
 
@@ -126,7 +130,31 @@ If you encounter issues with the Instacart adapter:
 
 ## Technical Details
 
+### Authentication & Loading
 - **Authentication**: Requires persistent Chrome profile with logged-in session
 - **Wait Strategy**: Uses `domcontentloaded` instead of `networkidle` due to dynamic content
-- **Ad Detection**: Uses CSS selectors from actual Instacart HTML patterns
-- **Success Criteria**: At least one TOA or Skyscraper image (following Kroger pattern)
+- **Lazy Loading**: Pre-scrolls page before extraction to load all lazy-loaded ads
+- **Virtual Scrolling**: Bidirectional scroll for full-page screenshots to keep grid items in DOM
+
+### Ad Detection & Extraction
+- **Semantic Selectors**: Uses stable HTML attributes (`data-testid`, `alt`, `role`) instead of hashed classes
+- **Container Selection**: Finds outermost ancestor containing h2 + "Spons" + carousel (or Advertisement img + carousel)
+- **Split Text Handling**: Detects "Sponsored" even when split across multiple `<span>` elements
+- **Hero Image Extraction**: Fallback logic for images without `alt="Advertisement"`
+- **Video Handling**: Detects video elements, downloads MP4 or saves HLS URLs, includes video metadata
+
+### Screenshot Strategy
+- **Container-based**: Screenshots the complete ad container (not individual elements)
+- **Padding**: Adds 20px padding on all sides to capture visual borders
+- **Timing**: Waits for ad creative to load before capture (viewability gates)
+- **Full-page**: Uses CDP for static full-page capture without viewport resizing
+
+### Known Issues & Solutions
+- **Issue**: Ads cropped too tight, missing headers
+  - **Solution**: Find outermost ancestor container, not closest
+- **Issue**: Lazy-loaded ads missing from extraction
+  - **Solution**: Pre-scroll page to load all content before extraction
+- **Issue**: Virtual scroll grid items missing
+  - **Solution**: Bidirectional scroll to keep items in DOM for screenshot
+- **Issue**: Hero images not captured in JSON
+  - **Solution**: Fallback to find large images (>100px) from display CDN

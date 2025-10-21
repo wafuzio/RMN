@@ -25,6 +25,12 @@ except ImportError:
     # Fallback if filename_utils not available
     def generate_ad_filename(retailer, ad_type, client, search_term, timestamp, index=1, extension='png'):
         return f"{retailer}_{ad_type}_{client}_{search_term}_{timestamp}_{index}.{extension}"
+
+# Import brand logo database
+try:
+    from brand_logo_database import BrandLogoDatabase
+except ImportError:
+    BrandLogoDatabase = None
 # --- BEGIN: debug configuration ---
 @dataclass
 class DebugConfig:
@@ -226,6 +232,7 @@ SELECTORS = {
     "sba": '[data-testid="sba-container"]',  # Sponsored Brand module
     "tile_takeover": '[data-testid="tile-take-over"]',  # Tile takeover
     "sbv": '[data-testid="search-video-in-grid"]',  # Sponsored Brand Video
+    "marquee_banner": '[data-testid="marquee2"]',  # Onsite Display Marquee Banner
 }
 @dataclass
 class CaptureResult:
@@ -816,6 +823,78 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                             if brand_elem.count() > 0:
                                 advertiser = brand_elem.inner_text().strip()
                         
+                        # Method 5: For marquee banners, extract from iframe or surrounding content
+                        if not advertiser and label == 'marquee_banner':
+                            try:
+                                # Try to get iframe element
+                                iframe = item.locator('iframe[data-ad-type="marquee2"]').first
+                                if iframe.count() > 0:
+                                    # Try to extract from iframe src URL
+                                    iframe_src = iframe.get_attribute('src') or ''
+                                    # Look for brand in URL parameters or path
+                                    brand_match = re.search(r'brand[=_-]([^&/]+)', iframe_src, re.IGNORECASE)
+                                    if brand_match:
+                                        advertiser = brand_match.group(1).replace('%20', ' ').replace('+', ' ').title()
+                                
+                                # Alternative: Look for brand logo image near the marquee
+                                if not advertiser:
+                                    logo_img = item.locator('img[alt]:not([alt=""])').first
+                                    if logo_img.count() > 0:
+                                        logo_alt = logo_img.get_attribute('alt')
+                                        if logo_alt and len(logo_alt) > 2:
+                                            # Clean up alt text (remove "Logo", "Brand", etc.)
+                                            cleaned = logo_alt
+                                            for word in ['Logo', 'logo', 'Brand', 'brand']:
+                                                cleaned = cleaned.replace(word, '').strip()
+                                            if cleaned:
+                                                advertiser = cleaned
+                                
+                                # Fallback: Extract from parent container ID
+                                if not advertiser:
+                                    parent_id = item.get_attribute('id') or ''
+                                    # ID format: "SEARCH-MarqueeDisplayAd-marquee2-vanilla ice cream-"
+                                    # Extract the search term part which might contain brand info
+                                    id_match = re.search(r'marquee2-([^-]+)-', parent_id)
+                                    if id_match:
+                                        search_term = id_match.group(1).strip()
+                                        # This is the search keyword, not the brand, so skip
+                                        pass
+                            except:
+                                pass
+                        
+                        # Extract and save brand logo to database (for SBA and Marquee Banner ads)
+                        if advertiser and advertiser != "unknown" and label in ['sba', 'marquee_banner'] and BrandLogoDatabase:
+                            try:
+                                # Look for brand logo image in SBA container
+                                logo_img = item.locator('img[alt]:not([alt=""])').first
+                                if logo_img.count() > 0:
+                                    logo_src = logo_img.get_attribute('src')
+                                    logo_alt = logo_img.get_attribute('alt')
+                                    
+                                    # Verify alt text matches advertiser (fuzzy match)
+                                    if logo_src and logo_alt:
+                                        # Normalize for comparison
+                                        norm_alt = logo_alt.lower().strip()
+                                        norm_advertiser = advertiser.lower().strip()
+                                        
+                                        # If alt text is close to advertiser name, save the logo
+                                        if norm_alt in norm_advertiser or norm_advertiser in norm_alt:
+                                            logo_db = BrandLogoDatabase()
+                                            ad_type_name = ad_type_map.get(label, label.title())
+                                            logo_db.add_brand_logo(
+                                                brand=advertiser,
+                                                logo_url=logo_src,
+                                                retailer="walmart",
+                                                metadata={
+                                                    "ad_type": ad_type_name,
+                                                    "keyword": keyword,
+                                                    "timestamp": timestamp
+                                                }
+                                            )
+                                            if SL: SL.log("brand_logo_saved", brand=advertiser, label=label)
+                            except Exception as logo_err:
+                                if SL: SL.log("brand_logo_error", error=str(logo_err), label=label)
+                        
                         # Final fallback: Use "unknown" if we couldn't extract brand
                         # This ensures filename generation doesn't fail and frontend hooks work
                         if not advertiser:
@@ -830,7 +909,8 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                         'sba': 'SBA',
                         'sbv': 'SBV',
                         'tile_takeover': 'Tile_Takeover',
-                        'top_banner': 'Top_Banner'
+                        'top_banner': 'Top_Banner',
+                        'marquee_banner': 'Marquee_Banner'
                     }
                     ad_type_folder = ad_type_map.get(label, label.title())
                     ad_folder = os.path.join(client_root, ad_type_folder)

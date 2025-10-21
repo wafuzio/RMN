@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ad } from "@/components/dashboard/AdCard";
 import { api } from "@/lib/api";
+import { toLocalImageUrl } from "@/utils/imageUrl";
 
 function parseTs(ts: string) { return new Date(ts.replace(" ", "T")); }
 
@@ -76,25 +77,35 @@ async function idbSet(url: string, blob: Blob) {
   } catch {}
 }
 async function getImage(src: string): Promise<HTMLImageElement> {
-  const cached = imgCache.get(src);
-  if (cached) return Promise.resolve(cached);
+  const finalSrc = toLocalImageUrl(src);
+  
+  const cached = imgCache.get(finalSrc);
+  if (cached) return cached;
+  
   // try IDB
-  const fromIDB = await idbGet(src);
+  const fromIDB = await idbGet(finalSrc);
   if (fromIDB) {
     const url = URL.createObjectURL(fromIDB);
     const img = await loadImage(url);
     URL.revokeObjectURL(url);
-    imgCache.set(src, img);
+    imgCache.set(finalSrc, img);
     return img;
   }
-  // fetch network
-  const resp = await fetch(src, { mode: 'cors' });
+  
+  // fetch network with content-type validation
+  const resp = await fetch(finalSrc, { mode: 'cors', redirect: 'follow', credentials: 'omit' });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${finalSrc}`);
+  
+  const ct = resp.headers.get('content-type') || '';
+  if (!ct.startsWith('image/')) throw new Error(`Not an image (${ct}) for ${finalSrc}`);
+  
   const blob = await resp.blob();
-  idbSet(src, blob);
-  const url = URL.createObjectURL(blob);
-  const img = await loadImage(url);
-  URL.revokeObjectURL(url);
-  imgCache.set(src, img);
+  idbSet(finalSrc, blob);
+  
+  const obj = URL.createObjectURL(blob);
+  const img = await loadImage(obj);
+  URL.revokeObjectURL(obj);
+  imgCache.set(finalSrc, img);
   return img;
 }
 function loadImage(url: string) {
@@ -144,7 +155,7 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange }: { ads: Ad[
       for (let i=0;i<Math.min(2, b.ads.length); i++) {
         const ad = b.ads[i] as any;
         const url = (ad.image_url_full || ad.image_url);
-        const full = url.startsWith('http') ? url : api.imageUrl(url);
+        const full = toLocalImageUrl(url);
         toPrefetch.push(full);
       }
     }
@@ -198,7 +209,7 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange }: { ads: Ad[
           const ad = b.ads[i];
           const url = (ad as any).image_url_full || ad.image_url; // fallback
           try {
-            const full = url.startsWith("http") ? url : api.imageUrl(url);
+            const full = toLocalImageUrl(url);
             const img = await getImage(full);
             const aspect = img.width / Math.max(1,img.height);
             const thumbW = Math.min(colWidth, Math.round(thumbH * aspect));

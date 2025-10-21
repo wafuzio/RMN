@@ -10,6 +10,186 @@ import json
 import time
 from datetime import datetime
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from filename_utils import generate_ad_filename
+
+
+def force_window_and_metrics(context, page, width=1920, height=1080, dpr=1, log=None):
+    """
+    In a persistent Chromium context, resize the actual OS window and apply emulation metrics
+    so viewport and DPR are exactly what we expect.
+    """
+    if log is None:
+        log = print
+    
+    try:
+        client = context.new_cdp_session(page)
+        log(f"   CDP session created")
+    except Exception as e:
+        log(f"   ⚠️ Failed to create CDP session: {e}")
+        return
+    
+    # 1) Resize the outer browser window (persistent contexts ignore set_viewport_size)
+    try:
+        win = client.send('Browser.getWindowForTarget')
+        log(f"   Window ID: {win.get('windowId')}")
+        result = client.send('Browser.setWindowBounds', {
+            'windowId': win['windowId'],
+            'bounds': {'width': width, 'height': height}
+        })
+        log(f"   ✅ Window bounds set to {width}x{height}")
+    except Exception as e:
+        log(f"   ⚠️ Failed to set window bounds: {e}")
+    
+    # 2) Override device metrics so CSS px math is stable
+    try:
+        client.send('Emulation.setDeviceMetricsOverride', {
+            'width': width,
+            'height': height,
+            'deviceScaleFactor': dpr,
+            'mobile': False,
+            'scale': 1
+        })
+        log(f"   ✅ Device metrics override set: {width}x{height}, DPR={dpr}")
+    except Exception as e:
+        log(f"   ⚠️ Failed to set device metrics: {e}")
+    
+    # 3) Reset any persisted page zoom (some profiles save per-origin zoom)
+    try:
+        client.send('Emulation.setPageScaleFactor', {'pageScaleFactor': 1})
+        log(f"   ✅ Page scale factor reset to 1")
+    except Exception as e:
+        log(f"   ⚠️ Failed to set page scale factor: {e}")
+    
+    # 4) Verify
+    try:
+        cur_dpr = page.evaluate('window.devicePixelRatio')
+        vp = page.evaluate('() => ({ width: window.innerWidth, height: window.innerHeight })')
+        log(f"   ✅ Viewport verified: {vp['width']}x{vp['height']}, DPR: {cur_dpr}")
+        
+        if vp['width'] != width or vp['height'] != height:
+            log(f"   ⚠️ WARNING: Viewport mismatch! Expected {width}x{height}, got {vp['width']}x{vp['height']}")
+        if abs(cur_dpr - dpr) > 0.01:
+            log(f"   ⚠️ WARNING: DPR mismatch! Expected {dpr}, got {cur_dpr}")
+    except Exception as e:
+        log(f"   ⚠️ Failed to verify viewport: {e}")
+
+
+def screenshot_element_beyond_viewport(context, page, handle, out_path, pad=8, log=None):
+    """CDP-based screenshot that captures beyond viewport (no reload)."""
+    if log is None:
+        log = print
+    
+    # Get element info BEFORE scrolling
+    try:
+        elem_id = handle.get_attribute('id')
+        elem_classes = handle.get_attribute('class')
+        log(f"      Element: id={elem_id}, classes={elem_classes[:50] if elem_classes else 'none'}")
+    except:
+        pass
+    
+    # Check what's inside the element
+    try:
+        has_inner = handle.query_selector('[id$="-inner"]')
+        has_carousel = handle.query_selector('[data-testid="shoppable-list-sliding-carousel"]')
+        has_header = handle.query_selector('h2, [role="heading"]')
+        has_logo = handle.query_selector('img[alt*="logo"], img[alt*="Logo"]')
+        log(f"      Contains: inner={bool(has_inner)}, carousel={bool(has_carousel)}, header={bool(has_header)}, logo={bool(has_logo)}")
+    except Exception as e:
+        log(f"      Could not check element contents: {e}")
+    
+    handle.scroll_into_view_if_needed()
+    page.wait_for_timeout(80)
+    
+    # Freeze motion and avoid smooth-scrolling reflows
+    try:
+        page.add_style_tag(content="""
+            html { scroll-behavior: auto !important; }
+            * { transition: none !important; animation: none !important; }
+        """)
+    except Exception:
+        pass
+    
+    # Hide sticky UI without reflow
+    try:
+        page.evaluate("""
+            () => {
+                const hdrs = [
+                    document.querySelector('header[class*="sticky"]'),
+                    document.querySelector('header[style*="position: fixed"]'),
+                    document.querySelector('header[style*="position:fixed"]')
+                ];
+                hdrs.forEach(h => { if (h) h.style.visibility = 'hidden'; });
+                const filters = document.querySelector('[aria-label="Filters"]');
+                if (filters) filters.style.visibility = 'hidden';
+            }
+        """)
+    except Exception:
+        pass
+    
+    # Flush layout right before measuring
+    try:
+        page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+    except Exception:
+        pass
+    
+    # Compute element rect in PAGE coordinates (viewport rect + scrollX/Y)
+    # This is critical: CDP captureScreenshot expects page coords, not viewport coords!
+    rect = page.evaluate(
+        """([el, pad]) => {
+            const r = el.getBoundingClientRect();
+            const sx = window.scrollX || window.pageXOffset || 0;
+            const sy = window.scrollY || window.pageYOffset || 0;
+            const x  = Math.max(0, Math.floor(r.left + sx - pad));
+            const y  = Math.max(0, Math.floor(r.top  + sy - pad));
+            const w  = Math.ceil(r.width  + 2*pad);
+            const h  = Math.ceil(r.height + 2*pad);
+            return { x, y, width: w, height: h, sx, sy, rt: r.top, rl: r.left, rw: r.width, rh: r.height };
+        }""",
+        [handle, pad]
+    )
+    
+    if not rect:
+        raise RuntimeError("No rect for element")
+    
+    # Debug logging
+    dpr = page.evaluate("window.devicePixelRatio")
+    viewport_info = page.evaluate('() => ({ width: window.innerWidth, height: window.innerHeight })')
+    log(f"      Viewport: {viewport_info['width']}x{viewport_info['height']}, scrollY={rect['sy']:.1f}, DPR={dpr}")
+    log(f"      Element rect (viewport): top={rect['rt']:.1f}, left={rect['rl']:.1f}, w={rect['rw']:.1f}, h={rect['rh']:.1f}")
+    log(f"      Clip (page coords): x={rect['x']}, y={rect['y']}, w={rect['width']}, h={rect['height']}")
+    
+    clip = {
+        'x': rect['x'],
+        'y': rect['y'],
+        'width': rect['width'],
+        'height': rect['height'],
+        'scale': 1.0,
+    }
+    
+    client = context.new_cdp_session(page)
+    shot = client.send('Page.captureScreenshot', {
+        'format': 'png',
+        'fromSurface': True,
+        'captureBeyondViewport': True,
+        'clip': clip,
+    })
+    
+    import base64, os
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, 'wb') as f:
+        f.write(base64.b64decode(shot['data']))
+    
+    # Check actual screenshot dimensions
+    try:
+        import PIL.Image
+        img = PIL.Image.open(out_path)
+        log(f"      Screenshot saved: {img.width}x{img.height} pixels")
+        if abs(img.width - clip['width']) > 2 or abs(img.height - clip['height']) > 2:
+            log(f"      ⚠️  SIZE MISMATCH! Expected {clip['width']:.0f}x{clip['height']:.0f}, got {img.width}x{img.height}")
+    except Exception as e:
+        log(f"      Could not verify screenshot dimensions: {e}")
+    
+    return out_path
 
 
 def _wait_until_home_ready(page, log, timeout_ms=15000):
@@ -160,6 +340,9 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     html_file = os.path.join(runs_dir, f"search_results_{timestamp}.html")
     json_file = os.path.join(runs_dir, f"run_results_{timestamp}.json")
+        
+    # Extract client name from output directory (e.g., /path/to/output/instacart/pickle -> pickle)
+    client_name = os.path.basename(output_dir)
     
     log(f"🔍 Searching Instacart for: '{keyword}'")
     log(f"   Store: {store}")
@@ -170,10 +353,14 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
     try:
         with sync_playwright() as p:
             # Launch with persistent context (authenticated session)
+            log("🖥️  Launching with viewport: 1920x1080, DPR: 1")
             context = p.chromium.launch_persistent_context(
                 user_data_dir=profile_dir,
                 headless=False,
                 viewport={'width': 1920, 'height': 1080},
+                device_scale_factor=1,  # Pin DPR to 1
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
                 locale='en-US',
                 args=[
                     '--disable-dev-shm-usage',
@@ -181,11 +368,18 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     '--disable-blink-features=AutomationControlled',
                     '--no-first-run',
                     '--no-default-browser-check',
-                    '--disable-session-crashed-bubble',  # Suppress "Restore pages?" prompt
+                    '--disable-session-crashed-bubble',
+                    '--window-size=1920,1080',  # Force initial outer window size
+                    '--force-device-scale-factor=1',  # Force DPR
+                    '--high-dpi-support=1',
                 ],
             )
             
             page = context.pages[0] if context.pages else context.new_page()
+            
+            # Force window and metrics via CDP (this works in persistent contexts)
+            log("🖥️  Forcing window bounds and device metrics via CDP...")
+            force_window_and_metrics(context, page, 1920, 1080, 1, log=log)
             
             # Visit homepage (organic navigation)
             log("Loading homepage...")
@@ -297,7 +491,7 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             
             # Prefer to see ad containers; fallback to a short settle delay
             try:
-                page.wait_for_selector("div.e-1qzz7bi, div.e-1hv1sre", timeout=8000)
+                page.wait_for_selector('[role="region"][aria-label*="carousel"]', timeout=8000)
                 log("Search: ad containers detected")
             except Exception:
                 log("Search: ad containers not detected within 8s; using short settle delay")
@@ -326,91 +520,214 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                 "results": [{"ads": []}]  # Nested structure like Kroger
             }
             
-            # Find all ad containers
-            # Note: div.e-1qzz7bi includes both Shoppable Display Ads and Shoppable Video Ads
-            # Sponsored Label ads are excluded as they are not actual ad units (just product labels)
-            ad_selectors = {
-                'Shoppable Display Ad': 'div.e-1qzz7bi',
-                'Display Ad': 'div.e-1hv1sre',
-                # 'Sponsored Label': 'div.e-cwus85',  # Excluded - not actual ad units
-            }
+            # Find all ad containers using structural selectors (hash classes change)
+            log("🧭 Finding ad containers via structural navigation...")
             
-            for ad_type, selector in ad_selectors.items():
-                elements = page.query_selector_all(selector)
-                for i, elem in enumerate(elements):
+            # Find all divs with UUID IDs that have -inner children
+            elements = []
+            all_divs = page.query_selector_all('div[id]')
+            log(f"   Checking {len(all_divs)} divs with IDs...")
+            
+            for div in all_divs:
+                try:
+                    div_id = div.get_attribute('id')
+                    if not div_id or '-' not in div_id:
+                        continue
+                    
+                    # Check if this div has a child with id="{div_id}-inner"
+                    inner = div.query_selector(f'[id="{div_id}-inner"]')
+                    if not inner:
+                        continue
+                    
+                    # Check if the inner contains a carousel
+                    carousel = inner.query_selector('[data-testid="shoppable-list-sliding-carousel"]')
+                    if not carousel:
+                        continue
+                    
+                    # This is a border container with a carousel!
                     try:
-                        # Get ad ID if available
-                        ad_id = elem.get_attribute('id') or f"{ad_type}_{i}"
-                        
-                        # For Shoppable Display Ads, check if it contains video
-                        actual_ad_type = ad_type
-                        if ad_type == 'Shoppable Display Ad':
-                            # Check if this ad contains a video player
-                            video_player = elem.query_selector('div[id^="video-player-"]')
-                            if video_player:
-                                actual_ad_type = 'Shoppable Video Ad'
-                        
-                        # Get bounding box for screenshot coordinates
-                        bbox = elem.bounding_box()
-                        
-                        ad_info = {
-                            "type": actual_ad_type,
-                            "selector": selector,
-                            "id": ad_id,
-                            "index": i,
+                        div_bbox = div.bounding_box()
+                        log(f"\n✅ Found ad container: id={div_id}")
+                        log(f"   ↳ Bbox: x={div_bbox['x']:.1f}, y={div_bbox['y']:.1f}, w={div_bbox['width']:.1f}, h={div_bbox['height']:.1f}")
+                    except:
+                        pass
+                    
+                    elements.append(('Shoppable Display Ad', div))
+                    
+                except Exception as e:
+                    continue
+            
+            log(f"\n✅ Found {len(elements)} ad containers total")
+            
+            for ad_type, elem in elements:
+                i = elements.index((ad_type, elem))
+                try:
+                    # Get ad ID if available
+                    ad_id = elem.get_attribute('id') or f"{ad_type}_{i}"
+                    
+                    # For Shoppable Display Ads, check if it contains video
+                    actual_ad_type = ad_type
+                    if ad_type == 'Shoppable Display Ad':
+                        # Check if this ad contains a video player
+                        video_player = elem.query_selector('div[id^="video-player-"]')
+                        if video_player:
+                            actual_ad_type = 'Shoppable Video Ad'
+                    
+                    # Get bounding box for screenshot coordinates
+                    bbox = elem.bounding_box()
+                    
+                    ad_info = {
+                        "type": actual_ad_type,
+                        "selector": "structural",
+                        "id": ad_id,
+                        "index": i,
+                    }
+                    
+                    if bbox:
+                        ad_info["bbox"] = {
+                            "x": bbox['x'],
+                            "y": bbox['y'],
+                            "width": bbox['width'],
+                            "height": bbox['height']
                         }
-                        
-                        if bbox:
-                            ad_info["bbox"] = {
-                                "x": bbox['x'],
-                                "y": bbox['y'],
-                                "width": bbox['width'],
-                                "height": bbox['height']
-                            }
-                        
-                        # Try to extract brand/title
-                        try:
-                            title_elem = elem.query_selector('h2, [role="heading"]')
-                            if title_elem:
-                                title = title_elem.inner_text()
-                                ad_info["title"] = title
-                                # Extract advertiser from title (matching Kroger structure)
-                                if title:
-                                    advertiser = None
-                                    # Method 1: "Brand - Description" format
-                                    if ' - ' in title:
-                                        parts = title.split(' - ')
-                                        if parts and parts[0]:
-                                            advertiser = parts[0].strip()
-                                    # Method 2: Look for capitalized brand names in title
-                                    # e.g., "Unleash spooky Goldfish® fun" → "Goldfish"
-                                    # e.g., "Amara Organic Smoothie Melts" → "Amara"
-                                    elif not advertiser:
-                                        # Look for capitalized words (potential brand names)
-                                        words = title.split()
-                                        for word in words:
-                                            # Remove ® and ™ symbols
-                                            clean_word = word.replace('®', '').replace('™', '').strip()
-                                            # Check if word is capitalized and not a common word
-                                            if (clean_word and clean_word[0].isupper() and 
-                                                clean_word.lower() not in ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by', 'as', 'is', 'was', 'are', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'unleash', 'love', 'what', 'you', 'your', 'our', 'refrigerated', 'organic', 'spooky', 'fun']):
-                                                advertiser = clean_word
-                                                break
-                                    
-                                    if advertiser:
-                                        ad_info["advertisers"] = [advertiser]
-                        except:
-                            pass
-                        
-                        ad_data["results"][0]["ads"].append(ad_info)
-                    except Exception as e:
-                        print(f"⚠️  Could not extract data from {ad_type} #{i}: {e}")
+                    
+                    # Try to extract brand/title
+                    try:
+                        title_elem = elem.query_selector('h2, [role="heading"]')
+                        if title_elem:
+                            title = title_elem.inner_text()
+                            ad_info["title"] = title
+                            # Extract advertiser from title (matching Kroger structure)
+                            if title:
+                                advertiser = None
+                                # Method 1: "Brand - Description" format
+                                if ' - ' in title:
+                                    parts = title.split(' - ')
+                                    if parts and parts[0]:
+                                        advertiser = parts[0].strip()
+                                # Method 2: Look for capitalized brand names in title
+                                # e.g., "Unleash spooky Goldfish® fun" → "Goldfish"
+                                # e.g., "Amara Organic Smoothie Melts" → "Amara"
+                                elif not advertiser:
+                                    # Look for capitalized words (potential brand names)
+                                    words = title.split()
+                                    for word in words:
+                                        # Remove ® and ™ symbols
+                                        clean_word = word.replace('®', '').replace('™', '').strip()
+                                        # Check if word is capitalized and not a common word
+                                        if (clean_word and clean_word[0].isupper() and 
+                                            clean_word.lower() not in ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by', 'as', 'is', 'was', 'are', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'unleash', 'love', 'what', 'you', 'your', 'our', 'refrigerated', 'organic', 'spooky', 'fun']):
+                                            advertiser = clean_word
+                                            break
+                                
+                                if advertiser:
+                                    ad_info["advertisers"] = [advertiser]
+                    except:
+                        pass
+                    
+                    ad_data["results"][0]["ads"].append(ad_info)
+                except Exception as e:
+                    print(f"⚠️  Could not extract data from {ad_type} #{i}: {e}")
             
             ad_count = len(ad_data['results'][0]['ads'])
             ad_data['count'] = ad_count
             print(f"📊 Found {ad_count} ad units")
             
-            # Save JSON
+            # Take screenshots of ads
+            log("\n📸 Taking screenshots...")
+            log(f"   Total elements to screenshot: {len(elements)}")
+            
+            # Force window and metrics again before screenshots (site may have changed them)
+            log("   Forcing window bounds and metrics via CDP before screenshots...")
+            force_window_and_metrics(context, page, 1920, 1080, 1, log=log)
+            
+            # Create output directories
+            shoppable_display_dir = os.path.join(output_dir, "Shoppable_Display_Ads")
+            shoppable_video_dir = os.path.join(output_dir, "Shoppable_Video_Ads")
+            main_dir = os.path.join(output_dir, "Main")
+            os.makedirs(shoppable_display_dir, exist_ok=True)
+            os.makedirs(shoppable_video_dir, exist_ok=True)
+            os.makedirs(main_dir, exist_ok=True)
+            log(f"   Display dir: {shoppable_display_dir}")
+            log(f"   Video dir: {shoppable_video_dir}")
+            log(f"   Main dir: {main_dir}")
+            
+            # Take full page screenshot first
+            try:
+                log("\n📸 Taking full page screenshot...")
+                fullpage_filename = generate_ad_filename(
+                    retailer='instacart',
+                    ad_type='main',
+                    client=client_name,
+                    search_term=keyword,
+                    timestamp=timestamp,
+                    index=1,
+                    extension='png',
+                    advertiser=None
+                )
+                fullpage_path = os.path.join(main_dir, fullpage_filename)
+                page.screenshot(path=fullpage_path, full_page=True)
+                log(f"   ✅ Full page: {fullpage_filename}")
+            except Exception as e:
+                log(f"   ⚠️ Full page screenshot failed: {e}")
+            
+            # Screenshot each ad
+            for idx, (ad_type, elem) in enumerate(elements):
+                log(f"\n📸 Screenshot {idx + 1}/{len(elements)}")
+                try:
+                    # Determine actual ad type (check for video)
+                    is_video = elem.query_selector('video') is not None
+                    actual_ad_type = 'Shoppable Video Ad' if is_video else 'Shoppable Display Ad'
+                    output_folder = shoppable_video_dir if is_video else shoppable_display_dir
+                    ad_type_slug = 'shoppable_video_ad' if is_video else 'shoppable_display_ad'
+                    log(f"   Ad type: {actual_ad_type} (video={is_video})")
+                    
+                    # Extract advertiser from ad data if available
+                    advertiser = None
+                    if idx < len(ad_data['results'][0]['ads']):
+                        ad_info = ad_data['results'][0]['ads'][idx]
+                        if 'advertisers' in ad_info and ad_info['advertisers']:
+                            advertiser = ad_info['advertisers'][0]
+                            log(f"   Advertiser: {advertiser}")
+                    
+                    # Generate filename
+                    screenshot_filename = generate_ad_filename(
+                        retailer='instacart',
+                        ad_type=ad_type_slug,
+                        client=client_name,
+                        search_term=keyword,
+                        timestamp=timestamp,
+                        index=idx + 1,
+                        extension='png',
+                        advertiser=advertiser
+                    )
+                    screenshot_path = os.path.join(output_folder, screenshot_filename)
+                    log(f"   Filename: {screenshot_filename}")
+                    
+                    # CDP screenshot (captures beyond viewport, no reload)
+                    log(f"   Taking CDP screenshot (beyond viewport)...")
+                    screenshot_element_beyond_viewport(context, page, elem, screenshot_path, pad=8, log=log)
+                    log(f"   ✅ Screenshot (CDP beyond-viewport): {os.path.basename(screenshot_path)}")
+                    
+                    # Verify file was created
+                    if os.path.exists(screenshot_path):
+                        file_size = os.path.getsize(screenshot_path)
+                        log(f"   ✅ Screenshot saved: {screenshot_filename} ({file_size} bytes)")
+                    else:
+                        log(f"   ⚠️ Screenshot file not found: {screenshot_path}")
+                    
+                    # Add screenshot path to ad_info
+                    if idx < len(ad_data['results'][0]['ads']):
+                        rel_path = os.path.relpath(screenshot_path, output_dir)
+                        ad_data['results'][0]['ads'][idx]['screenshot'] = rel_path
+                        log(f"   Added to JSON: {rel_path}")
+                        
+                except Exception as e:
+                    log(f"   ⚠️ Screenshot failed for ad #{idx + 1}: {e}")
+                    import traceback
+                    log(f"   Traceback: {traceback.format_exc()}")
+            
+            # Save JSON (with screenshot paths now included)
             with open(json_file, 'w', encoding='utf-8') as f:
                 json.dump(ad_data, f, indent=2)
             print(f"💾 JSON saved: {json_file}")

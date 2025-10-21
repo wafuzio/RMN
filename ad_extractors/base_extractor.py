@@ -247,13 +247,20 @@ class AdExtractor:
                 # Save TOA image
                 toa.save(toa_filepath)
                 
+                # Return RELATIVE paths (from client directory)
+                # Convert "output/client/main/file.jpg" -> "main/file.jpg"
+                # Convert "output/client/TOA/file.jpg" -> "TOA/file.jpg"
+                relative_full = os.path.join("main", filename)
+                relative_toa = os.path.join("TOA", toa_filename)
+                
                 return {
-                    "full": full_filepath,
-                    "toa": toa_filepath
+                    "full": relative_full,
+                    "toa": relative_toa
                 }
             except Exception as e:
                 print(f"[TOA Extraction Failed] {url} - {e}")
-                return {"full": full_filepath}
+                # Return relative path even on error
+                return {"full": os.path.join("main", filename)}
                 
         except requests.RequestException as e:
             print(f"[Image Request Failed] {url} - {e}")

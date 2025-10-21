@@ -23,6 +23,8 @@ from playwright.sync_api import sync_playwright
 from browser_lock import single_browser_lock
 from playwright._impl._errors import Error as PWError
 from kroger_login import save_cookies  # Removed load_cookies as it's redundant with user_data_dir
+from filename_utils import generate_ad_filename
+from core.brands import canonicalize
 
 # Constants for file paths
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -661,20 +663,58 @@ def search_and_capture(search_term=None, output_dir=None):
                                 """)
                                 carousel.scroll_into_view_if_needed()
                                 page.wait_for_timeout(500)
-                                header = carousel.query_selector(
-                                    '.CuratedCarousel__header, h2, .header, .kds-Heading, .headerSection-header, [class*="header"], [class*="title"]'
+                                # Extract advertiser from product titles (not promotional header)
+                                advertiser = "unknown"
+                                
+                                # Try to get brand from first product title
+                                product_links = carousel.query_selector_all('a.kds-Link[aria-label*="title"]')
+                                if product_links:
+                                    first_product = product_links[0]
+                                    # Try to get title from span
+                                    title_span = first_product.query_selector('span[data-testid="cart-page-item-description"]')
+                                    if title_span:
+                                        product_title = title_span.text_content().strip()
+                                        if product_title:
+                                            # Extract brand from product title using lexicon
+                                            brand = canonicalize(product_title)
+                                            if brand:
+                                                advertiser = brand
+                                                print(f"📦 Extracted brand from product: {advertiser}")
+                                    elif first_product.get_attribute('aria-label'):
+                                        # Fallback to aria-label
+                                        aria_label = first_product.get_attribute('aria-label')
+                                        brand = canonicalize(aria_label)
+                                        if brand:
+                                            advertiser = brand
+                                            print(f"📦 Extracted brand from aria-label: {advertiser}")
+                                
+                                # Final fallback: try header text
+                                if advertiser == "unknown":
+                                    header = carousel.query_selector(
+                                        '.CuratedCarousel__header, h2, .header, .kds-Heading, .headerSection-header, [class*="header"], [class*="title"]'
+                                    )
+                                    if header:
+                                        header_text = header.text_content().strip()
+                                        if header_text:
+                                            brand = canonicalize(header_text)
+                                            if brand:
+                                                advertiser = brand
+                                                print(f"📋 Extracted brand from header: {advertiser}")
+                                
+                                # Client slug derived from output_dir (e.g., bomb_pop)
+                                client_slug = os.path.basename(os.path.normpath(output_dir))
+                                
+                                # Build the canonical, final filename using the SAME run timestamp
+                                filename = generate_ad_filename(
+                                    retailer="kroger",
+                                    ad_type="carousel",
+                                    client=client_slug,
+                                    search_term=search_term,   # generator will slug
+                                    timestamp=timestamp,       # CRITICAL: reuse run ts, not datetime.now()
+                                    index=i+1,                 # 1-based position
+                                    extension="png",
+                                    advertiser=advertiser,
                                 )
-                                if not header:
-                                    print(f"⚠️ Skipping carousel {i+1} - no header found")
-                                    continue
-                                header_text = header.text_content().strip() if header else "main_carousel"
-                                if not header_text:
-                                    print(f"⚠️ Skipping carousel {i+1} - empty header text")
-                                    continue
-                                ts2 = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                                safe_term2 = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in search_term.lower())
-                                # Use index number instead of header text for consistent naming
-                                filename = f"carousel_{safe_term2}_{ts2}_{i+1}.png"
                                 filepath = os.path.join(carousel_dir, filename)
                                 try:
                                     box = carousel.bounding_box()

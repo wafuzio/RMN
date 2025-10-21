@@ -1,4 +1,4 @@
-import { API_BASE } from "@/lib/api";
+import { toLocalImageUrl } from "@/utils/imageUrl";
 
 interface RetailerLogoProps {
   retailer: string;
@@ -7,13 +7,15 @@ interface RetailerLogoProps {
 }
 
 export function RetailerLogo({ retailer, className = "h-8 w-auto", alt }: RetailerLogoProps) {
-  const logoUrl = `${API_BASE}/api/logo/${retailer.toLowerCase()}`;
+  const logoUrl = toLocalImageUrl(`/api/logo/${retailer.toLowerCase()}`);
 
   return (
     <img
       src={logoUrl}
       alt={alt || `${retailer} logo`}
       className={`${className} object-contain`}
+      crossOrigin="anonymous"
+      referrerPolicy="no-referrer"
       style={{ maxHeight: '100%', maxWidth: '100%', display: 'block' }}
       onError={(e) => {
         const target = e.target as HTMLImageElement;

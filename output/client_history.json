@@ -24,7 +24,7 @@
     "waterproof bandages"
   ],
   "blue bunny": [
-    "ice cream cones"
+    "ice cream bar"
   ],
   "bomb pop": [
     "ice pop"
@@ -45,8 +45,7 @@
     "AAA batteries"
   ],
   "land o frost": [
-    "black forest ham",
-    "packaged deli meat"
+    "honey ham"
   ],
   "taxonomy test": [
     "light potato chips"
@@ -56,5 +55,22 @@
   ],
   "tax test wmt 2": [
     "ice pop"
+  ],
+  "amara": [
+    "kids snacks"
+  ],
+  "pork rinds": [],
+  "barilla": [
+    "barilla pasta",
+    "boxed pasta"
+  ],
+  "coca cola": [
+    "coke zero"
+  ],
+  "magic spoon": [
+    "protein cereal"
+  ],
+  "sun chips": [
+    "sun chips"
   ]
 }

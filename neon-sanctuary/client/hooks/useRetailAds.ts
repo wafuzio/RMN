@@ -20,13 +20,46 @@ export function useClients(retailer?: string) {
   });
 }
 
-export function useAds(params: { retailer: string; client?: string; start?: string; end?: string; types?: string[]; search?: string; pageSize?: number; }) {
-  const { retailer, client, start, end, types, search, pageSize=24 } = params;
+export function useAds(params: { 
+  retailer?: string; 
+  client?: string; 
+  term?: string;
+  advertiser?: string;
+  start?: string; 
+  end?: string; 
+  types?: string[]; 
+  search?: string; 
+  pageSize?: number; 
+}) {
+  const { retailer, client, term, advertiser, start, end, types, search, pageSize = 24 } = params;
+  
+  // Guard: don't fire query until both retailer and client are present
+  const enabled = Boolean(retailer && client);
+  
   return useInfiniteQuery<AdsCardsResponse>({
-    queryKey: ["ads", retailer, client, start, end, types?.join("|"), search, pageSize],
+    queryKey: ["ads", retailer, client, term, advertiser, start, end, types?.join("|"), search, pageSize],
     initialPageParam: 1,
     getNextPageParam: (lastPage, pages) => lastPage.has_more ? pages.length + 1 : undefined,
-    queryFn: ({ pageParam }) => api.getAds({ retailer, client, start, end, types, search, page: pageParam as number, page_size: pageSize }),
-    enabled: !!retailer,
+    queryFn: ({ pageParam }) => {
+      // TypeScript knows these are non-null because enabled=true
+      if (!retailer || !client) {
+        throw new Error('retailer and client are required');
+      }
+      return api.getAds({ 
+        retailer, 
+        client, 
+        term,
+        advertiser,
+        start, 
+        end, 
+        types, 
+        search, 
+        page: pageParam as number, 
+        pageSize 
+      });
+    },
+    enabled,  // Only run when both retailer and client are present
+    staleTime: 0, // Always refetch - don't cache
+    gcTime: 0, // Don't keep old data in memory
   });
 }

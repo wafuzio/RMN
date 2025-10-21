@@ -10,10 +10,17 @@ import os
 import json
 import argparse
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+# Add project root to path for imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
+from filename_utils import generate_ad_filename
 
 # Set up logging
 import logging
@@ -219,17 +226,28 @@ def screenshot_carousel(html_file, output_dir=None, search_term=None):
                         except Exception as e:
                             print(f"   Note: Could not extract header text: {e}")
                         
-                        # Generate filename
-                        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                        safe_header = sanitize_filename(header_text)
+                        # Generate filename using taxonomy
+                        timestamp = datetime.now()
                         
-                        # Include search term in filename if available
-                        search_term_part = ""
-                        if search_term:
-                            safe_search_term = sanitize_filename(search_term)
-                            search_term_part = f"_{safe_search_term}"
+                        # Extract retailer and client from path
+                        # Path structure: output/retailer/client/Carousel/
+                        path_parts = carousel_dir.split(os.sep)
+                        retailer = path_parts[-3] if len(path_parts) >= 3 else "unknown"
+                        client = path_parts[-2] if len(path_parts) >= 2 else "unknown"
                         
-                        filename = f"carousel_{safe_header}{search_term_part}_{timestamp}.png"
+                        # Use header text as advertiser if available
+                        advertiser = header_text if header_text and header_text != "unknown" else None
+                        
+                        filename = generate_ad_filename(
+                            retailer=retailer,
+                            ad_type="carousel",
+                            client=client,
+                            search_term=search_term or "unknown",
+                            timestamp=timestamp,
+                            index=i + 1,
+                            extension="png",
+                            advertiser=advertiser
+                        )
                         filepath = os.path.join(carousel_dir, filename)
                         
                         # Take screenshot with padding

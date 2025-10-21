@@ -1,8 +1,49 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { toLocalImageUrl } from "@/utils/imageUrl";
 import { RetailerLogo } from "@/components/dashboard/RetailerLogo";
+
+// Robust image loader component
+function AdImage({ relUrl, alt }: { relUrl?: string; alt?: string }) {
+  if (!relUrl) {
+    return <div className="fallback-text text-gray-400 text-sm">No image</div>;
+  }
+
+  const src = toLocalImageUrl(relUrl);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setLoaded(false); // reset whenever src changes
+  }, [src]);
+
+  return (
+    <div className="w-full h-[200px] overflow-hidden rounded-t-lg bg-gray-100 flex items-center justify-center relative">
+      <img
+        key={src}                          // force a fresh element when URL changes
+        src={src}
+        alt={alt || 'ad'}
+        className="w-full h-full object-cover"
+        style={{ display: 'block' }}       // never hide the <img>
+        crossOrigin="anonymous"            // Enable CORS for cross-origin images
+        referrerPolicy="no-referrer"       // Extra security
+        decoding="async"
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        onError={() => {
+          console.log('img error', src);   // keep temporarily for debugging
+          setLoaded(false);
+        }}
+      />
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+          <div className="fallback-text text-gray-400 text-sm">Loading...</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const TYPE_STYLES: Record<string, string> = {
   TOA: "bg-blue-500 text-white",
@@ -28,6 +69,7 @@ export interface Ad {
 
 export function AdCard({ ad, onRemove, onOpen, draggableProps }: { ad: Ad; onRemove: (id: string)=>void; onOpen: (ad: Ad)=>void; draggableProps?: any; }) {
   const [hidden, setHidden] = useState(false);
+  
   if (hidden) return null;
 
   return (
@@ -37,7 +79,7 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps }: { ad: Ad; onRem
       role="article"
       aria-label={`Ad card ${ad.brand}`}
     >
-      <div className="absolute left-2 top-2 bg-white/90 border rounded px-1 py-1">
+      <div className="absolute left-2 top-2 z-20 bg-white/90 border rounded px-1 py-1">
         <span className="sr-only">{ad.retailer}</span>
         <RetailerLogo retailer={ad.retailer} className="h-6 w-auto" />
       </div>
@@ -50,28 +92,7 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps }: { ad: Ad; onRem
       </button>
       <div className="cursor-grab absolute left-2 top-2 translate-y-10 opacity-0 group-hover:opacity-100" aria-hidden>⋮⋮</div>
       <button onClick={() => onOpen(ad)} className="text-left">
-        <div className="w-full h-[200px] overflow-hidden rounded-t-lg bg-gray-100 flex items-center justify-center">
-          {ad.image_url ? (
-            <img 
-              src={`${api.imageUrl(ad.image_url)}`} 
-              alt={`${ad.brand} ad`} 
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                const parent = target.parentElement;
-                if (parent && !parent.querySelector('.fallback-text')) {
-                  const fallback = document.createElement('div');
-                  fallback.className = 'fallback-text text-gray-400 text-sm';
-                  fallback.textContent = 'No image';
-                  parent.appendChild(fallback);
-                }
-              }}
-            />
-          ) : (
-            <div className="text-gray-400 text-sm">No image</div>
-          )}
-        </div>
+        <AdImage relUrl={ad.image_url} alt={`${ad.brand} ad`} />
         <div className="p-4">
           <div className="flex items-center justify-between mb-1">
             <div className="font-bold text-[1.2em] text-[#111827]">{ad.brand}</div>

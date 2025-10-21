@@ -13,11 +13,24 @@ function groupBy<T>(arr: T[], key: (t: T) => string) {
 
 export interface TimelinePoint { label: string; count: number; date: Date }
 
-export function Timeline({ timestamps }: { timestamps: string[] }) {
+export function Timeline({ timestamps, onRangeChange }: { timestamps: string[]; onRangeChange?: (start: Date, end: Date) => void }) {
   const [granularity, setGranularity] = useState<"month"|"week"|"day">("day");
 
   const points: TimelinePoint[] = useMemo(() => {
-    const dates = timestamps.map(t => new Date(t.replace(" ", "T")));
+    // Filter out invalid/missing timestamps and create valid Date objects
+    const dates = timestamps
+      .filter(t => t && typeof t === 'string') // Remove null/undefined/non-string
+      .map(t => {
+        // Handle multiple timestamp formats:
+        // "2025-10-13 22:07:10" -> "2025-10-13T22:07:10"
+        // "2025-10-13T22:07:10.123" -> already valid
+        const normalized = t.includes('T') ? t : t.replace(" ", "T");
+        return new Date(normalized);
+      })
+      .filter(d => !isNaN(d.getTime())); // Remove invalid dates
+
+    if (dates.length === 0) return [];
+
     let format: (d: Date)=>string;
     if (granularity === "month") format = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
     else if (granularity === "week") {
@@ -42,6 +55,18 @@ export function Timeline({ timestamps }: { timestamps: string[] }) {
 
   const visible = points.slice(range[0], range[1]+1);
 
+  // Apply date filter when range changes
+  const handleRangeChange = (newRange: [number, number]) => {
+    setRange(newRange);
+    if (onRangeChange && points.length > 0) {
+      const startPoint = points[newRange[0]];
+      const endPoint = points[newRange[1]];
+      if (startPoint && endPoint) {
+        onRangeChange(startPoint.date, endPoint.date);
+      }
+    }
+  };
+
   return (
     <div className="card-surface p-4">
       <div className="flex items-center justify-between mb-3">
@@ -60,7 +85,7 @@ export function Timeline({ timestamps }: { timestamps: string[] }) {
         ))}
       </div>
       <div className="mt-3">
-        <Slider value={[range[0], range[1]]} min={min} max={max} step={1} onValueChange={(v:any)=> setRange([v[0], v[1]])} />
+        <Slider value={[range[0], range[1]]} min={min} max={max} step={1} onValueChange={(v:any)=> handleRangeChange([v[0], v[1]])} />
         <div className="mt-1 text-xs text-[#6b7280] flex justify-between">
           <span>{points[range[0]]?.label || ""}</span>
           <span>{points[range[1]]?.label || ""}</span>

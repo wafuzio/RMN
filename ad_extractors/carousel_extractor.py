@@ -6,8 +6,6 @@ This module provides functionality to extract curated carousel ads from Kroger.c
 
 from bs4 import BeautifulSoup
 import re
-import os
-from datetime import datetime
 from .base_extractor import AdExtractor
 
 class CarouselExtractor(AdExtractor):
@@ -20,6 +18,7 @@ class CarouselExtractor(AdExtractor):
     def extract(self, html):
         """
         Extract curated carousel ad data from HTML
+        Only extracts SPONSORED/FEATURED carousels (not organic product carousels)
         
         Args:
             html (str): HTML content containing carousel ad
@@ -36,6 +35,16 @@ class CarouselExtractor(AdExtractor):
                           soup.select_one('div[data-testid*="carousel"]')
         
         if not carousel_element:
+            return None
+        
+        # CRITICAL: Only extract SPONSORED carousels (marked with "Featured")
+        # Look for the featured flag div within the carousel
+        featured_indicator = carousel_element.select_one('.CuratedCarousel__featuredFlag') or \
+                            carousel_element.select_one('[data-testid="carousel-featured-flag"]') or \
+                            carousel_element.find(string=re.compile(r'^Featured$', re.IGNORECASE))
+        
+        if not featured_indicator:
+            # Not a sponsored carousel - skip it
             return None
         
         # Initialize ad data
@@ -90,64 +99,12 @@ class CarouselExtractor(AdExtractor):
         # Process carousel as a whole - outside the product loop
         # Only continue if we found products or have a valid carousel element
         if ad['products'] or carousel_element:
-            # Save screenshot path for the carousel
-            if self.client:
-                try:
-                    # Create client directory structure if it doesn't exist
-                    client_dir = os.path.join("output", self.client)
-                    os.makedirs(client_dir, exist_ok=True)
-                    
-                    # Create carousel directory
-                    carousel_dir = os.path.join(client_dir, "Carousel")
-                    os.makedirs(carousel_dir, exist_ok=True)
-                    
-                    # Generate a unique filename for this carousel
-                    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    
-                    # Get header text for filename
-                    header_text = ad.get('header', '')
-                    if not header_text:
-                        # Try to extract header directly from the carousel element
-                        header_elem = carousel_element.select_one('.CuratedCarousel__header, h2, .header')
-                        if header_elem:
-                            header_text = header_elem.get_text(strip=True)
-                    
-                    header_text = header_text.lower() if header_text else 'unknown_carousel'
-                    
-                    # Include search term if available
-                    search_term_part = ""
-                    if hasattr(self, 'search_term') and self.search_term:
-                        # Sanitize search term for filename
-                        safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in self.search_term)
-                        search_term_part = f"_{safe_search_term}"
-                    
-                    # Clean header for filename
-                    clean_header = re.sub(r'[^a-z0-9]', '_', header_text)
-                    clean_header = re.sub(r'_+', '_', clean_header)  # Replace multiple underscores
-                    clean_header = clean_header[:30]  # Limit length
-                    
-                    # Create a unique filename for this carousel
-                    filename = f"carousel_{clean_header}{search_term_part}_{timestamp}.png"
-                    
-                    # Full path to save the image
-                    image_path = os.path.join(carousel_dir, filename)
-                    
-                    # Save image path in ad data
-                    ad['carousel_image_path'] = image_path
-                    
-                    # Note: We're not attempting to save individual images here anymore
-                    # Instead, we rely on the direct screenshot approach in kroger_search_and_capture.py
-                    # which captures the entire carousel as a single image during the initial page capture
-                    
-                    # Record that this carousel should be captured during live scraping
-                    ad['capture_entire_carousel'] = True
-                    
-                    # For backwards compatibility, we'll still set the image path
-                    # but the actual image capture happens in kroger_search_and_capture.py
-                    ad['carousel_image_path'] = image_path
-                    
-                except Exception as e:
-                    print(f"Error preparing carousel image path: {e}")
+            # NOTE: carousel_image_path is now generated centrally in kroger_ad_core.py
+            # after brand extraction with lexicon validation. This ensures:
+            # 1. JSON path matches the actual saved file
+            # 2. Uses the same run timestamp (not datetime.now())
+            # 3. Uses canonical brand name from lexicon
+            # 4. Consistent with screenshot script filename generation
             
             return ad
         

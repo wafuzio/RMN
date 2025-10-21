@@ -190,13 +190,31 @@ List all search terms used for a client.
 }
 ```
 
-#### `GET /api/ads/cards?retailer=<retailer>&client=<client>&term=<term>&page=1&page_size=24`
+#### `GET /api/advertisers?retailer=<retailer>&client=<client>`
+List all unique advertisers/brands for a client.
+
+**Parameters:**
+- `retailer` (required): Retailer slug
+- `client` (required): Client name
+
+**Response:**
+```json
+{
+  "retailer": "kroger",
+  "client": "cheese_dip",
+  "advertisers": ["Herdez", "Jennie-O", "Kraft", "P&G"],
+  "count": 4
+}
+```
+
+#### `GET /api/ads/cards?retailer=<retailer>&client=<client>&term=<term>&advertiser=<brand>&page=1&page_size=24`
 Get ad cards with filtering and pagination.
 
 **Parameters:**
 - `retailer` (required): Retailer slug
 - `client` (required): Client name
 - `term` (optional): Filter by search term
+- `advertiser` (optional): Filter by advertiser/brand name
 - `page` (optional): Page number (default: 1)
 - `page_size` (optional): Items per page (default: 24, max: 100)
 
@@ -204,27 +222,38 @@ Get ad cards with filtering and pagination.
 ```json
 {
   "retailer": "kroger",
-  "client": "bandaid",
+  "client": "cheese_dip",
   "cards": [
     {
       "retailer": "kroger",
-      "client": "bandaid",
-      "keyword": "waterproof bandages",
+      "client": "cheese_dip",
+      "keyword": "cheese dip",
       "ad_type": "TOA",
-      "brand": "Unknown",
-      "message": "",
-      "image_url": "/api/image/kroger/bandaid/toa_waterproof_bandages_2025-10-09_09-23-42.png",
-      "run_file": "run_results_waterproof_bandages_2025-10-09_09-23-42.json",
-      "timestamp": "2025-10-09 09:23:42",
-      "featured": false
+      "brand": "Herdez + Jennie-O",
+      "advertisers": ["Herdez", "Jennie-O"],
+      "message": "Turk-ify Your Taco",
+      "image_url": "/api/image/kroger/cheese_dip/kroger__herdez+jennie_o__toa__cheese_dip__cheese_dip__D2025-10-12_T19-20.33_1.png",
+      "run_file": "run_results_cheese_dip_2025-10-12_19-19-52.json",
+      "timestamp": "2025-10-12 19:19:52",
+      "featured": false,
+      "ad_index": 0
     }
   ],
   "page": 1,
   "page_size": 24,
   "has_more": false,
-  "total_cards": 15
+  "total_cards": 15,
+  "filters": {
+    "term": null,
+    "advertiser": null
+  }
 }
 ```
+
+**Co-Branded Ad Support:**
+- `brand`: Display string with `+` separator (e.g., "Herdez + Jennie-O")
+- `advertisers`: Array of individual brands for filtering
+- Filter by any brand: `?advertiser=herdez` returns co-branded ads too
 
 #### `GET /api/image/<retailer>/<client>/<filename>`
 Serve ad image files.
@@ -623,7 +652,8 @@ Amazon_Scrape/
 | `GET /api/clients?retailer=<retailer>` | ✅ Working | All retailers return client lists |
 | `GET /api/runs?retailer=<retailer>&client=<client>` | ✅ Working | Handles nested directories (Walmart) |
 | `GET /api/terms?retailer=<retailer>&client=<client>` | ✅ Working | Scans all JSON structures |
-| `GET /api/ads/cards` | ✅ Working | Returns paginated ad cards |
+| `GET /api/advertisers?retailer=<retailer>&client=<client>` | ✅ Working | Lists all unique brands |
+| `GET /api/ads/cards` | ✅ Working | Returns paginated ad cards with advertiser filtering |
 | `GET /api/image/<retailer>/<client>/<path:filename>` | ✅ Working | Serves images with path support |
 
 ### 📊 Data Availability by Retailer

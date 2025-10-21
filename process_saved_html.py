@@ -697,20 +697,23 @@ def extract_ads_from_html_file(html_file, process_images_for_html=None):
         with open(html_file, 'r', encoding='utf-8') as f:
             html = f.read()
         
-        # Try to extract keyword from filename
+        # Try to extract keyword and timestamp from filename
         keyword = None
+        run_timestamp = None
         filename = os.path.basename(html_file)
         if filename.startswith("search_results_"):
             # Extract search term from filename
             # Format is typically search_results_SEARCH_TERM_TIMESTAMP.html
             # Extract everything between search_results_ and the timestamp
-            timestamp_pattern = r'_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}'
+            timestamp_pattern = r'_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})'
             match = re.search(timestamp_pattern, filename)
             
             if match:
                 # Get everything between 'search_results_' and the timestamp
                 keyword_part = filename[len('search_results_'):match.start()]
                 keyword = keyword_part.replace('_', ' ').strip()
+                # Extract the timestamp for consistent filename generation
+                run_timestamp = match.group(1)
             else:
                 # Fallback to old method
                 parts = filename.replace("search_results_", "").split("_")
@@ -750,7 +753,10 @@ def extract_ads_from_html_file(html_file, process_images_for_html=None):
         client = None
         dir_path = os.path.dirname(html_file)
         if "output" in dir_path:
+            # If HTML is in runs/ subdirectory, go up one level to get client
             client_dir = os.path.basename(dir_path)
+            if client_dir == "runs":
+                client_dir = os.path.basename(os.path.dirname(dir_path))
             if client_dir != "output":  # Make sure it's not the main output dir
                 client = client_dir
         
@@ -766,8 +772,14 @@ def extract_ads_from_html_file(html_file, process_images_for_html=None):
                 if screenshot_candidates:
                     screenshot_path = screenshot_candidates[0]
         
-        # Extract all ads from the HTML
-        ads = extract_ads_from_html(html, client=client, search_term=keyword)
+        # Extract all ads from the HTML (pass timestamp for consistent carousel filenames)
+        ads = extract_ads_from_html(
+            html, 
+            client=client, 
+            search_term=keyword,
+            timestamp=run_timestamp,
+            source_file=html_file
+        )
         
         # Remove HTML content from ads to reduce JSON size
         ads = remove_html_from_ads(ads)

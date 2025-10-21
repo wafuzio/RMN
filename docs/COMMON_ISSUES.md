@@ -513,13 +513,568 @@ if _is_login_modal_visible(page):
 
 ---
 
+---
+
+## Stale lock files blocking extraction
+
+**Cause:** Process crashed/killed without cleaning up lock file.
+
+**Symptoms:**
+- Extraction hangs indefinitely
+- Log shows "Waiting for lock..."
+- No progress after 5+ minutes
+
+**Fix:**
+```bash
+# Find and remove stale locks
+find logs/<retailer>/locks/ -name "*.lock" -mmin +30 -delete
+
+# Or manually:
+rm logs/<retailer>/locks/*_image_extraction.lock
+```
+
+**Prevention:**
+- Use proper signal handling in extractors
+- Add timeout to lock acquisition (5 minutes max)
+- Clean locks on startup
+
+---
+
+## Selector changes breaking extractors
+
+**Cause:** Retailer updated their HTML structure or CSS classes.
+
+**Symptoms:**
+- Extractor returns 0 ads
+- Log shows "No elements found for selector"
+- Screenshots show page loaded but no ads captured
+
+**Debug steps:**
+1. Check saved HTML in `runs/` directory
+2. Search for ad elements manually in HTML
+3. Update selectors in extractor
+4. Test with `--headed` flag to see what's actually on page
+
+**Common patterns:**
+- Class names change: `.ProductCard` → `.ProductCard-v2`
+- Data attributes added: `div.ad` → `div[data-testid="ad"]`
+- Structure changes: Direct child → nested deeper
+
+**Prevention:**
+- Use multiple selector fallbacks
+- Prefer data attributes over classes when available
+- Document selector rationale in comments
+
+---
+
+## Image URLs returning 403/404
+
+**Cause:** CDN requires specific headers or cookies, or URL expired.
+
+**Symptoms:**
+- `context.request.get()` returns 403 or 404
+- Images work in browser but not in extractor
+- Works initially, fails on retry
+
+**Fix:**
+1. **Check if URL is time-limited:**
+   - Look for tokens/signatures in URL
+   - Extract fresh URLs from page instead of JSON
+
+2. **Add required headers:**
+   ```python
+   context.set_extra_http_headers({
+       "Referer": srp_url,
+       "User-Agent": REAL_UA,
+       "Accept": "image/*",
+   })
+   ```
+
+3. **Seed cookies from SRP:**
+   ```python
+   page.goto(srp_url, wait_until="commit")
+   page.wait_for_timeout(1000)
+   # Now context has cookies
+   ```
+
+4. **Fall back to navigation:**
+   ```python
+   try:
+       resp = context.request.get(url, timeout=5000)
+       if not resp.ok:
+           page.goto(url, wait_until="commit")
+   except:
+       page.goto(url, wait_until="commit")
+   ```
+
+---
+
+## Process hangs during scrape
+
+**Cause:** Waiting for element that never appears, or infinite retry loop.
+
+**Symptoms:**
+- No log output for 5+ minutes
+- CPU usage near 0%
+- Process doesn't respond to Ctrl+C
+
+**Common causes:**
+1. **Missing timeout on wait:**
+   ```python
+   # Wrong - waits forever
+   page.wait_for_selector(".ad")
+   
+   # Correct - times out after 30s
+   page.wait_for_selector(".ad", timeout=30000)
+   ```
+
+2. **Infinite retry without bail:**
+   ```python
+   # Wrong - retries forever
+   while not success:
+       success = try_scrape()
+   
+   # Correct - bail after N attempts
+   for attempt in range(MAX_RETRIES):
+       if try_scrape():
+           break
+   else:
+       log("❌ Max retries exceeded")
+       return False
+   ```
+
+3. **Deadlock on lock file:**
+   - Check `logs/<retailer>/locks/` for stale locks
+   - Add timeout to lock acquisition
+
+**Debug:**
+```bash
+# Find hung process
+ps aux | grep python | grep scrape
+
+# Kill it
+kill -9 <PID>
+
+# Check what it was waiting for
+tail -100 logs/<retailer>/keyword_input.log
+```
+
+---
+
+## Screenshots desync from HTML/JSON data
+
+**Cause:** Screenshots taken in separate page load from data extraction, causing mismatches due to dynamic content.
+
+**Symptoms:**
+- Ad screenshots show different content than JSON data
+- Ad count mismatch between JSON and screenshot count
+- Screenshots missing ads that appear in JSON
+- Virtualized content differs between loads
+
+**Fix:** Integrate screenshot capture directly into scraper during same page load:
+
+```python
+# In main scraper (e.g., instacart_search_and_capture.py)
+for elem in ad_elements:
+    # Extract data
+    ad_info = extract_ad_data(elem)
+    
+    # Take screenshot IMMEDIATELY (same page load!)
+    try:
+        elem.scroll_into_view_if_needed()
+        page.wait_for_timeout(250)
+        elem.screenshot(path=screenshot_path)
+        ad_info["screenshot"] = screenshot_path
+    except Exception as e:
+        print(f"Screenshot failed: {e}")
+    
+    # Add to results
+    ad_data["ads"].append(ad_info)
+
+# Save HTML/JSON after all extraction
+html_content = page.content()
+save_html(html_content)
+save_json(ad_data)
+```
+
+**Why it matters:**
+- Ensures perfect synchronization between data and visuals
+- Prevents virtualization/lazy-loading mismatches
+- Critical for dynamic SPAs like Instacart
+
+**See:** `docs/INSTACART_INTEGRATION.md` → Synchronized Screenshot Capture
+
+---
+
+## Full-page screenshot causes DOM reflow
+
+**Cause:** `page.screenshot(full_page=True)` resizes viewport, triggering virtualization to remount/unmount content.
+
+**Symptoms:**
+- Ads disappear from full-page screenshot
+- Different ad layout in full-page vs individual screenshots
+- Sticky headers repeat throughout screenshot
+- Tile seams visible in stitched screenshots
+
+**Fix:** Use CDP's `Page.captureScreenshot` with `captureBeyondViewport=true`:
+
+```python
+def capture_fullpage_static_no_resize(context, page, out_path):
+    """Capture entire page without viewport resize using CDP"""
+    client = context.new_cdp_session(page)
+    
+    # Disable animations for clean capture
+    page.add_style_tag(content="""
+      * { animation: none !important; transition: none !important; }
+      html { scroll-behavior: auto !important; }
+    """)
+    
+    # Single-pass capture (no viewport resize)
+    shot = client.send("Page.captureScreenshot", {
+        "format": "png",
+        "fromSurface": True,
+        "captureBeyondViewport": True
+    })
+    
+    data = base64.b64decode(shot["data"])
+    with open(out_path, "wb") as f:
+        f.write(data)
+    return out_path
+
+# Before capture, warm up lazy content
+vh = page.evaluate("() => window.innerHeight")
+doc_h = page.evaluate("() => document.body.scrollHeight")
+step = int(vh * 0.85)
+y = 0
+while y < doc_h - vh:
+    page.evaluate(f"window.scrollTo(0, {y})")
+    page.wait_for_timeout(250)
+    y += step
+
+# Return to top and capture
+page.evaluate("window.scrollTo(0, 0)")
+capture_fullpage_static_no_resize(context, page, output_path)
+```
+
+**Benefits:**
+- No viewport resize = no DOM reflow
+- Single compositor pass = no seams
+- Sticky headers handled automatically
+- Faster than tile stitching
+
+**See:** `docs/INSTACART_INTEGRATION.md` → CDP Static Full-Page Screenshots
+
+---
+
+## Ads don't load (viewability gates)
+
+**Cause:** Ad creative requires dwell time in viewport (600-1000ms) before mounting.
+
+**Symptoms:**
+- Screenshots show blank ad containers
+- Video ads show loading spinner
+- Ad count correct but screenshots empty
+- Works with manual browsing, fails in automation
+
+**Fix:** Wait for ad creative to load before screenshot:
+
+```python
+def _wait_for_ad_creative_loaded(page, el, timeout_ms=1200):
+    """Wait for images/video inside ad element to load"""
+    try:
+        page.wait_for_function(
+            """(e) => {
+               const vw = window.innerWidth, vh = window.innerHeight;
+               const r = e.getBoundingClientRect();
+               const inView = (r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw);
+               if (!inView) return false;
+               const imgs = Array.from(e.querySelectorAll('img'));
+               const okImg = imgs.length === 0 || imgs.every(i => i.complete && i.naturalWidth > 0);
+               const vid = e.querySelector('video');
+               const okVid = !vid || (vid.readyState >= 2);
+               return okImg && okVid;
+            }""",
+            el,
+            timeout=timeout_ms
+        )
+    except Exception:
+        pass  # Non-fatal
+
+# Use before screenshot
+elem.scroll_into_view_if_needed()
+page.wait_for_timeout(250)
+_wait_for_ad_creative_loaded(page, elem, timeout_ms=1200)  # ← Add this
+elem.screenshot(path=screenshot_path)
+```
+
+**Additional fixes:**
+- Force eager loading: `img[loading="lazy"]` → `img[loading="eager"]`
+- Increase dwell time for video ads (1200ms minimum)
+- Scroll element into view before waiting
+
+**See:** `docs/INSTACART_INTEGRATION.md` → Anti-Detection & Ad Loading
+
+---
+
+## Automation detected / ads suppressed
+
+**Cause:** Ad systems detect Playwright and degrade/suppress creative serving.
+
+**Symptoms:**
+- Fewer ads in automation than manual browsing
+- Blank ad containers
+- Generic placeholder images instead of real creative
+- Works in headed mode, fails in headless
+
+**Fix:** Anti-detection measures:
+
+```python
+# 1. Use mainstream User-Agent (not Playwright default)
+context = p.chromium.launch_persistent_context(
+    user_data_dir=profile_dir,
+    headless=False,
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+               "(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    args=[
+        '--disable-blink-features=AutomationControlled',
+        '--no-sandbox',
+    ]
+)
+
+# 2. Dismiss consent banners (can block ads)
+consent_selectors = [
+    "[id*='onetrust-accept']",
+    "button:has-text('Accept')",
+    "button:has-text('I agree')",
+]
+for cta in consent_selectors:
+    try:
+        if page.locator(cta).first.is_visible(timeout=1000):
+            page.locator(cta).first.click(timeout=1000)
+            break
+    except:
+        pass
+
+# 3. Emulate human behavior on direct navigation
+page.goto(url, wait_until="domcontentloaded")
+page.wait_for_timeout(1200)  # Dwell
+page.evaluate("window.scrollTo(0, 200)")  # Scroll
+page.wait_for_timeout(400)
+page.evaluate("window.scrollTo(0, 0)")  # Back to top
+```
+
+**Additional measures:**
+- Use persistent profile (not incognito)
+- Disable "block third-party cookies" in profile
+- Turn off Do-Not-Track
+- Check for ad-blocking extensions
+
+**See:** `docs/INSTACART_INTEGRATION.md` → Anti-Detection & Ad Loading
+
+---
+
+## Duplicate brand logos with different hashes
+
+**Cause:** Logo filenames hashed by URL instead of image content.
+
+**Symptoms:**
+- `boiron_40a07122.png` and `boiron_58d48a91.png` are identical
+- Multiple files for same brand logo
+- Database has duplicate entries
+
+**Fix:** Use content-based hashing in `brand_logo_database.py`:
+
+```python
+# OLD: Hash the URL
+url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+filename = f"{brand_key}_{url_hash}.{ext}"
+
+# NEW: Hash the actual image content
+response = requests.get(url)
+content_hash = hashlib.md5(response.content).hexdigest()
+
+# Check if identical image already exists
+existing_files = list(logos_dir.glob(f"{brand_key}*.{ext}"))
+for existing_file in existing_files:
+    existing_hash = hashlib.md5(existing_file.read_bytes()).hexdigest()
+    if existing_hash == content_hash:
+        return f"brand_logos/{existing_file.name}"  # Reuse existing
+
+# New unique image - use clean numbered naming
+logo_number = find_next_logo_number(brand_key, ext)
+filename = f"{brand_key}.{ext}" if logo_number == 1 else f"{brand_key}_{logo_number}.{ext}"
+```
+
+**Cleanup existing duplicates:**
+```bash
+python3 scripts/deduplicate_brand_logos.py
+```
+
+**Result:**
+- `boiron.png` (single file for identical images)
+- `boiron_2.png` (if brand has second unique logo)
+- Clean, human-readable filenames
+
+**See:** `docs/ARTIFACT_TAXONOMY.md` → Brand Logos
+
+---
+
+## Brand logo not in JSON output
+
+**Cause:** Logo path not enriched into ad data after extraction.
+
+**Symptoms:**
+- Brand logos downloaded and saved
+- JSON has `brand` field but no `brand_logo` field
+- Frontend can't display logos
+
+**Fix:** Add logo path enrichment before appending to results:
+
+```python
+# In scraper after extracting ad data
+ad_info = {
+    "type": ad_type,
+    "brand": advertiser,
+    "title": title,
+    # ... other fields ...
+}
+
+# Enrich with brand logo path from database
+if advertiser and logo_db:
+    logo_path = logo_db.get_logo_path(advertiser)
+    if logo_path:
+        ad_info["brand_logo"] = logo_path  # ← Add this
+
+ad_data["ads"].append(ad_info)
+```
+
+**JSON output:**
+```json
+{
+  "type": "Shoppable Display Ad",
+  "brand": "Boiron",
+  "brand_logo": "brand_logos/boiron.png",
+  "screenshot": "output/instacart/client/Shoppable_Display_Ads/..."
+}
+```
+
+**See:** `docs/ARTIFACT_TAXONOMY.md` → JSON Schema Standardization
+
+---
+
 ## References
 
 - **Onboarding:** `docs/RETAILER_ONBOARDING_CHECKLIST.md`
 - **Taxonomy:** `docs/ARTIFACT_TAXONOMY.md`
 - **Playwright:** `docs/PLAYWRIGHT_BOOTSTRAP.md`
-- **Devlog:** `docs/DEVLOG.md`
+- **Builder GUI:** `docs/BUILDER_GUIDE.md`
 
+
+## Instacart ad screenshots cropped incorrectly / showing only carousel
+
+**Status:** ✅ SOLVED
+
+**Symptoms:**
+- Ad screenshots showing only the product carousel (not full ad card)
+- Missing logo/brand header at top
+- Missing hero image section
+- Missing "Sponsored" label
+- Screenshots are correct width (1580-1793px) but wrong height (233-467px vs expected 400-600px)
+- Element bounding box shows correct dimensions but screenshot captures wrong content
+
+**Root Causes Identified and Fixed:**
+
+1. **Viewport scaling from wrong Chrome profile** ✅ FIXED
+   - GUI was passing Walmart profile (`~/ChromeProfiles/walmart`) to Instacart scraper
+   - Walmart profile had saved window dimensions of 2133x1200 with DPR 0.9
+   - CDP viewport control commands couldn't override persistent profile preferences
+   - Caused all screenshots to be scaled incorrectly
+   
+   **Solution:** 
+   - Created dedicated Instacart profile (`~/ChromeProfiles/instacart`)
+   - Adapter now detects wrong profile and auto-switches to correct one
+   - Fresh profile has no saved dimensions, allows 1920x1080 DPR 1.0 to work
+   - Added to `auth/profiles.json` for future use
+
+2. **Coordinate space mismatch in CDP screenshot** ✅ FIXED - THE ACTUAL BUG
+   - `element.bounding_box()` returns **viewport coordinates** (relative to scroll position)
+   - CDP `Page.captureScreenshot` expects **page coordinates** (absolute document position)
+   - When scrolled, element at viewport y=423 is actually at page y=1675 (423 + scrollY 1252)
+   - Was passing viewport coords (y=423) when CDP needed page coords (y=1675)
+   - Result: CDP captured wrong region of page (1252px too high)
+   
+   **Debug Evidence of Bug:**
+   ```
+   Found ad container: y=1675.4 (before scroll)
+   Element rect: top=423.4, scrollY=1252.0 (after scroll into view)
+   Clip: y=415.4 (WRONG - missing scrollY offset!)
+   Expected: y = 423.4 + 1252.0 = 1675.4
+   ```
+   
+   **Solution:**
+   ```python
+   # Compute rect in PAGE coordinates (viewport + scroll offset)
+   rect = page.evaluate(
+       """([el, pad]) => {
+           const r = el.getBoundingClientRect();
+           const sx = window.scrollX || window.pageXOffset || 0;
+           const sy = window.scrollY || window.pageYOffset || 0;
+           const x = Math.max(0, Math.floor(r.left + sx - pad));
+           const y = Math.max(0, Math.floor(r.top + sy - pad));
+           const w = Math.ceil(r.width + 2*pad);
+           const h = Math.ceil(r.height + 2*pad);
+           return { x, y, width: w, height: h };
+       }""",
+       [handle, pad]
+   )
+   
+   # Now clip uses page coordinates
+   clip = {'x': rect['x'], 'y': rect['y'], 'width': rect['width'], 'height': rect['height']}
+   ```
+
+3. **Hash class instability** ✅ HANDLED
+   - Border container class changes between runs: `e-onstcn`, `e-1cjjmkc`, `e-s7m7s6`
+   - Cannot rely on direct class selectors
+   - Use structural navigation (UUID + `-inner` child + carousel presence)
+
+**Complete Solution Stack:**
+1. ✅ Dedicated Instacart Chrome profile (no saved window dimensions)
+2. ✅ CDP viewport control: `Browser.setWindowBounds` + `Emulation.setDeviceMetricsOverride`
+3. ✅ Force DPR=1: `device_scale_factor=1` + `--force-device-scale-factor=1`
+4. ✅ Page coordinate calculation: `rect.top + window.scrollY` for CDP clip
+5. ✅ CDP screenshot with `captureBeyondViewport: true`
+6. ✅ Single browser session (no separate extraction phase)
+
+**Key Learnings:**
+- **Persistent browser contexts save window state** - need fresh profile or CDP override
+- **CDP coordinate spaces are different** - viewport coords ≠ page coords
+- **Always add scroll offsets** when using CDP `captureScreenshot` with scrolled content
+- **Playwright's `element.bounding_box()`** returns viewport coords, not page coords
+- **`page.evaluate()` in Python** takes single arg, use array: `page.evaluate(expr, [arg1, arg2])`
+
+**Files Modified:**
+- `instacart_search_and_capture.py`: Added CDP viewport control and page coordinate calculation
+- `retailers/instacart/adapter.py`: Auto-switch to Instacart profile
+- `auth/profiles.json`: Added Instacart profile entry
+- Created: `~/ChromeProfiles/instacart` directory
+
+**Verification:**
+```bash
+# Check screenshots show full ad cards
+ls -lh output/instacart/*/Shoppable_Display_Ads/*.png
+
+# Verify viewport in logs
+grep "Viewport verified" output/instacart/*/debug_search.log
+# Should show: 1920x1080, DPR: 1
+
+# Verify page coordinates used
+grep "Clip (page coords)" output/instacart/*/debug_search.log
+# Should show: y ≈ (viewport top + scrollY)
+```
+
+**See:** `retailers/instacart/README.md` → Technical Details → Screenshot Capture
+
+---
 
 ## Taxonomy Fix checklist
 

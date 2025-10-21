@@ -45,12 +45,27 @@ class InstacartAdapter(RetailerAdapter):
             store = os.environ.get('INSTACART_STORE', 'publix')
             log(f"Store: {store}")
             
-            # NEW: Ensure scraper sees the same profile/store even when launched from the app
-            if ctx.profile_dir and os.path.isdir(ctx.profile_dir):
+            # Set Instacart-specific profile directory
+            # Check if ctx.profile_dir looks like it's for the wrong retailer
+            if ctx.profile_dir and 'walmart' in ctx.profile_dir.lower():
+                # GUI passed walmart profile, use instacart profile instead
+                instacart_profile = os.path.expanduser("~/ChromeProfiles/instacart")
+                if os.path.isdir(instacart_profile):
+                    os.environ["INSTACART_PROFILE_DIR"] = instacart_profile
+                    log(f"Using Instacart profile: {instacart_profile}")
+                else:
+                    log(f"⚠️ Instacart profile not found: {instacart_profile}")
+            elif ctx.profile_dir and os.path.isdir(ctx.profile_dir):
                 os.environ["INSTACART_PROFILE_DIR"] = ctx.profile_dir
-                log(f"Injected INSTACART_PROFILE_DIR into env: {ctx.profile_dir}")
+                log(f"Using profile from ctx: {ctx.profile_dir}")
             else:
-                log("⚠️ ctx.profile_dir missing or invalid; scraper may run without cookies")
+                # Fallback to instacart profile
+                instacart_profile = os.path.expanduser("~/ChromeProfiles/instacart")
+                if os.path.isdir(instacart_profile):
+                    os.environ["INSTACART_PROFILE_DIR"] = instacart_profile
+                    log(f"Using default Instacart profile: {instacart_profile}")
+                else:
+                    log("⚠️ No valid profile directory found")
             
             os.environ.setdefault("INSTACART_STORE", store)
             
@@ -78,88 +93,51 @@ class InstacartAdapter(RetailerAdapter):
                 pairs.append((j, h))
         return pairs
     def extract_images(self, json_path: str, html_path: str, ctx) -> dict:
-        """Extract ad images using Instacart-specific screenshot script."""
+        """Count screenshots already captured during search_and_capture."""
         import glob
         from datetime import datetime
-        import os, time, subprocess
+        import os, time
         
-        script = os.path.join(ctx.script_dir, "extractors/screenshot_instacart_ads.py")
-
-        cmd = [
-            os.sys.executable, script,
-            "--json", json_path,
-            "--html", html_path,
-            "--output", ctx.output_dir,
-            "--no-headless",  # headful helps with login/CDN visibility
-        ]
-        
-        env = os.environ.copy()
-        env.setdefault("PYTHONUNBUFFERED", "1")
-        env.setdefault("PYTHONIOENCODING", "utf-8")
-        
-        # Pass profile dir so extractor reuses the same session
-        if ctx.profile_dir and os.path.isdir(ctx.profile_dir):
-            cmd += ["--profile-dir", ctx.profile_dir]
-            env[self.profile_env] = ctx.profile_dir
-        
-        # Store choice for Instacart
-        env['INSTACART_STORE'] = os.environ.get('INSTACART_STORE', 'publix')
-
+        # Screenshots are now captured during search_and_capture, so we just count them
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         os.makedirs(ctx.logs_dir, exist_ok=True)
         log_path = os.path.join(ctx.logs_dir, f"image_extract_{ts}.log")
         pair_start = time.time()
 
-        # Run the extractor and tee its stdout into our log
+        # Count images with a forgiving window (5 min back)
+        slack_seconds = 300
+        horizon = pair_start - slack_seconds
+
+        def recent_pngs(leaf: str) -> list:
+            d = os.path.join(ctx.output_dir, leaf)
+            return [
+                p for p in glob.glob(os.path.join(d, "*.png"))
+                if os.path.getmtime(p) >= horizon
+            ]
+
+        # Instacart folders + legacy fallbacks
+        toa_files = []
+        toa_files += recent_pngs("Shoppable_Display_Ads")
+        toa_files += recent_pngs("Shoppable_Video_Ads")
+        toa_files += recent_pngs("TOA")
+        # Some extractors drop big units in 'Main'
+        toa_files += recent_pngs("Main")
+
+        sky_files = []
+        sky_files += recent_pngs("Display_Ads")
+        sky_files += recent_pngs("Skyscraper")
+
+        # Log what we counted to help debug
         with open(log_path, "w", encoding="utf-8") as lf:
             lf.write(f"=== START {datetime.now().isoformat()} ===\n")
-            lf.write(f"CMD: {' '.join(cmd)}\nCWD: {ctx.script_dir}\n\n")
-            proc = subprocess.Popen(
-                cmd, env=env, cwd=ctx.script_dir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding="utf-8", errors="replace", bufsize=1,
-            )
-            for line in iter(proc.stdout.readline, ""):
-                lf.write(line)
-            try:
-                proc.wait(timeout=240)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                lf.write("\n❌ Timeout: 240s\n")
-            lf.write(f"Exit code: {proc.returncode}\n")
-
-            # Count images with a forgiving window (5 min back)
-            slack_seconds = 300
-            horizon = pair_start - slack_seconds
-
-            def recent_pngs(leaf: str) -> list:
-                d = os.path.join(ctx.output_dir, leaf)
-                return [
-                    p for p in glob.glob(os.path.join(d, "*.png"))
-                    if os.path.getmtime(p) >= horizon
-                ]
-
-            # Instacart folders + legacy fallbacks
-            toa_files = []
-            toa_files += recent_pngs("Shoppable_Display_Ads")
-            toa_files += recent_pngs("Shoppable_Video_Ads")
-            toa_files += recent_pngs("TOA")
-            # Some extractors drop big units in 'Main'
-            toa_files += recent_pngs("Main")
-
-            sky_files = []
-            sky_files += recent_pngs("Display_Ads")
-            sky_files += recent_pngs("Skyscraper")
-
-            # Log what we counted to help debug
-            lf.write(f"\nCounted files (since {datetime.fromtimestamp(horizon).isoformat()}):\n")
+            lf.write("NOTE: Screenshots captured during search_and_capture, not extracted separately\n\n")
+            lf.write(f"Counted files (since {datetime.fromtimestamp(horizon).isoformat()}):\n")
             lf.write(f"  TOA-like: {len(toa_files)}\n")
             for p in sorted(toa_files)[:10]:
                 lf.write(f"    - {p}\n")
             lf.write(f"  Skyscraper-like: {len(sky_files)}\n")
             for p in sorted(sky_files)[:10]:
                 lf.write(f"    - {p}\n")
-
             lf.write(f"=== END {datetime.now().isoformat()} ===\n")
 
         return {

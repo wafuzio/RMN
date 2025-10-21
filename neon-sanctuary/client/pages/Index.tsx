@@ -10,7 +10,39 @@ import { SkeletonGrid } from "@/components/dashboard/SkeletonGrid";
 import { TemporalVisualMap } from "@/components/visual/TemporalVisualMap";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RetailerLogo } from "@/components/dashboard/RetailerLogo";
+import GaleLogo from "../../../web/assets/logos/GALE.svg";
+
+// Stable ID builder for ads - prevents key collisions without index dependency
+type Cardish = {
+  retailer: string;
+  client: string;
+  keyword: string;
+  ad_type: string;
+  brand: string;
+  message: string;
+  image_url: string;
+  timestamp: string;
+  run_file?: string;
+  ad_index?: number;
+  timestamp_ms?: number;
+  json_path?: string;
+  run_date?: string;
+};
+
+const buildAdId = (c: Cardish, fallbackIndex: number): string => {
+  // Prefer millisecond epoch for stability
+  const tsMs = typeof c.timestamp_ms === 'number' 
+    ? c.timestamp_ms 
+    : (c.timestamp ? Date.parse(c.timestamp.replace(' ', 'T')) : 0);
+  
+  // Prefer full path if available; else run_file
+  const runId = (c.json_path || c.run_file || 'unknown').trim();
+  
+  // Keep 0; only fall back if undefined/null
+  const idx = c.ad_index ?? fallbackIndex;
+  
+  return `${c.retailer}|${c.client}|${runId}|${idx}|${tsMs}`;
+};
 
 function useDnD<T>(items: T[], setItems: (v:T[])=>void) {
   const dragIndex = useRef<number | null>(null);
@@ -37,15 +69,59 @@ export default function Index() {
   const [retailers, setRetailers] = useState<("kroger"|"amazon"|"instacart"|"walmart")[]>(["kroger"]);
   const { data: retailersData } = useRetailers();
   const enabledRetailers = useMemo(() => new Set(retailersData?.retailers || []), [retailersData]);
-  
+
   // Use first selected retailer for single-retailer operations (filters, clients)
   const primaryRetailer = retailers[0];
 
-  const [filters, setFilters] = useState<FiltersState>({ types: [], search: "" });
+  const [filters, setFilters] = useState<FiltersState>({ types: [], search: "", keywords: [], datePreset: { type: "lifetime" } });
   const [leftFilters, setLeftFilters] = useState<FiltersState | null>(null);
   const [rightFilters, setRightFilters] = useState<FiltersState | null>(null);
   const { data: clientsResp } = useClients(primaryRetailer);
-  
+
+  // Restore last session state
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("retail-dashboard:last-state:v1");
+      if (!raw) return;
+      const saved = JSON.parse(raw) as any;
+      if (Array.isArray(saved.retailers) && saved.retailers.length) {
+        setRetailers(saved.retailers);
+      }
+      if (saved.filters && typeof saved.filters === "object") {
+        const f = saved.filters as Partial<FiltersState> & { start?: string; end?: string };
+        const parsedStart = f.start ? new Date(f.start) : undefined;
+        const parsedEnd = f.end ? new Date(f.end) : undefined;
+        const start = parsedStart && isFinite(+parsedStart) ? parsedStart : undefined;
+        const end = parsedEnd && isFinite(+parsedEnd) ? parsedEnd : undefined;
+        const parsed: FiltersState = {
+          types: Array.isArray(f.types) ? f.types : [],
+          search: typeof f.search === "string" ? f.search : "",
+          keywords: Array.isArray(f.keywords) ? f.keywords : [],
+          client: typeof f.client === "string" ? f.client : undefined,
+          start,
+          end,
+          datePreset: f.datePreset || { type: "lifetime" },
+        };
+        setFilters(prev => ({ ...prev, ...parsed }));
+      }
+    } catch {}
+  }, []);
+
+  // Persist state changes
+  useEffect(() => {
+    try {
+      const toSave = {
+        retailers,
+        filters: {
+          ...filters,
+          start: filters.start ? filters.start.toISOString() : undefined,
+          end: filters.end ? filters.end.toISOString() : undefined,
+        },
+      };
+      localStorage.setItem("retail-dashboard:last-state:v1", JSON.stringify(toSave));
+    } catch {}
+  }, [retailers, filters]);
+
   // Auto-select first client if none selected
   useEffect(() => {
     if (clientsResp?.clients.length && !filters.client) {
@@ -53,14 +129,51 @@ export default function Index() {
     }
   }, [clientsResp, filters.client]);
 
-  const adsQuery = useAds({
-    retailer: primaryRetailer,
+  // Fetch ads for each possible retailer (must call hooks unconditionally)
+  const krogerQuery = useAds({
+    retailer: "kroger",
     client: filters.client,
     start: filters.start ? filters.start.toISOString().slice(0,10) : undefined,
     end: filters.end ? filters.end.toISOString().slice(0,10) : undefined,
     types: filters.types,
-    search: filters.search,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
   });
+  const walmartQuery = useAds({
+    retailer: "walmart",
+    client: filters.client,
+    start: filters.start ? filters.start.toISOString().slice(0,10) : undefined,
+    end: filters.end ? filters.end.toISOString().slice(0,10) : undefined,
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  const instacartQuery = useAds({
+    retailer: "instacart",
+    client: filters.client,
+    start: filters.start ? filters.start.toISOString().slice(0,10) : undefined,
+    end: filters.end ? filters.end.toISOString().slice(0,10) : undefined,
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  const amazonQuery = useAds({
+    retailer: "amazon",
+    client: filters.client,
+    start: filters.start ? filters.start.toISOString().slice(0,10) : undefined,
+    end: filters.end ? filters.end.toISOString().slice(0,10) : undefined,
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  
+  // Map selected retailers to their queries
+  const queryMap = {
+    kroger: krogerQuery,
+    walmart: walmartQuery,
+    instacart: instacartQuery,
+    amazon: amazonQuery,
+  };
+  const retailerQueries = retailers.map(r => queryMap[r]);
+  
+  // For backwards compatibility, keep adsQuery as the primary retailer's query
+  const adsQuery = retailerQueries[0];
 
   const lf = leftFilters ?? filters;
   const rf = rightFilters ?? filters;
@@ -82,19 +195,68 @@ export default function Index() {
   });
 
   const flatAds: Ad[] = useMemo(() => {
-    const cards = adsQuery.data?.pages.flatMap(p => p.cards) || [];
-    return cards.map((c, i) => ({ ...c, id: `${c.retailer}-${c.client}-${c.image_url}-${i}` }));
-  }, [adsQuery.data]);
+    // Merge cards from all selected retailers with deduplication
+    try {
+      const allCards = retailerQueries.flatMap(query => 
+        query.data?.pages?.flatMap(p => p.cards || []) || []
+      );
+      
+      // Dedupe using stable IDs (prevents duplicates from pagination/multiple queries)
+      const uniq = new Map<string, Ad>();
+      for (let i = 0; i < allCards.length; i++) {
+        const c = allCards[i] as any;
+        const id = buildAdId(c, i);
+        if (!uniq.has(id)) {
+          const ad = { ...c, id } as Ad;
+          // Debug: log first ad to verify image_url is present
+          if (i === 0) {
+            console.log('First ad object:', ad);
+            console.log('Has image_url?', !!ad.image_url);
+          }
+          uniq.set(id, ad);
+        }
+        // else duplicate from another page/query; ignore it
+      }
+      
+      const result = Array.from(uniq.values());
+      
+      // Dev-only sanity check for duplicate IDs
+      if (import.meta.env.DEV) {
+        const seen = new Set<string>();
+        for (const a of result) {
+          if (seen.has(a.id)) {
+            console.warn('Duplicate id detected:', a.id, a);
+          }
+          seen.add(a.id);
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error in flatAds:', error);
+      return [];
+    }
+  }, [krogerQuery.data, walmartQuery.data, instacartQuery.data, amazonQuery.data, retailers]);
 
   const [ads, setAds] = useState<Ad[]>([]);
   // sync local ads list with fetched pages (enables reordering/dismiss)
-  useEffect(() => { setAds(flatAds); }, [flatAds]);
+  // Force clear when filters change to prevent stale data mixing
+  useEffect(() => { 
+    setAds(flatAds); 
+  }, [flatAds]);
+  
+  // Clear ads when date filters change to force fresh render
+  useEffect(() => {
+    setAds([]);
+  }, [filters.start, filters.end]);
 
   const dnd = useDnD(ads, setAds);
 
   const timestamps = useMemo(() => flatAds.map(a => a.timestamp), [flatAds]);
 
-  const totalCards = adsQuery.data?.pages?.[0]?.total_cards || 0;
+  const totalCards = retailerQueries.reduce((sum, query) => 
+    sum + (query.data?.pages?.[0]?.total_cards || 0), 0
+  );
   const activeRetailers = retailersData?.count || 0;
   const sov = useMemo(() => {
     const countByBrand: Record<string, number> = {};
@@ -126,7 +288,7 @@ export default function Index() {
   const hideSelected = () => setAds(prev => prev.filter(a => !selected.has(a.id)));
 
   const applyFilters = () => adsQuery.refetch();
-  const resetFilters = () => setFilters({ types: [], search: "" });
+  const resetFilters = () => setFilters({ types: [], search: "", keywords: [], datePreset: { type: "lifetime" } });
 
   const downloadCSV = () => {
     const rows = [
@@ -140,11 +302,11 @@ export default function Index() {
   };
 
   return (
-    <main className="min-h-screen py-6 px-4 md:px-8">
+    <main className="min-h-screen py-6 pb-32 md:pb-48 pr-4 md:pr-8 pl-8 sm:pl-10 md:pl-14 lg:pl-16">
       <div className="w-full max-w-[1400px] mx-auto">
         <header className="flex flex-wrap items-center gap-3 mb-6">
           <div className="flex items-center gap-3">
-            <RetailerLogo retailer={primaryRetailer} className="h-8 w-auto" />
+            <img src={GaleLogo} alt="GALE" className="h-8 w-auto" />
             <h1 className="text-white text-2xl font-extrabold">Retail Ad Monitoring</h1>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -180,7 +342,7 @@ export default function Index() {
               onReset={resetFilters}
             />
 
-            <Timeline timestamps={timestamps} />
+            <Timeline timestamps={timestamps} onRangeChange={(from, to) => setFilters(v => ({ ...v, start: from, end: to, datePreset: { type: "custom" } }))} />
 
             <div className="card-surface p-2">
               <TemporalVisualMap ads={ads} onRangeChange={(from,to)=> setFilters(v=>({ ...v, start: from, end: to }))} />
@@ -205,7 +367,7 @@ export default function Index() {
             ) : ads.length === 0 ? (
               <div className="card-surface p-10 text-center text-[#111827]">No ads found for the selected filters.</div>
             ) : (
-              <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
+              <div className="columns-1 sm:columns-1 md:columns-2 lg:columns-2 xl:columns-3 gap-4">
                 {ads.map((ad, idx) => (
                   <div key={ad.id} className="break-inside-avoid" onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}>
                     <div className="absolute z-10 m-2">
@@ -228,26 +390,26 @@ export default function Index() {
         {compareMode && (
           <section className="grid md:grid-cols-2 gap-4">
             {(() => {
-              const leftAds = (leftAdsQuery.data?.pages.flatMap(p=>p.cards) || []).map((c,i)=>({ ...c, id: `L-${c.retailer}-${c.client}-${c.image_url}-${i}`})) as Ad[];
-              const rightAds = (rightAdsQuery.data?.pages.flatMap(p=>p.cards) || []).map((c,i)=>({ ...c, id: `R-${c.retailer}-${c.client}-${c.image_url}-${i}`})) as Ad[];
+              const leftAds = (leftAdsQuery.data?.pages.flatMap(p=>p.cards) || []).map((c,i)=>({ ...c, id: `L-${c.retailer}-${c.client}-${c.ad_type}-${c.brand}-${c.keyword}-${c.timestamp}-${i}`})) as Ad[];
+              const rightAds = (rightAdsQuery.data?.pages.flatMap(p=>p.cards) || []).map((c,i)=>({ ...c, id: `R-${c.retailer}-${c.client}-${c.ad_type}-${c.brand}-${c.keyword}-${c.timestamp}-${i}`})) as Ad[];
               const leftTs = leftAds.map(a=>a.timestamp);
               const rightTs = rightAds.map(a=>a.timestamp);
               return (
                 <>
                   <div className="space-y-4">
                     <h2 className="text-white font-semibold">Left View</h2>
-                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} value={lf} onChange={(v)=>setLeftFilters(v)} onApply={()=>leftAdsQuery.refetch()} onReset={()=>setLeftFilters({ types: [], search: '' })} />
-                    <Timeline timestamps={leftTs} />
+                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} value={lf} onChange={(v)=>setLeftFilters(v)} onApply={()=>leftAdsQuery.refetch()} onReset={()=>setLeftFilters({ types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
+                    <Timeline timestamps={leftTs} onRangeChange={(from,to)=> setLeftFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
                     <div className="card-surface p-2">
-                      <TemporalVisualMap ads={leftAds} onRangeChange={(from,to)=> setLeftFilters(prev=>({ types: prev?.types || [], search: prev?.search || '', start: from, end: to }))} />
+                      <TemporalVisualMap ads={leftAds} onRangeChange={(from,to)=> setLeftFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
                     </div>
                   </div>
                   <div className="space-y-4">
                     <h2 className="text-white font-semibold">Right View</h2>
-                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} value={rf} onChange={(v)=>setRightFilters(v)} onApply={()=>rightAdsQuery.refetch()} onReset={()=>setRightFilters({ types: [], search: '' })} />
-                    <Timeline timestamps={rightTs} />
+                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} value={rf} onChange={(v)=>setRightFilters(v)} onApply={()=>rightAdsQuery.refetch()} onReset={()=>setRightFilters({ types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
+                    <Timeline timestamps={rightTs} onRangeChange={(from,to)=> setRightFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
                     <div className="card-surface p-2">
-                      <TemporalVisualMap ads={rightAds} onRangeChange={(from,to)=> setRightFilters(prev=>({ types: prev?.types || [], search: prev?.search || '', start: from, end: to }))} />
+                      <TemporalVisualMap ads={rightAds} onRangeChange={(from,to)=> setRightFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
                     </div>
                   </div>
                   <div className="col-span-full card-surface p-3 text-center">Exit Comparison to view full visual maps.</div>

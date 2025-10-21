@@ -180,8 +180,20 @@ class KeywordInputApp:
         """Initialize the application"""
         self.root = root
         self.root.title("Retail Ad Monitor")
-        self.root.geometry("900x740")
-        self.root.minsize(760, 600)
+        
+        # Load saved window geometry or use defaults
+        self.geometry_file = os.path.join(get_base_dir(), "logs", "window_geometry.txt")
+        self.state_file = os.path.join(get_base_dir(), "logs", "gui_state.json")
+        saved_geometry = self.load_window_geometry()
+        if saved_geometry:
+            self.root.geometry(saved_geometry)
+        else:
+            self.root.geometry("900x1100")
+        
+        self.root.minsize(760, 1000)
+        
+        # Save geometry on window close
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # Set up grid layout for main window: [row 0 = scrollable content | row 1 = fixed footer]
         self.root.rowconfigure(0, weight=1)
@@ -263,6 +275,9 @@ class KeywordInputApp:
             self.start_daemon_automatically()
             self.daemon_status = True
         
+        # Start periodic daemon status refresh (every 30 seconds)
+        self.refresh_daemon_status()
+        
         # Set up the main frame
         main_frame = ttk.Frame(root, padding=20, style='App.TFrame')
         main_frame.grid(row=0, column=0, sticky="nsew")
@@ -296,6 +311,15 @@ class KeywordInputApp:
 
         # Mouse wheel support (mac/Win/Linux)
         def _on_mousewheel(event):
+            # Only scroll if mouse is over the canvas
+            widget = event.widget
+            # Don't scroll canvas if we're over a combobox, scrolledtext, or listbox (dropdown popup)
+            if isinstance(widget, (ttk.Combobox, tk.Text, tk.Listbox)):
+                return
+            # Also check widget class name for ttk popdown listbox
+            widget_class = widget.winfo_class()
+            if widget_class in ('Listbox', 'TCombobox'):
+                return
             if getattr(event, "num", None) == 4 or event.delta > 0:
                 canvas.yview_scroll(-1, "units")
             else:
@@ -317,7 +341,14 @@ class KeywordInputApp:
         # Alphabetize clients
         clients = sorted(self.client_history.keys(), key=str.lower)
 
-        self.client_var = tk.StringVar(value=PLACEHOLDER)
+        # Load saved state to restore last selected client
+        saved_state = self.load_gui_state()
+        last_client = saved_state.get("selected_client", PLACEHOLDER) if saved_state else PLACEHOLDER
+        # Verify the client still exists
+        if last_client not in clients and last_client != PLACEHOLDER:
+            last_client = PLACEHOLDER
+        
+        self.client_var = tk.StringVar(value=last_client)
 
         self.client_dropdown = ttk.Combobox(
             client_frame,
@@ -329,6 +360,10 @@ class KeywordInputApp:
         )
         self.client_dropdown.pack(side=tk.LEFT, padx=(10, 6))
         self.client_dropdown.bind("<<ComboboxSelected>>", self.on_client_selected)
+        
+        # Note: Combobox dropdown list scrolling is handled internally by ttk
+        # We prevent the main window scroll in the canvas mousewheel handler
+        # by checking if the event widget is a Combobox
 
         # True "New…" button (not inside the dropdown)
         self.new_client_btn = ttk.Button(
@@ -356,6 +391,19 @@ class KeywordInputApp:
         
         self.retailer_picker = RetailerPicker(retailer_frame, unavailable=unavailable, columns=4)
         self.retailer_picker.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Restore saved retailer selections or use defaults
+        if saved_state and "selected_retailers" in saved_state:
+            # Restore from saved state
+            for retailer in saved_state["selected_retailers"]:
+                if retailer in self.retailer_picker.vars:
+                    self.retailer_picker.vars[retailer].set(True)
+        else:
+            # Pre-select Kroger and Instacart by default (first time only)
+            if "Kroger" in self.retailer_picker.vars:
+                self.retailer_picker.vars["Kroger"].set(True)
+            if "Instacart" in self.retailer_picker.vars:
+                self.retailer_picker.vars["Instacart"].set(True)
         
         # --- Debug Options (restored) ---
         debug_frame = ttk.LabelFrame(scrollable_frame, text="Debug Options", style='Card.TLabelframe', padding=10)
@@ -387,12 +435,6 @@ class KeywordInputApp:
         ttk.Entry(paths_frame, textvariable=self.output_root_var, width=50).grid(row=1, column=1, sticky="ew")
 
         ttk.Checkbutton(debug_frame, text="Open run folder when done", variable=self.debug_vars['open_run_folder']).grid(row=2, column=0, columnspan=2, sticky="w", pady=(5,0))
-        
-        # Pre-select Kroger and Instacart by default
-        if "Kroger" in self.retailer_picker.vars:
-            self.retailer_picker.vars["Kroger"].set(True)
-        if "Instacart" in self.retailer_picker.vars:
-            self.retailer_picker.vars["Instacart"].set(True)
         
         # Instructions
         instructions = ttk.Label(
@@ -533,14 +575,58 @@ class KeywordInputApp:
             style='Body.TLabel'
         )
         self.status_label.pack(side=tk.LEFT, padx=(12, 0))
+        
+        # Daemon control buttons
+        daemon_controls_frame = ttk.Frame(footer, style='App.TFrame')
+        daemon_controls_frame.pack(side=tk.LEFT, padx=(10, 0))
+        
+        ttk.Button(
+            daemon_controls_frame,
+            text="🔄 Refresh",
+            command=self.refresh_daemon_status_manual,
+            width=10
+        ).pack(side=tk.LEFT, padx=2)
+        
+        ttk.Button(
+            daemon_controls_frame,
+            text="▶️ Start",
+            command=self.start_daemon_manual,
+            width=10
+        ).pack(side=tk.LEFT, padx=2)
+        
+        ttk.Button(
+            daemon_controls_frame,
+            text="⏹️ Stop",
+            command=self.stop_daemon_manual,
+            width=10
+        ).pack(side=tk.LEFT, padx=2)
+        
+        # Schedule viewer button
+        ttk.Button(
+            daemon_controls_frame,
+            text="📅 See Full Schedule",
+            command=self.show_full_schedule,
+            width=18
+        ).pack(side=tk.LEFT, padx=2)
 
         # --- App log console (scrollable content) ---
         log_frame = ttk.LabelFrame(scrollable_frame, text="Activity", style='Card.TLabelframe', padding=8)
         log_frame.pack(fill=tk.BOTH, expand=False, pady=(10, 0))
 
-        self.app_log = scrolledtext.ScrolledText(log_frame, height=8, wrap="word")
+        self.app_log = scrolledtext.ScrolledText(log_frame, height=12, wrap="word")
         self.app_log.pack(fill=tk.BOTH, expand=True)
         self.app_log.configure(font=("Inter", 10), state="disabled")
+        
+        # Enable smooth scrolling for activity log
+        def _on_log_scroll(event):
+            if event.delta > 0 or getattr(event, "num", None) == 4:
+                self.app_log.yview_scroll(-1, "units")
+            else:
+                self.app_log.yview_scroll(1, "units")
+            return "break"  # Prevent event propagation
+        self.app_log.bind("<MouseWheel>", _on_log_scroll)
+        self.app_log.bind("<Button-4>", _on_log_scroll)
+        self.app_log.bind("<Button-5>", _on_log_scroll)
 
         # Initialize save button state
         self.refresh_save_button_state()
@@ -1101,31 +1187,28 @@ class KeywordInputApp:
         """Get all scheduled times from all clients to detect conflicts"""
         scheduled_times = set()
         
-        output_path = os.path.join(get_base_dir(), "output")
-        if not os.path.exists(output_path):
-            return scheduled_times
-
-        def _process_schedule(file_path, client_name_guess):
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                retailer = config.get("retailer", "kroger")
-                client_name = config.get("client", client_name_guess)
-                times = config.get("times", [])
-                days = config.get("days", [])
-                
+        # NEW: Scan schedules/ directory using shared library
+        try:
+            from pathlib import Path
+            import sys
+            base = get_base_dir()
+            sys.path.insert(0, str(base))
+            from schedules.schedules_lib import scan_schedules
+            
+            schedules = scan_schedules(Path(base))
+            for sched in schedules:
+                if not sched.enabled:
+                    continue
                 # Skip the current client if specified
-                if exclude_client and client_name == exclude_client:
-                    return
-                    
-                for hour_str, minute_str, ampm in times:
+                if exclude_client and sched.client == exclude_client:
+                    continue
+                
+                # Process each time in 24h format
+                for time_24h in sched.times:
                     try:
-                        hour_12 = int(hour_str); minute = int(minute_str)
-                        hour_24 = hour_12
-                        if ampm == "PM" and hour_12 < 12: hour_24 += 12
-                        elif ampm == "AM" and hour_12 == 12: hour_24 = 0
+                        hour_24, minute = map(int, time_24h.split(':'))
                         # 5-minute window
-                        for day in days:
+                        for day in sched.days:
                             for offset in range(-2, 3):  # -2, -1, 0, 1, 2 minutes
                                 conflict_minute = minute + offset
                                 conflict_hour = hour_24
@@ -1144,32 +1227,80 @@ class KeywordInputApp:
                                 elif conflict_hour < 0:
                                     conflict_hour = 23
                                     
-                                scheduled_times.add((retailer, day, conflict_hour, conflict_minute))
+                                scheduled_times.add((sched.retailer, day, conflict_hour, conflict_minute))
                     except (ValueError, TypeError):
                         continue
-            except Exception:
-                pass
+        except Exception as e:
+            print(f"Error scanning schedules/ for conflicts: {e}")
+        
+        # LEGACY: Scan output/ directory
+        output_path = os.path.join(get_base_dir(), "output")
+        if os.path.exists(output_path):
+            def _process_schedule(file_path, client_name_guess):
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        config = json.load(f)
+                    retailer = config.get("retailer", "kroger")
+                    client_name = config.get("client", client_name_guess)
+                    times = config.get("times", [])
+                    days = config.get("days", [])
+                    
+                    # Skip the current client if specified
+                    if exclude_client and client_name == exclude_client:
+                        return
+                        
+                    for hour_str, minute_str, ampm in times:
+                        try:
+                            hour_12 = int(hour_str); minute = int(minute_str)
+                            hour_24 = hour_12
+                            if ampm == "PM" and hour_12 < 12: hour_24 += 12
+                            elif ampm == "AM" and hour_12 == 12: hour_24 = 0
+                            # 5-minute window
+                            for day in days:
+                                for offset in range(-2, 3):  # -2, -1, 0, 1, 2 minutes
+                                    conflict_minute = minute + offset
+                                    conflict_hour = hour_24
+                                    
+                                    # Handle minute overflow/underflow
+                                    if conflict_minute >= 60:
+                                        conflict_minute -= 60
+                                        conflict_hour += 1
+                                    elif conflict_minute < 0:
+                                        conflict_minute += 60
+                                        conflict_hour -= 1
+                                        
+                                    # Handle hour overflow/underflow
+                                    if conflict_hour >= 24:
+                                        conflict_hour = 0
+                                    elif conflict_hour < 0:
+                                        conflict_hour = 23
+                                        
+                                    scheduled_times.add((retailer, day, conflict_hour, conflict_minute))
+                        except (ValueError, TypeError):
+                            continue
+                except Exception:
+                    pass
 
-        # New layout: output/<retailer>/<client>/schedule_config.json
-        for rdir in os.listdir(output_path):
-            rpath = os.path.join(output_path, rdir)
-            if not os.path.isdir(rpath):
-                continue
-            for cdir in os.listdir(rpath):
-                cpath = os.path.join(rpath, cdir)
-                if not os.path.isdir(cpath):
+            # New layout: output/<retailer>/<client>/schedule_config.json
+            for rdir in os.listdir(output_path):
+                rpath = os.path.join(output_path, rdir)
+                if not os.path.isdir(rpath):
                     continue
-                sched = os.path.join(cpath, "schedule_config.json")
-                if os.path.exists(sched):
-                    _process_schedule(sched, cdir)
+                for cdir in os.listdir(rpath):
+                    cpath = os.path.join(rpath, cdir)
+                    if not os.path.isdir(cpath):
+                        continue
+                    sched = os.path.join(cpath, "schedule_config.json")
+                    if os.path.exists(sched):
+                        _process_schedule(sched, cdir)
 
-        # Back-compat: old layout output/<client>/schedule_config.json
-        for cdir in os.listdir(output_path):
-            cpath = os.path.join(output_path, cdir)
-            if os.path.isdir(cpath):
-                sched = os.path.join(cpath, "schedule_config.json")
-                if os.path.exists(sched):
-                    _process_schedule(sched, cdir)
+            # Back-compat: old layout output/<client>/schedule_config.json
+            for cdir in os.listdir(output_path):
+                cpath = os.path.join(output_path, cdir)
+                if os.path.isdir(cpath):
+                    sched = os.path.join(cpath, "schedule_config.json")
+                    if os.path.exists(sched):
+                        _process_schedule(sched, cdir)
                 
         return scheduled_times
     
@@ -1379,16 +1510,6 @@ class KeywordInputApp:
         """Restore window when signal is received"""
         self.root.after(0, self.restore_window)
     
-    def on_closing(self):
-        """Handle window closing - actually quit the application"""
-        # Clean up and quit properly
-        try:
-            os.remove('/tmp/kroger_toa_scraper.pid')
-        except:
-            pass
-        self.root.quit()
-        self.root.destroy()
-    
     def restore_window(self):
         """Restore window when dock icon is clicked"""
         self.root.deiconify()
@@ -1400,16 +1521,20 @@ class KeywordInputApp:
         try:
             base = get_base_dir()
             retailer = os.getenv("RETAILER", "").strip()
-            # PID path supports retailer namespacing if RETAILER is set
-            pid_path = os.path.join(base, "logs", retailer, "scheduler.pid") if retailer else os.path.join(base, "logs", "scheduler.pid")
-
-            if os.path.exists(pid_path):
-                with open(pid_path, "r") as pf:
-                    pid = pf.read().strip()
-                if pid.isdigit():
-                    # macOS doesn't have /proc — do both checks safely
-                    if os.path.exists(f"/proc/{pid}") or self._ps_contains_pid(pid):
-                        return True
+            
+            # Check both central and retailer-specific PID locations
+            candidates = [os.path.join(base, "logs", "scheduler.pid")]
+            if retailer:
+                candidates.append(os.path.join(base, "logs", retailer, "scheduler.pid"))
+            
+            for pid_path in candidates:
+                if os.path.exists(pid_path):
+                    with open(pid_path, "r") as pf:
+                        pid = pf.read().strip()
+                    if pid.isdigit():
+                        # macOS doesn't have /proc — do both checks safely
+                        if os.path.exists(f"/proc/{pid}") or self._ps_contains_pid(pid):
+                            return True
 
             # Fallback: name-based scan (brittle but better than nothing)
             return self._ps_contains_name("scheduler_daemon.py")
@@ -1434,6 +1559,530 @@ class KeywordInputApp:
             return False
         except Exception:
             return False
+    
+    def refresh_daemon_status(self):
+        """Periodically refresh daemon status and update UI"""
+        try:
+            # Check current daemon status
+            new_status = self.check_daemon_status()
+            
+            # Update if status changed
+            if new_status != self.daemon_status:
+                self.daemon_status = new_status
+                if hasattr(self, 'status_label'):
+                    daemon_text = "✅ Daemon running" if self.daemon_status else "⚠️ Daemon stopped"
+                    self.status_label.config(text=f"Ready to scrape | {daemon_text}")
+        except Exception as e:
+            print(f"Error refreshing daemon status: {e}")
+        
+        # Schedule next refresh in 30 seconds
+        self.root.after(30000, self.refresh_daemon_status)
+    
+    def refresh_daemon_status_manual(self):
+        """Manually refresh daemon status (called by button)"""
+        try:
+            new_status = self.check_daemon_status()
+            self.daemon_status = new_status
+            daemon_text = "✅ Daemon running" if self.daemon_status else "⚠️ Daemon stopped"
+            self.status_label.config(text=f"Ready to scrape | {daemon_text}")
+            self.notify(f"Daemon status: {'Running' if new_status else 'Stopped'}", "info")
+        except Exception as e:
+            self.notify(f"Error checking daemon status: {e}", "error")
+    
+    def start_daemon_manual(self):
+        """Manually start the daemon (called by button)"""
+        if self.daemon_status:
+            self.notify("Daemon is already running", "info")
+            return
+        
+        try:
+            base = get_base_dir()
+            daemon_script = os.path.join(base, "start_scheduler.sh")
+            lock_file = os.path.join(base, "logs", "scheduler.lock")
+            
+            if not os.path.exists(daemon_script):
+                self.notify("start_scheduler.sh not found", "error")
+                return
+            
+            # Check for stale lock file
+            if os.path.exists(lock_file):
+                # Verify daemon is actually NOT running
+                if not self.check_daemon_status():
+                    # Lock file is stale, remove it
+                    try:
+                        os.remove(lock_file)
+                        self.notify("Removed stale lock file", "info")
+                    except Exception as e:
+                        self.notify(f"Could not remove lock file: {e}", "error")
+                        return
+                else:
+                    self.notify("Daemon is already running", "info")
+                    return
+            
+            # Set required environment variable for centralized scheduler
+            env = os.environ.copy()
+            env['CENTRAL_SCHEDULER'] = '1'
+            env['SCRAPER_HOME'] = base
+            
+            # Start daemon in background (non-blocking)
+            subprocess.Popen(
+                [daemon_script], 
+                cwd=base,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True  # Detach from parent process
+            )
+            
+            # Wait a moment then check status
+            self.root.after(2000, lambda: self.refresh_daemon_status_manual())
+            self.notify("Starting daemon...", "info")
+            
+        except Exception as e:
+            self.notify(f"Error starting daemon: {e}", "error")
+    
+    def stop_daemon_manual(self):
+        """Manually stop the daemon (called by button)"""
+        if not self.daemon_status:
+            self.notify("Daemon is not running", "info")
+            return
+        
+        try:
+            # Find scheduler_daemon.py process
+            result = subprocess.run(
+                ["ps", "aux"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            daemon_pid = None
+            for line in result.stdout.splitlines():
+                if "scheduler_daemon.py" in line and "grep" not in line:
+                    parts = line.split()
+                    if len(parts) > 1:
+                        daemon_pid = parts[1]
+                        break
+            
+            if daemon_pid and daemon_pid.isdigit():
+                # Send SIGTERM to gracefully stop
+                os.kill(int(daemon_pid), 15)
+                self.notify("Stopping daemon...", "info")
+                
+                # Wait a moment then check status
+                self.root.after(1500, lambda: self.refresh_daemon_status_manual())
+            else:
+                self.notify("Could not find daemon process", "error")
+                
+        except ProcessLookupError:
+            self.notify("Daemon process not found (already stopped?)", "warn")
+            self.refresh_daemon_status_manual()
+        except Exception as e:
+            self.notify(f"Error stopping daemon: {e}", "error")
+    
+    def load_gui_state(self):
+        """Load saved GUI state (selected client and retailers)"""
+        try:
+            if os.path.exists(self.state_file):
+                with open(self.state_file, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Could not load GUI state: {e}")
+        return None
+    
+    def save_gui_state(self):
+        """Save current GUI state (selected client and retailers)"""
+        try:
+            # Get selected retailers
+            selected_retailers = []
+            if hasattr(self, 'retailer_picker'):
+                selected_retailers = [
+                    name for name, var in self.retailer_picker.vars.items() 
+                    if var.get()
+                ]
+            
+            # Get selected client
+            selected_client = self.client_var.get() if hasattr(self, 'client_var') else PLACEHOLDER
+            
+            state = {
+                "selected_client": selected_client,
+                "selected_retailers": selected_retailers
+            }
+            
+            os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
+            with open(self.state_file, 'w') as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            print(f"Could not save GUI state: {e}")
+    
+    def load_window_geometry(self):
+        """Load saved window geometry from file"""
+        try:
+            if os.path.exists(self.geometry_file):
+                with open(self.geometry_file, 'r') as f:
+                    geometry = f.read().strip()
+                    
+                # Validate geometry string format (widthxheight+x+y or widthxheight-x-y)
+                if geometry and ('x' in geometry):
+                    # Parse geometry to check if position is reasonable
+                    # Format: 900x1100+100+50 or 900x1100-100-50
+                    parts = geometry.replace('-', '+').split('+')
+                    if len(parts) >= 3:
+                        try:
+                            x = int(parts[1])
+                            y = int(parts[2])
+                            # Check if position is completely off-screen (negative or too large)
+                            # Allow negative values for multi-monitor setups
+                            # But reject if position is way off (> 10000 pixels)
+                            if abs(x) < 10000 and abs(y) < 10000:
+                                return geometry
+                        except ValueError:
+                            pass
+                    return geometry  # Return even if we can't parse, let Tk handle it
+        except Exception as e:
+            print(f"Could not load window geometry: {e}")
+        return None
+    
+    def save_window_geometry(self):
+        """Save current window geometry to file"""
+        try:
+            geometry = self.root.geometry()
+            os.makedirs(os.path.dirname(self.geometry_file), exist_ok=True)
+            with open(self.geometry_file, 'w') as f:
+                f.write(geometry)
+        except Exception as e:
+            print(f"Could not save window geometry: {e}")
+    
+    def on_closing(self):
+        """Handle window close event"""
+        # Save window geometry and GUI state
+        self.save_window_geometry()
+        self.save_gui_state()
+        # Destroy window
+        self.root.destroy()
+    
+    def show_full_schedule(self):
+        """Show a popup window with all scheduled runs across all clients and retailers"""
+        # Create popup window
+        popup = tk.Toplevel(self.root)
+        popup.title("Full Schedule View")
+        popup.geometry("1000x700")
+        popup.transient(self.root)
+        
+        # Main container
+        main_frame = ttk.Frame(popup, padding=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Filters frame at top
+        filters_frame = ttk.LabelFrame(main_frame, text="Filters", padding=10)
+        filters_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Retailer filter
+        ttk.Label(filters_frame, text="Retailer:").grid(row=0, column=0, padx=5, sticky="w")
+        retailer_var = tk.StringVar(value="All")
+        retailer_filter = ttk.Combobox(filters_frame, textvariable=retailer_var, width=20, state="readonly")
+        retailer_filter.grid(row=0, column=1, padx=5)
+        
+        # Client filter
+        ttk.Label(filters_frame, text="Client:").grid(row=0, column=2, padx=5, sticky="w")
+        client_var = tk.StringVar(value="All")
+        client_filter = ttk.Combobox(filters_frame, textvariable=client_var, width=30, state="readonly")
+        client_filter.grid(row=0, column=3, padx=5)
+        
+        # Day filter
+        ttk.Label(filters_frame, text="Day:").grid(row=0, column=4, padx=5, sticky="w")
+        day_var = tk.StringVar(value="All")
+        day_filter = ttk.Combobox(
+            filters_frame, 
+            textvariable=day_var, 
+            values=["All", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+            width=15,
+            state="readonly"
+        )
+        day_filter.grid(row=0, column=5, padx=5)
+        
+        # Show empty slots checkbox
+        show_empty_var = tk.BooleanVar(value=False)
+        show_empty_check = ttk.Checkbutton(
+            filters_frame,
+            text="Show empty slots",
+            variable=show_empty_var
+        )
+        show_empty_check.grid(row=0, column=6, padx=15, sticky="w")
+        
+        # Schedule display area with scrollbar
+        schedule_frame = ttk.Frame(main_frame)
+        schedule_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Create Treeview for schedule display (matrix view: time x retailers)
+        # Columns will be dynamically set based on available retailers
+        tree = ttk.Treeview(schedule_frame, show="tree headings", height=25)
+        
+        # Scrollbars
+        scrollbar_y = ttk.Scrollbar(schedule_frame, orient="vertical", command=tree.yview)
+        scrollbar_x = ttk.Scrollbar(schedule_frame, orient="horizontal", command=tree.xview)
+        tree.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+        
+        tree.grid(row=0, column=0, sticky="nsew")
+        scrollbar_y.grid(row=0, column=1, sticky="ns")
+        scrollbar_x.grid(row=1, column=0, sticky="ew")
+        
+        schedule_frame.grid_rowconfigure(0, weight=1)
+        schedule_frame.grid_columnconfigure(0, weight=1)
+        
+        # Load all schedules
+        def load_schedules():
+            """Load all schedule configs using shared library"""
+            schedules = []
+            base = get_base_dir()
+            
+            # Use shared library to scan schedules
+            try:
+                from pathlib import Path
+                import sys
+                sys.path.insert(0, str(base))
+                from schedules.schedules_lib import scan_schedules
+                
+                schedule_objects = scan_schedules(Path(base))
+                
+                # Convert Schedule objects to display format
+                for sched in schedule_objects:
+                    if not sched.enabled:
+                        continue
+                    
+                    keywords_str = ", ".join(sched.keywords[:3])
+                    if len(sched.keywords) > 3:
+                        keywords_str += f" (+{len(sched.keywords)-3} more)"
+                    
+                    # Convert 24h times back to 12h for display
+                    for time_24h in sched.times:
+                        try:
+                            h, m = map(int, time_24h.split(':'))
+                            ampm = "AM" if h < 12 else "PM"
+                            if h == 0:
+                                h = 12
+                            elif h > 12:
+                                h -= 12
+                            time_str = f"{h}:{m:02d} {ampm}"
+                            
+                            for day in sched.days:
+                                schedules.append({
+                                    "time": time_str,
+                                    "day": day.capitalize(),
+                                    "retailer": sched.retailer,
+                                    "client": sched.client,
+                                    "keywords": keywords_str
+                                })
+                        except (ValueError, AttributeError):
+                            continue
+                
+                return schedules
+            except Exception as e:
+                print(f"Error loading schedules: {e}")
+                # Fallback to legacy method
+                pass
+            
+            # LEGACY FALLBACK: Scan output/<retailer>/<client>/schedule_config.json
+            output_dir = os.path.join(base, "output")
+            if not os.path.exists(output_dir):
+                return schedules
+            
+            for retailer in os.listdir(output_dir):
+                retailer_dir = os.path.join(output_dir, retailer)
+                if not os.path.isdir(retailer_dir):
+                    continue
+                    
+                for client in os.listdir(retailer_dir):
+                    client_dir = os.path.join(retailer_dir, client)
+                    if not os.path.isdir(client_dir):
+                        continue
+                    
+                    config_file = os.path.join(client_dir, "schedule_config.json")
+                    if os.path.exists(config_file):
+                        try:
+                            with open(config_file, 'r') as f:
+                                config = json.load(f)
+                            
+                            # Get keywords
+                            keywords = config.get("keywords", [])
+                            keywords_str = ", ".join(keywords[:3])
+                            if len(keywords) > 3:
+                                keywords_str += f" (+{len(keywords)-3} more)"
+                            
+                            # Parse schedule (support both old and new format)
+                            if "days" in config and "times" in config:
+                                # New format
+                                days = config["days"]
+                                times = config["times"]
+                                for time_slot in times:
+                                    hour, minute, ampm = time_slot
+                                    time_str = f"{hour}:{minute} {ampm}"
+                                    for day in days:
+                                        schedules.append({
+                                            "time": time_str,
+                                            "day": day,
+                                            "retailer": retailer,
+                                            "client": client,
+                                            "keywords": keywords_str
+                                        })
+                            elif "schedule" in config:
+                                # Old format
+                                for day, times in config["schedule"].items():
+                                    for time_str in times:
+                                        schedules.append({
+                                            "time": time_str,
+                                            "day": day.capitalize(),
+                                            "retailer": retailer,
+                                            "client": client,
+                                            "keywords": keywords_str
+                                        })
+                        except Exception as e:
+                            print(f"Error loading {config_file}: {e}")
+            
+            return schedules
+        
+        # Populate filters and tree
+        def refresh_display():
+            """Refresh the tree view as a matrix: rows=time slots, columns=retailers"""
+            # Clear tree
+            for item in tree.get_children():
+                tree.delete(item)
+            
+            # Get filter values
+            client_filter_val = client_var.get()
+            day_filter_val = day_var.get()
+            show_empty = show_empty_var.get()
+            
+            # Load all schedules
+            all_schedules = load_schedules()
+            
+            # Get all unique retailers from schedules AND from output directory
+            scheduled_retailers = set(s["retailer"] for s in all_schedules)
+            
+            # Also scan output directory for retailers without schedules
+            base = get_base_dir()
+            output_dir = os.path.join(base, "output")
+            all_retailers = set()
+            if os.path.exists(output_dir):
+                for item in os.listdir(output_dir):
+                    item_path = os.path.join(output_dir, item)
+                    if os.path.isdir(item_path) and item not in ["runs", "brand_logos"]:
+                        all_retailers.add(item)
+            
+            all_retailers = sorted(all_retailers)
+            all_clients = sorted(set(s["client"] for s in all_schedules))
+            
+            # Update filter dropdowns
+            retailer_filter["values"] = ["All"] + all_retailers
+            client_filter["values"] = ["All"] + all_clients
+            
+            # Apply client filter
+            if client_filter_val != "All":
+                all_schedules = [s for s in all_schedules if s["client"] == client_filter_val]
+            
+            # Determine which days to show
+            all_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            if day_filter_val != "All":
+                all_days = [day_filter_val]
+            
+            # Generate all time slots (5-minute intervals)
+            def generate_time_slots():
+                slots = []
+                for hour in range(24):
+                    for minute in [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]:
+                        if hour == 0:
+                            time_str = f"12:{minute:02d} AM"
+                        elif hour < 12:
+                            time_str = f"{hour}:{minute:02d} AM"
+                        elif hour == 12:
+                            time_str = f"12:{minute:02d} PM"
+                        else:
+                            time_str = f"{hour-12}:{minute:02d} PM"
+                        slots.append(time_str)
+                return slots
+            
+            all_time_slots = generate_time_slots()
+            
+            # Build matrix: {(day, time, retailer): [clients]}
+            matrix = {}
+            for s in all_schedules:
+                key = (s["day"], s["time"], s["retailer"])
+                if key not in matrix:
+                    matrix[key] = []
+                matrix[key].append(s["client"])
+            
+            # Configure tree columns: Day/Time + one column per retailer
+            columns = ["time_day"] + all_retailers
+            tree["columns"] = columns
+            tree.column("#0", width=0, stretch=False)  # Hide tree column
+            tree.column("time_day", width=150, anchor="w")
+            tree.heading("time_day", text="Day / Time")
+            
+            for retailer in all_retailers:
+                tree.column(retailer, width=200, anchor="w")
+                tree.heading(retailer, text=retailer.capitalize())
+            
+            # Populate tree
+            occupied_count = 0
+            total_slots = 0
+            
+            for day in all_days:
+                # Add day header (open=True makes it expanded by default)
+                day_node = tree.insert("", "end", text=day, values=[f"═══ {day} ═══"] + [""] * len(all_retailers), tags=("day_header",), open=True)
+                
+                for time_slot in all_time_slots:
+                    # Check if this time slot has any assignments
+                    has_assignment = any((day, time_slot, r) in matrix for r in all_retailers)
+                    
+                    if not show_empty and not has_assignment:
+                        continue
+                    
+                    total_slots += 1
+                    
+                    # Build row values
+                    row_values = [time_slot]
+                    for retailer in all_retailers:
+                        key = (day, time_slot, retailer)
+                        if key in matrix:
+                            clients = matrix[key]
+                            row_values.append(", ".join(clients))
+                            occupied_count += len(clients)
+                        else:
+                            row_values.append("—" if show_empty else "")
+                    
+                    # Insert row
+                    tags = ("empty",) if not has_assignment else ()
+                    tree.insert(day_node, "end", values=row_values, tags=tags)
+            
+            # Configure tags
+            tree.tag_configure("day_header", font=("Inter", 11, "bold"), background="#e0e0e0")
+            tree.tag_configure("empty", foreground="gray")
+            
+            # Update count
+            if show_empty:
+                count_label.config(text=f"Showing {total_slots} time slots with {occupied_count} scheduled runs")
+            else:
+                count_label.config(text=f"Showing {occupied_count} scheduled runs")
+        
+        # Bind filter changes
+        retailer_var.trace("w", lambda *args: refresh_display())
+        client_var.trace("w", lambda *args: refresh_display())
+        day_var.trace("w", lambda *args: refresh_display())
+        show_empty_var.trace("w", lambda *args: refresh_display())
+        
+        # Count label at bottom
+        count_label = ttk.Label(main_frame, text="", font=("Inter", 10))
+        count_label.pack(pady=(5, 0))
+        
+        # Refresh button
+        ttk.Button(
+            main_frame,
+            text="🔄 Refresh",
+            command=refresh_display
+        ).pack(pady=5)
+        
+        # Initial load
+        refresh_display()
     
     def start_daemon_automatically(self):
         """Optionally start the scheduler daemon if it's not running (opt-in only)."""
@@ -1526,7 +2175,7 @@ class KeywordInputApp:
                 selected_days = [day for day, var in self.day_vars.items() if var.get()]
                 
             if not selected_days or not selected_client or selected_client == PLACEHOLDER:
-                conflict_label.config(text="")
+                conflict_label.config(text="(select client & days)", fg="gray")
                 return
                 
             # Check for conflicts
@@ -1835,8 +2484,15 @@ class KeywordInputApp:
                 minute_combo["values"] = self.get_allowed_minutes_for_hour(alt_h, alt_a, selected_days, exclude_client=selected_client)
                 minute_var.set(f"{alt_m:02d}")
 
-            # Conflict indicator label
-            conflict_label = ttk.Label(time_frame, text="", style='Body.TLabel')
+            # Conflict indicator label (use tk.Label for better color control)
+            conflict_label = tk.Label(
+                time_frame, 
+                text="", 
+                width=25,
+                anchor="w",
+                bg=self.root.cget('bg') if hasattr(self, 'root') else 'white',
+                font=('SF Pro', 11)
+            )
             conflict_label.pack(side=tk.LEFT, padx=(5, 0))
             
             # Store references for conflict checking
@@ -1926,17 +2582,59 @@ class KeywordInputApp:
             pass
     
     def load_schedule_config(self, client=None):
-        """Load schedule configuration from file"""
+        """Load schedule configuration from file using shared library"""
         default_config = {
             "runs": 3, 
             "times": [("8", "00", "AM"), ("12", "00", "PM"), ("4", "00", "PM")],
             "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
         }
         
-        # If client is specified, try to load client-specific config
+        # If client is specified, try to load from new schedules/ directory
         if client:
+            try:
+                from pathlib import Path
+                import sys
+                base = get_base_dir()
+                sys.path.insert(0, str(base))
+                from schedules.schedules_lib import scan_schedules
+                
+                # Scan all schedules and find matching client
+                schedules = scan_schedules(Path(base))
+                retailer_slug = self._schedule_retailer_slug()
+                
+                for sched in schedules:
+                    if sched.client.lower() == client.lower() and sched.retailer == retailer_slug:
+                        # Convert 24h times back to 12h format for GUI
+                        times_12h = []
+                        for time_24h in sched.times:
+                            h, m = map(int, time_24h.split(':'))
+                            ampm = "AM" if h < 12 else "PM"
+                            if h == 0:
+                                h = 12
+                            elif h > 12:
+                                h -= 12
+                            times_12h.append((str(h), f"{m:02d}", ampm))
+                        
+                        # Convert lowercase days to capitalized
+                        days_cap = [d.capitalize() for d in sched.days]
+                        
+                        # Update schedule file path
+                        self.schedule_file = sched.source_path
+                        
+                        return {
+                            "runs": len(sched.times),
+                            "times": times_12h,
+                            "days": days_cap,
+                            "keywords": sched.keywords,
+                            "client": sched.client,
+                            "retailer": sched.retailer
+                        }
+            except Exception as e:
+                print(f"Error loading schedule from library: {e}")
+                pass  # Fall back to legacy method
+            
+            # LEGACY: Try old output/ location
             folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in client)
-            # Try retailer-scoped path first (new), then fall back to old path
             base = get_base_dir()
             retailer_slug = "kroger"  # Default for backward compatibility
             client_schedule_file = os.path.join(base, "output", retailer_slug, folder_name, "schedule_config.json")
@@ -2009,36 +2707,77 @@ class KeywordInputApp:
                 self.notify("Could not resolve all conflicts automatically.", "error")
                 return False
             
-        # Create client-specific schedule file path
-        folder_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client)
-        
-        # Include retailer in the path
+        # Get retailer and create slugs
         retailer_slug = self._schedule_retailer_slug()
-        client_schedule_file = os.path.join(get_base_dir(), "output", retailer_slug, folder_name, "schedule_config.json")
+        client_slug = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client.lower())
         
-        # Get current times
-        times = []
+        # Get current times and convert to 24-hour format
+        times_24h = []
         for hour_var, minute_var, ampm_var in self.time_vars:
-            times.append((hour_var.get(), minute_var.get(), ampm_var.get()))
+            try:
+                hour = int(hour_var.get())
+                minute = int(minute_var.get())
+                ampm = ampm_var.get().upper()
+                
+                # Convert to 24-hour
+                if ampm == "AM":
+                    if hour == 12:
+                        hour = 0
+                elif ampm == "PM":
+                    if hour != 12:
+                        hour += 12
+                
+                times_24h.append(f"{hour:02d}:{minute:02d}")
+            except (ValueError, AttributeError):
+                continue
         
-        # Get selected days
+        # Get selected days and normalize to lowercase
         selected_days = []
         for day, var in self.day_vars.items():
             if var.get():
-                selected_days.append(day)
+                selected_days.append(day.lower())
         
-        # Create config
+        # Get keywords from text area
+        keywords_text = self.keyword_input.get("1.0", tk.END).strip()
+        keywords = [kw.strip() for kw in keywords_text.split('\n') if kw.strip() and kw.strip() != self.placeholder_text]
+        
+        # Guard: don't save empty schedules
+        if not keywords:
+            self.notify("No keywords to save in schedule.", "warn")
+            return False
+        
+        # Generate schedule ID
+        import hashlib
+        key = f"{retailer_slug}|{client_slug}|{','.join(keywords)}|{','.join(selected_days)}|{','.join(times_24h)}"
+        dhash = hashlib.sha1(key.encode()).hexdigest()[:8]
+        kw_slug = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in keywords[0].lower()) if keywords else "default"
+        schedule_id = f"{retailer_slug}_{client_slug}_{kw_slug}_{dhash}"
+        
+        # Create new schedule file path in schedules/ directory
+        schedule_filename = f"{retailer_slug}__{client_slug}__{kw_slug}.json"
+        schedules_dir = os.path.join(get_base_dir(), "schedules")
+        client_schedule_file = os.path.join(schedules_dir, schedule_filename)
+        
+        # Create normalized config using new schema
+        from datetime import datetime
+        now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        
         config = {
-            "runs": self.runs_var.get(),
-            "times": times,
-            "days": selected_days,
-            "client": selected_client,  # Store client name in config
-            "retailer": retailer_slug  # Include retailer in the config
+            "id": schedule_id,
+            "retailer": retailer_slug,
+            "client": selected_client,
+            "keywords": keywords,
+            "days": sorted(selected_days),
+            "times": sorted(times_24h),
+            "enabled": True,
+            "tz": "",  # Optional timezone
+            "created_at": now_iso,
+            "updated_at": now_iso
         }
         
         # Save to file
         try:
-            os.makedirs(os.path.dirname(client_schedule_file), exist_ok=True)
+            os.makedirs(schedules_dir, exist_ok=True)
             with open(client_schedule_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2)
             
@@ -2048,7 +2787,28 @@ class KeywordInputApp:
             self.status_label.config(text=f"✅ Schedule saved for {selected_client} - daemon will handle execution")
         
             if self.logger:
-                self.logger.info(f"Schedule configuration saved for {selected_client}")
+                self.logger.info(f"Schedule saved to {client_schedule_file}")
+            
+            # Rebuild master index using shared library
+            try:
+                from pathlib import Path
+                import sys
+                sys.path.insert(0, str(get_base_dir()))
+                from schedules.schedules_lib import build_master_index
+                
+                master_path = build_master_index(Path(get_base_dir()))
+                if self.logger:
+                    self.logger.info(f"Master schedule index rebuilt: {master_path}")
+                # Update status to show master index was rebuilt
+                self.status_label.config(text=f"✅ Schedule saved for {selected_client} - master index updated")
+            except Exception as e:
+                # Non-fatal - master index will be rebuilt on next daemon tick
+                if self.logger:
+                    self.logger.warning(f"Could not rebuild master index: {e}")
+                # Show warning in GUI
+                print(f"Warning: Could not rebuild master index: {e}")
+                import traceback
+                traceback.print_exc()
                 
             return True
         except (IOError, PermissionError) as e:

@@ -118,11 +118,12 @@ class SkyscraperExtractor(AdExtractor):
                     else:
                         filename = f"skyscraper_ad{search_term_part}_{timestamp}.jpg"
                 
-                # Full path to save the image
+                # Full path to save the image (for file operations)
                 image_path = os.path.join(skyscraper_dir, filename)
                 
-                # Save image path in ad data
-                ad['skyscraper_image_path'] = image_path
+                # Save RELATIVE path in ad data (from client directory)
+                # This should be "Skyscraper/filename.jpg" not "output/client/Skyscraper/filename.jpg"
+                ad['skyscraper_image_path'] = os.path.join("Skyscraper", filename)
                 
             except Exception as e:
                 print(f"Error preparing skyscraper image path: {e}")

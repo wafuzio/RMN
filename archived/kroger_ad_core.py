@@ -41,7 +41,8 @@ import re
 import json
 import importlib
 from pathlib import Path
-import sys, logging, datetime, json
+from datetime import datetime
+import sys, logging, json
 
 # --- Diagnostics setup ---
 # Since this file is in archived/, go up one level to get the actual project root
@@ -50,7 +51,7 @@ DIAG_DIR = PROJECT_ROOT / "diagnostics"
 DIAG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Timestamped log file
-LOG_PATH = DIAG_DIR / f"run_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+LOG_PATH = DIAG_DIR / f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,107 +66,153 @@ def log(msg: str): logging.info(msg)
 log(f"Diagnostics dir: {DIAG_DIR}")
 log(f"Log file: {LOG_PATH}")
 
+# ------- Brand lexicon + matching helpers (no external deps) -------
+from difflib import get_close_matches
+
+# Where to load a curated lexicon (canonical + synonyms)
+_BRANDS_PATH = PROJECT_ROOT / "config" / "brands.json"
+_BRANDS_CACHE = None
+_CANONICAL = []  # list[str]
+_SYNONYM_TO_CANON = {}  # dict[str, str] lower -> canonical
+
+def _load_brands():
+    global _BRANDS_CACHE, _CANONICAL, _SYNONYM_TO_CANON
+    if _BRANDS_CACHE is not None:
+        return
+    try:
+        with open(_BRANDS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        # Minimal seed so we're never empty; expand via config/brands.json
+        data = [
+            {"name": "Nature's Bounty", "synonyms": ["Natures Bounty", "NBTY"]},
+            {"name": "Go-GURT", "synonyms": ["GoGurt", "Gogurt"]},
+            {"name": "Yoplait", "synonyms": []},
+            {"name": "O'Keeffe's", "synonyms": ["OKeeffes", "Okeeffes"]},
+            {"name": "Gold Bond", "synonyms": ["Goldbond"]},
+            {"name": "Heinz", "synonyms": []},
+            {"name": "Kraft", "synonyms": []},
+            {"name": "General Mills", "synonyms": ["GeneralMills", "Gen Mills"]},
+            {"name": "P&G", "synonyms": ["PG", "Procter & Gamble", "Procter and Gamble"]},
+            {"name": "Kroger", "synonyms": []}
+        ]
+    _BRANDS_CACHE = data
+    _CANONICAL = [b["name"] for b in data]
+    _SYNONYM_TO_CANON.clear()
+    for b in data:
+        for syn in [b["name"]] + b.get("synonyms", []):
+            _SYNONYM_TO_CANON[syn.lower()] = b["name"]
+
+def _brand_from_token(token: str, cutoff: float = 0.86):
+    """Return canonical brand for a candidate token, or None."""
+    if not token:
+        return None
+    _load_brands()
+    low = token.lower()
+    if low in _SYNONYM_TO_CANON:
+        return _SYNONYM_TO_CANON[low]
+    # Fuzzy match across all synonyms (keys)
+    choices = list(_SYNONYM_TO_CANON.keys())
+    # difflib returns best close matches; we approximate with ratio threshold
+    matches = get_close_matches(low, choices, n=1, cutoff=cutoff)
+    if matches:
+        return _SYNONYM_TO_CANON[matches[0]]
+    return None
+
+def _best_brand_from_tokens(tokens):
+    """Return first confident canonical brand from a list of tokens."""
+    for t in tokens:
+        b = _brand_from_token(t)
+        if b:
+            return b
+    return None
+
+def _split_camel_pascal(s: str):
+    return re.findall(r"[A-Z][a-zA-Z0-9]+", s or "")
+
+def _slug_tokens(s: str):
+    # simple tokenizer used for messages/headers/keywords
+    return re.findall(r"[A-Za-z][A-Za-z0-9&''\-]+", s or "")
+
+def _brand_from_url(href: str):
+    if not href:
+        return None
+    from urllib.parse import unquote, urlparse, parse_qs
+    try:
+        # /brand/ path
+        if "/brand/" in href:
+            brand_part = href.split("/brand/", 1)[-1].split("?", 1)[0].split("/")[0]
+            return _brand_from_token(unquote(brand_part).replace("-", " ").replace("_", " "))
+        # query param ?brand=
+        qs = parse_qs(urlparse(href).query)
+        if "brand" in qs and qs["brand"]:
+            return _brand_from_token(qs["brand"][0].replace("+", " "))
+        # keyword parameter often has PascalCase with brand tokens
+        kw = qs.get("keyword", [""])[0]
+        toks = _split_camel_pascal(kw)
+        if toks:
+            b = _best_brand_from_tokens(toks)
+            if b:
+                return b
+    except Exception:
+        pass
+    return None
+
 def _extract_kroger_advertiser(ad_dict):
-    """Extract advertiser/brand name from Kroger ad."""
-    import re
+    """Deterministic brand/advertiser extraction with lexicon validation."""
+    _load_brands()
     from urllib.parse import unquote
     
-    # Method 1: Extract from message text (e.g., "P&G. Buy 2 Save $10..." or "JOTS Herdez Taco Tuesday")
-    message = ad_dict.get('message', '')
+    # 0) If extractor already put advertisers/brand, trust it (but canonicalize)
+    for key in ("advertisers", "brand", "brands"):
+        val = ad_dict.get(key)
+        if isinstance(val, str):
+            b = _brand_from_token(val)
+            if b:
+                return b
+        elif isinstance(val, (list, tuple)):
+            b = _best_brand_from_tokens([str(x) for x in val])
+            if b:
+                return b
+    
+    # 1) URL-derived brand (cheapest and often reliable)
+    href = ad_dict.get("href", "") or ad_dict.get("click_url", "")
+    b = _brand_from_url(href)
+    if b:
+        return b
+    
+    # 2) Parse message/header but only accept matches that map to a known brand
+    message = ad_dict.get("message", "") or ad_dict.get("header", "")
     if message:
-        # Pattern 1: "from [Brand]" pattern (e.g., "Frozen snacks from Kraft") - check this FIRST
-        # Match 1-2 capitalized words after "from"
-        from_match = re.search(r'\bfrom\s+([A-Z][A-Za-z0-9&\'-]+(?:\s+[A-Z][A-Za-z0-9&\'-]+)?)', message)
-        if from_match:
-            brand = from_match.group(1).strip()
-            brand_lower = brand.lower()
-            
-            # Reject common slogan patterns (possessive/generic phrases, not brand names)
-            # "Our/Your/The [Place]" are slogans, but "Market Kitchen" or "Kraft Heinz" are brands
-            slogan_patterns = [
-                r'^(our|your|the)\s+(table|kitchen|home|family|heart|farm|field|garden)$',
-                r'^(our|your)\s+',  # Anything starting with "Our" or "Your" is likely a slogan
-            ]
-            is_slogan = any(re.match(pattern, brand_lower) for pattern in slogan_patterns)
-            
-            # Accept if: not a slogan, not a promotional word, and reasonable length
-            if (not is_slogan and 
-                brand_lower not in ['buy', 'save', 'get', 'shop', 'new', 'sale'] and 
-                len(brand.split()) <= 2):
-                return brand
+        # a) "from <Brand>" pattern
+        m = re.search(r'\bfrom\s+([A-Z][A-Za-z0-9&\'\-]+(?:\s+[A-Z][A-Za-z0-9&\'\-]+)?)', message)
+        if m:
+            candidate = m.group(1).strip()
+            b = _brand_from_token(candidate)
+            if b:
+                return b
         
-        # Pattern 2: Brand followed by period at start (e.g., "P&G. Buy...")
-        match = re.match(r'^([A-Z][A-Za-z0-9&\s\'-]+?)\.', message)
-        if match:
-            brand = match.group(1).strip()
-            brand_lower = brand.lower()
-            # Filter out common promotional words/phrases and check it's not too long
-            cta_phrases = ['shop now', 'buy now', 'save now', 'get now', 'learn more', 'see more', 'click here']
-            is_cta = brand_lower in cta_phrases or brand_lower in ['buy', 'save', 'get', 'shop', 'new', 'sale', 'jots']
-            if brand and not is_cta and len(brand.split()) <= 3:
-                return brand
+        # b) Leading "<Brand>." pattern
+        m = re.match(r'^([A-Z][A-Za-z0-9&\s\'\-]+?)\.', message)
+        if m:
+            candidate = m.group(1).strip()
+            b = _brand_from_token(candidate)
+            if b:
+                return b
         
-        # Pattern 2: Extract brand name from middle of message (e.g., "JOTS Herdez Taco Tuesday")
-        # Look for capitalized words that aren't common promotional terms
-        words = message.split()
-        for i, word in enumerate(words):
-            # Skip promotional words and common food category words
-            if word.lower() in ['jots', 'advertisement', 'frozen', 'snacks', 'from', 'shop', 'now', 'buy', 'save', 'get', 'new', 'sale', 'taco', 'tuesday', 'monday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']:
-                continue
-            # Check if word starts with capital and is likely a brand
-            if word and word[0].isupper() and len(word) > 2:
-                # Check if next word is also capitalized AND not a category word (multi-word brand like "Kraft Heinz")
-                if i + 1 < len(words) and words[i+1] and words[i+1][0].isupper() and len(words[i+1]) > 2:
-                    next_word_lower = words[i+1].lower()
-                    if next_word_lower not in ['taco', 'tuesday', 'monday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'snacks', 'frozen']:
-                        return f"{word} {words[i+1]}"
-                return word
+        # c) Token scan with lexicon validation
+        b = _best_brand_from_tokens(_slug_tokens(message))
+        if b:
+            return b
     
-    # Method 2: Extract from href parameter (e.g., /pr/kpm-pg-9 or /brand/...)
-    href = ad_dict.get('href', '')
-    if href:
-        # Check for /brand/ in URL
-        if '/brand/' in href:
-            brand_part = href.split('/brand/')[-1].split('?')[0].split('/')[0]
-            brand = unquote(brand_part).replace('-', ' ').replace('_', ' ')
-            return brand.title()
-        
-        # Check for brand in query parameters
-        brand_match = re.search(r'[?&]brand=([^&]+)', href, re.IGNORECASE)
-        if brand_match:
-            brand = unquote(brand_match.group(1)).replace('+', ' ')
-            return brand.title()
-        
-        # Extract brand from keyword parameter (e.g., keyword=DuncanHinesDollyHalloweenBaking2025)
-        keyword_match = re.search(r'[?&]keyword=([^&]+)', href, re.IGNORECASE)
-        if keyword_match:
-            keyword = unquote(keyword_match.group(1))
-            # Split camelCase/PascalCase into words
-            words = re.findall(r'[A-Z][a-z]+', keyword)
-            
-            if words:
-                # Filter out promotional/seasonal words
-                promo_words = {'Halloween', 'Christmas', 'Holiday', 'Summer', 'Spring', 'Fall', 'Winter',
-                              'Baking', 'Cooking', 'Sale', 'Deal', 'Special', 'Limited', 'New', 'Fresh',
-                              'Buy', 'Save', 'Get', 'Shop', 'Now', 'More', 'Best', 'Great', 'Super'}
-                
-                # Collect brand words (first consecutive capitalized words before hitting a promo word)
-                brand_words = []
-                for word in words:
-                    if word in promo_words:
-                        break  # Stop at first promotional word
-                    brand_words.append(word)
-                    if len(brand_words) >= 2:  # Limit to 2 words for brand name
-                        break
-                
-                if brand_words:
-                    brand = ' '.join(brand_words)
-                    # Validate it's not just a single promotional word that slipped through
-                    if len(brand_words) >= 1 and brand.lower() not in ['buy', 'save', 'get', 'shop', 'new', 'sale']:
-                        return brand
+    # 3) Keyword fallback (sometimes contains brand-ish tokens)
+    key = ad_dict.get("keyword", "")
+    if key:
+        b = _best_brand_from_tokens(_slug_tokens(key) + _split_camel_pascal(key))
+        if b:
+            return b
     
-    # Method 3: For Kroger promotional content (no brand sponsor)
-    # If no brand found and it's a TOA/Skyscraper, it's likely Kroger's own promo
+    # 4) Kroger house promo fallback
     ad_type = ad_dict.get('type', '')
     if ad_type in ['TOA', 'Skyscraper'] and not message:
         return 'Kroger'
@@ -191,6 +238,9 @@ except LookupError:
 import ad_extractors.toa_extractor
 import ad_extractors.skyscraper_extractor
 import ad_extractors.carousel_extractor
+
+# Import filename generator for centralized carousel path creation
+from filename_utils import generate_ad_filename
 
 def get_rendered_html(url, wait_ms=5000, user_data_dir=None, keep_open=False):
     log(f">>> get_rendered_html called: {url}")
@@ -624,7 +674,7 @@ def extract_common_words_and_phrases(titles):
         "common_phrases": phrase_freq
     }
 
-def extract_ads_from_html(html, client=None, search_term=None):
+def extract_ads_from_html(html, client=None, search_term=None, timestamp=None, source_file=None):
     """
     Extract all ads from HTML content using registered extractors
     
@@ -632,6 +682,8 @@ def extract_ads_from_html(html, client=None, search_term=None):
         html (str): HTML content to extract from
         client (str, optional): Client name for image saving
         search_term (str, optional): Search term to include in image filenames
+        timestamp (str, optional): Run timestamp for consistent filename generation
+        source_file (str, optional): Source HTML file path
         
     Returns:
         list: List of extracted ad data
@@ -647,6 +699,9 @@ def extract_ads_from_html(html, client=None, search_term=None):
         log(f"Looking for {ad_type} ads...")
         extractor = extractor_class()
         
+        # Set retailer (always kroger for this core)
+        extractor.retailer = 'kroger'
+        
         # Set client name if provided
         if client:
             extractor.client = client
@@ -654,6 +709,10 @@ def extract_ads_from_html(html, client=None, search_term=None):
         # Set search term for image filenames
         if search_term:
             extractor.search_term = search_term
+        
+        # Set run timestamp for consistent filename generation
+        if timestamp:
+            extractor.run_ts = timestamp
         
         # For TOA ads, look for the specific div with data-testid="StandardTOA" (confirmed in screenshot)
         if ad_type == "TOA":
@@ -901,6 +960,69 @@ def extract_ads_from_html(html, client=None, search_term=None):
                     header = div.select_one('h2, h3, [class*="header"], [class*="headline"]')
                     if header:
                         ad['message'] = header.get_text(strip=True)
+                
+                # Extract advertiser using lexicon validation
+                # For carousels, try to extract brand from product titles first
+                advertiser = None
+                if ad.get('products'):
+                    # Extract brand from first product title
+                    first_product = ad['products'][0]
+                    product_title = first_product.get('title', '')
+                    if product_title:
+                        # Try to extract brand from product title using lexicon
+                        # Pass the product title as 'message' for brand extraction
+                        product_ad = {'message': product_title}
+                        advertiser = _extract_kroger_advertiser(product_ad)
+                
+                # Fallback to header/message if no brand found in products
+                if not advertiser:
+                    advertiser = _extract_kroger_advertiser(ad)
+                
+                if advertiser:
+                    ad['advertisers'] = [advertiser]
+                
+                # Centralized carousel filename generation (ensures JSON matches saved file)
+                # Always generate path, even if advertiser is unknown
+                try:
+                    if not client:
+                        log(f"Warning: No client provided for carousel filename generation")
+                    if not timestamp:
+                        log(f"Warning: No timestamp provided for carousel filename generation")
+                    
+                    if client and timestamp:
+                        # Parse timestamp string to datetime if needed
+                        if isinstance(timestamp, str):
+                            try:
+                                ts_dt = datetime.strptime(timestamp, "%Y-%m-%d_%H-%M-%S")
+                            except ValueError:
+                                # Try alternate format
+                                ts_dt = datetime.strptime(timestamp.replace('-', '_'), "%Y_%m_%d_%H_%M_%S")
+                        else:
+                            ts_dt = timestamp
+                        
+                        # Use canonical advertiser from lexicon, fallback to "unknown"
+                        canonical_advertiser = (ad.get('advertisers') or ['unknown'])[0]
+                        
+                        # Generate filename using same logic as screenshot script
+                        filename = generate_ad_filename(
+                            retailer='kroger',
+                            ad_type='carousel',
+                            client=client,
+                            search_term=search_term or 'unknown',
+                            timestamp=ts_dt,
+                            index=idx,
+                            extension='png',
+                            advertiser=canonical_advertiser
+                        )
+                        
+                        # Set relative path in ad data
+                        ad['carousel_image_path'] = os.path.join('Carousel', filename)
+                        ad['capture_entire_carousel'] = True
+                        log(f"Generated carousel_image_path: {ad['carousel_image_path']}")
+                except Exception as e:
+                    log(f"Error generating carousel filename: {e}")
+                    import traceback
+                    log(traceback.format_exc())
                 
                 # Differentiate multiple instances
                 ad['position'] = idx
