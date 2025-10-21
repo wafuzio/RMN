@@ -1076,6 +1076,65 @@ grep "Clip (page coords)" output/instacart/*/debug_search.log
 
 ---
 
+## Frontend showing duplicate images for different ads
+
+**Status:** ✅ SOLVED
+
+**Symptoms:**
+- Web dashboard displays same image for multiple different ads
+- Siggi's ad card shows Danone image
+- JSON has correct screenshot paths but frontend uses wrong image URL
+- Browser dev tools show wrong image URL in `<img src>`
+
+**Root Cause:**
+Backend image path resolution was not checking the `screenshot` field that Instacart scraper uses. It only checked for `screenshot_path`, `image_path`, etc. When the field wasn't found, it fell back to searching by brand name, which could match the wrong file.
+
+**Solution:**
+Add `"screenshot"` to the list of path fields checked in `web/builder_server_v2.py`:
+
+```python
+# Try various path fields first (these point to actual saved files)
+for path_field in ["skyscraper_image_path", "carousel_image_path", "main_image_path",
+                   "image_path", "screenshot_path", "screenshot", "filename"]:
+    p = ad.get(path_field)
+    if not p:
+        continue
+    # ... rest of logic
+```
+
+**Why it matters:**
+- Different retailers use different field names in their JSON output
+- Instacart: `screenshot`
+- Kroger: `screenshot_path` or `image_path`
+- Walmart: `main_image_path` or `carousel_image_path`
+- Backend must check all common field names to find the correct image path
+
+**Additional fix:** Frontend ID generation now includes brand and ad_type to ensure uniqueness:
+```typescript
+// In neon-sanctuary/client/pages/Index.tsx
+const brand = (c.brand || 'unknown').replace(/[|]/g, '-');
+const adType = (c.ad_type || 'unknown').replace(/[|]/g, '-');
+return `${c.retailer}|${c.client}|${runId}|${idx}|${brand}|${adType}|${tsMs}`;
+```
+
+**Files Modified:**
+- `web/builder_server_v2.py`: Added `"screenshot"` to path field list
+- `neon-sanctuary/client/pages/Index.tsx`: Updated `buildAdId()` to include brand/ad_type
+
+**Verification:**
+```bash
+# Restart web server
+cd neon-sanctuary && pnpm dev
+
+# Check API returns correct image URLs
+curl -s "http://localhost:48752/api/ads/cards?retailer=instacart&client=magic_spoon" | \
+  jq '.cards[] | {brand, image_url}'
+
+# Each brand should have unique image URL matching their screenshot filename
+```
+
+---
+
 ## Taxonomy Fix checklist
 
 ### Instacart

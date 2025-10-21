@@ -13,15 +13,17 @@ function AdImage({ relUrl, alt }: { relUrl?: string; alt?: string }) {
 
   const src = toLocalImageUrl(relUrl);
   const [loaded, setLoaded] = useState(false);
+  const [imgKey, setImgKey] = useState(0);
 
   useEffect(() => {
     setLoaded(false); // reset whenever src changes
+    setImgKey(prev => prev + 1); // force new img element
   }, [src]);
 
   return (
     <div className="w-full h-[200px] overflow-hidden rounded-t-lg bg-gray-100 flex items-center justify-center relative">
       <img
-        key={src}                          // force a fresh element when URL changes
+        key={`${src}-${imgKey}`}           // force a fresh element when URL changes
         src={src}
         alt={alt || 'ad'}
         className="w-full h-full object-cover"

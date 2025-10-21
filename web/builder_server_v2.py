@@ -646,7 +646,7 @@ def api_ads_cards():
                 
                 # Try various path fields first (these point to actual saved files)
                 for path_field in ["skyscraper_image_path", "carousel_image_path", "main_image_path",
-                                   "image_path", "screenshot_path", "filename"]:
+                                   "image_path", "screenshot_path", "screenshot", "filename"]:
                     p = ad.get(path_field)
                     if not p:
                         continue

@@ -500,14 +500,6 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             search_url = page.url
             log("✅ Authenticated session active")
             
-            # Get page content
-            html_content = page.content()
-            
-            # Save HTML
-            with open(html_file, 'w', encoding='utf-8') as f:
-                f.write(html_content)
-            print(f"💾 HTML saved: {html_file}")
-            
             # Extract ad data for JSON (matching Kroger structure)
             ad_data = {
                 "keyword": keyword,
@@ -591,39 +583,168 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                             "height": bbox['height']
                         }
                     
-                    # Try to extract brand/title
+                    # Try to extract brand/advertiser with multiple strategies
+                    advertiser = None
+                    
+                    # STRATEGY 1: Extract from brand_link (most reliable for shoppable ads)
                     try:
-                        title_elem = elem.query_selector('h2, [role="heading"]')
-                        if title_elem:
-                            title = title_elem.inner_text()
-                            ad_info["title"] = title
-                            # Extract advertiser from title (matching Kroger structure)
-                            if title:
-                                advertiser = None
-                                # Method 1: "Brand - Description" format
-                                if ' - ' in title:
-                                    parts = title.split(' - ')
-                                    if parts and parts[0]:
-                                        advertiser = parts[0].strip()
-                                # Method 2: Look for capitalized brand names in title
-                                # e.g., "Unleash spooky Goldfish® fun" → "Goldfish"
-                                # e.g., "Amara Organic Smoothie Melts" → "Amara"
-                                elif not advertiser:
-                                    # Look for capitalized words (potential brand names)
-                                    words = title.split()
-                                    for word in words:
-                                        # Remove ® and ™ symbols
-                                        clean_word = word.replace('®', '').replace('™', '').strip()
-                                        # Check if word is capitalized and not a common word
-                                        if (clean_word and clean_word[0].isupper() and 
-                                            clean_word.lower() not in ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by', 'as', 'is', 'was', 'are', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'unleash', 'love', 'what', 'you', 'your', 'our', 'refrigerated', 'organic', 'spooky', 'fun']):
-                                            advertiser = clean_word
-                                            break
+                        brand_link_elem = elem.query_selector('a[href*="/store/"][href*="/brands/"]')
+                        if brand_link_elem:
+                            brand_link = brand_link_elem.get_attribute('href') or ""
+                            if brand_link:
+                                brand_match = re.search(r'/brands/([^/?]+)', brand_link)
+                                if brand_match:
+                                    brand_slug = brand_match.group(1)
+                                    # Clean up brand slug - remove company prefixes like "dgic-"
+                                    if '-' in brand_slug:
+                                        parts = brand_slug.split('-')
+                                        if len(parts) > 1 and len(parts[0]) <= 4:
+                                            brand_slug = '-'.join(parts[1:])
+                                    advertiser = brand_slug.replace('-', ' ').title()
+                                    log(f"      📌 Brand from link: {advertiser}")
+                    except Exception as e:
+                        log(f"      ⚠️  Brand link extraction failed: {e}")
+                    
+                    # STRATEGY 2: Extract from logo alt text (reliable for display ads)
+                    if not advertiser:
+                        try:
+                            logo_img = elem.query_selector('img[alt]:not([alt=""])')
+                            if logo_img:
+                                alt_text = logo_img.get_attribute('alt')
+                                if alt_text and alt_text.strip() and len(alt_text) > 2:
+                                    # Clean generic descriptive words FIRST (e.g., "goodpop logo" -> "goodpop")
+                                    cleaned = alt_text
+                                    for word in ['Logo', 'logo', 'Brand', 'brand', 'Image', 'image']:
+                                        cleaned = cleaned.replace(word, '').strip()
+                                    
+                                    # Use cleaned version if it's not empty
+                                    if cleaned and len(cleaned) > 2:
+                                        alt_text = cleaned
+                                    
+                                    # NOW check if the cleaned text is purely generic
+                                    generic_alts = ['ad', 'banner', 'sponsored', 'advertisement']
+                                    
+                                    if alt_text.lower() not in generic_alts:
+                                        
+                                        # Use short, clean alt text directly
+                                        if len(alt_text) < 30 and '&' not in alt_text:
+                                            advertiser = alt_text.strip()
+                                            # Capitalize if all lowercase (e.g., "goodpop" -> "Goodpop")
+                                            if advertiser.islower():
+                                                advertiser = advertiser.capitalize()
+                                            log(f"      📌 Brand from logo alt: {advertiser}")
+                                        else:
+                                            # For longer alt text, extract brand intelligently
+                                            # Strategy: Check for " - " separator (brand often comes after)
+                                            if ' - ' in alt_text:
+                                                parts = alt_text.split(' - ')
+                                                if len(parts) > 1:
+                                                    brand_part = parts[-1].strip()
+                                                    words = brand_part.split()
+                                                    brand_words = []
+                                                    for word in words[:3]:
+                                                        if word and word[0].isupper():
+                                                            brand_words.append(word)
+                                                        else:
+                                                            break
+                                                    if brand_words:
+                                                        advertiser = ' '.join(brand_words)
+                                                        log(f"      📌 Brand from logo alt (after dash): {advertiser}")
+                                            
+                                            # Fallback: Extract from beginning (before '&' or descriptive words)
+                                            if not advertiser:
+                                                words = alt_text.split()
+                                                descriptive_words = {'in', 'on', 'with', 'and', 'or', 'the', 'a', 'an', 'for', 'at',
+                                                                   'candies', 'candy', 'products', 'product', 'items', 'item',
+                                                                   'treats', 'treat', 'delicious', 'frighteningly'}
+                                                brand_words = []
+                                                for word in words[:5]:
+                                                    if word in ['&', 'and', '-'] or word.lower() in descriptive_words:
+                                                        break
+                                                    if word and word[0].isupper():
+                                                        brand_words.append(word)
+                                                        if len(brand_words) >= 3:
+                                                            break
+                                                if brand_words:
+                                                    advertiser = ' '.join(brand_words)
+                                                    log(f"      📌 Brand from logo alt (beginning): {advertiser}")
+                        except:
+                            pass
+                    
+                    # STRATEGY 3: Extract from carousel products (check if all products start with same brand)
+                    if not advertiser:
+                        try:
+                            # Get all product titles in the carousel
+                            product_elems = elem.query_selector_all('[data-testid="shoppable-list-sliding-carousel"] [role="group"] h3, [data-testid="shoppable-list-sliding-carousel"] [role="group"] [class*="title"]')
+                            if product_elems and len(product_elems) > 0:
+                                product_titles = []
+                                for prod in product_elems[:5]:  # Check first 5 products
+                                    try:
+                                        title = prod.inner_text()
+                                        if title:
+                                            product_titles.append(title)
+                                    except:
+                                        pass
                                 
-                                if advertiser:
-                                    ad_info["advertisers"] = [advertiser]
-                    except:
-                        pass
+                                if product_titles:
+                                    # Extract potential brand from first product (first 1-2 capitalized words)
+                                    first_title = product_titles[0]
+                                    words = first_title.split()
+                                    brand_candidate = None
+                                    
+                                    # Try 2-word brand first, then 1-word
+                                    for num_words in [2, 1]:
+                                        if len(words) >= num_words:
+                                            potential_brand = ' '.join(words[:num_words])
+                                            # Check if all products start with this brand
+                                            if all(title.startswith(potential_brand) for title in product_titles):
+                                                brand_candidate = potential_brand
+                                                break
+                                    
+                                    if brand_candidate:
+                                        advertiser = brand_candidate
+                                        log(f"      📌 Brand from carousel (all products start with '{advertiser}')")
+                        except:
+                            pass
+                    
+                    # STRATEGY 4: Extract from header text (LAST RESORT - only if ® or ™ present)
+                    if not advertiser:
+                        try:
+                            title_elem = elem.query_selector('h2, [role="heading"]')
+                            if title_elem:
+                                title = title_elem.inner_text()
+                                ad_info["title"] = title
+                                if title:
+                                    # Only extract from header if it contains trademark symbols
+                                    if '®' in title or '™' in title:
+                                        # Look for "Brand - Description" format
+                                        if ' - ' in title:
+                                            parts = title.split(' - ')
+                                            if parts and parts[0]:
+                                                # Check if first part has trademark
+                                                if '®' in parts[0] or '™' in parts[0]:
+                                                    advertiser = parts[0].replace('®', '').replace('™', '').strip()
+                                                    log(f"      📌 Brand from header with ® (dash): {advertiser}")
+                                        
+                                        # Look for word with ® or ™ symbol
+                                        if not advertiser:
+                                            words = title.split()
+                                            for word in words:
+                                                if '®' in word or '™' in word:
+                                                    clean_word = word.replace('®', '').replace('™', '').strip()
+                                                    if clean_word and clean_word[0].isupper():
+                                                        advertiser = clean_word
+                                                        log(f"      📌 Brand from header with ® or ™: {advertiser}")
+                                                        break
+                        except:
+                            pass
+                    
+                    # Add advertiser to ad_info if we found one
+                    if advertiser:
+                        ad_info["advertisers"] = [advertiser]
+                        ad_info["brand"] = advertiser
+                    else:
+                        log(f"      ⚠️  No brand extracted for ad #{i} (title: {ad_info.get('title', 'NO TITLE')})")
                     
                     ad_data["results"][0]["ads"].append(ad_info)
                 except Exception as e:
@@ -632,6 +753,13 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             ad_count = len(ad_data['results'][0]['ads'])
             ad_data['count'] = ad_count
             print(f"📊 Found {ad_count} ad units")
+            
+            # Save HTML AFTER all ad extraction (includes all lazy-loaded content)
+            log("\n💾 Saving HTML with all lazy-loaded content...")
+            html_content = page.content()
+            with open(html_file, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            log(f"   ✅ HTML saved: {html_file}")
             
             # Take screenshots of ads
             log("\n📸 Taking screenshots...")

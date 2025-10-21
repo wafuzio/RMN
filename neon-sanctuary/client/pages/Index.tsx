@@ -41,7 +41,11 @@ const buildAdId = (c: Cardish, fallbackIndex: number): string => {
   // Keep 0; only fall back if undefined/null
   const idx = c.ad_index ?? fallbackIndex;
   
-  return `${c.retailer}|${c.client}|${runId}|${idx}|${tsMs}`;
+  // Include brand and ad_type for semantic uniqueness
+  const brand = (c.brand || 'unknown').replace(/[|]/g, '-');
+  const adType = (c.ad_type || 'unknown').replace(/[|]/g, '-');
+  
+  return `${c.retailer}|${c.client}|${runId}|${idx}|${brand}|${adType}|${tsMs}`;
 };
 
 function useDnD<T>(items: T[], setItems: (v:T[])=>void) {
