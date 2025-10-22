@@ -913,9 +913,9 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                         'marquee_banner': 'Marquee_Banner'
                     }
                     ad_type_folder = ad_type_map.get(label, label.title())
-                    # Save to base_dir (run directory) instead of client_root
-                    ad_folder = os.path.join(base_dir, ad_type_folder)
-                    print(f"[DEBUG] base_dir={base_dir}, ad_type_folder={ad_type_folder}, ad_folder={ad_folder}, advertiser={advertiser}")
+                    # Save images to client_root (like Kroger), metadata goes to base_dir/runs
+                    ad_folder = os.path.join(client_root, ad_type_folder)
+                    print(f"[DEBUG] client_root={client_root}, ad_type_folder={ad_type_folder}, ad_folder={ad_folder}, advertiser={advertiser}")
                     os.makedirs(ad_folder, exist_ok=True)
                     
                     # Generate standardized filename
@@ -2719,8 +2719,8 @@ def search_and_capture(
                     
                     # Generate standardized filename and save to SBV folder
                     if client_name and client_root and run_timestamp:
-                        # Save to base_dir (run directory) instead of client_root
-                        sbv_folder = os.path.join(base_dir, "SBV")
+                        # Save images to client_root (like Kroger), metadata goes to base_dir/runs
+                        sbv_folder = os.path.join(client_root, "SBV")
                         os.makedirs(sbv_folder, exist_ok=True)
                         
                         # PNG screenshot
