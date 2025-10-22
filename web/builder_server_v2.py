@@ -168,8 +168,9 @@ def _image_response(filepath: str):
     resp.headers["Access-Control-Allow-Origin"] = "*"
     resp.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
     
-    # Cache for performance (optional but recommended)
-    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    # Cache with revalidation - allows browser to check for updates
+    # Use ETag from file modification time for efficient revalidation
+    resp.headers["Cache-Control"] = "public, max-age=3600, must-revalidate"
     
     return resp
 

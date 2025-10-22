@@ -2584,7 +2584,13 @@ def search_and_capture(
                     return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
             
             # Save HTML with Kroger-style filename (standardized for GUI)
-            run_ts_file = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            # Use run_timestamp from directory name to ensure consistency with image filenames
+            if run_timestamp and len(run_timestamp) == 14:
+                # Convert YYYYMMDDHHMMSS to YYYY-MM-DD_HH-MM-SS
+                run_ts_file = f"{run_timestamp[0:4]}-{run_timestamp[4:6]}-{run_timestamp[6:8]}_{run_timestamp[8:10]}-{run_timestamp[10:12]}-{run_timestamp[12:14]}"
+            else:
+                # Fallback to current time if run_timestamp is invalid
+                run_ts_file = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             clean_kw_for_file = (keyword or "search").replace(" ", "_").lower()
             html_path = os.path.join(base_dir, f"search_results_{clean_kw_for_file}_{run_ts_file}.html")
             

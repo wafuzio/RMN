@@ -312,6 +312,16 @@ class SchedulerDaemon:
             self.execution_logger.debug(f"FILE_READ_ATTEMPT: {config_file}")
             with open(config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
+            
+            # Compute log_dir if not present (for new schedule format)
+            if "log_dir" not in config:
+                retailer = config.get("retailer", "").strip().lower()
+                client = config.get("client", "").strip()
+                if retailer and client:
+                    # Use output/<retailer>/<client>/runs as the base directory
+                    config["log_dir"] = str(self.output_dir / retailer / client / "runs")
+                    self.execution_logger.debug(f"COMPUTED_LOG_DIR: {config['log_dir']}")
+            
             self.execution_logger.debug(f"CONFIG_LOADED_SUCCESS: {config}")
             return config
         except (json.JSONDecodeError, IOError) as e:
