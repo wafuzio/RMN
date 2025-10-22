@@ -1,0 +1,26 @@
+{
+  "id": "instacart_blue_bunny_ice_cream_bar_4379c934",
+  "retailer": "instacart",
+  "client": "blue bunny",
+  "keywords": [
+    "ice cream bar"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "09:10",
+    "09:15",
+    "09:20",
+    "22:20",
+    "23:20"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-10-22T04:18:16Z",
+  "updated_at": "2025-10-22T04:18:16Z"
+}

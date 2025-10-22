@@ -469,6 +469,10 @@ def search_and_capture(search_term=None, output_dir=None):
     
     # Step 2: Launch browser and check login status
     print("\n🔐 Step 2: Checking login status...")
+    # Variable to store html_path for post-processing after browser lock is released
+    saved_html_path = None
+    saved_output_dir = output_dir
+    
     # Enforce a single Chromium across all processes
     with single_browser_lock(timeout=600):
         with sync_playwright() as p:
@@ -756,43 +760,9 @@ def search_and_capture(search_term=None, output_dir=None):
                     f.write(page.content())
                 print(f"💾 HTML saved to {html_path}")
                 
-                # Add diagnostic logging to understand what's happening
-                print("\n🔍 DIAGNOSTIC: About to attempt post-processing")
-                try:
-                    # Import the module
-                    print("🔍 DIAGNOSTIC: Importing process_saved_html...")
-                    from process_saved_html import process_specific_html_files
-                    print("🔍 DIAGNOSTIC: Import successful")
-                    
-                    # Log the parameters
-                    print(f"🔍 DIAGNOSTIC: HTML path: {html_path}")
-                    print(f"🔍 DIAGNOSTIC: Output dir: {output_dir}")
-                    
-                    # Call the function
-                    print("🔍 DIAGNOSTIC: Calling process_specific_html_files...")
-                    result = process_specific_html_files([html_path], output_dir=output_dir, force_images=True)
-                    print(f"🔍 DIAGNOSTIC: Function returned: {result}")
-                    
-                    # Check for images
-                    import glob
-                    timestamp_part = os.path.basename(html_path).split('_', 2)[-1].split('.')[0]
-                    search_term_part = os.path.basename(html_path).split('_', 2)[1]
-                    
-                    toa_pattern = os.path.join(output_dir, 'TOA', f"*_{search_term_part}_{timestamp_part}_*.png")
-                    sky_pattern = os.path.join(output_dir, 'Skyscraper', f"*_{search_term_part}_{timestamp_part}_*.png")
-                    
-                    toa_files = glob.glob(toa_pattern)
-                    sky_files = glob.glob(sky_pattern)
-                    
-                    print(f"🔍 DIAGNOSTIC: Found {len(toa_files)} TOA images and {len(sky_files)} Skyscraper images")
-                    for f in toa_files + sky_files:
-                        print(f"   - {os.path.basename(f)}")
-                    
-                except Exception as e:
-                    import traceback
-                    print(f"⚠️ Post-processing exception: {e}")
-                    print("⚠️ Full traceback:")
-                    traceback.print_exc()
+                # Save path for post-processing AFTER browser lock is released
+                saved_html_path = html_path
+                print("✅ Browser work complete - will do post-processing after releasing lock")
 
             except (TimeoutError, ConnectionError) as e:
                 print(f"❌ Network or timeout error during search test: {e}")
@@ -812,10 +782,38 @@ def search_and_capture(search_term=None, output_dir=None):
                 except Exception:
                     pass
 
-            # We've already done the post-processing inside the browser context
-            # This ensures it runs before the function returns
-                
-            return True
+    # Post-processing happens AFTER browser lock is released to prevent deadlock
+    if saved_html_path:
+        print("\n🔍 Starting post-processing (browser lock released)...")
+        try:
+            from process_saved_html import process_specific_html_files
+            print(f"Processing HTML: {saved_html_path}")
+            print(f"Output dir: {saved_output_dir}")
+            
+            result = process_specific_html_files([saved_html_path], output_dir=saved_output_dir, force_images=True)
+            print(f"Post-processing result: {result}")
+            
+            # Check for generated images
+            import glob
+            timestamp_part = os.path.basename(saved_html_path).split('_', 2)[-1].split('.')[0]
+            search_term_part = os.path.basename(saved_html_path).split('_', 2)[1]
+            
+            toa_pattern = os.path.join(saved_output_dir, 'TOA', f"*_{search_term_part}_{timestamp_part}_*.png")
+            sky_pattern = os.path.join(saved_output_dir, 'Skyscraper', f"*_{search_term_part}_{timestamp_part}_*.png")
+            
+            toa_files = glob.glob(toa_pattern)
+            sky_files = glob.glob(sky_pattern)
+            
+            print(f"✅ Found {len(toa_files)} TOA images and {len(sky_files)} Skyscraper images")
+            for f in toa_files + sky_files:
+                print(f"   - {os.path.basename(f)}")
+            
+        except Exception as e:
+            import traceback
+            print(f"⚠️ Post-processing exception: {e}")
+            traceback.print_exc()
+    
+    return True
 
 if __name__ == "__main__":
     # Parse command line arguments

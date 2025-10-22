@@ -129,22 +129,29 @@ def download_image_with_context(
     current = url
     for attempt in range(1, retries + 1):
         try:
-            resp = context.request.get(current, headers=headers, timeout=45000, fail_on_status=False)
+            print(f"[ctx] attempt {attempt}/{retries}: {current[:80]}...")
+            resp = context.request.get(current, headers=headers, timeout=15000, fail_on_status=False)  # Reduced to 15s
             if resp.status in (301, 302, 303, 307, 308):
                 loc = resp.headers.get("location")
                 if loc:
                     current = urljoin(current, loc)  # Handle relative redirects
                     print(f"[ctx] redirect {resp.status} -> {current}")
-                    time.sleep(backoff_s * attempt)
+                    time.sleep(backoff_s)
                     continue
-            print(f"[ctx] status {resp.status} for {current}")
+            print(f"[ctx] status {resp.status} for {current[:80]}")
             if 200 <= resp.status < 300:
                 with open(dest_path, "wb") as f:
                     f.write(resp.body())
+                print(f"[ctx] ✅ Downloaded {len(resp.body())} bytes")
                 return True
-        except Exception:
-            pass
-        time.sleep(backoff_s * attempt)
+            else:
+                print(f"[ctx] ❌ HTTP {resp.status} - not retrying")
+                return False  # Don't retry on 4xx/5xx errors
+        except Exception as e:
+            print(f"[ctx] ⚠️ attempt {attempt} failed: {type(e).__name__}: {str(e)[:100]}")
+            if attempt >= retries:
+                return False
+        time.sleep(backoff_s)  # Fixed delay instead of exponential
     return False
 
 
@@ -684,24 +691,31 @@ def process_images(
                         if override_seed:
                             seed_candidates.insert(0, override_seed)
                         
-                        if not srp_url:
-                            print("⚠️ No SRP URL found in JSON; seeding cookies with retailer homepage")
+                        # Check if we already have cookies (persistent profile)
+                        existing_cookies = context.cookies(f"https://www.{retailer}.com" if retailer else "https://www.kroger.com")
+                        if existing_cookies and len(existing_cookies) > 0:
+                            print(f"✅ Using existing cookies from persistent profile ({len(existing_cookies)} cookies)")
+                            print(f"[cookies] {retailer or 'kroger'}.com cookies: {[c['name'] for c in existing_cookies[:6]]}")
+                            cookies_ok = True
                         else:
-                            print(f"Seeding cookies from SRP URL: {srp_url}")
-                        
-                        cookies_ok = False
-                        for seed in seed_candidates:
-                            try:
-                                print(f"[session] Seeding cookies from: {seed}")
-                                page.goto(seed, wait_until="commit", timeout=60000)  # commit is more reliable
-                                page.wait_for_timeout(1200)
-                                cookies = context.cookies("https://www.kroger.com")
-                                print(f"[cookies] kroger.com={len(cookies)} -> {[c['name'] for c in cookies[:6]]}")
-                                if len(cookies) > 0:
-                                    cookies_ok = True
-                                    break
-                            except Exception as e:
-                                print(f"[warn] Seed failed for {seed}: {e}")
+                            if not srp_url:
+                                print("⚠️ No SRP URL found in JSON; seeding cookies with retailer homepage")
+                            else:
+                                print(f"Seeding cookies from SRP URL: {srp_url}")
+                            
+                            cookies_ok = False
+                            for seed in seed_candidates:
+                                try:
+                                    print(f"[session] Seeding cookies from: {seed}")
+                                    page.goto(seed, wait_until="commit", timeout=30000)  # Reduced to 30s
+                                    page.wait_for_timeout(1200)
+                                    cookies = context.cookies(f"https://www.{retailer}.com" if retailer else "https://www.kroger.com")
+                                    print(f"[cookies] {retailer or 'kroger'}.com={len(cookies)} -> {[c['name'] for c in cookies[:6]]}")
+                                    if len(cookies) > 0:
+                                        cookies_ok = True
+                                        break
+                                except Exception as e:
+                                    print(f"[warn] Seed failed for {seed}: {e}")
                         
                         if not cookies_ok:
                             print("⚠️ No cookies after seeding attempts. Image downloads may hang.")

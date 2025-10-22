@@ -1171,3 +1171,128 @@ skyscraper ad is captured
 html and json are in the right place
 
 none of the other ads are patured
+
+---
+
+## Kroger scraper hangs indefinitely / deadlock
+
+**Status:** ✅ SOLVED (Oct 2025)
+
+**Symptoms:**
+- Kroger scrapes start but never complete (hang for 8+ minutes)
+- Browser closes but process still running
+- Lock files remain, blocking subsequent runs
+- Logs show "START" but never "SUCCESS" or "TIMEOUT"
+- Screenshot extraction process waiting indefinitely
+- Other retailers (Walmart, Instacart) complete successfully in same run
+
+**Root Cause:**
+**Deadlock in browser lock acquisition.** The main Kroger scraper (`kroger_search_and_capture.py`) was calling post-processing (which spawns the screenshot extraction script) **while still holding the global browser lock**. The screenshot script then tried to acquire the same lock, causing a deadlock:
+
+1. Parent (main scraper) acquires `single_browser_lock()`
+2. Parent completes scraping and saves HTML/JSON
+3. Parent calls `process_specific_html_files()` **inside the lock**
+4. Post-processing spawns screenshot script as child process
+5. Child tries to acquire `single_browser_lock()`
+6. **DEADLOCK** - child waits for parent's lock, parent waits for child to finish
+
+**Debug Evidence:**
+```bash
+# Main scraper still running after 5+ minutes
+ps aux | grep kroger_search_and_capture
+# PID 38324 - running since 23:13, now 23:18
+
+# Screenshot script also running, waiting for lock
+ps aux | grep screenshot_toa_image
+# PID 38486 - child of 38324, stuck
+
+# Lock file exists
+cat logs/locks/sour_cream_image_extraction.lock
+# 38486
+
+# Files created but processing never completes
+ls -lth output/kroger/sour_cream/runs/
+# HTML/JSON created at 23:13, but no images extracted
+```
+
+**Solution:**
+Move post-processing **outside** the browser lock in `kroger_search_and_capture.py`:
+
+```python
+# BEFORE (deadlock):
+with single_browser_lock(timeout=600):
+    with sync_playwright() as p:
+        # ... browser work ...
+        save_html(html_path)
+        
+        # ❌ DEADLOCK: Post-processing inside lock
+        from process_saved_html import process_specific_html_files
+        process_specific_html_files([html_path], output_dir=output_dir, force_images=True)
+
+# AFTER (fixed):
+saved_html_path = None
+
+with single_browser_lock(timeout=600):
+    with sync_playwright() as p:
+        # ... browser work ...
+        save_html(html_path)
+        
+        # Save path for later processing
+        saved_html_path = html_path
+        print("✅ Browser work complete - will do post-processing after releasing lock")
+
+# Lock is released here ↑
+
+# ✅ Post-processing after lock released
+if saved_html_path:
+    print("\n🔍 Starting post-processing (browser lock released)...")
+    from process_saved_html import process_specific_html_files
+    process_specific_html_files([saved_html_path], output_dir=output_dir, force_images=True)
+```
+
+**Additional Fixes Applied:**
+
+1. **Screenshot download timeout reduction** (`extractors/screenshot_ad_image.py`):
+   - Reduced timeout from 45s to 15s per attempt
+   - Added detailed logging for each download attempt
+   - Fail fast on HTTP errors (don't retry 404s, 403s)
+   - Fixed delay instead of exponential backoff
+
+2. **Cookie seeding optimization** (`extractors/screenshot_ad_image.py`):
+   - Check for existing cookies in persistent profile BEFORE navigation
+   - Skip cookie seeding if cookies already exist (from main scraper)
+   - Only navigate to seed cookies if profile is empty
+
+**Files Modified:**
+- `kroger_search_and_capture.py`: Moved post-processing outside browser lock (lines 472-816)
+- `extractors/screenshot_ad_image.py`: Reduced timeouts, added logging, skip cookie seeding if cookies exist
+
+**Result:**
+- Kroger scrapes complete in ~1 minute (down from 8+ minute hangs)
+- TOA and Skyscraper images extract successfully
+- No more deadlocks or stale lock files
+- Detailed logging shows exactly what's happening during downloads
+
+**Prevention:**
+- Always release browser locks before spawning child processes that need the same lock
+- Use `--no-lock` flag when calling screenshot scripts from within locked context (adapter already does this)
+- Add timeouts to all lock acquisitions
+- Log lock acquisition/release for debugging
+
+**Verification:**
+```bash
+# Check Kroger runs complete quickly
+tail -f logs/scheduler_daemon.log | grep kroger
+
+# Should see:
+# [kroger] START keyword 'ice cream bar' for blue bunny
+# [kroger] SUCCESS keyword 'ice cream bar' for blue bunny  (< 1 minute later)
+# [kroger] Waiting 120s before HTML processing
+# [kroger] Successfully processed HTML files for blue bunny
+# [kroger] Completed scheduled scrape for blue bunny: 1/1 keywords successful
+
+# Check for extracted images
+ls -lth output/kroger/*/TOA/*.png output/kroger/*/Skyscraper/*.png | head -10
+```
+
+**See:** `docs/SCHEDULER_PERFORMANCE_FIXES.md` → Browser Lock Management

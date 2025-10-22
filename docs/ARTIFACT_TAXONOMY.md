@@ -130,8 +130,11 @@ Each retailer outputs different JSON structures, requiring retailer-specific cod
 ```
 
 **Standard Fields:**
-- `image_path`: Path to saved screenshot (in ad-type folder, not `runs/`)
-- `screenshot`: Alias for `image_path` (some retailers use this)
+- `image_path` / `screenshot`: Path to saved screenshot (in ad-type folder, not `runs/`)
+  - Different retailers use different field names for the same data
+  - Instacart: `screenshot`
+  - Kroger: `image_path`, `screenshot_path`, or type-specific (e.g., `skyscraper_image_path`)
+  - Backend checks all common field names to find the correct path
 - `brand_logo`: Relative path to brand logo file (automatically enriched from database)
 - `timestamp`: ISO 8601 format with `T` separator (e.g., `2025-10-20T10:45:43`)
 

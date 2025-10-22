@@ -52,13 +52,13 @@ This is the canonical snapshot of how the tool is structured. Keep it short, cur
 - Persistent profile via AMZ_PROFILE_DIR.
 - Mirrors Kroger's outputs; initial selectors for SB/SBV/SP; refine with samples.
 
-### instacart (active development)
+### instacart (stable)
 - Persistent profile via INSTACART_PROFILE_DIR.
 - Store selection via INSTACART_STORE env var (default: publix).
 - URL pattern: https://www.instacart.com/store/{store}/s?k={keyword}
 - Uses semantic selectors (data-testid, alt, role) not hashed CSS classes
 - Ad types: Shoppable Display Ad, Shoppable Video Ad (with video download/HLS URL capture)
-- **Current Issue**: Ad screenshots cropping incorrectly (missing headers, capturing content below) - IN PROGRESS
+- Screenshot capture: CDP with page coordinates (not viewport coords) for accurate cropping
 - See: `retailers/instacart/README.md`, `docs/COMMON_ISSUES.md` → Instacart ad screenshots
 
 ### walmart (functional - security bypassed)
@@ -114,12 +114,6 @@ python3 auth/retailer_auth.py --retailer kroger --profile-dir ~/ChromeProfiles/k
 - `logs/<retailer>/locks/*.lock` - Process locks (stale locks can hang extraction)
 
 ## Current Work
-- [ ] **Instacart ad screenshot cropping** - IN PROGRESS
-  - Issue: Screenshots missing headers, capturing content below ad
-  - Attempted: Outermost ancestor selection, multiple ad format support
-  - Status: Testing fixes for C4, Trolli, Dreyers, Dairy Farmers ads
-  - See: `docs/COMMON_ISSUES.md` → Instacart ad screenshots
-  
 - [ ] **JSON Schema Standardization** - PARTIALLY COMPLETE
   - Many retailers now output consistent schema
   - Some retailer-specific fields remain

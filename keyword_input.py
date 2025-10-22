@@ -544,6 +544,28 @@ class KeywordInputApp:
         self.schedule_button.pack(side=tk.LEFT, padx=(0, 10))
         self.schedule_button.state(['disabled'])
         
+        # Scheduler management buttons (right side of Schedule Settings)
+        ttk.Button(
+            schedule_buttons_frame,
+            text="📊 Run History",
+            command=self.view_run_history,
+            width=14
+        ).pack(side=tk.RIGHT, padx=2)
+        
+        ttk.Button(
+            schedule_buttons_frame,
+            text="📋 View Logs",
+            command=self.view_scheduler_logs,
+            width=12
+        ).pack(side=tk.RIGHT, padx=2)
+        
+        ttk.Button(
+            schedule_buttons_frame,
+            text="🔄 Restart",
+            command=self.restart_scheduler,
+            width=10
+        ).pack(side=tk.RIGHT, padx=2)
+        
         # Fixed footer with Scrape / Clear buttons (always visible)
         footer = ttk.Frame(self.root)
         footer.grid(row=1, column=0, sticky="ew", pady=(4, 8))
@@ -1680,6 +1702,101 @@ class KeywordInputApp:
         except Exception as e:
             self.notify(f"Error stopping daemon: {e}", "error")
     
+    def view_scheduler_logs(self):
+        """Open scheduler logs in a new window"""
+        try:
+            base = get_base_dir()
+            log_file = os.path.join(base, "logs", "scheduler_daemon.log")
+            
+            if not os.path.exists(log_file):
+                self.notify("No scheduler logs found", "warn")
+                return
+            
+            # Create new window
+            log_window = tk.Toplevel(self.root)
+            log_window.title("Scheduler Logs")
+            log_window.geometry("900x600")
+            
+            # Add scrolled text widget
+            log_text = scrolledtext.ScrolledText(log_window, wrap="word", font=("Monaco", 10))
+            log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            # Load and display last 500 lines
+            with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+                log_text.insert("1.0", ''.join(lines[-500:]))
+            
+            log_text.see("end")
+            log_text.configure(state="disabled")
+            
+        except Exception as e:
+            self.notify(f"Error viewing logs: {e}", "error")
+    
+    def view_run_history(self):
+        """Show last 24 hours of scheduler activity"""
+        try:
+            base = get_base_dir()
+            check_script = os.path.join(base, "check_runs.sh")
+            
+            if not os.path.exists(check_script):
+                self.notify("check_runs.sh not found", "warn")
+                return
+            
+            # Run the check_runs script
+            result = subprocess.run(
+                [check_script],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=10,
+                cwd=base
+            )
+            
+            # Create new window
+            history_window = tk.Toplevel(self.root)
+            history_window.title("Scheduler Run History (Last 24 Hours)")
+            history_window.geometry("1000x700")
+            
+            # Add scrolled text widget
+            history_text = scrolledtext.ScrolledText(history_window, wrap="word", font=("Monaco", 9))
+            history_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            # Display output
+            history_text.insert("1.0", result.stdout)
+            history_text.see("1.0")
+            history_text.configure(state="disabled")
+            
+        except Exception as e:
+            self.notify(f"Error viewing run history: {e}", "error")
+    
+    def restart_scheduler(self):
+        """Restart the scheduler daemon"""
+        try:
+            base = get_base_dir()
+            manage_script = os.path.join(base, "manage_launchagent.sh")
+            
+            if os.path.exists(manage_script):
+                # Use LaunchAgent restart
+                self.notify("Restarting scheduler via LaunchAgent...", "info")
+                subprocess.Popen(
+                    [manage_script, "restart"],
+                    cwd=base,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+            else:
+                # Manual restart
+                self.notify("Restarting scheduler...", "info")
+                self.stop_daemon_manual()
+                self.root.after(2000, self.start_daemon_manual)
+            
+            # Refresh status after delay
+            self.root.after(3000, self.refresh_daemon_status_manual)
+            
+        except Exception as e:
+            self.notify(f"Error restarting scheduler: {e}", "error")
+    
     def load_gui_state(self):
         """Load saved GUI state (selected client and retailers)"""
         try:
@@ -2669,6 +2786,16 @@ class KeywordInputApp:
         if not selected_client or selected_client == PLACEHOLDER:
             self.notify("Select a client/product before saving schedule", "error")
             return False
+        
+        # Get selected retailers
+        try:
+            selected_retailers = self.retailer_picker.get_selected()
+            if not selected_retailers:
+                self.notify("Select at least one retailer before saving schedule", "error")
+                return False
+        except Exception:
+            self.notify("Error getting selected retailers", "error")
+            return False
 
         # Detect conflicts
         if self.schedule_has_conflicts():
@@ -2707,8 +2834,7 @@ class KeywordInputApp:
                 self.notify("Could not resolve all conflicts automatically.", "error")
                 return False
             
-        # Get retailer and create slugs
-        retailer_slug = self._schedule_retailer_slug()
+        # Create client slug
         client_slug = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client.lower())
         
         # Get current times and convert to 24-hour format
@@ -2746,50 +2872,57 @@ class KeywordInputApp:
             self.notify("No keywords to save in schedule.", "warn")
             return False
         
-        # Generate schedule ID
-        import hashlib
-        key = f"{retailer_slug}|{client_slug}|{','.join(keywords)}|{','.join(selected_days)}|{','.join(times_24h)}"
-        dhash = hashlib.sha1(key.encode()).hexdigest()[:8]
-        kw_slug = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in keywords[0].lower()) if keywords else "default"
-        schedule_id = f"{retailer_slug}_{client_slug}_{kw_slug}_{dhash}"
-        
-        # Create new schedule file path in schedules/ directory
-        schedule_filename = f"{retailer_slug}__{client_slug}__{kw_slug}.json"
+        # Save a schedule for EACH selected retailer
         schedules_dir = os.path.join(get_base_dir(), "schedules")
-        client_schedule_file = os.path.join(schedules_dir, schedule_filename)
+        os.makedirs(schedules_dir, exist_ok=True)
         
-        # Create normalized config using new schema
+        saved_count = 0
         from datetime import datetime
         now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         
-        config = {
-            "id": schedule_id,
-            "retailer": retailer_slug,
-            "client": selected_client,
-            "keywords": keywords,
-            "days": sorted(selected_days),
-            "times": sorted(times_24h),
-            "enabled": True,
-            "tz": "",  # Optional timezone
-            "created_at": now_iso,
-            "updated_at": now_iso
-        }
-        
-        # Save to file
-        try:
-            os.makedirs(schedules_dir, exist_ok=True)
-            with open(client_schedule_file, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+        for retailer_name in selected_retailers:
+            # Convert retailer display name to slug
+            retailer_slug = self._retailer_by_name.get(retailer_name, retailer_name.lower())
             
-            # Update instance variables
-            self.schedule_file = client_schedule_file
-            self.schedule_config = config
-            self.status_label.config(text=f"✅ Schedule saved for {selected_client} - daemon will handle execution")
-        
-            if self.logger:
-                self.logger.info(f"Schedule saved to {client_schedule_file}")
+            # Generate schedule ID
+            import hashlib
+            key = f"{retailer_slug}|{client_slug}|{','.join(keywords)}|{','.join(selected_days)}|{','.join(times_24h)}"
+            dhash = hashlib.sha1(key.encode()).hexdigest()[:8]
+            kw_slug = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in keywords[0].lower()) if keywords else "default"
+            schedule_id = f"{retailer_slug}_{client_slug}_{kw_slug}_{dhash}"
             
-            # Rebuild master index using shared library
+            # Create schedule file path
+            schedule_filename = f"{retailer_slug}__{client_slug}__{kw_slug}.json"
+            client_schedule_file = os.path.join(schedules_dir, schedule_filename)
+            
+            # Create normalized config
+            config = {
+                "id": schedule_id,
+                "retailer": retailer_slug,
+                "client": selected_client,
+                "keywords": keywords,
+                "days": sorted(selected_days),
+                "times": sorted(times_24h),
+                "enabled": True,
+                "tz": "",  # Optional timezone
+                "created_at": now_iso,
+                "updated_at": now_iso
+            }
+            
+            # Save to file
+            try:
+                with open(client_schedule_file, "w", encoding="utf-8") as f:
+                    json.dump(config, f, indent=2)
+                
+                saved_count += 1
+                if self.logger:
+                    self.logger.info(f"Schedule saved to {client_schedule_file}")
+            except (IOError, PermissionError) as e:
+                self.notify(f"Failed to save schedule for {retailer_name}: {e}", "error")
+                continue
+        
+        # After saving all retailer schedules, rebuild master index
+        if saved_count > 0:
             try:
                 from pathlib import Path
                 import sys
@@ -2799,26 +2932,27 @@ class KeywordInputApp:
                 master_path = build_master_index(Path(get_base_dir()))
                 if self.logger:
                     self.logger.info(f"Master schedule index rebuilt: {master_path}")
-                # Update status to show master index was rebuilt
-                self.status_label.config(text=f"✅ Schedule saved for {selected_client} - master index updated")
+                
+                # Update status
+                retailers_str = ", ".join(selected_retailers)
+                self.status_label.config(text=f"✅ Saved {saved_count} schedule(s) for {selected_client} ({retailers_str})")
+                self.notify(f"Saved {saved_count} schedule(s) for {retailers_str}", "success")
+                
+                # Notify user that scheduler will pick up changes on next tick
+                self._activity_line(f"Scheduler will pick up new schedules within 1 minute", "info")
+                
             except Exception as e:
                 # Non-fatal - master index will be rebuilt on next daemon tick
                 if self.logger:
                     self.logger.warning(f"Could not rebuild master index: {e}")
-                # Show warning in GUI
                 print(f"Warning: Could not rebuild master index: {e}")
                 import traceback
                 traceback.print_exc()
                 
             return True
-        except (IOError, PermissionError) as e:
-            self.notify(f"Failed to save schedule: {e}", "error")
-            self.status_label.config(text=f"Error saving schedule: {str(e)}")
-        except json.JSONDecodeError as e:
-            self.notify(f"Failed to encode schedule data: {e}", "error")
-            self.status_label.config(text=f"Error encoding schedule data: {str(e)}")
+        else:
+            self.notify("Failed to save any schedules", "error")
             return False
-        return True
     
     def any_conflicts_current_view(self) -> bool:
         """Return True if any time selector shows a conflict."""

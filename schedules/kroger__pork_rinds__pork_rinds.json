@@ -1,26 +1,26 @@
 {
-  "id": "kroger_pickle_pickle_spears_0f600cb6",
+  "id": "kroger_pork_rinds_pork_rinds_e207573e",
   "retailer": "kroger",
-  "client": "pickle",
+  "client": "pork rinds",
   "keywords": [
-    "pickle spears"
+    "pork rinds"
   ],
   "days": [
     "friday",
     "monday",
+    "saturday",
+    "sunday",
     "thursday",
     "tuesday",
     "wednesday"
   ],
   "times": [
-    "01:10",
     "12:00",
-    "13:20",
-    "16:05",
+    "16:00",
     "20:00"
   ],
   "enabled": true,
   "tz": "",
-  "created_at": "2025-10-22T04:52:13Z",
-  "updated_at": "2025-10-22T04:52:13Z"
+  "created_at": "2025-10-22T03:27:17Z",
+  "updated_at": "2025-10-22T03:27:17Z"
 }

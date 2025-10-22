@@ -207,9 +207,17 @@ class SchedulerDaemon:
         self.keyword_timeout = int(os.environ.get("SCHEDULER_KEYWORD_TIMEOUT", "180"))  # 3 minutes default
         self.job_budget = int(os.environ.get("SCHEDULER_JOB_BUDGET_SEC", "600"))  # 10 minutes per job
         self.max_concurrent = int(os.environ.get("SCHEDULER_MAX_CONCURRENCY", "2"))  # 2 concurrent retailers
+        self.due_window_min = int(os.environ.get("SCHEDULER_DUE_WINDOW_MIN", "2"))  # fire if within ±2 min
+        self.missing_gap_sec = int(os.environ.get("SCHEDULER_MISSING_GAP_SEC", "120"))  # wait 2 min before extraction
+        self.process_timeout = int(os.environ.get("SCHEDULER_PROCESS_TIMEOUT_SEC", "300"))  # 5 min for HTML processing
         
         # Set up logging
         self.setup_logging()
+        
+        # Log environment snapshot at boot
+        self.logger.info("ENV SNAPSHOT: SCRAPER_HOME=%s TZ=%s", os.environ.get("SCRAPER_HOME"), os.environ.get("TZ"))
+        for k in ("KROGER_PROFILE_DIR","AMZ_PROFILE_DIR","INSTACART_PROFILE_DIR","INSTACART_STORE","WALMART_PROFILE_DIR"):
+            self.logger.info("ENV %s=%s", k, os.environ.get(k))
         
     def setup_logging(self):
         """Set up comprehensive logging for the daemon"""
@@ -251,6 +259,26 @@ class SchedulerDaemon:
         
         self.execution_logger.addHandler(execution_handler)
         self.execution_logger.propagate = False  # Don't propagate to root logger
+    
+    def _proc_env(self):
+        """Child process environment (pin SCRAPER_HOME and inherit parent env)."""
+        env = os.environ.copy()
+        env["SCRAPER_HOME"] = str(self.root_dir)
+        # Optional but useful: unbuffered IO for logs
+        env.setdefault("PYTHONUNBUFFERED", "1")
+        return env
+    
+    def _hhmm_to_min(self, hhmm: str) -> int:
+        h, m = map(int, hhmm.split(":"))
+        return h * 60 + m
+    
+    def _within_window(self, now_min: int, slot_hhmm: str, window: int) -> bool:
+        """Return True if now_min within ±window minutes of slot_hhmm (wrap-aware)."""
+        tgt = self._hhmm_to_min(slot_hhmm)
+        diff = abs(now_min - tgt)
+        # wrap around midnight (e.g., 1439 vs 0)
+        diff = min(diff, 1440 - diff)
+        return diff <= window
         
     def find_all_client_schedules(self):
         """Find all client schedule configuration files from schedules/ (preferred) or output/ (legacy)"""
@@ -400,7 +428,9 @@ class SchedulerDaemon:
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
-                        start_new_session=True  # puts child in a new process group
+                        start_new_session=True,  # puts child in a new process group
+                        cwd=str(self.code_dir),
+                        env=self._proc_env(),
                     )
                     
                     stdout, stderr = proc.communicate(timeout=self.keyword_timeout)
@@ -442,6 +472,11 @@ class SchedulerDaemon:
                 self.execution_logger.info(f"HTML_PROCESSING_SKIPPED: Retailer={retailer}, Client={client_name}")
                 return
             
+            # Give the newest runs a moment so '--latest-missing --missing-gap-minutes 2' won't skip them
+            if self.missing_gap_sec > 0:
+                self.logger.info(f"[{retailer}] Waiting {self.missing_gap_sec}s before HTML processing")
+                time.sleep(self.missing_gap_sec)
+            
             # Process only newest HTMLs missing images (per-run, no mixing)
             self.execution_logger.info(f"HTML_PROCESSING_START: {client_dir} (latest-missing)")
             try:
@@ -465,7 +500,9 @@ class SchedulerDaemon:
                     process_cmd,
                     capture_output=True,
                     text=True,
-                    timeout=120  # 2 minute timeout for processing
+                    timeout=self.process_timeout,
+                    cwd=str(self.code_dir),
+                    env=self._proc_env(),
                 )
                 
                 self.execution_logger.debug(f"HTML_PROCESS_RETURN_CODE: {result.returncode}")
@@ -538,7 +575,7 @@ class SchedulerDaemon:
                     pass
 
         run_key = f"{client_name}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}"
-        t = threading.Thread(target=worker, name=f"run-{retailer}-{client_name}", daemon=True)
+        t = threading.Thread(target=worker, name=f"run-{retailer}-{client_name}", daemon=False)
         t.start()
         self.inflight[run_key] = t
         self.logger.info(f"Started async job for {client_name} (retailer: {retailer}, thread={t.name})")
@@ -578,16 +615,16 @@ class SchedulerDaemon:
                     # Use timezone if specified
                     if s.tz:
                         check_time = now_in_tz(s.tz)
-                        check_today = check_time.strftime("%A").lower()
-                        check_hhmm = check_time.strftime("%H:%M")
                     else:
-                        check_today = today
-                        check_hhmm = hhmm
+                        check_time = now
+                    check_today = check_time.strftime("%A").lower()
+                    now_min = check_time.hour * 60 + check_time.minute
                     
-                    # Check if today and time match
-                    if check_today in s.days and check_hhmm in s.times:
+                    # Check if today and time match (with window)
+                    if check_today in s.days and any(self._within_window(now_min, t, self.due_window_min) for t in s.times):
                         client_name = s.client
                         retailer = s.retailer
+                        check_hhmm = check_time.strftime("%H:%M")
                         self.logger.info(f"→ DUE: [{retailer}] {client_name} @ {check_hhmm} ({s.source_path})")
                         self.execution_logger.info(f"SCHEDULE_MATCH: [{retailer}] {client_name} @ {check_hhmm}")
                         
@@ -606,7 +643,7 @@ class SchedulerDaemon:
                             continue
                         
                         # Create run key for duplicate prevention
-                        run_key = f"{retailer}_{client_name}_{now.strftime('%Y-%m-%d_%H:%M')}"
+                        run_key = f"{s.id}_{check_time.strftime('%Y-%m-%d%H:%M')}"
                         if run_key in self.last_run_times:
                             self.execution_logger.debug(f"DUPLICATE_RUN_PREVENTED: {run_key}")
                             continue

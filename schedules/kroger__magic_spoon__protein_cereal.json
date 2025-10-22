@@ -1,0 +1,28 @@
+{
+  "id": "kroger_magic_spoon_protein_cereal_656f0d45",
+  "retailer": "kroger",
+  "client": "magic spoon",
+  "keywords": [
+    "protein cereal"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "00:25",
+    "12:00",
+    "16:00",
+    "22:35",
+    "23:50"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-10-22T04:47:50Z",
+  "updated_at": "2025-10-22T04:47:50Z"
+}

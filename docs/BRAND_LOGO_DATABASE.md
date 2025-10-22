@@ -19,8 +19,9 @@ Amazon_Scrape/
 ├── brand_logos/                    # Centralized logo storage
 │   ├── brand_logo_database.json   # Main database file
 │   ├── frontend_logos.json        # Frontend-friendly export
-│   ├── lays_a1b2c3d4.png         # Logo files (normalized names)
-│   ├── sour_patch_kids_e5f6g7h8.png
+│   ├── lays.png                   # Logo files (clean, numbered names)
+│   ├── sour_patch_kids.png
+│   ├── nestle_2.png               # Multiple logos numbered sequentially
 │   └── ...
 └── brand_logo_database.py         # Database manager class
 ```
@@ -35,7 +36,7 @@ Amazon_Scrape/
     "lays": {
       "brand_name": "Lay's",
       "logo_url": "https://display.instacart.com/.../72917cb9-cc41-404c-9a7e-dcdedf0a7ee5-1.png",
-      "logo_file": "brand_logos/lays_72917cb9.png",
+      "logo_file": "brand_logos/lays.png",
       "retailers": ["instacart", "kroger"],
       "first_seen": "2025-10-15T12:53:00",
       "last_seen": "2025-10-15T14:30:00",
@@ -59,9 +60,10 @@ Simplified mapping for frontend use:
 
 ```json
 {
-  "Lay's": "brand_logos/lays_72917cb9.png",
-  "Sour Patch Kids": "brand_logos/sour_patch_kids_e5f6g7h8.png",
-  "McCormick": "brand_logos/mccormick_f9a0b1c2.png"
+  "Lay's": "brand_logos/lays.png",
+  "Sour Patch Kids": "brand_logos/sour_patch_kids.png",
+  "McCormick": "brand_logos/mccormick.png",
+  "Nestlé": "brand_logos/nestle_2.png"
 }
 ```
 
@@ -111,7 +113,7 @@ db.add_brand_logo(
 
 # Get logo path for a brand
 logo_path = db.get_logo_path("Lay's")
-# Returns: "brand_logos/lays_72917cb9.png"
+# Returns: "brand_logos/lays.png"
 
 # List all brands
 brands = db.list_all_brands()
@@ -159,9 +161,16 @@ def get_brand_logo(brand_name):
 
 ### Duplicate Prevention
 
-- Uses MD5 hash of URL to create unique filenames
-- If same logo URL is encountered, updates metadata instead of re-downloading
+- **Content-based deduplication**: Uses MD5 hash of image content (not URL)
+- Identical images from different URLs share one file
+- Clean numbered naming: `brand_name.png` or `brand_name_2.png` (no hash suffixes)
+- If same logo content is encountered, reuses existing file instead of re-downloading
 - Tracks which retailers have this brand
+
+**Example:**
+- First Boiron logo → `boiron.png`
+- Different Boiron logo (different content) → `boiron_2.png`
+- Same Boiron logo from different URL → reuses `boiron.png`
 
 ### Brand Name Normalization
 

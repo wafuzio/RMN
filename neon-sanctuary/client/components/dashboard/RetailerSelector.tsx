@@ -23,7 +23,7 @@ export function RetailerSelector({ value, onChange, enabledRetailers }: { value:
   };
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-1" role="group" aria-label="Select retailers">
+    <div className="flex gap-6 overflow-x-auto pb-1" role="group" aria-label="Select retailers">
       {RETAILERS.map(r => {
         const selected = value.includes(r.id);
         const enabled = enabledRetailers.has(r.id);
@@ -34,13 +34,14 @@ export function RetailerSelector({ value, onChange, enabledRetailers }: { value:
             aria-pressed={selected}
             aria-label={r.label}
             className={cn(
-              "relative w-[120px] h-[80px] card-surface flex items-center justify-center rounded-xl select-none",
-              "transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
-              enabled ? "hover:scale-[1.03]" : "opacity-40 cursor-not-allowed",
-              selected ? "ring-4 ring-[#3b82f6] shadow-[0_0_0_3px_rgba(59,130,246,0.4)] opacity-100" : "opacity-40",
+              "relative flex items-center justify-center select-none",
+              "transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-lg",
+              !enabled && "cursor-not-allowed",
+              enabled && "hover:scale-110",
+              selected ? "opacity-100 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" : enabled ? "opacity-60" : "opacity-30",
             )}
           >
-            <RetailerLogo retailer={r.id} className="max-h-10 w-auto object-contain" />
+            <RetailerLogo retailer={r.id} className="h-16 w-auto object-contain" />
           </button>
         );
       })}

@@ -2921,3 +2921,34 @@ def search_and_capture(
     SL.log("run_end", run_id=RUN_ID, html_saved=html_saved, shots_count=len(shots), assets_count=len(assets))
     
     return CaptureResult(html_saved=html_saved, shots=shots, assets=assets, meta=meta)
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Walmart search and capture")
+    parser.add_argument("keyword", help="Search keyword")
+    parser.add_argument("--output-dir", required=True, help="Output directory")
+    parser.add_argument("--headless", action="store_true", help="Run in headless mode")
+    args = parser.parse_args()
+    
+    # Get profile dir from environment
+    profile_dir = os.environ.get("WALMART_PROFILE_DIR")
+    
+    # Dummy activity callback for CLI mode
+    def dummy_activity_cb(event, **kwargs):
+        pass
+    
+    # Call the search_and_capture function
+    result = search_and_capture(
+        root_logger=None,
+        activity_cb=dummy_activity_cb,
+        base_dir=args.output_dir,
+        keyword=args.keyword,
+        profile_dir=profile_dir,
+        headless=args.headless,
+        debug=None,
+    )
+    
+    # Exit with appropriate code
+    html_saved = getattr(result, "html_saved", 0) or 0
+    sys.exit(0 if html_saved > 0 else 1)
