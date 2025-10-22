@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { toLocalImageUrl } from "@/utils/imageUrl";
 import { Ad } from "./AdCard";
 
 export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; ad: Ad | null; onOpenChange: (v: boolean)=>void; onCompare: (ad: Ad)=>void; }) {
@@ -11,7 +12,7 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
         {ad && (
           <div className="grid md:grid-cols-2 gap-6">
             <div className="rounded-lg overflow-hidden">
-              <img src={api.imageUrl(ad.image_url)} alt={`${ad.brand} full`} className="w-full h-full object-contain" />
+              <img src={toLocalImageUrl(ad.image_url)} alt={`${ad.brand} full`} className="w-full h-full object-contain" crossOrigin="anonymous" referrerPolicy="no-referrer" />
             </div>
             <div className="space-y-3">
               <h3 className="text-2xl font-bold">{ad.brand}</h3>
@@ -20,7 +21,7 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
               <div className="text-sm"><span className="font-semibold">Client:</span> {ad.client}</div>
               <div className="text-sm"><span className="font-semibold">Date:</span> {new Date(ad.timestamp.replace(" ","T")).toLocaleString()}</div>
               <div className="pt-4 flex gap-2">
-                <Button onClick={() => { const a = document.createElement('a'); a.href = api.imageUrl(ad.image_url); a.download = `${ad.brand}-${ad.ad_type}.png`; a.click(); }}>Download</Button>
+                <Button onClick={() => { const a = document.createElement('a'); a.href = toLocalImageUrl(ad.image_url); a.download = `${ad.brand}-${ad.ad_type}.png`; a.click(); }}>Download</Button>
                 <Button variant="secondary" onClick={() => onCompare(ad)}>Compare</Button>
               </div>
             </div>

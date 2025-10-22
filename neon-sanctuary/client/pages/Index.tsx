@@ -258,10 +258,13 @@ export default function Index() {
 
   const timestamps = useMemo(() => flatAds.map(a => a.timestamp), [flatAds]);
 
-  const totalCards = retailerQueries.reduce((sum, query) => 
+  const totalCards = retailerQueries.reduce((sum, query) =>
     sum + (query.data?.pages?.[0]?.total_cards || 0), 0
   );
-  const activeRetailers = retailersData?.count || 0;
+  const activeBrands = useMemo(() => {
+    const uniqueBrands = new Set(flatAds.map(a => a.brand));
+    return uniqueBrands.size;
+  }, [flatAds]);
   const sov = useMemo(() => {
     const countByBrand: Record<string, number> = {};
     for (const a of flatAds) countByBrand[a.brand] = (countByBrand[a.brand]||0)+1;
@@ -284,6 +287,9 @@ export default function Index() {
   const [modalAd, setModalAd] = useState<Ad|null>(null);
   const [compareMode, setCompareMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showVisualMap, setShowVisualMap] = useState(true);
+  const [showLeftVisualMap, setShowLeftVisualMap] = useState(true);
+  const [showRightVisualMap, setShowRightVisualMap] = useState(true);
 
   const dismiss = (id: string) => setAds(prev => prev.filter(a => a.id !== id));
 
@@ -330,7 +336,7 @@ export default function Index() {
           <section className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <StatCard value={totalCards} label="Total Ad Cards" />
-              <StatCard value={activeRetailers} label="Active Retailers" />
+              <StatCard value={activeBrands} label="Active Brands" />
               <StatCard value={`${sov.brand}`} label="Top Brand by SOV" hint={`${sov.pct}%`} />
               <StatCard value={""} label="Ad Volume Trend" trend={trend} />
             </div>
@@ -348,8 +354,20 @@ export default function Index() {
 
             <Timeline timestamps={timestamps} onRangeChange={(from, to) => setFilters(v => ({ ...v, start: from, end: to, datePreset: { type: "custom" } }))} />
 
-            <div className="card-surface p-2">
-              <TemporalVisualMap ads={ads} onRangeChange={(from,to)=> setFilters(v=>({ ...v, start: from, end: to }))} />
+            <div className="card-surface">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 cursor-pointer" onClick={() => setShowVisualMap(!showVisualMap)}>
+                <h3 className="text-sm font-semibold text-gray-700">Visual Timeline</h3>
+                <button className="p-1 hover:bg-gray-100 rounded transition" aria-label={showVisualMap ? "Collapse visual timeline" : "Expand visual timeline"}>
+                  <svg className={`w-5 h-5 text-gray-600 transition-transform ${showVisualMap ? '' : '-rotate-90'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </button>
+              </div>
+              {showVisualMap && (
+                <div className="p-2">
+                  <TemporalVisualMap ads={ads} onRangeChange={(from,to)=> setFilters(v=>({ ...v, start: from, end: to }))} onAdClick={setModalAd} />
+                </div>
+              )}
             </div>
 
             <div className="card-surface p-3 flex items-center gap-4">
@@ -404,16 +422,40 @@ export default function Index() {
                     <h2 className="text-white font-semibold">Left View</h2>
                     <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} value={lf} onChange={(v)=>setLeftFilters(v)} onApply={()=>leftAdsQuery.refetch()} onReset={()=>setLeftFilters({ types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
                     <Timeline timestamps={leftTs} onRangeChange={(from,to)=> setLeftFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
-                    <div className="card-surface p-2">
-                      <TemporalVisualMap ads={leftAds} onRangeChange={(from,to)=> setLeftFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
+                    <div className="card-surface">
+                      <div className="flex items-center justify-between p-4 border-b border-gray-200 cursor-pointer" onClick={() => setShowLeftVisualMap(!showLeftVisualMap)}>
+                        <h3 className="text-sm font-semibold text-gray-700">Visual Timeline</h3>
+                        <button className="p-1 hover:bg-gray-100 rounded transition" aria-label={showLeftVisualMap ? "Collapse visual timeline" : "Expand visual timeline"}>
+                          <svg className={`w-5 h-5 text-gray-600 transition-transform ${showLeftVisualMap ? '' : '-rotate-90'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                          </svg>
+                        </button>
+                      </div>
+                      {showLeftVisualMap && (
+                        <div className="p-2">
+                          <TemporalVisualMap ads={leftAds} onRangeChange={(from,to)=> setLeftFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} onAdClick={setModalAd} />
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-4">
                     <h2 className="text-white font-semibold">Right View</h2>
                     <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} value={rf} onChange={(v)=>setRightFilters(v)} onApply={()=>rightAdsQuery.refetch()} onReset={()=>setRightFilters({ types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
                     <Timeline timestamps={rightTs} onRangeChange={(from,to)=> setRightFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
-                    <div className="card-surface p-2">
-                      <TemporalVisualMap ads={rightAds} onRangeChange={(from,to)=> setRightFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
+                    <div className="card-surface">
+                      <div className="flex items-center justify-between p-4 border-b border-gray-200 cursor-pointer" onClick={() => setShowRightVisualMap(!showRightVisualMap)}>
+                        <h3 className="text-sm font-semibold text-gray-700">Visual Timeline</h3>
+                        <button className="p-1 hover:bg-gray-100 rounded transition" aria-label={showRightVisualMap ? "Collapse visual timeline" : "Expand visual timeline"}>
+                          <svg className={`w-5 h-5 text-gray-600 transition-transform ${showRightVisualMap ? '' : '-rotate-90'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                          </svg>
+                        </button>
+                      </div>
+                      {showRightVisualMap && (
+                        <div className="p-2">
+                          <TemporalVisualMap ads={rightAds} onRangeChange={(from,to)=> setRightFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} onAdClick={setModalAd} />
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="col-span-full card-surface p-3 text-center">Exit Comparison to view full visual maps.</div>

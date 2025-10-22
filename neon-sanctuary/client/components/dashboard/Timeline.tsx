@@ -21,9 +21,20 @@ export function Timeline({ timestamps, onRangeChange }: { timestamps: string[]; 
     const dates = timestamps
       .filter(t => t && typeof t === 'string') // Remove null/undefined/non-string
       .map(t => {
-        // Handle multiple timestamp formats:
-        // "2025-10-13 22:07:10" -> "2025-10-13T22:07:10"
-        // "2025-10-13T22:07:10.123" -> already valid
+        // Handle Instacart format: 20251022_002600 -> 2025-10-22T00:26:00
+        if (/^\d{8}_\d{6}$/.test(t)) {
+          const date = t.slice(0, 8);
+          const time = t.slice(9, 15);
+          const yyyy = date.slice(0, 4);
+          const mm = date.slice(4, 6);
+          const dd = date.slice(6, 8);
+          const hh = time.slice(0, 2);
+          const min = time.slice(2, 4);
+          const ss = time.slice(4, 6);
+          return new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`);
+        }
+        // Walmart format and incomplete timestamps are skipped (no date info available here)
+        // Handle Kroger format: 2025-10-13 22:07:10 -> 2025-10-13T22:07:10
         const normalized = t.includes('T') ? t : t.replace(" ", "T");
         return new Date(normalized);
       })
