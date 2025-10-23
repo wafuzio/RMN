@@ -40,6 +40,7 @@ export function RetailerSelector({ value, onChange, enabledRetailers }: { value:
               enabled && "hover:scale-110",
               selected ? "opacity-100 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" : enabled ? "opacity-60" : "opacity-30",
             )}
+            style={!selected ? { filter: "saturate(0.5)" } : undefined}
           >
             <RetailerLogo retailer={r.id} className="h-16 w-auto object-contain" />
           </button>

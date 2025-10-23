@@ -1296,3 +1296,49 @@ ls -lth output/kroger/*/TOA/*.png output/kroger/*/Skyscraper/*.png | head -10
 ```
 
 **See:** `docs/SCHEDULER_PERFORMANCE_FIXES.md` → Browser Lock Management
+
+---
+
+## Frontend: Content box not spanning full width of card container
+
+**Symptoms:**
+- Text/content box constrained to image width instead of card width
+- Content box right edge aligns with image right edge, not card edge
+- Styling properties on content element don't work (width, alignment, etc.)
+- Issue appears for specific ad types (e.g., Skyscraper) but not others
+
+**Root Cause:**
+The **parent container** (button wrapper) is not full-width, constraining all children. The content box styling is correct, but it's inside a narrow parent.
+
+**How to Debug Faster:**
+
+❌ **Don't say:** "For skyscraper ads, this is not applying"
+- Too vague - doesn't identify which element or boundary is wrong
+
+✅ **Do say:**
+- "The text box is constrained to the image width instead of extending to the card's full width"
+- "The content box's right edge aligns with the image's right edge, but it should extend to the card's edge"  
+- "The button wrapper isn't expanding full width for skyscraper ads"
+
+**Key Insight:**
+Describe **which elements are constrained** and **what boundaries they're incorrectly snapping to**, rather than just which ad type isn't working. This immediately points to the parent/container problem instead of the child styling.
+
+**Common Fix:**
+```tsx
+// Wrong - button wrapper not full width
+<button className="relative">
+  <img src={...} />
+  <div className="content-frame w-full">Text</div>
+</button>
+
+// Correct - button wrapper is full width
+<button className="relative w-full">
+  <img src={...} />
+  <div className="content-frame w-full">Text</div>
+</button>
+```
+
+**Analogy:**
+You were rearranging furniture in a room without realizing the room's walls were too narrow. The furniture (content box) was fine - the room (button wrapper) needed to be bigger.
+
+**See:** Frontend component debugging, Tailwind layout issues

@@ -9,8 +9,10 @@ import sys
 import json
 import time
 from datetime import datetime
+from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from filename_utils import generate_ad_filename
+from brand_logo_database import BrandLogoDatabase
 
 
 def force_window_and_metrics(context, page, width=1920, height=1080, dpr=1, log=None):
@@ -322,6 +324,16 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
         log("Run: ./scripts/setup_instacart_profile.sh")
         return False
     log(f"✅ Profile directory valid")
+    
+    # Initialize brand logo database
+    try:
+        # Get project root (2 levels up from output_dir)
+        project_root = Path(output_dir).parent.parent
+        logo_db = BrandLogoDatabase(base_dir=str(project_root))
+        log("Brand logo database initialized")
+    except Exception as e:
+        log(f"Warning: Could not initialize brand logo database: {e}")
+        logo_db = None
     
     # Clean up stale lock file if it exists
     lock_file = os.path.join(profile_dir, 'SingletonLock')
@@ -675,7 +687,8 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     if not advertiser:
                         try:
                             # Get all product titles in the carousel
-                            product_elems = elem.query_selector_all('[data-testid="shoppable-list-sliding-carousel"] [role="group"] h3, [data-testid="shoppable-list-sliding-carousel"] [role="group"] [class*="title"]')
+                            # Use structural selectors (role/aria) instead of hash-based classes
+                            product_elems = elem.query_selector_all('[data-testid="shoppable-list-sliding-carousel"] [role="group"] [role="heading"][aria-level="4"] > div, [data-testid="shoppable-list-sliding-carousel"] [role="group"] h3')
                             if product_elems and len(product_elems) > 0:
                                 product_titles = []
                                 for prod in product_elems[:5]:  # Check first 5 products
@@ -743,6 +756,28 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     if advertiser:
                         ad_info["advertisers"] = [advertiser]
                         ad_info["brand"] = advertiser
+                        
+                        # Save brand logo to database if available
+                        if logo_db:
+                            try:
+                                # Find logo image in the ad
+                                logo_img_elem = elem.query_selector('img[src*="display.instacart.com"], img[src*="cdn"], img[alt]')
+                                if logo_img_elem:
+                                    logo_src = logo_img_elem.get_attribute('src')
+                                    if logo_src and ('display.instacart.com' in logo_src or 'cdn' in logo_src):
+                                        logo_db.add_brand_logo(
+                                            brand=advertiser,
+                                            logo_url=logo_src,
+                                            retailer="instacart",
+                                            metadata={
+                                                "ad_type": ad_type,
+                                                "keyword": keyword,
+                                                "timestamp": timestamp
+                                            }
+                                        )
+                                        log(f"      💾 Saved logo for {advertiser}")
+                            except Exception as logo_err:
+                                log(f"      Warning: Could not save brand logo: {logo_err}")
                     else:
                         log(f"      ⚠️  No brand extracted for ad #{i} (title: {ad_info.get('title', 'NO TITLE')})")
                     

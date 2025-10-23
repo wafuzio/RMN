@@ -1,7 +1,7 @@
 {
   "schedules": [
     {
-      "id": "instacart_blue_bunny_ice_cream_bar_4379c934",
+      "id": "instacart_blue_bunny_ice_cream_bar_1a875879",
       "retailer": "instacart",
       "client": "blue bunny",
       "keywords": [
@@ -12,24 +12,26 @@
         "tuesday",
         "wednesday",
         "thursday",
-        "friday"
+        "friday",
+        "saturday",
+        "sunday"
       ],
       "times": [
-        "09:10",
-        "09:15",
-        "09:20",
-        "22:20",
-        "23:20"
+        "08:00",
+        "10:15",
+        "12:20",
+        "13:15",
+        "15:25"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:18:16Z",
-      "updated_at": "2025-10-22T04:18:16Z",
+      "created_at": "2025-10-23T03:58:20Z",
+      "updated_at": "2025-10-23T03:58:20Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__blue_bunny__ice_cream_bar.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/blue_bunny"
     },
     {
-      "id": "instacart_bomb_pop_ice_pop_ed343836",
+      "id": "instacart_bomb_pop_ice_pop_b9ce50b3",
       "retailer": "instacart",
       "client": "bomb pop",
       "keywords": [
@@ -45,7 +47,7 @@
         "sunday"
       ],
       "times": [
-        "01:00",
+        "08:00",
         "12:00",
         "16:00",
         "22:40",
@@ -53,8 +55,8 @@
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:51:51Z",
-      "updated_at": "2025-10-22T04:51:51Z",
+      "created_at": "2025-10-23T03:58:37Z",
+      "updated_at": "2025-10-23T03:58:37Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__bomb_pop__ice_pop.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/bomb_pop"
     },
@@ -119,11 +121,43 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/keto_chips"
     },
     {
-      "id": "instacart_magic_spoon_protein_cereal_d7ad874d",
+      "id": "instacart_land_o_frost_honey_ham_37a6126a",
+      "retailer": "instacart",
+      "client": "land o frost",
+      "keywords": [
+        "honey ham",
+        "black forest ham"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "03:00",
+        "09:00",
+        "11:00",
+        "15:00",
+        "19:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:47:53Z",
+      "updated_at": "2025-10-23T03:47:53Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__land_o_frost__honey_ham.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/land_o_frost"
+    },
+    {
+      "id": "instacart_magic_spoon_protein_cereal_9028d7e1",
       "retailer": "instacart",
       "client": "magic spoon",
       "keywords": [
-        "protein cereal"
+        "protein cereal",
+        "healthy cereal"
       ],
       "days": [
         "monday",
@@ -136,15 +170,15 @@
       ],
       "times": [
         "00:25",
-        "12:00",
+        "13:15",
         "16:00",
         "22:35",
         "23:50"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:47:50Z",
-      "updated_at": "2025-10-22T04:47:50Z",
+      "created_at": "2025-10-22T18:12:45Z",
+      "updated_at": "2025-10-22T18:12:45Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__magic_spoon__protein_cereal.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/magic_spoon"
     },
@@ -283,7 +317,7 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/blue_bunny"
     },
     {
-      "id": "kroger_blue_bunny_ice_cream_bar_e3135642",
+      "id": "kroger_blue_bunny_ice_cream_bar_68c4af98",
       "retailer": "kroger",
       "client": "blue bunny",
       "keywords": [
@@ -294,24 +328,26 @@
         "tuesday",
         "wednesday",
         "thursday",
-        "friday"
+        "friday",
+        "saturday",
+        "sunday"
       ],
       "times": [
-        "09:10",
-        "09:15",
-        "09:20",
-        "22:20",
-        "23:20"
+        "08:00",
+        "10:15",
+        "12:20",
+        "13:15",
+        "15:25"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:18:16Z",
-      "updated_at": "2025-10-22T04:18:16Z",
+      "created_at": "2025-10-23T03:58:20Z",
+      "updated_at": "2025-10-23T03:58:20Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__blue_bunny__ice_cream_bar.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/blue_bunny"
     },
     {
-      "id": "kroger_bomb_pop_ice_pop_45ed3906",
+      "id": "kroger_bomb_pop_ice_pop_a5e9ef35",
       "retailer": "kroger",
       "client": "bomb pop",
       "keywords": [
@@ -327,7 +363,7 @@
         "sunday"
       ],
       "times": [
-        "01:00",
+        "08:00",
         "12:00",
         "16:00",
         "22:40",
@@ -335,8 +371,8 @@
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:51:51Z",
-      "updated_at": "2025-10-22T04:51:51Z",
+      "created_at": "2025-10-23T03:58:37Z",
+      "updated_at": "2025-10-23T03:58:37Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__bomb_pop__ice_pop.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/bomb_pop"
     },
@@ -401,11 +437,43 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/keto_chips"
     },
     {
-      "id": "kroger_magic_spoon_protein_cereal_656f0d45",
+      "id": "kroger_land_o_frost_honey_ham_cad95639",
+      "retailer": "kroger",
+      "client": "land o frost",
+      "keywords": [
+        "honey ham",
+        "black forest ham"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "03:00",
+        "09:00",
+        "11:00",
+        "15:00",
+        "19:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:47:53Z",
+      "updated_at": "2025-10-23T03:47:53Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__land_o_frost__honey_ham.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/land_o_frost"
+    },
+    {
+      "id": "kroger_magic_spoon_protein_cereal_9738274d",
       "retailer": "kroger",
       "client": "magic spoon",
       "keywords": [
-        "protein cereal"
+        "protein cereal",
+        "healthy cereal"
       ],
       "days": [
         "monday",
@@ -418,15 +486,15 @@
       ],
       "times": [
         "00:25",
-        "12:00",
+        "13:15",
         "16:00",
         "22:35",
         "23:50"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:47:50Z",
-      "updated_at": "2025-10-22T04:47:50Z",
+      "created_at": "2025-10-22T18:12:45Z",
+      "updated_at": "2025-10-22T18:12:45Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__magic_spoon__protein_cereal.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/magic_spoon"
     },
@@ -565,7 +633,7 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/sour_cream"
     },
     {
-      "id": "walmart_blue_bunny_ice_cream_bar_b6928740",
+      "id": "walmart_blue_bunny_ice_cream_bar_8c6c4d72",
       "retailer": "walmart",
       "client": "blue bunny",
       "keywords": [
@@ -576,24 +644,26 @@
         "tuesday",
         "wednesday",
         "thursday",
-        "friday"
+        "friday",
+        "saturday",
+        "sunday"
       ],
       "times": [
-        "09:10",
-        "09:15",
-        "09:20",
-        "22:20",
-        "23:20"
+        "08:00",
+        "10:15",
+        "12:20",
+        "13:15",
+        "15:25"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:18:16Z",
-      "updated_at": "2025-10-22T04:18:16Z",
+      "created_at": "2025-10-23T03:58:20Z",
+      "updated_at": "2025-10-23T03:58:20Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__blue_bunny__ice_cream_bar.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/blue_bunny"
     },
     {
-      "id": "walmart_bomb_pop_ice_pop_552ac9ec",
+      "id": "walmart_bomb_pop_ice_pop_4284ae10",
       "retailer": "walmart",
       "client": "bomb pop",
       "keywords": [
@@ -609,7 +679,7 @@
         "sunday"
       ],
       "times": [
-        "01:00",
+        "08:00",
         "12:00",
         "16:00",
         "22:40",
@@ -617,8 +687,8 @@
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:51:51Z",
-      "updated_at": "2025-10-22T04:51:51Z",
+      "created_at": "2025-10-23T03:58:37Z",
+      "updated_at": "2025-10-23T03:58:37Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__bomb_pop__ice_pop.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/bomb_pop"
     },
@@ -683,11 +753,43 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/keto_chips"
     },
     {
-      "id": "walmart_magic_spoon_protein_cereal_6db75bd8",
+      "id": "walmart_land_o_frost_honey_ham_b00718ae",
+      "retailer": "walmart",
+      "client": "land o frost",
+      "keywords": [
+        "honey ham",
+        "black forest ham"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "03:00",
+        "09:00",
+        "11:00",
+        "15:00",
+        "19:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:47:53Z",
+      "updated_at": "2025-10-23T03:47:53Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__land_o_frost__honey_ham.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/land_o_frost"
+    },
+    {
+      "id": "walmart_magic_spoon_protein_cereal_5f73f5d2",
       "retailer": "walmart",
       "client": "magic spoon",
       "keywords": [
-        "protein cereal"
+        "protein cereal",
+        "healthy cereal"
       ],
       "days": [
         "monday",
@@ -700,15 +802,15 @@
       ],
       "times": [
         "00:25",
-        "12:00",
+        "13:15",
         "16:00",
         "22:35",
         "23:50"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:47:50Z",
-      "updated_at": "2025-10-22T04:47:50Z",
+      "created_at": "2025-10-22T18:12:45Z",
+      "updated_at": "2025-10-22T18:12:45Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__magic_spoon__protein_cereal.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/magic_spoon"
     },

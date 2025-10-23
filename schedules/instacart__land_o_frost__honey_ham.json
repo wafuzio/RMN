@@ -1,0 +1,29 @@
+{
+  "id": "instacart_land_o_frost_honey_ham_37a6126a",
+  "retailer": "instacart",
+  "client": "land o frost",
+  "keywords": [
+    "honey ham",
+    "black forest ham"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "03:00",
+    "09:00",
+    "11:00",
+    "15:00",
+    "19:00"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-10-23T03:47:53Z",
+  "updated_at": "2025-10-23T03:47:53Z"
+}

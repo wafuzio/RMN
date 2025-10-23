@@ -52,18 +52,28 @@ def process_html_to_run_results(runs_root: str, retailer: str, html_paths: List[
         # Derive keyword & timestamp from filename if present, else fallback
         base = os.path.basename(html_path)
         # expected: search_results_{clean_kw}_{run_ts}.html
-        parts = base.replace(".html","").split("_")
-        # safe fallback
+        # where run_ts format is YYYY-MM-DD_HH-MM-SS (contains dashes/hyphens)
         keyword = "search"
         run_ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        if len(parts) >= 3 and parts[0] == "search" and parts[1] == "results":
-            # join keyword parts except "search","results" and last timestamp
-            if len(parts) > 3:
-                keyword = "_".join(parts[2:-1])
-            else:
-                keyword = parts[2]
-            run_ts = parts[-1]
+        # Use regex to extract timestamp in format YYYY-MM-DD_HH-MM-SS
+        ts_match = re.search(r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})', base)
+        if ts_match:
+            run_ts = ts_match.group(1)
+            # Extract keyword from everything between "search_results_" and the timestamp
+            prefix = "search_results_"
+            if base.startswith(prefix):
+                keyword_part = base[len(prefix):base.index(run_ts)].rstrip("_")
+                if keyword_part:
+                    keyword = keyword_part.replace("_", " ")
+        elif base.startswith("search_results_"):
+            # Fallback: use old parsing for backward compatibility
+            parts = base.replace(".html","").split("_")
+            if len(parts) >= 3 and parts[0] == "search" and parts[1] == "results":
+                if len(parts) > 3:
+                    keyword = "_".join(parts[2:-1]).replace("_", " ")
+                else:
+                    keyword = parts[2]
         
         # Build a core-level single result
         # Advertiser extraction now happens directly in walmart_ad_core.py
@@ -857,7 +867,7 @@ def process_latest_html_file(input_dir=None, output_dir=None, force_images=False
     
     # Sort by modification time (newest first)
     latest_html = max(html_files, key=os.path.getmtime)
-    print(f"📋 Found latest HTML file: {os.path.basename(latest_html)}")
+    print(f"���� Found latest HTML file: {os.path.basename(latest_html)}")
     
     # Process the HTML file
     results = extract_ads_from_html_file(latest_html)

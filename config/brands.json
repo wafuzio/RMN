@@ -1,63 +1,115 @@
 [
   {
     "name": "Bomb Pop",
-    "synonyms": ["BombPop", "Bomb-Pop"]
+    "synonyms": [
+      "BombPop",
+      "Bomb-Pop"
+    ]
   },
   {
     "name": "Frollies",
-    "synonyms": ["Frollie"]
+    "synonyms": [
+      "Frollie"
+    ]
   },
   {
     "name": "Nature's Bounty",
-    "synonyms": ["Natures Bounty", "NBTY", "Natures", "Bounty"]
+    "synonyms": [
+      "Natures Bounty",
+      "NBTY",
+      "Natures",
+      "Bounty"
+    ]
   },
   {
     "name": "Go-GURT",
-    "synonyms": ["GoGurt", "Gogurt", "Go Gurt", "Yoplait Go-GURT"]
+    "synonyms": [
+      "GoGurt",
+      "Gogurt",
+      "Go Gurt",
+      "Yoplait Go-GURT"
+    ]
   },
   {
     "name": "Yoplait",
-    "synonyms": ["Yoplait Yogurt"]
+    "synonyms": [
+      "Yoplait Yogurt"
+    ]
   },
   {
     "name": "Gold Bond",
-    "synonyms": ["Goldbond", "Gold-Bond"]
+    "synonyms": [
+      "Goldbond",
+      "Gold-Bond"
+    ]
   },
   {
     "name": "O'Keeffe's",
-    "synonyms": ["OKeeffes", "Okeeffes", "O Keeffes", "OKeeffe"]
+    "synonyms": [
+      "OKeeffes",
+      "Okeeffes",
+      "O Keeffes",
+      "OKeeffe"
+    ]
   },
   {
     "name": "Kraft",
-    "synonyms": ["Kraft Foods"]
+    "synonyms": [
+      "Kraft Foods"
+    ]
   },
   {
     "name": "Heinz",
-    "synonyms": ["Heinz Ketchup"]
+    "synonyms": [
+      "Heinz Ketchup"
+    ]
   },
   {
     "name": "Kraft Heinz",
-    "synonyms": ["Kraft-Heinz", "KraftHeinz"]
+    "synonyms": [
+      "Kraft-Heinz",
+      "KraftHeinz"
+    ]
   },
   {
     "name": "General Mills",
-    "synonyms": ["GeneralMills", "Gen Mills", "General-Mills"]
+    "synonyms": [
+      "GeneralMills",
+      "Gen Mills",
+      "General-Mills"
+    ]
   },
   {
     "name": "P&G",
-    "synonyms": ["PG", "P and G", "Procter & Gamble", "Procter and Gamble", "Procter"]
+    "synonyms": [
+      "PG",
+      "P and G",
+      "Procter & Gamble",
+      "Procter and Gamble",
+      "Procter"
+    ]
   },
   {
     "name": "Kroger",
-    "synonyms": ["Kroger Brand", "Kroger's"]
+    "synonyms": [
+      "Kroger Brand",
+      "Kroger's"
+    ]
   },
   {
     "name": "Herdez",
-    "synonyms": ["MegaMex", "Herdez Brand"]
+    "synonyms": [
+      "MegaMex",
+      "Herdez Brand"
+    ]
   },
   {
     "name": "Jennie-O",
-    "synonyms": ["Jennie O", "JennieO", "Hormel"]
+    "synonyms": [
+      "Jennie O",
+      "JennieO",
+      "Hormel"
+    ]
   },
   {
     "name": "Unilever",
@@ -65,38 +117,133 @@
   },
   {
     "name": "Nestle",
-    "synonyms": ["Nestlé", "Nestle USA"]
+    "synonyms": [
+      "Nestlé",
+      "Nestle USA"
+    ]
   },
   {
     "name": "PepsiCo",
-    "synonyms": ["Pepsi Co", "Pepsi", "PepsiCo Inc"]
+    "synonyms": [
+      "Pepsi Co",
+      "Pepsi",
+      "PepsiCo Inc"
+    ]
   },
   {
     "name": "Coca-Cola",
-    "synonyms": ["Coca Cola", "CocaCola", "Coke"]
+    "synonyms": [
+      "Coca Cola",
+      "CocaCola",
+      "Coke"
+    ]
   },
   {
     "name": "Kellogg's",
-    "synonyms": ["Kellogg", "Kelloggs", "Kellogg Company"]
+    "synonyms": [
+      "Kellogg",
+      "Kelloggs",
+      "Kellogg Company"
+    ]
   },
   {
     "name": "Campbell's",
-    "synonyms": ["Campbell", "Campbells", "Campbell Soup"]
+    "synonyms": [
+      "Campbell",
+      "Campbells",
+      "Campbell Soup"
+    ]
   },
   {
     "name": "Barilla",
-    "synonyms": ["Barilla Pasta"]
+    "synonyms": [
+      "Barilla Pasta"
+    ]
   },
   {
     "name": "Blue Bunny",
-    "synonyms": ["BlueBunny", "Blue-Bunny"]
+    "synonyms": [
+      "BlueBunny",
+      "Blue-Bunny"
+    ]
   },
   {
     "name": "Band-Aid",
-    "synonyms": ["BandAid", "Band Aid"]
+    "synonyms": [
+      "BandAid",
+      "Band Aid"
+    ]
   },
   {
     "name": "Fresh Pet",
-    "synonyms": ["FreshPet", "Fresh-Pet"]
+    "synonyms": [
+      "FreshPet",
+      "Fresh-Pet"
+    ]
+  },
+  {
+    "name": "Magic Spoon",
+    "synonyms": [
+      "MagicSpoon",
+      "Magic-Spoon",
+      "Magic Spoon®"
+    ]
+  },
+  {
+    "name": "Pull-Ups",
+    "synonyms": [
+      "Pull Ups",
+      "PullUps",
+      "Pull-Ups®",
+      "Pullups"
+    ]
+  },
+  {
+    "name": "Jell-O",
+    "synonyms": [
+      "Jello",
+      "Jell O",
+      "JellO",
+      "Jell-O®"
+    ]
+  },
+  {
+    "name": "Nature's Path",
+    "synonyms": [
+      "Natures Path",
+      "NaturesPath",
+      "Nature Path"
+    ]
+  },
+  {
+    "name": "NuTrail",
+    "synonyms": [
+      "Nu Trail",
+      "Nu-Trail",
+      "Nutrail"
+    ]
+  },
+  {
+    "name": "Olipop",
+    "synonyms": [
+      "OLIPOP",
+      "Oli Pop",
+      "Oli-Pop"
+    ]
+  },
+  {
+    "name": "Ithaca",
+    "synonyms": [
+      "Ithaca Hummus"
+    ]
+  },
+  {
+    "name": "Häagen-Dazs",
+    "synonyms": [
+      "Haagen-Dazs",
+      "Haagen Dazs",
+      "HagenDazs",
+      "Häagen Dazs"
+    ]
   }
 ]

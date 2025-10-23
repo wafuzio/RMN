@@ -484,15 +484,15 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
   };
 
   return (
-    <div className="w-full" aria-label="Temporal Visual Map">
+    <div className="w-full overflow-x-auto overflow-y-hidden" aria-label="Temporal Visual Map">
       <div className="flex items-center justify-between px-2 pb-2 text-sm text-[#6b7280]">
         <div>Visual Map • Semantic zoom ({g})</div>
         <div className="flex items-center gap-2">
           <button className="px-2 py-1 rounded bg-white/80 border" onClick={()=> setState({ scale: 1, offsetX: 0 })}>Reset</button>
         </div>
       </div>
-      <div ref={wrapRef} className="w-full relative px-2" style={{ height }} onDoubleClick={onDoubleClick}>
-        <canvas ref={canvasRef} width={width} height={height} className="w-full h-full block" />
+      <div ref={wrapRef} className="relative" style={{ height, width: '100%', minWidth: '100%' }} onDoubleClick={onDoubleClick}>
+        <canvas ref={canvasRef} width={width} height={height} style={{ display: 'block', width: '100%', height: '100%' }} />
       </div>
     </div>
   );

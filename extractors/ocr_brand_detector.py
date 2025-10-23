@@ -58,6 +58,8 @@ def extract_brands_from_text(text: str) -> List[str]:
     - ©2025 Brand Name, LLC
     - ©2025 Brand Name
     - Copyright Brand Name
+    - Brand Name® (registered trademark)
+    - Brand Name™ (trademark)
     
     Args:
         text: OCR extracted text
@@ -78,6 +80,18 @@ def extract_brands_from_text(text: str) -> List[str]:
         brand = re.sub(r'\s+(LLC|Inc|Corp|Co|Foods|Turkey|Store|Stores).*$', '', brand, flags=re.IGNORECASE)
         brand = brand.strip()
         if brand and len(brand) > 2 and not brand.lower() in ['the', 'and', 'or']:
+            brands.add(brand)
+    
+    # Pattern 2: Trademark symbols (® or ™)
+    # Pull-Ups® | Magic Spoon™ | Brand Name®
+    # Look for capitalized words followed by ® or ™
+    trademark_pattern = r'([A-Z][A-Za-z0-9&\s\'-]+?)[®™]'
+    matches = re.findall(trademark_pattern, text)
+    for match in matches:
+        brand = match.strip()
+        # Clean up extra words after the brand
+        # Keep hyphenated brands like "Pull-Ups" intact
+        if brand and len(brand) > 2 and not brand.lower() in ['the', 'and', 'or', 'select', 'buy', 'save']:
             brands.add(brand)
     
     # Pattern 2: Map parent companies to consumer brands

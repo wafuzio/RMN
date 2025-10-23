@@ -1327,16 +1327,31 @@ class KeywordInputApp:
         return scheduled_times
     
     def is_time_conflicted(self, hour_24, minute, days, exclude_client=None):
-        """Check if a specific time conflicts with existing schedules"""
+        """Check if a specific time conflicts with existing schedules
+        
+        IMPORTANT: Checks across ALL retailers because they share the same Playwright browser.
+        Multiple scrapers cannot run simultaneously regardless of retailer.
+        """
         scheduled_times = self.get_all_scheduled_times(exclude_client)
         
-        # Get current retailer
+        # Get current retailer (for debug logging only)
         retailer_slug = self._schedule_retailer_slug()
         
+        # DEBUG: Log what we're checking
+        print(f"[DEBUG] Checking conflicts for {retailer_slug} at {hour_24}:{minute:02d} on {days}")
+        print(f"[DEBUG] Total scheduled times: {len(scheduled_times)}")
+        print(f"[DEBUG] Sample scheduled times: {list(scheduled_times)[:5]}")
+        
         for day in days:
-            # Check for conflicts in the same retailer
-            if (retailer_slug, day, hour_24, minute) in scheduled_times:
-                return True
+            # Check for conflicts across ALL retailers (not just same retailer)
+            # Format: (retailer, day, hour, minute)
+            # We need to check if ANY retailer has this time scheduled
+            for scheduled_tuple in scheduled_times:
+                sched_retailer, sched_day, sched_hour, sched_minute = scheduled_tuple
+                if sched_day == day and sched_hour == hour_24 and sched_minute == minute:
+                    print(f"[DEBUG] CONFLICT FOUND: {scheduled_tuple} conflicts with {retailer_slug}/{day}/{hour_24}:{minute:02d}")
+                    return True
+        print(f"[DEBUG] No conflicts found")
         return False
     
     def find_next_available_time(self, preferred_hour, preferred_minute, preferred_ampm, days, exclude_client=None):
@@ -2719,8 +2734,13 @@ class KeywordInputApp:
                 schedules = scan_schedules(Path(base))
                 retailer_slug = self._schedule_retailer_slug()
                 
+                print(f"[DEBUG LOAD] Looking for client='{client}' retailer='{retailer_slug}'")
+                print(f"[DEBUG LOAD] Found {len(schedules)} total schedules")
+                
                 for sched in schedules:
+                    print(f"[DEBUG LOAD] Checking: {sched.retailer}/{sched.client}")
                     if sched.client.lower() == client.lower() and sched.retailer == retailer_slug:
+                        print(f"[DEBUG LOAD] MATCH FOUND! Loading schedule for {sched.client}")
                         # Convert 24h times back to 12h format for GUI
                         times_12h = []
                         for time_24h in sched.times:
@@ -2746,8 +2766,12 @@ class KeywordInputApp:
                             "client": sched.client,
                             "retailer": sched.retailer
                         }
+                
+                print(f"[DEBUG LOAD] No matching schedule found for {client}/{retailer_slug}")
             except Exception as e:
-                print(f"Error loading schedule from library: {e}")
+                print(f"[DEBUG LOAD] Error loading schedule from library: {e}")
+                import traceback
+                traceback.print_exc()
                 pass  # Fall back to legacy method
             
             # LEGACY: Try old output/ location

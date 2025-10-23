@@ -6,6 +6,7 @@ import { Filters, FiltersState } from "@/components/dashboard/Filters";
 import { Timeline } from "@/components/dashboard/Timeline";
 import { Ad, AdCard } from "@/components/dashboard/AdCard";
 import { AdModal } from "@/components/dashboard/AdModal";
+import { TopBrandModal } from "@/components/dashboard/TopBrandModal";
 import { SkeletonGrid } from "@/components/dashboard/SkeletonGrid";
 import { TemporalVisualMap } from "@/components/visual/TemporalVisualMap";
 import { Button } from "@/components/ui/button";
@@ -50,11 +51,15 @@ const buildAdId = (c: Cardish, fallbackIndex: number): string => {
 
 function useDnD<T>(items: T[], setItems: (v:T[])=>void) {
   const dragIndex = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   return {
+    dragIndex: dragIndex.current,
+    dragOverIndex,
     makeProps: (index: number) => ({
       draggable: true,
-      onDragStart: () => { dragIndex.current = index; },
-      onDragOver: (e: any) => { e.preventDefault?.(); },
+      onDragStart: () => { dragIndex.current = index; setDragOverIndex(null); },
+      onDragOver: (e: any) => { e.preventDefault?.(); setDragOverIndex(index); },
+      onDragLeave: () => { setDragOverIndex(null); },
       onDrop: () => {
         if (dragIndex.current === null) return;
         const from = dragIndex.current;
@@ -64,6 +69,7 @@ function useDnD<T>(items: T[], setItems: (v:T[])=>void) {
         next.splice(to, 0, moved as any);
         setItems(next);
         dragIndex.current = null;
+        setDragOverIndex(null);
       },
     }),
   } as const;
@@ -275,6 +281,17 @@ export default function Index() {
     return { brand: top[0], pct: isFinite(pct) ? pct : 0 };
   }, [flatAds]);
 
+  const topBrands = useMemo(() => {
+    const countByBrand: Record<string, number> = {};
+    for (const a of flatAds) countByBrand[a.brand] = (countByBrand[a.brand]||0)+1;
+    const entries = Object.entries(countByBrand).sort((a,b)=>b[1]-a[1]);
+    return entries.map(([brand, count]) => ({
+      brand,
+      count,
+      percentage: flatAds.length > 0 ? Math.round((count / flatAds.length) * 100) : 0,
+    }));
+  }, [flatAds]);
+
   const trend: "up"|"down"|null = useMemo(()=>{
     if (timestamps.length < 2) return null;
     const recent = timestamps.slice(-50).map(t=>new Date(t.replace(" ","T"))).sort((a,b)=>+a-+b);
@@ -285,6 +302,7 @@ export default function Index() {
   }, [timestamps]);
 
   const [modalAd, setModalAd] = useState<Ad|null>(null);
+  const [showTopBrandModal, setShowTopBrandModal] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showVisualMap, setShowVisualMap] = useState(true);
@@ -312,8 +330,8 @@ export default function Index() {
   };
 
   return (
-    <main className="min-h-screen py-6 pb-32 md:pb-48 pr-4 md:pr-8 pl-8 sm:pl-10 md:pl-14 lg:pl-16">
-      <div className="w-full max-w-[1400px] mx-auto">
+    <main className="min-h-screen py-6 pb-32 md:pb-48 px-4 md:px-8">
+      <div className="w-full max-w-[1400px]">
         <header className="flex flex-wrap items-center gap-3 mb-6">
           <div className="flex items-center gap-3">
             <img src={GaleLogo} alt="GALE" className="h-8 w-auto" />
@@ -337,7 +355,13 @@ export default function Index() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <StatCard value={totalCards} label="Total Ad Cards" />
               <StatCard value={activeBrands} label="Active Brands" />
-              <StatCard value={`${sov.brand}`} label="Top Brand by SOV" hint={`${sov.pct}%`} />
+              <StatCard
+                value={`${sov.brand}`}
+                label="Top Brand by SOV"
+                hint={`${sov.pct}%`}
+                brandName={sov.brand}
+                onClick={() => setShowTopBrandModal(true)}
+              />
               <StatCard value={""} label="Ad Volume Trend" trend={trend} />
             </div>
 
@@ -389,13 +413,13 @@ export default function Index() {
             ) : ads.length === 0 ? (
               <div className="card-surface p-10 text-center text-[#111827]">No ads found for the selected filters.</div>
             ) : (
-              <div className="columns-1 sm:columns-1 md:columns-2 lg:columns-2 xl:columns-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {ads.map((ad, idx) => (
-                  <div key={ad.id} className="break-inside-avoid" onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}>
-                    <div className="absolute z-10 m-2">
+                  <div key={ad.id} onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}>
+                    <div className="absolute z-10 m-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <input aria-label="Select ad" type="checkbox" className="h-4 w-4" checked={selected.has(ad.id)} onChange={()=>toggleSelect(ad.id)} />
                     </div>
-                    <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} />
+                    <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} dragIndex={dnd.dragIndex} dragOverIndex={dnd.dragOverIndex} currentIndex={idx} />
                   </div>
                 ))}
               </div>
@@ -466,6 +490,7 @@ export default function Index() {
         )}
 
         <AdModal open={!!modalAd} ad={modalAd} onOpenChange={(v)=>!v && setModalAd(null)} onCompare={(ad)=>{ setModalAd(null); setCompareMode(true); }} />
+        <TopBrandModal open={showTopBrandModal} onOpenChange={setShowTopBrandModal} topBrands={topBrands} />
       </div>
     </main>
   );

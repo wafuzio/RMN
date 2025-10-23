@@ -206,11 +206,6 @@ Each brand logo includes:
 
 ## Maintenance
 
-### Cleanup Old Logos
-
-```python
-# TODO: Add cleanup functionality for logos not seen in X days
-```
 
 ### Update Logos
 
@@ -222,8 +217,6 @@ If a brand updates their logo, the system will:
 
 ## Future Enhancements
 
-- [ ] Automatic logo cleanup (remove logos not seen in 90 days)
-- [ ] Logo versioning (track logo changes over time)
 - [ ] Image optimization (resize, compress)
 - [ ] Brand aliases (handle variations like "Coca Cola" vs "Coke")
 - [ ] Logo quality scoring

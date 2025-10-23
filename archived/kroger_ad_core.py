@@ -104,19 +104,31 @@ def _load_brands():
             _SYNONYM_TO_CANON[syn.lower()] = b["name"]
 
 def _brand_from_token(token: str, cutoff: float = 0.86):
-    """Return canonical brand for a candidate token, or None."""
+    """Return canonical brand for a candidate token, or the token itself if not in lexicon.
+    
+    The lexicon is used for canonicalization (e.g., 'magicspoon' -> 'Magic Spoon'),
+    not as a filter. This allows discovery of new brands.
+    """
     if not token:
         return None
     _load_brands()
     low = token.lower()
+    
+    # Try exact match in lexicon
     if low in _SYNONYM_TO_CANON:
         return _SYNONYM_TO_CANON[low]
-    # Fuzzy match across all synonyms (keys)
+    
+    # Try fuzzy match in lexicon
     choices = list(_SYNONYM_TO_CANON.keys())
-    # difflib returns best close matches; we approximate with ratio threshold
     matches = get_close_matches(low, choices, n=1, cutoff=cutoff)
     if matches:
         return _SYNONYM_TO_CANON[matches[0]]
+    
+    # Not in lexicon - return the token as-is (new brand discovery)
+    # Only return if it looks like a brand (starts with capital, reasonable length)
+    if token and token[0].isupper() and 2 <= len(token) <= 30:
+        return token
+    
     return None
 
 def _best_brand_from_tokens(tokens):
@@ -151,6 +163,14 @@ def _brand_from_url(href: str):
         kw = qs.get("keyword", [""])[0]
         toks = _split_camel_pascal(kw)
         if toks:
+            # Try 2-word combinations first (e.g., "Pull Ups" from ["Pull", "Ups", "Big", ...])
+            if len(toks) >= 2:
+                two_word = f"{toks[0]} {toks[1]}"
+                b = _brand_from_token(two_word)
+                if b:
+                    return b
+            
+            # Fall back to single word tokens
             b = _best_brand_from_tokens(toks)
             if b:
                 return b
@@ -184,7 +204,19 @@ def _extract_kroger_advertiser(ad_dict):
     # 2) Parse message/header but only accept matches that map to a known brand
     message = ad_dict.get("message", "") or ad_dict.get("header", "")
     if message:
-        # a) "from <Brand>" pattern
+        # a) "Parent SubBrand" pattern (e.g., "P&G Tide" → extract "Tide")
+        # Look for patterns where a parent company is followed by a specific brand
+        parent_subbrand = re.match(r'^(P&G|Procter & Gamble|Kraft|Unilever|General Mills|Nestlé?|PepsiCo)\s+([A-Z][A-Za-z0-9\'\-]+)', message)
+        if parent_subbrand:
+            subbrand = parent_subbrand.group(2).strip()
+            # Check if the sub-brand is mentioned multiple times in the message
+            subbrand_count = message.lower().count(subbrand.lower())
+            if subbrand_count >= 2:  # Sub-brand mentioned at least twice
+                b = _brand_from_token(subbrand)
+                if b:
+                    return b
+        
+        # b) "from <Brand>" pattern
         m = re.search(r'\bfrom\s+([A-Z][A-Za-z0-9&\'\-]+(?:\s+[A-Z][A-Za-z0-9&\'\-]+)?)', message)
         if m:
             candidate = m.group(1).strip()
@@ -192,7 +224,7 @@ def _extract_kroger_advertiser(ad_dict):
             if b:
                 return b
         
-        # b) Leading "<Brand>." pattern
+        # c) Leading "<Brand>." pattern
         m = re.match(r'^([A-Z][A-Za-z0-9&\s\'\-]+?)\.', message)
         if m:
             candidate = m.group(1).strip()
@@ -787,6 +819,19 @@ def extract_ads_from_html(html, client=None, search_term=None, timestamp=None, s
                 if advertiser:
                     ad['advertisers'] = [advertiser]  # Array format for future co-brand support
                 
+                # Filter out Kroger-branded promotional slots (not brand ads)
+                href = ad.get('href', '')
+                is_kroger_slot = (
+                    href.startswith('https://') or  # Full URLs to Kroger services
+                    href.startswith('/f/') or       # Kroger features (e.g., /f/new-arrivals)
+                    href.startswith('/o/') or       # Kroger offers (e.g., /o/gift-cards)
+                    href.startswith('/health/')     # Kroger health services
+                )
+                
+                if is_kroger_slot:
+                    log(f"Skipping Kroger-branded slot (not a brand ad): {href[:60]}")
+                    continue
+                
                 # Include the raw HTML in the results so downstream image tooling works
                 ad['html'] = raw_html
                 results.append(ad)
@@ -928,6 +973,19 @@ def extract_ads_from_html(html, client=None, search_term=None, timestamp=None, s
                 advertiser = _extract_kroger_advertiser(ad)
                 if advertiser:
                     ad['advertisers'] = [advertiser]  # Array format for future co-brand support
+                
+                # Filter out Kroger-branded promotional slots (not brand ads)
+                href = ad.get('href', '')
+                is_kroger_slot = (
+                    href.startswith('https://') or  # Full URLs to Kroger services
+                    href.startswith('/f/') or       # Kroger features (e.g., /f/new-arrivals)
+                    href.startswith('/o/') or       # Kroger offers (e.g., /o/gift-cards)
+                    href.startswith('/health/')     # Kroger health services
+                )
+                
+                if is_kroger_slot:
+                    log(f"Skipping Kroger-branded slot (not a brand ad): {href[:60]}")
+                    continue
                 
                 # Don't include the raw HTML in the results
                 # ad['html'] = raw_html  # Removed to reduce JSON size
