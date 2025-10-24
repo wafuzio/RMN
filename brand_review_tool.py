@@ -264,17 +264,69 @@ class BrandReviewTool:
                     for ad in result.get('ads', []):
                         advertisers = ad.get('advertisers', [])
                         
-                        # Check if unknown or uncertain
-                        is_unknown = (
+                        # Check if unknown or uncertain in JSON
+                        is_unknown_in_json = (
                             not advertisers or
                             advertisers == ['unknown'] or
                             any(self.is_uncertain_brand(adv) for adv in advertisers)
                         )
                         
-                        if is_unknown:
-                            # Find associated image file
-                            image_path = self.find_ad_image(ad, json_file)
+                        # Find associated image file first
+                        image_path = self.find_ad_image(ad, json_file)
+                        
+                        # CRITICAL: Also check if image filename contains "unknown"
+                        # This catches cases where JSON has a brand but screenshot failed to match it
+                        is_unknown_in_filename = False
+                        
+                        # If image_path from JSON doesn't exist, search for unknown files
+                        if image_path and not os.path.exists(image_path):
+                            # Try to find an unknown file with similar timestamp
+                            base_dir = os.path.dirname(os.path.dirname(json_file))
+                            ad_type = ad.get('type')
+                            if ad_type == 'TOA':
+                                subfolder = 'TOA'
+                            elif ad_type == 'Skyscraper':
+                                subfolder = 'Skyscraper'
+                            elif ad_type == 'CuratedCarousel':
+                                subfolder = 'Carousel'
+                            else:
+                                subfolder = None
                             
+                            if subfolder:
+                                search_dir = os.path.join(base_dir, subfolder)
+                                if os.path.exists(search_dir):
+                                    # Look for unknown files
+                                    for filename in os.listdir(search_dir):
+                                        if '__unknown__' in filename:
+                                            # Check if timestamp matches roughly (date + hour + minute, ignore seconds)
+                                            stored_filename = os.path.basename(image_path)
+                                            # Extract timestamp from both (date and hour-minute only)
+                                            import re
+                                            stored_ts = re.search(r'D(\d{4}-\d{2}-\d{2}_T\d{2}-\d{2})', stored_filename)
+                                            unknown_ts = re.search(r'D(\d{4}-\d{2}-\d{2}_T\d{2}-\d{2})', filename)
+                                            
+                                            # Match if date+hour+minute are the same (ignore seconds)
+                                            if stored_ts and unknown_ts:
+                                                stored_dt = stored_ts.group(1)  # e.g., 2025-10-24_T02-58
+                                                unknown_dt = unknown_ts.group(1)
+                                                if stored_dt == unknown_dt:
+                                                    # Found matching unknown file
+                                                    image_path = os.path.join(search_dir, filename)
+                                                    is_unknown_in_filename = True
+                                                    print(f"[WARN] JSON path doesn't exist, found unknown file instead")
+                                                    print(f"      Advertisers in JSON: {advertisers}")
+                                                    print(f"      Unknown file: {filename}")
+                                                    break
+                        
+                        # Also check if the existing path has unknown in it
+                        if image_path and os.path.exists(image_path):
+                            filename = os.path.basename(image_path)
+                            if '__unknown__' in filename and not is_unknown_in_filename:
+                                is_unknown_in_filename = True
+                                print(f"[WARN] Found 'unknown' in filename but JSON has: {advertisers}")
+                        
+                        # Flag as unknown if EITHER condition is true
+                        if is_unknown_in_json or is_unknown_in_filename:
                             self.unknown_ads.append({
                                 'json_file': json_file,
                                 'ad': ad,

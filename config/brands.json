@@ -8,6 +8,12 @@
     "synonyms": []
   },
   {
+    "name": "Annie's",
+    "synonyms": [
+      "Annie's"
+    ]
+  },
+  {
     "name": "Applegate Natural",
     "synonyms": []
   },
@@ -34,6 +40,10 @@
     "synonyms": [
       "Barilla Pasta"
     ]
+  },
+  {
+    "name": "Ben",
+    "synonyms": []
   },
   {
     "name": "Bertolli",
@@ -63,6 +73,12 @@
     "name": "Birdseye",
     "synonyms": [
       "MSMAlwaysOn0625"
+    ]
+  },
+  {
+    "name": "Blue Buffalo",
+    "synonyms": [
+      "Blue Buffalo"
     ]
   },
   {
@@ -121,6 +137,13 @@
     ]
   },
   {
+    "name": "Clif",
+    "synonyms": [
+      "ClifSummerIMCSMGTOA0825",
+      "Clif"
+    ]
+  },
+  {
     "name": "Clio",
     "synonyms": []
   },
@@ -160,6 +183,12 @@
     "synonyms": []
   },
   {
+    "name": "Duncan Hines",
+    "synonyms": [
+      "Duncan Hines"
+    ]
+  },
+  {
     "name": "Eat Happy",
     "synonyms": []
   },
@@ -168,6 +197,12 @@
     "synonyms": [
       "MSCCollegeFootballWave2101525",
       "Dr. Pepper"
+    ]
+  },
+  {
+    "name": "Frank's Red Hot",
+    "synonyms": [
+      "Late July"
     ]
   },
   {
@@ -198,7 +233,8 @@
     "synonyms": [
       "GeneralMills",
       "Gen Mills",
-      "General-Mills"
+      "General-Mills",
+      "General Mills"
     ]
   },
   {
@@ -242,6 +278,12 @@
     "synonyms": []
   },
   {
+    "name": "Hamburger Helper",
+    "synonyms": [
+      "Hamburger Helper"
+    ]
+  },
+  {
     "name": "Healthy Choice",
     "synonyms": [
       "SSMAlwaysOn0625",
@@ -255,10 +297,22 @@
     ]
   },
   {
+    "name": "Hellmann's",
+    "synonyms": [
+      "Hellmann's"
+    ]
+  },
+  {
     "name": "Herdez",
     "synonyms": [
       "MegaMex",
       "Herdez Brand"
+    ]
+  },
+  {
+    "name": "Hillshire Farm",
+    "synonyms": [
+      "Hillshire Farm Hot"
     ]
   },
   {
@@ -277,7 +331,8 @@
   {
     "name": "Impossible",
     "synonyms": [
-      "Impossible"
+      "Impossible",
+      "Impossible2025"
     ]
   },
   {
@@ -301,6 +356,13 @@
       "Jennie O",
       "JennieO",
       "Hormel"
+    ]
+  },
+  {
+    "name": "Jimmy Dean",
+    "synonyms": [
+      "JimmyDeanMasterbrand1025",
+      "Jimmy Dean"
     ]
   },
   {
@@ -349,7 +411,8 @@
   {
     "name": "Kroger Brand",
     "synonyms": [
-      "Kroger Brand"
+      "Kroger Brand",
+      "TOAOB0925KBBreakfastQ3"
     ]
   },
   {
@@ -367,8 +430,33 @@
     "synonyms": []
   },
   {
+    "name": "Late July",
+    "synonyms": [
+      "Late July"
+    ]
+  },
+  {
     "name": "Lay's",
     "synonyms": []
+  },
+  {
+    "name": "Litehouse",
+    "synonyms": [
+      "Litehouse"
+    ]
+  },
+  {
+    "name": "Louisiana Hot Sauce",
+    "synonyms": [
+      "Litehouse"
+    ]
+  },
+  {
+    "name": "Lunchables",
+    "synonyms": [
+      "LunchablePBJFall2025",
+      "Lunchables"
+    ]
   },
   {
     "name": "Madegood",
@@ -402,6 +490,12 @@
     "synonyms": []
   },
   {
+    "name": "Mezzetta",
+    "synonyms": [
+      "Mezzetta"
+    ]
+  },
+  {
     "name": "Mifroma",
     "synonyms": []
   },
@@ -412,6 +506,12 @@
   {
     "name": "Momofuku Soy",
     "synonyms": []
+  },
+  {
+    "name": "Monster Energy",
+    "synonyms": [
+      "Monster Energy"
+    ]
   },
   {
     "name": "Natural Vitality",
@@ -489,6 +589,12 @@
     "synonyms": []
   },
   {
+    "name": "Ortega",
+    "synonyms": [
+      "Ortega"
+    ]
+  },
+  {
     "name": "Oscar Mayer",
     "synonyms": [
       "ColdCutsProjectElmer0825"
@@ -528,8 +634,26 @@
     ]
   },
   {
+    "name": "Philadelphia",
+    "synonyms": [
+      "Late July"
+    ]
+  },
+  {
+    "name": "Pillsbury",
+    "synonyms": [
+      "Pillsbury"
+    ]
+  },
+  {
     "name": "Pompeian",
     "synonyms": []
+  },
+  {
+    "name": "Pringles",
+    "synonyms": [
+      "Pringles"
+    ]
   },
   {
     "name": "Pull-Ups",
@@ -557,6 +681,10 @@
     "synonyms": []
   },
   {
+    "name": "Starbucks",
+    "synonyms": []
+  },
+  {
     "name": "Stonyfield Organic",
     "synonyms": []
   },
@@ -567,6 +695,12 @@
   {
     "name": "Surprisingly Snackable Pecans",
     "synonyms": []
+  },
+  {
+    "name": "Swanson",
+    "synonyms": [
+      "Late July"
+    ]
   },
   {
     "name": "Terra Delyssa",
@@ -598,6 +732,10 @@
   },
   {
     "name": "Voltaren Arthritis Pain",
+    "synonyms": []
+  },
+  {
+    "name": "Wild Planet Not",
     "synonyms": []
   },
   {

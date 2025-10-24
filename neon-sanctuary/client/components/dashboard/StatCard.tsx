@@ -60,7 +60,7 @@ export function StatCard({ value, label, hint, trend, className, brandName, onCl
     >
       <div className="flex-1 flex flex-col">
         <div className="flex items-center gap-3">
-          <div className="text-[3em] leading-none font-extrabold text-[#111827]">{value}</div>
+          <div className="text-[3em] leading-none font-extrabold bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent">{value}</div>
           {trend && (
             <span className={cn("pill", trend === "up" ? "bg-success text-white" : "bg-warning text-white")} aria-label={`trend ${trend}`}>{trend === "up" ? "▲" : "▼"}</span>
           )}

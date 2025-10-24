@@ -1900,7 +1900,10 @@ class KeywordInputApp:
     def check_and_launch_brand_review(self):
         """Check if there are unknown brands and auto-launch review tool"""
         try:
+            print("[BRAND CHECK] Checking for unknown brands...")
             count = self.count_unknown_brands()
+            print(f"[BRAND CHECK] Found {count} unknown/uncertain brands")
+            
             if count > 0:
                 response = messagebox.askyesno(
                     "Unknown Brands Found",
@@ -1910,8 +1913,13 @@ class KeywordInputApp:
                 )
                 if response:
                     self.launch_brand_review_tool()
+            else:
+                print("[BRAND CHECK] No unknown brands found")
         except Exception as e:
             logging.error(f"Error checking for unknown brands: {e}")
+            print(f"[BRAND CHECK ERROR] {e}")
+            import traceback
+            traceback.print_exc()
     
     def count_unknown_brands(self):
         """Count ads with unknown/uncertain brands"""
