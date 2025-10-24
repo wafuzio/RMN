@@ -61,6 +61,37 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/bomb_pop"
     },
     {
+      "id": "instacart_halo_top_healthy_ice_cream_ec247958",
+      "retailer": "instacart",
+      "client": "halo top",
+      "keywords": [
+        "healthy ice cream",
+        "low calorie ice cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:15",
+        "12:15",
+        "14:15",
+        "16:15",
+        "20:15"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T04:08:51Z",
+      "updated_at": "2025-10-24T04:08:51Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__halo_top__healthy_ice_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/halo_top"
+    },
+    {
       "id": "instacart_jenis_jenis_ice_cream_73ce6189",
       "retailer": "instacart",
       "client": "jenis",
@@ -377,6 +408,37 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/bomb_pop"
     },
     {
+      "id": "kroger_halo_top_healthy_ice_cream_eb6e34cd",
+      "retailer": "kroger",
+      "client": "halo top",
+      "keywords": [
+        "healthy ice cream",
+        "low calorie ice cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:15",
+        "12:15",
+        "14:15",
+        "16:15",
+        "20:15"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T04:08:51Z",
+      "updated_at": "2025-10-24T04:08:51Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__halo_top__healthy_ice_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/halo_top"
+    },
+    {
       "id": "kroger_jenis_jenis_ice_cream_e50e0a09",
       "retailer": "kroger",
       "client": "jenis",
@@ -691,6 +753,37 @@
       "updated_at": "2025-10-23T03:58:37Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__bomb_pop__ice_pop.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/bomb_pop"
+    },
+    {
+      "id": "walmart_halo_top_healthy_ice_cream_4eb2de4d",
+      "retailer": "walmart",
+      "client": "halo top",
+      "keywords": [
+        "healthy ice cream",
+        "low calorie ice cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:15",
+        "12:15",
+        "14:15",
+        "16:15",
+        "20:15"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T04:08:51Z",
+      "updated_at": "2025-10-24T04:08:51Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__halo_top__healthy_ice_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/halo_top"
     },
     {
       "id": "walmart_jenis_jenis_ice_cream_d51f04aa",

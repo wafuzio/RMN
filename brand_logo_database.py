@@ -221,6 +221,20 @@ class BrandLogoDatabase:
         """Get list of all brands in database"""
         return [info["brand_name"] for info in self.database["brands"].values()]
     
+    def get_frontend_map(self) -> Dict[str, str]:
+        """
+        Get a simple mapping of brand names to logo file paths for frontend use
+        
+        Returns:
+            Dictionary mapping brand names to logo file paths
+        """
+        frontend_map = {
+            info["brand_name"]: info["logo_file"]
+            for info in self.database["brands"].values()
+        }
+        
+        return frontend_map
+    
     def export_for_frontend(self, output_file: str = None) -> Dict[str, str]:
         """Export brand logo mapping for frontend use
         
@@ -230,16 +244,51 @@ class BrandLogoDatabase:
         Returns:
             Dictionary mapping brand names to logo file paths
         """
-        frontend_map = {
-            info["brand_name"]: info["logo_file"]
-            for info in self.database["brands"].values()
-        }
+        frontend_map = self.get_frontend_map()
         
         if output_file:
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(frontend_map, f, indent=2, ensure_ascii=False)
         
         return frontend_map
+    
+    def sync_to_lexicon(self, lexicon_path: str = "config/brands.json"):
+        """
+        Sync all brands from logo database to the brand lexicon
+        Ensures every brand with a logo is also in the lexicon
+        """
+        import json
+        
+        try:
+            # Load lexicon
+            with open(lexicon_path, 'r') as f:
+                lexicon_brands = json.load(f)
+            
+            # Create set of existing brand names (lowercase)
+            existing_names = {brand['name'].lower() for brand in lexicon_brands}
+            
+            # Add missing brands
+            added_count = 0
+            for brand_info in self.database["brands"].values():
+                brand_name = brand_info["brand_name"]
+                if brand_name.lower() not in existing_names:
+                    lexicon_brands.append({
+                        'name': brand_name,
+                        'synonyms': []
+                    })
+                    added_count += 1
+            
+            if added_count > 0:
+                # Sort and save
+                lexicon_brands_sorted = sorted(lexicon_brands, key=lambda x: x['name'].lower())
+                with open(lexicon_path, 'w') as f:
+                    json.dump(lexicon_brands_sorted, f, indent=2, ensure_ascii=False)
+                print(f"[LOGO DB] Synced {added_count} brands to lexicon")
+            
+            return added_count
+        except Exception as e:
+            print(f"[LOGO DB] Failed to sync to lexicon: {e}")
+            return 0
 
 
 # Example usage

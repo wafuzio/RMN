@@ -1,5 +1,82 @@
 [
   {
+    "name": "Abreva",
+    "synonyms": []
+  },
+  {
+    "name": "Ancient Harvest",
+    "synonyms": []
+  },
+  {
+    "name": "Applegate Natural",
+    "synonyms": []
+  },
+  {
+    "name": "Ball Park",
+    "synonyms": []
+  },
+  {
+    "name": "Band-Aid",
+    "synonyms": [
+      "BandAid",
+      "Band Aid"
+    ]
+  },
+  {
+    "name": "Banquet",
+    "synonyms": [
+      "SSMAlwaysOn0625",
+      "Marie Callender's"
+    ]
+  },
+  {
+    "name": "Barilla",
+    "synonyms": [
+      "Barilla Pasta"
+    ]
+  },
+  {
+    "name": "Bertolli",
+    "synonyms": [
+      "MSMAlwaysOn0625",
+      "Bertolli"
+    ]
+  },
+  {
+    "name": "Bibigo",
+    "synonyms": []
+  },
+  {
+    "name": "Big K",
+    "synonyms": [
+      "Big"
+    ]
+  },
+  {
+    "name": "Birds Eye",
+    "synonyms": [
+      "MSMAlwaysOn0625",
+      "Bertolli"
+    ]
+  },
+  {
+    "name": "Birdseye",
+    "synonyms": [
+      "MSMAlwaysOn0625"
+    ]
+  },
+  {
+    "name": "Blue Bunny",
+    "synonyms": [
+      "BlueBunny",
+      "Blue-Bunny"
+    ]
+  },
+  {
+    "name": "Boiron",
+    "synonyms": []
+  },
+  {
     "name": "Bomb Pop",
     "synonyms": [
       "BombPop",
@@ -7,68 +84,113 @@
     ]
   },
   {
+    "name": "Boulder Canyon",
+    "synonyms": []
+  },
+  {
+    "name": "Breyers",
+    "synonyms": []
+  },
+  {
+    "name": "Butterfinger Ice Cream Bars",
+    "synonyms": [
+      "Butterfinger Ice Cream Bars"
+    ]
+  },
+  {
+    "name": "Campbell's",
+    "synonyms": [
+      "Campbell",
+      "Campbells",
+      "Campbell Soup"
+    ]
+  },
+  {
+    "name": "Campbells Chunky",
+    "synonyms": []
+  },
+  {
+    "name": "Carbe Diem Penne",
+    "synonyms": []
+  },
+  {
+    "name": "Cheez-It",
+    "synonyms": [
+      "MSCCollegeFootballWave2101525",
+      "Dr. Pepper"
+    ]
+  },
+  {
+    "name": "Clio",
+    "synonyms": []
+  },
+  {
+    "name": "Coca-Cola",
+    "synonyms": [
+      "Coca Cola",
+      "CocaCola",
+      "Coke"
+    ]
+  },
+  {
+    "name": "Dairy Farmers of America",
+    "synonyms": []
+  },
+  {
+    "name": "Danone",
+    "synonyms": []
+  },
+  {
+    "name": "Del Monte",
+    "synonyms": []
+  },
+  {
+    "name": "Dr. Pepper",
+    "synonyms": [
+      "MSCCollegeFootballWave2101525",
+      "Dr. Pepper"
+    ]
+  },
+  {
+    "name": "Dreyers Grand Ice Cream",
+    "synonyms": []
+  },
+  {
+    "name": "Dreyers Grand Ice Creanm",
+    "synonyms": []
+  },
+  {
+    "name": "Eat Happy",
+    "synonyms": []
+  },
+  {
+    "name": "Eckrich",
+    "synonyms": [
+      "MSCCollegeFootballWave2101525",
+      "Dr. Pepper"
+    ]
+  },
+  {
+    "name": "Fresh Pet",
+    "synonyms": [
+      "FreshPet",
+      "Fresh-Pet"
+    ]
+  },
+  {
+    "name": "Fresh Press",
+    "synonyms": []
+  },
+  {
+    "name": "Frito Lay",
+    "synonyms": [
+      "FLMultipack899MB2"
+    ]
+  },
+  {
     "name": "Frollies",
     "synonyms": [
       "Frollie"
-    ]
-  },
-  {
-    "name": "Nature's Bounty",
-    "synonyms": [
-      "Natures Bounty",
-      "NBTY",
-      "Natures",
-      "Bounty"
-    ]
-  },
-  {
-    "name": "Go-GURT",
-    "synonyms": [
-      "GoGurt",
-      "Gogurt",
-      "Go Gurt",
-      "Yoplait Go-GURT"
-    ]
-  },
-  {
-    "name": "Yoplait",
-    "synonyms": [
-      "Yoplait Yogurt"
-    ]
-  },
-  {
-    "name": "Gold Bond",
-    "synonyms": [
-      "Goldbond",
-      "Gold-Bond"
-    ]
-  },
-  {
-    "name": "O'Keeffe's",
-    "synonyms": [
-      "OKeeffes",
-      "Okeeffes",
-      "O Keeffes",
-      "OKeeffe"
-    ]
-  },
-  {
-    "name": "Kraft",
-    "synonyms": [
-      "Kraft Foods"
-    ]
-  },
-  {
-    "name": "Heinz",
-    "synonyms": [
-      "Heinz Ketchup"
-    ]
-  },
-  {
-    "name": "Kraft Heinz",
-    "synonyms": [
-      "Kraft-Heinz",
-      "KraftHeinz"
     ]
   },
   {
@@ -80,13 +202,138 @@
     ]
   },
   {
-    "name": "P&G",
+    "name": "Ghirardelli",
+    "synonyms": []
+  },
+  {
+    "name": "Go-GURT",
     "synonyms": [
-      "PG",
-      "P and G",
-      "Procter & Gamble",
-      "Procter and Gamble",
-      "Procter"
+      "GoGurt",
+      "Gogurt",
+      "Go Gurt",
+      "Yoplait Go-GURT"
+    ]
+  },
+  {
+    "name": "Gold Bond",
+    "synonyms": [
+      "Goldbond",
+      "Gold-Bond"
+    ]
+  },
+  {
+    "name": "Goldfish",
+    "synonyms": []
+  },
+  {
+    "name": "Goodpop",
+    "synonyms": []
+  },
+  {
+    "name": "GRILLO'S PICKLES",
+    "synonyms": []
+  },
+  {
+    "name": "Grown in Idaho",
+    "synonyms": []
+  },
+  {
+    "name": "Haagen-Dazs",
+    "synonyms": []
+  },
+  {
+    "name": "Healthy Choice",
+    "synonyms": [
+      "SSMAlwaysOn0625",
+      "Marie Callender's"
+    ]
+  },
+  {
+    "name": "Heinz",
+    "synonyms": [
+      "Heinz Ketchup"
+    ]
+  },
+  {
+    "name": "Herdez",
+    "synonyms": [
+      "MegaMex",
+      "Herdez Brand"
+    ]
+  },
+  {
+    "name": "Hillshire Farm Hot",
+    "synonyms": []
+  },
+  {
+    "name": "Häagen-Dazs",
+    "synonyms": [
+      "Haagen-Dazs",
+      "Haagen Dazs",
+      "HagenDazs",
+      "Häagen Dazs"
+    ]
+  },
+  {
+    "name": "Impossible",
+    "synonyms": [
+      "Impossible"
+    ]
+  },
+  {
+    "name": "Ithaca",
+    "synonyms": [
+      "Ithaca Hummus"
+    ]
+  },
+  {
+    "name": "Jell-O",
+    "synonyms": [
+      "Jello",
+      "Jell O",
+      "JellO",
+      "Jell-O®"
+    ]
+  },
+  {
+    "name": "Jennie-O",
+    "synonyms": [
+      "Jennie O",
+      "JennieO",
+      "Hormel"
+    ]
+  },
+  {
+    "name": "Jonnypops",
+    "synonyms": []
+  },
+  {
+    "name": "Kellogg's",
+    "synonyms": [
+      "Kellogg",
+      "Kelloggs",
+      "Kellogg Company"
+    ]
+  },
+  {
+    "name": "Kellogg's Cereal",
+    "synonyms": []
+  },
+  {
+    "name": "Kettle",
+    "synonyms": []
+  },
+  {
+    "name": "Kraft",
+    "synonyms": [
+      "Kraft Foods"
+    ]
+  },
+  {
+    "name": "Kraft Heinz",
+    "synonyms": [
+      "Kraft-Heinz",
+      "KraftHeinz"
     ]
   },
   {
@@ -100,89 +347,32 @@
     ]
   },
   {
-    "name": "Herdez",
+    "name": "Kroger Brand",
     "synonyms": [
-      "MegaMex",
-      "Herdez Brand"
+      "Kroger Brand"
     ]
   },
   {
-    "name": "Jennie-O",
+    "name": "Kroger Cereal",
     "synonyms": [
-      "Jennie O",
-      "JennieO",
-      "Hormel"
+      "Kroger Cereal"
     ]
   },
   {
-    "name": "Unilever",
+    "name": "Land O Frost",
     "synonyms": []
   },
   {
-    "name": "Nestle",
-    "synonyms": [
-      "Nestlé",
-      "Nestle USA"
-    ]
+    "name": "Land O Frost Premium Products",
+    "synonyms": []
   },
   {
-    "name": "PepsiCo",
-    "synonyms": [
-      "Pepsi Co",
-      "Pepsi",
-      "PepsiCo Inc"
-    ]
+    "name": "Lay's",
+    "synonyms": []
   },
   {
-    "name": "Coca-Cola",
-    "synonyms": [
-      "Coca Cola",
-      "CocaCola",
-      "Coke"
-    ]
-  },
-  {
-    "name": "Kellogg's",
-    "synonyms": [
-      "Kellogg",
-      "Kelloggs",
-      "Kellogg Company"
-    ]
-  },
-  {
-    "name": "Campbell's",
-    "synonyms": [
-      "Campbell",
-      "Campbells",
-      "Campbell Soup"
-    ]
-  },
-  {
-    "name": "Barilla",
-    "synonyms": [
-      "Barilla Pasta"
-    ]
-  },
-  {
-    "name": "Blue Bunny",
-    "synonyms": [
-      "BlueBunny",
-      "Blue-Bunny"
-    ]
-  },
-  {
-    "name": "Band-Aid",
-    "synonyms": [
-      "BandAid",
-      "Band Aid"
-    ]
-  },
-  {
-    "name": "Fresh Pet",
-    "synonyms": [
-      "FreshPet",
-      "Fresh-Pet"
-    ]
+    "name": "Madegood",
+    "synonyms": []
   },
   {
     "name": "Magic Spoon",
@@ -193,21 +383,45 @@
     ]
   },
   {
-    "name": "Pull-Ups",
+    "name": "Marie Callender's",
     "synonyms": [
-      "Pull Ups",
-      "PullUps",
-      "Pull-Ups®",
-      "Pullups"
+      "SSMAlwaysOn0625",
+      "Marie Callender's"
     ]
   },
   {
-    "name": "Jell-O",
+    "name": "Marzetti",
+    "synonyms": []
+  },
+  {
+    "name": "Mateo's Gourmet Salsa",
+    "synonyms": []
+  },
+  {
+    "name": "Mayfield Dairy Farms",
+    "synonyms": []
+  },
+  {
+    "name": "Mifroma",
+    "synonyms": []
+  },
+  {
+    "name": "Milton's Craft Bakers",
+    "synonyms": []
+  },
+  {
+    "name": "Momofuku Soy",
+    "synonyms": []
+  },
+  {
+    "name": "Natural Vitality",
+    "synonyms": []
+  },
+  {
+    "name": "Nature's Bounty",
     "synonyms": [
-      "Jello",
-      "Jell O",
-      "JellO",
-      "Jell-O®"
+      "Natures Bounty",
+      "NBTY"
     ]
   },
   {
@@ -219,11 +433,43 @@
     ]
   },
   {
+    "name": "Nature's Truth",
+    "synonyms": []
+  },
+  {
+    "name": "Nestle",
+    "synonyms": [
+      "Nestlé",
+      "Nestle USA"
+    ]
+  },
+  {
+    "name": "Nestle Toll House",
+    "synonyms": []
+  },
+  {
+    "name": "New York Bakery",
+    "synonyms": []
+  },
+  {
     "name": "NuTrail",
     "synonyms": [
       "Nu Trail",
       "Nu-Trail",
       "Nutrail"
+    ]
+  },
+  {
+    "name": "NuTrail Granola",
+    "synonyms": []
+  },
+  {
+    "name": "O'Keeffe's",
+    "synonyms": [
+      "OKeeffes",
+      "Okeeffes",
+      "O Keeffes",
+      "OKeeffe"
     ]
   },
   {
@@ -235,39 +481,12 @@
     ]
   },
   {
-    "name": "Ithaca",
-    "synonyms": [
-      "Ithaca Hummus"
-    ]
-  },
-  {
-    "name": "Häagen-Dazs",
-    "synonyms": [
-      "Haagen-Dazs",
-      "Haagen Dazs",
-      "HagenDazs",
-      "Häagen Dazs"
-    ]
-  },
-  {
-    "name": "Big K",
-    "synonyms": [
-      "Big"
-    ]
-  },
-  {
-    "name": "Nestle Toll House",
+    "name": "Opti-free",
     "synonyms": []
   },
   {
-    "name": "Tillamook",
+    "name": "Orgain: Clean Nutrition",
     "synonyms": []
-  },
-  {
-    "name": "Kroger Cereal",
-    "synonyms": [
-      "Kroger Cereal"
-    ]
   },
   {
     "name": "Oscar Mayer",
@@ -276,34 +495,17 @@
     ]
   },
   {
-    "name": "Kroger Brand",
-    "synonyms": [
-      "Kroger Brand"
-    ]
+    "name": "Outshine",
+    "synonyms": []
   },
   {
-    "name": "Zbar",
+    "name": "P&G",
     "synonyms": [
-      "Zbar"
-    ]
-  },
-  {
-    "name": "Frito Lay",
-    "synonyms": [
-      "FLMultipack899MB2"
-    ]
-  },
-  {
-    "name": "Bertolli",
-    "synonyms": [
-      "MSMAlwaysOn0625",
-      "Bertolli"
-    ]
-  },
-  {
-    "name": "Birdseye",
-    "synonyms": [
-      "MSMAlwaysOn0625"
+      "PG",
+      "P and G",
+      "Procter & Gamble",
+      "Procter and Gamble",
+      "Procter"
     ]
   },
   {
@@ -314,64 +516,104 @@
     ]
   },
   {
-    "name": "Birds Eye",
+    "name": "Panera Bread",
+    "synonyms": []
+  },
+  {
+    "name": "PepsiCo",
     "synonyms": [
-      "MSMAlwaysOn0625",
-      "Bertolli"
+      "Pepsi Co",
+      "Pepsi",
+      "PepsiCo Inc"
     ]
   },
   {
-    "name": "Impossible",
+    "name": "Pompeian",
+    "synonyms": []
+  },
+  {
+    "name": "Pull-Ups",
     "synonyms": [
-      "Impossible"
+      "Pull Ups",
+      "PullUps",
+      "Pull-Ups®",
+      "Pullups"
     ]
   },
   {
-    "name": "Marie Callender's",
+    "name": "Siete Foods",
+    "synonyms": []
+  },
+  {
+    "name": "Siggi's",
+    "synonyms": []
+  },
+  {
+    "name": "Snack Factory",
+    "synonyms": []
+  },
+  {
+    "name": "Sour Patch Kids",
+    "synonyms": []
+  },
+  {
+    "name": "Stonyfield Organic",
+    "synonyms": []
+  },
+  {
+    "name": "Success Rice",
+    "synonyms": []
+  },
+  {
+    "name": "Surprisingly Snackable Pecans",
+    "synonyms": []
+  },
+  {
+    "name": "Terra Delyssa",
+    "synonyms": []
+  },
+  {
+    "name": "Tide",
+    "synonyms": []
+  },
+  {
+    "name": "Tillamook",
+    "synonyms": []
+  },
+  {
+    "name": "Trolli Gummi Pop",
+    "synonyms": []
+  },
+  {
+    "name": "Tru Fru",
+    "synonyms": []
+  },
+  {
+    "name": "Tyson",
+    "synonyms": []
+  },
+  {
+    "name": "Unilever",
+    "synonyms": []
+  },
+  {
+    "name": "Voltaren Arthritis Pain",
+    "synonyms": []
+  },
+  {
+    "name": "Yoplait",
     "synonyms": [
-      "SSMAlwaysOn0625",
-      "Marie Callender's"
+      "Yoplait Yogurt"
     ]
   },
   {
-    "name": "Healthy Choice",
-    "synonyms": [
-      "SSMAlwaysOn0625",
-      "Marie Callender's"
-    ]
+    "name": "Zapp's",
+    "synonyms": []
   },
   {
-    "name": "Banquet",
+    "name": "Zbar",
     "synonyms": [
-      "SSMAlwaysOn0625",
-      "Marie Callender's"
-    ]
-  },
-  {
-    "name": "Dr. Pepper",
-    "synonyms": [
-      "MSCCollegeFootballWave2101525",
-      "Dr. Pepper"
-    ]
-  },
-  {
-    "name": "Cheez-It",
-    "synonyms": [
-      "MSCCollegeFootballWave2101525",
-      "Dr. Pepper"
-    ]
-  },
-  {
-    "name": "Eckrich",
-    "synonyms": [
-      "MSCCollegeFootballWave2101525",
-      "Dr. Pepper"
-    ]
-  },
-  {
-    "name": "Butterfinger Ice Cream Bars",
-    "synonyms": [
-      "Butterfinger Ice Cream Bars"
+      "Zbar"
     ]
   }
 ]

@@ -1,0 +1,29 @@
+{
+  "id": "walmart_halo_top_healthy_ice_cream_4eb2de4d",
+  "retailer": "walmart",
+  "client": "halo top",
+  "keywords": [
+    "healthy ice cream",
+    "low calorie ice cream"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "08:15",
+    "12:15",
+    "14:15",
+    "16:15",
+    "20:15"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-10-24T04:08:51Z",
+  "updated_at": "2025-10-24T04:08:51Z"
+}

@@ -22,6 +22,14 @@ import re
 from pathlib import Path
 import shutil
 
+# Import brand logo database
+try:
+    from brand_logo_database import BrandLogoDatabase
+    LOGO_DB_AVAILABLE = True
+except ImportError:
+    LOGO_DB_AVAILABLE = False
+    print("[WARN] Brand logo database not available")
+
 class BrandReviewTool:
     def __init__(self, root):
         self.root = root
@@ -32,6 +40,23 @@ class BrandReviewTool:
         self.unknown_ads = []
         self.current_index = 0
         self.lexicon_path = "config/brands.json"
+        
+        # Initialize logo database
+        if LOGO_DB_AVAILABLE:
+            try:
+                # Point to output/ directory where logos are stored
+                base_dir = Path(os.getcwd()) / "output"
+                self.logo_db = BrandLogoDatabase(base_dir=str(base_dir))
+                brand_count = len(self.logo_db.database.get('brands', {}))
+                print(f"[INFO] Brand logo database loaded ({brand_count} brands)")
+            except Exception as e:
+                print(f"[WARN] Failed to load logo database: {e}")
+                self.logo_db = None
+        else:
+            self.logo_db = None
+        
+        # Sync logo database brands to lexicon
+        self.sync_logo_brands_to_lexicon()
         
         # Setup UI
         self.setup_ui()
@@ -84,9 +109,17 @@ class BrandReviewTool:
         input_frame = ttk.LabelFrame(right_frame, text="Correct Brand Name(s)", padding="10")
         input_frame.pack(fill=tk.X, pady=(0, 10))
         
-        ttk.Label(input_frame, text="Current Brand:", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.current_brand_label = ttk.Label(input_frame, text="", foreground="red", font=("Arial", 10))
-        self.current_brand_label.grid(row=0, column=1, columnspan=2, sticky=tk.W, pady=5, padx=(10, 0))
+        # Current brand with logo
+        brand_row = ttk.Frame(input_frame)
+        brand_row.grid(row=0, column=0, columnspan=3, sticky=tk.EW, pady=5)
+        
+        ttk.Label(brand_row, text="Current Brand:", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
+        self.current_brand_label = ttk.Label(brand_row, text="", foreground="red", font=("Arial", 10))
+        self.current_brand_label.pack(side=tk.LEFT, padx=(10, 10))
+        
+        # Brand logo display (small thumbnail)
+        self.brand_logo_label = ttk.Label(brand_row)
+        self.brand_logo_label.pack(side=tk.LEFT, padx=(0, 10))
         
         # Container for brand entries
         self.brand_entries_frame = ttk.Frame(input_frame)
@@ -451,6 +484,12 @@ class BrandReviewTool:
             brand_text = ad_data['current_brand']
         self.current_brand_label.config(text=brand_text)
         
+        # Display brand logo if available (use first brand)
+        if advertisers and advertisers[0] != 'unknown':
+            self.display_brand_logo(advertisers[0])
+        else:
+            self.brand_logo_label.config(image='')
+        
         # Clear and update details
         self.details_text.delete('1.0', tk.END)
         details = self.format_ad_details(ad)
@@ -535,6 +574,39 @@ class BrandReviewTool:
             self.image_label.image = photo  # Keep a reference
         except Exception as e:
             self.image_label.config(text=f"Error loading image:\n{str(e)}", image='')
+    
+    def display_brand_logo(self, brand_name):
+        """Display brand logo thumbnail if available"""
+        if not self.logo_db:
+            return
+        
+        try:
+            logo_info = self.logo_db.get_brand_logo(brand_name)
+            if logo_info and 'logo_file' in logo_info:
+                logo_path = logo_info['logo_file']
+                
+                # Check if file exists (relative to project root or absolute)
+                if not os.path.isabs(logo_path):
+                    logo_path = os.path.join(os.getcwd(), 'output', logo_path)
+                
+                if os.path.exists(logo_path):
+                    img = Image.open(logo_path)
+                    
+                    # Resize to small thumbnail (40x40)
+                    img.thumbnail((40, 40), Image.Resampling.LANCZOS)
+                    
+                    photo = ImageTk.PhotoImage(img)
+                    self.brand_logo_label.config(image=photo)
+                    self.brand_logo_label.image = photo  # Keep reference
+                    print(f"[LOGO] Displayed logo for {brand_name}")
+                else:
+                    self.brand_logo_label.config(image='')
+                    print(f"[LOGO] Logo file not found: {logo_path}")
+            else:
+                self.brand_logo_label.config(image='')
+        except Exception as e:
+            self.brand_logo_label.config(image='')
+            print(f"[LOGO] Error displaying logo: {e}")
     
     def show_suggestions(self, ad):
         """Generate and show brand suggestions"""
@@ -719,6 +791,43 @@ class BrandReviewTool:
             shutil.move(old_path, new_path)
             ad_data['image_path'] = new_path
     
+    def sync_logo_brands_to_lexicon(self):
+        """Sync brands from logo database into lexicon"""
+        if not self.logo_db:
+            return
+        
+        try:
+            # Get all brands from logo database
+            logo_brands = self.logo_db.list_all_brands()
+            
+            # Load lexicon
+            with open(self.lexicon_path, 'r') as f:
+                lexicon_brands = json.load(f)
+            
+            # Create a set of existing brand names (lowercase for comparison)
+            existing_names = {brand['name'].lower() for brand in lexicon_brands}
+            
+            # Add missing brands from logo database
+            added_count = 0
+            for logo_brand in logo_brands:
+                if logo_brand.lower() not in existing_names:
+                    # Add to lexicon
+                    lexicon_brands.append({
+                        'name': logo_brand,
+                        'synonyms': []
+                    })
+                    added_count += 1
+                    print(f"[SYNC] Added '{logo_brand}' from logo database to lexicon")
+            
+            if added_count > 0:
+                # Sort and save
+                lexicon_brands_sorted = sorted(lexicon_brands, key=lambda x: x['name'].lower())
+                with open(self.lexicon_path, 'w') as f:
+                    json.dump(lexicon_brands_sorted, f, indent=2, ensure_ascii=False)
+                print(f"[SYNC] Added {added_count} brands from logo database to lexicon")
+        except Exception as e:
+            print(f"[WARN] Failed to sync logo brands to lexicon: {e}")
+    
     def update_lexicon(self, corrected_brand, old_brand):
         """Add corrected brand to lexicon and add old brand as alias"""
         # Load lexicon (it's a list of {name, synonyms} objects)
@@ -746,9 +855,12 @@ class BrandReviewTool:
             brands.append(new_brand)
             print(f"[LEXICON] Added new brand '{corrected_brand}' with synonym '{old_brand}'")
         
+        # Sort brands alphabetically by name (case-insensitive)
+        brands_sorted = sorted(brands, key=lambda x: x['name'].lower())
+        
         # Save lexicon (keep it as a list)
         with open(self.lexicon_path, 'w') as f:
-            json.dump(brands, f, indent=2, ensure_ascii=False)
+            json.dump(brands_sorted, f, indent=2, ensure_ascii=False)
     
     def apply_to_all_similar(self):
         """Apply the corrected brand(s) to all similar ads with the same message/header/URL"""

@@ -340,6 +340,99 @@ def extract_image_urls_from_json(
 
 
 # ----------------------------
+# JSON Update
+# ----------------------------
+
+def update_json_with_image_paths(json_file: str, image_urls: List[Dict[str, Any]]):
+    """
+    Update the JSON file with saved image paths.
+    Maps each ad to its corresponding image file path.
+    """
+    print(f"\n💾 Updating JSON with image paths: {json_file}")
+    
+    try:
+        with open(json_file, 'r') as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"❌ Failed to read JSON: {e}")
+        return
+    
+    # Build a mapping of ad info to saved paths
+    # image_urls contains: ad_type, position, url, saved_image_path
+    path_map = {}
+    for img_info in image_urls:
+        if 'saved_image_path' not in img_info:
+            continue
+        
+        ad_type = img_info.get('ad_type', 'TOA')
+        position = img_info.get('position')
+        image_url = img_info.get('url', '')
+        saved_path = img_info['saved_image_path']
+        
+        # Create a key to match ads (type + position + url)
+        key = (ad_type, position, image_url)
+        path_map[key] = saved_path
+    
+    if not path_map:
+        print("⚠️ No saved paths to update")
+        return
+    
+    print(f"📋 Found {len(path_map)} image paths to save")
+    
+    # Update ads in JSON
+    updated_count = 0
+    for result in data.get('results', []):
+        for ad in result.get('ads', []):
+            ad_type = ad.get('type')
+            position = ad.get('position')
+            image_url = ad.get('image_url', '')
+            
+            # Try to match this ad
+            key = (ad_type, position, image_url)
+            if key in path_map:
+                saved_path = path_map[key]
+                
+                # Determine the field name based on ad type
+                if ad_type == 'CuratedCarousel':
+                    field_name = 'carousel_image_path'
+                elif ad_type == 'Skyscraper':
+                    field_name = 'skyscraper_image_path'
+                else:  # TOA or other
+                    field_name = 'toa_image_path'
+                
+                # Save relative path (from output/ directory)
+                # Convert absolute path to relative: /path/to/output/kroger/client/TOA/file.png -> TOA/file.png
+                try:
+                    # Extract just the last 2-3 parts (ad_type/filename or client/ad_type/filename)
+                    parts = saved_path.split(os.sep)
+                    if 'TOA' in parts:
+                        idx = parts.index('TOA')
+                        relative_path = os.sep.join(parts[idx:])
+                    elif 'Skyscraper' in parts:
+                        idx = parts.index('Skyscraper')
+                        relative_path = os.sep.join(parts[idx:])
+                    elif 'Carousel' in parts:
+                        idx = parts.index('Carousel')
+                        relative_path = os.sep.join(parts[idx:])
+                    else:
+                        relative_path = os.path.basename(saved_path)
+                except Exception:
+                    relative_path = os.path.basename(saved_path)
+                
+                ad[field_name] = relative_path
+                updated_count += 1
+                print(f"  ✓ Updated {ad_type} ad (position {position}): {field_name} = {relative_path}")
+    
+    # Save updated JSON
+    try:
+        with open(json_file, 'w') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        print(f"✅ JSON updated successfully ({updated_count} ads)")
+    except Exception as e:
+        print(f"❌ Failed to write JSON: {e}")
+
+
+# ----------------------------
 # Screenshot / Process
 # ----------------------------
 
@@ -632,6 +725,9 @@ def process_images(
                                     image_info['advertisers'] = detected_brands
                             except Exception as ocr_err:
                                 print(f"⚠️ OCR detection skipped: {ocr_err}")
+                            
+                            # Save the final output path for JSON update
+                            image_info['saved_image_path'] = output_path
                     except Exception as e:
                         print(f"❌ Image download error: {e}")
 
@@ -820,6 +916,7 @@ def process_images(
                             
                             if ok:
                                 print(f"✅ Image downloaded successfully to: {output_path}")
+                                saved_count += 1
                             else:
                                 # Second attempt: try rendering in a tab (some CDNs require it)
                                 print("⚠️ Context download failed, trying browser fallback...")
@@ -830,6 +927,7 @@ def process_images(
                                     page.screenshot(path=output_path, full_page=False)
                                     print(f"✅ Fallback screenshot saved to: {output_path}")
                                     ok = True
+                                    saved_count += 1
                                 except Exception as e:
                                     print(f"❌ Navigation/screenshot fallback error: {e}")
                                     # Last resort: direct download without browser context
@@ -837,8 +935,13 @@ def process_images(
                                     ok = direct_download_image(image_url, output_path, referer=srp_url, retries=3)
                                     if ok:
                                         print(f"✅ Direct download successful: {output_path}")
+                                        saved_count += 1
                                     else:
                                         print(f"❌ All download methods failed for: {image_url}")
+                            
+                            # Save the final output path for JSON update
+                            if ok:
+                                image_info['saved_image_path'] = output_path
                         except Exception as e:
                             print(f"❌ Image download error: {e}")
 
@@ -859,6 +962,14 @@ def process_images(
                         pass
     
     print(f"\n📊 Summary: {saved_count}/{len(image_urls)} images saved successfully")
+    
+    # Update JSON with saved image paths
+    if saved_count > 0:
+        try:
+            update_json_with_image_paths(args.json, image_urls)
+        except Exception as e:
+            print(f"⚠️ Failed to update JSON with image paths: {e}")
+    
     return saved_count
 
 
