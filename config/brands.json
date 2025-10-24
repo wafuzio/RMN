@@ -93,7 +93,10 @@
     "name": "Kroger",
     "synonyms": [
       "Kroger Brand",
-      "Kroger's"
+      "Kroger's",
+      "Kroger",
+      "TOABLBORExpandedDistroFY25H293",
+      "TOAOB0825BakeryFreshQ3"
     ]
   },
   {
@@ -244,6 +247,131 @@
       "Haagen Dazs",
       "HagenDazs",
       "Häagen Dazs"
+    ]
+  },
+  {
+    "name": "Big K",
+    "synonyms": [
+      "Big"
+    ]
+  },
+  {
+    "name": "Nestle Toll House",
+    "synonyms": []
+  },
+  {
+    "name": "Tillamook",
+    "synonyms": []
+  },
+  {
+    "name": "Kroger Cereal",
+    "synonyms": [
+      "Kroger Cereal"
+    ]
+  },
+  {
+    "name": "Oscar Mayer",
+    "synonyms": [
+      "ColdCutsProjectElmer0825"
+    ]
+  },
+  {
+    "name": "Kroger Brand",
+    "synonyms": [
+      "Kroger Brand"
+    ]
+  },
+  {
+    "name": "Zbar",
+    "synonyms": [
+      "Zbar"
+    ]
+  },
+  {
+    "name": "Frito Lay",
+    "synonyms": [
+      "FLMultipack899MB2"
+    ]
+  },
+  {
+    "name": "Bertolli",
+    "synonyms": [
+      "MSMAlwaysOn0625",
+      "Bertolli"
+    ]
+  },
+  {
+    "name": "Birdseye",
+    "synonyms": [
+      "MSMAlwaysOn0625"
+    ]
+  },
+  {
+    "name": "P.F. Chang's",
+    "synonyms": [
+      "MSMAlwaysOn0625",
+      "Bertolli"
+    ]
+  },
+  {
+    "name": "Birds Eye",
+    "synonyms": [
+      "MSMAlwaysOn0625",
+      "Bertolli"
+    ]
+  },
+  {
+    "name": "Impossible",
+    "synonyms": [
+      "Impossible"
+    ]
+  },
+  {
+    "name": "Marie Callender's",
+    "synonyms": [
+      "SSMAlwaysOn0625",
+      "Marie Callender's"
+    ]
+  },
+  {
+    "name": "Healthy Choice",
+    "synonyms": [
+      "SSMAlwaysOn0625",
+      "Marie Callender's"
+    ]
+  },
+  {
+    "name": "Banquet",
+    "synonyms": [
+      "SSMAlwaysOn0625",
+      "Marie Callender's"
+    ]
+  },
+  {
+    "name": "Dr. Pepper",
+    "synonyms": [
+      "MSCCollegeFootballWave2101525",
+      "Dr. Pepper"
+    ]
+  },
+  {
+    "name": "Cheez-It",
+    "synonyms": [
+      "MSCCollegeFootballWave2101525",
+      "Dr. Pepper"
+    ]
+  },
+  {
+    "name": "Eckrich",
+    "synonyms": [
+      "MSCCollegeFootballWave2101525",
+      "Dr. Pepper"
+    ]
+  },
+  {
+    "name": "Butterfinger Ice Cream Bars",
+    "synonyms": [
+      "Butterfinger Ice Cream Bars"
     ]
   }
 ]

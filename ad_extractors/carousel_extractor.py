@@ -37,15 +37,31 @@ class CarouselExtractor(AdExtractor):
         if not carousel_element:
             return None
         
-        # CRITICAL: Only extract SPONSORED carousels (marked with "Featured")
-        # Look for the featured flag div within the carousel
+        # CRITICAL: Only extract SPONSORED carousels (marked with "Featured" or "Sponsored")
+        # Look for the featured flag element or explicit badge text
         featured_indicator = carousel_element.select_one('.CuratedCarousel__featuredFlag') or \
                             carousel_element.select_one('[data-testid="carousel-featured-flag"]') or \
-                            carousel_element.find(string=re.compile(r'^Featured$', re.IGNORECASE))
+                            carousel_element.select_one('[class*="featured"]') or \
+                            carousel_element.select_one('[class*="sponsored"]')
         
+        # If no featured element, check for explicit "Featured" or "Sponsored" badge text
+        # IMPORTANT: Only check at carousel level, not within product cards
         if not featured_indicator:
-            # Not a sponsored carousel - skip it
-            return None
+            # Look for "Featured" badge BEFORE the product content section
+            # The badge should be a direct child or in the header area, not in product cards
+            header_section = carousel_element.find('div', class_='CuratedCarousel__header')
+            if header_section:
+                # Check if "Featured" appears before the header (as a badge)
+                for sibling in header_section.previous_siblings:
+                    if hasattr(sibling, 'get_text'):
+                        text = sibling.get_text(strip=True)
+                        if text in ['Featured', 'Sponsored']:
+                            featured_indicator = True
+                            break
+            
+            if not featured_indicator:
+                # Not a sponsored carousel - skip it
+                return None
         
         # Initialize ad data
         ad = {

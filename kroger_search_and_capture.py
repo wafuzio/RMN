@@ -626,6 +626,22 @@ def search_and_capture(search_term=None, output_dir=None):
                 except Exception as e:
                     print(f"   Warning: Scrolling failed: {e}")
 
+                # Wait for carousel products to load after scrolling (prevents gray boxes in main screenshot)
+                try:
+                    # Check if there are carousels on the page
+                    carousels = page.query_selector_all('div.CuratedCarousel')
+                    if carousels:
+                        print(f"   Waiting for {len(carousels)} carousel(s) to load...")
+                        # Wait for carousel product images to load
+                        page.wait_for_selector('img[src*="product/images"]', timeout=3000, state='visible')
+                        # Additional wait for images to render
+                        page.wait_for_timeout(1500)
+                        print("   ✅ Carousels loaded")
+                except Exception as carousel_wait_err:
+                    print(f"   ⚠️ Carousel loading wait timed out (may not affect screenshot): {carousel_wait_err}")
+                    # Continue anyway - not all pages have carousels
+                    pass
+
                 # Screenshot main results
                 screenshot_path = os.path.join(main_dir, f"{file_prefix}.png")
                 page.screenshot(path=screenshot_path, full_page=True)
@@ -652,21 +668,57 @@ def search_and_capture(search_term=None, output_dir=None):
                         for i, carousel in enumerate(carousels):
                             try:
                                 # CRITICAL: Only capture FEATURED/SPONSORED carousels
-                                # Check for featured flag (matches HTML parser logic)
-                                featured_flag = carousel.query_selector('.CuratedCarousel__featuredFlag, [data-testid="carousel-featured-flag"]')
+                                # Check for featured flag/badge (must be explicit, not just text containing "Featured")
+                                featured_flag = carousel.query_selector('.CuratedCarousel__featuredFlag, [data-testid="carousel-featured-flag"], [class*="featured" i], [class*="sponsored" i]')
+                                
+                                # If no featured flag element, check for explicit "Featured" badge text
+                                # IMPORTANT: Only check at carousel level, not within product cards
                                 if not featured_flag:
-                                    # Also check for "Featured" text
-                                    featured_text = carousel.evaluate('el => el.textContent.includes("Featured")')
-                                    if not featured_text:
-                                        print(f"⚠️ Skipping carousel {i+1} - not a featured/sponsored carousel")
+                                    # Look for "Featured" badge BEFORE the product content
+                                    # The badge should be a direct child, not in product card tags
+                                    featured_badge = carousel.evaluate('''el => {
+                                        // Look for "Featured" badge at carousel level only
+                                        // Check direct children and header siblings, not deep descendants
+                                        const header = el.querySelector('.CuratedCarousel__header');
+                                        if (header) {
+                                            // Check siblings before the header
+                                            let sibling = header.previousElementSibling;
+                                            while (sibling) {
+                                                const text = sibling.textContent.trim();
+                                                if (text === "Featured" || text === "Sponsored") {
+                                                    return true;
+                                                }
+                                                sibling = sibling.previousElementSibling;
+                                            }
+                                        }
+                                        return false;
+                                    }''')
+                                    if not featured_badge:
+                                        print(f"⚠️ Skipping carousel {i+1} - not a featured/sponsored carousel (no badge found)")
                                         continue
+                                
+                                print(f"✅ Carousel {i+1} is featured/sponsored - capturing")
                                 
                                 page.add_style_tag(content="""
                                     header, .Header, .kds-Header, [data-testid=\"header\"], .kds-StickyHeader,
                                     .SearchFilters, .search-page-filters, [class*=\"sticky\"] { display: none !important; }
                                 """)
                                 carousel.scroll_into_view_if_needed()
-                                page.wait_for_timeout(500)
+                                
+                                # Wait for carousel products to load (prevent gray boxes)
+                                # First wait for product links to appear
+                                try:
+                                    carousel.wait_for_selector('a.kds-Link[aria-label*="title"]', timeout=3000)
+                                    # Then wait for images to load
+                                    carousel.wait_for_selector('img[src*="product/images"]', timeout=3000)
+                                    # Additional wait for images to fully render
+                                    page.wait_for_timeout(1000)
+                                    print(f"✅ Carousel {i+1} products loaded")
+                                except Exception as wait_err:
+                                    print(f"⚠️ Carousel {i+1} products may not be fully loaded: {wait_err}")
+                                    # Continue anyway with a shorter wait
+                                    page.wait_for_timeout(500)
+                                
                                 # Extract advertiser from product titles (not promotional header)
                                 advertiser = "unknown"
                                 

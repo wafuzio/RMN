@@ -265,6 +265,9 @@ class KeywordInputApp:
         self.history_file = os.path.join(get_base_dir(), "output", "client_history.json")
         self.schedule_file = os.path.join(get_base_dir(), "output", "schedule_config.json")
         
+        # Check for unknown brands on startup (after a short delay)
+        self.root.after(1000, self.check_and_launch_brand_review)
+        
         self.client_history = self.load_client_history()
         self.schedule_config = self.load_schedule_config()
         self.day_vars = {}  # Will store day checkbox variables
@@ -579,6 +582,15 @@ class KeywordInputApp:
             style='Primary.TButton'
         )
         self.scrape_button.pack(side=tk.RIGHT, padx=(8, 12))
+        
+        # Review Brands button
+        self.review_brands_button = ttk.Button(
+            footer,
+            text="Review Brands",
+            command=self.launch_brand_review_tool,
+            style='Secondary.TButton'
+        )
+        self.review_brands_button.pack(side=tk.RIGHT, padx=(0, 8))
 
         # Clear button
         self.clear_button = ttk.Button(
@@ -1884,6 +1896,92 @@ class KeywordInputApp:
                 f.write(geometry)
         except Exception as e:
             print(f"Could not save window geometry: {e}")
+    
+    def check_and_launch_brand_review(self):
+        """Check if there are unknown brands and auto-launch review tool"""
+        try:
+            count = self.count_unknown_brands()
+            if count > 0:
+                response = messagebox.askyesno(
+                    "Unknown Brands Found",
+                    f"Found {count} ad(s) with unknown or uncertain brands.\n\n"
+                    f"Would you like to review them now?",
+                    icon='info'
+                )
+                if response:
+                    self.launch_brand_review_tool()
+        except Exception as e:
+            logging.error(f"Error checking for unknown brands: {e}")
+    
+    def count_unknown_brands(self):
+        """Count ads with unknown/uncertain brands"""
+        import glob
+        import re
+        
+        count = 0
+        json_files = glob.glob(os.path.join(get_base_dir(), 'output/kroger/*/runs/*.json'))
+        
+        for json_file in json_files[:50]:  # Limit check to avoid slowdown
+            try:
+                with open(json_file, 'r') as f:
+                    data = json.load(f)
+                
+                for result in data.get('results', []):
+                    for ad in result.get('ads', []):
+                        advertisers = ad.get('advertisers', [])
+                        
+                        # Check if unknown or uncertain
+                        is_unknown = (
+                            not advertisers or
+                            advertisers == ['unknown'] or
+                            any(self.is_uncertain_brand(adv) for adv in advertisers)
+                        )
+                        
+                        if is_unknown:
+                            count += 1
+            except:
+                continue
+        
+        return count
+    
+    def is_uncertain_brand(self, brand):
+        """Check if a brand name looks uncertain (same logic as brand_review_tool)"""
+        if not brand or brand == 'unknown':
+            return True
+        
+        # Kroger and Kroger-branded products are valid, not uncertain
+        if brand.lower().startswith('kroger'):
+            return False
+        
+        uncertain_patterns = [
+            r'^(TOAOB|MSM|SSM|ZB)',  # Removed KROG to avoid matching "Kroger" brand
+            r'^\w+\d{4,}$',
+            r'(KB|MB|TOA|Scale|Act)\d+',
+            r'(Q\d+|FY\d+|H\d+)$',
+        ]
+        
+        for pattern in uncertain_patterns:
+            if re.search(pattern, brand, re.IGNORECASE):
+                return True
+        
+        if len(brand) <= 3 and brand.lower() not in ['p&g', 'jif']:
+            return True
+        
+        return False
+    
+    def launch_brand_review_tool(self):
+        """Launch the brand review tool in a separate process"""
+        try:
+            tool_path = os.path.join(get_base_dir(), 'brand_review_tool.py')
+            if os.path.exists(tool_path):
+                # Launch in separate process so it doesn't block the main GUI
+                subprocess.Popen([sys.executable, tool_path], cwd=get_base_dir())
+                logging.info("Launched brand review tool")
+            else:
+                messagebox.showerror("Error", f"Brand review tool not found at:\n{tool_path}")
+        except Exception as e:
+            logging.error(f"Error launching brand review tool: {e}")
+            messagebox.showerror("Error", f"Failed to launch brand review tool:\n{str(e)}")
     
     def on_closing(self):
         """Handle window close event"""

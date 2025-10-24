@@ -132,7 +132,19 @@ def _brand_from_token(token: str, cutoff: float = 0.86):
     return None
 
 def _best_brand_from_tokens(tokens):
-    """Return first confident canonical brand from a list of tokens."""
+    """Return first confident canonical brand from a list of tokens.
+    
+    Tries 2-word combinations first (e.g., 'Magic Spoon') before single words.
+    This prevents matching 'Magic' when 'Magic Spoon' is the actual brand.
+    """
+    # First pass: try 2-word combinations
+    for i in range(len(tokens) - 1):
+        two_word = f"{tokens[i]} {tokens[i+1]}"
+        b = _brand_from_token(two_word)
+        if b:
+            return b
+    
+    # Second pass: try single tokens
     for t in tokens:
         b = _brand_from_token(t)
         if b:
