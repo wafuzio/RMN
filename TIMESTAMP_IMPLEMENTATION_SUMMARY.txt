@@ -1,0 +1,109 @@
+================================================================================
+TIMESTAMP NORMALIZATION - IMPLEMENTATION COMPLETE
+================================================================================
+
+BACKEND: ✅ COMPLETE
+- All timestamps normalized to ISO 8601 Z (UTC): "2025-10-27T02:56:54Z"
+- Added timestamp_ms field (epoch milliseconds)
+- UTC-aware date filtering
+- Files: web/builder_server_v2.py
+
+FRONTEND: ✅ UTILITY CREATED
+- File: neon-sanctuary/client/lib/date.ts
+- Consistent formatting in viewer's local timezone
+
+================================================================================
+HOW IT WORKS
+================================================================================
+
+1. BACKEND RETURNS UTC (ISO Z)
+   Card structure:
+   {
+     "timestamp": "2025-10-27T02:56:54Z",  // UTC
+     "timestamp_ms": 1730000214000          // Epoch milliseconds
+   }
+
+2. FRONTEND RENDERS IN VIEWER'S LOCAL TIMEZONE
+   Same timestamp displays differently based on viewer location:
+   - Central Time (UTC-5): "Oct 26, 2025 9:56 PM"
+   - Eastern Time (UTC-4): "Oct 26, 2025 10:56 PM"
+
+3. NO MORE GRID/MODAL MISMATCH
+   Both use the same formatter → same display
+
+================================================================================
+FRONTEND USAGE
+================================================================================
+
+Import the utility:
+  import { formatLocal } from "@/lib/date"
+
+Use in Grid:
+  <div>{formatLocal(card.timestamp)}</div>
+
+Use in Modal:
+  <div>{formatLocal(card.timestamp)}</div>
+
+Other utilities available:
+  - formatLocalDate(iso)     // Short date only
+  - formatRelative(iso)      // "2 hours ago"
+  - getLocalMTDRange()       // MTD boundaries for filtering
+  - getLocalYTDRange()       // YTD boundaries for filtering
+  - getLocalCustomRange()    // Custom date range
+
+================================================================================
+DATE FILTERING (MTD/YTD)
+================================================================================
+
+Frontend computes local range and converts to UTC for API:
+
+  import { getLocalMTDRange } from "@/lib/date"
+  
+  const { startIsoUtc, endIsoUtc } = getLocalMTDRange()
+  fetch(`/api/ads/cards?start=${startIsoUtc}&end=${endIsoUtc}`)
+
+Backend compares UTC timestamps → accurate filtering!
+
+================================================================================
+TESTING
+================================================================================
+
+1. Restart servers:
+   ./restart_servers.sh
+
+2. Test timestamp normalization:
+   ./test_timestamp_normalization.sh
+
+3. Test API returns ISO Z:
+   curl "http://localhost:5006/api/ads/cards?retailer=walmart&client=halo_top&page_size=3" | \
+     jq '.cards[] | {timestamp, timestamp_ms}'
+
+Expected:
+   {
+     "timestamp": "2025-10-27T02:56:54Z",
+     "timestamp_ms": 1730000214000
+   }
+
+4. Update Builder.io components to use formatLocal()
+
+================================================================================
+MIGRATION (OPTIONAL)
+================================================================================
+
+Backend normalizes on read, so legacy JSON files work fine.
+If you want to permanently fix files on disk:
+
+  python3 tools/migrate_timestamps_to_isoz.py --dry-run
+  python3 tools/migrate_timestamps_to_isoz.py
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. ✅ Backend complete (already done)
+2. ✅ Frontend utility created (already done)
+3. TODO: Update Builder.io grid component
+4. TODO: Update Builder.io modal component
+5. TODO: Test MTD/YTD filtering with getLocalMTDRange()
+
+================================================================================

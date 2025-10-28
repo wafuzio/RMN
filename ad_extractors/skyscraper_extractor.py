@@ -7,8 +7,11 @@ This module provides functionality to extract skyscraper ads from Kroger.com sea
 from bs4 import BeautifulSoup
 import re
 import os
+import requests
+from pathlib import Path
 from datetime import datetime
 from .base_extractor import AdExtractor
+from filename_utils import generate_ad_filename
 
 class SkyscraperExtractor(AdExtractor):
     """Extractor for Skyscraper ads on Kroger.com"""
@@ -76,57 +79,50 @@ class SkyscraperExtractor(AdExtractor):
         if brand_elem:
             ad['brand'] = brand_elem.get_text(strip=True)
         
-        # Save the image if URL is available
-        if 'image_url' in ad and self.client:
+        # Save the image if URL is available and we have a client context
+        if ad.get('image_url') and self.client:
             try:
-                # Create client directory structure if it doesn't exist
-                client_dir = os.path.join("output", self.client)
-                os.makedirs(client_dir, exist_ok=True)
-                
-                # Create skyscraper directory
-                skyscraper_dir = os.path.join(client_dir, "Skyscraper")
-                os.makedirs(skyscraper_dir, exist_ok=True)
-                
-                # Generate filename
-                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                
-                # Include search term if available
-                search_term_part = ""
-                if hasattr(self, 'search_term') and self.search_term:
-                    # Sanitize search term for filename
-                    safe_search_term = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in self.search_term)
-                    search_term_part = f"_{safe_search_term}"
-                
-                # Try to extract image ID from URL
-                img_id = None
-                if ad['image_url']:
-                    id_match = re.search(r'monetization-v1/([a-f0-9-]+)\.(jpg|png)', ad['image_url'])
-                    if id_match:
-                        img_id = id_match.group(1)
-                
-                if img_id:
-                    filename = f"skyscraper_{img_id}{search_term_part}_{timestamp}.jpg"
-                else:
-                    # Use message or generic name
-                    message = ad.get('message', '').lower()
-                    if message:
-                        # Clean message for filename
-                        clean_message = re.sub(r'[^a-z0-9]', '_', message)
-                        clean_message = re.sub(r'_+', '_', clean_message)  # Replace multiple underscores
-                        clean_message = clean_message[:30]  # Limit length
-                        filename = f"skyscraper_{clean_message}{search_term_part}_{timestamp}.jpg"
-                    else:
-                        filename = f"skyscraper_ad{search_term_part}_{timestamp}.jpg"
-                
-                # Full path to save the image (for file operations)
-                image_path = os.path.join(skyscraper_dir, filename)
-                
-                # Save RELATIVE path in ad data (from client directory)
-                # This should be "Skyscraper/filename.jpg" not "output/client/Skyscraper/filename.jpg"
-                ad['skyscraper_image_path'] = os.path.join("Skyscraper", filename)
-                
+                client_dir = Path("output") / self.client
+                out_dir = client_dir / "Skyscraper"
+                out_dir.mkdir(parents=True, exist_ok=True)
+
+                # Use run timestamp from the caller if present; fallback to now
+                ts = getattr(self, "run_ts", None)
+                if ts is None:
+                    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+                # Determine advertiser token to use in filename
+                advertiser = None
+                if ad.get("brand"):
+                    advertiser = ad["brand"]
+                elif ad.get("advertisers"):
+                    advertiser = ad["advertisers"][0] if isinstance(ad["advertisers"], list) else None
+                advertiser = advertiser or "unknown"
+
+                # Build canonical filename and save path
+                filename = generate_ad_filename(
+                    retailer="kroger",
+                    ad_type="skyscraper",
+                    client=self.client,
+                    search_term=self.search_term or "unknown",
+                    timestamp=ts,
+                    index=1,  # if you track position, pass it here
+                    extension="png",
+                    advertiser=advertiser,
+                )
+                save_path = out_dir / filename
+
+                # Download and save the image
+                resp = requests.get(ad["image_url"], timeout=10)
+                resp.raise_for_status()
+                save_path.write_bytes(resp.content)
+
+                # Canonical image path (relative to client root)
+                ad["image_path"] = str(Path("Skyscraper") / filename)
+                # Keep type-specific for back-compat
+                ad["skyscraper_image_path"] = ad["image_path"]
             except Exception as e:
-                print(f"Error preparing skyscraper image path: {e}")
+                print(f"Error saving skyscraper image: {e}")
         
         return ad
 

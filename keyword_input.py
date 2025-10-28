@@ -1901,13 +1901,21 @@ class KeywordInputApp:
         """Check if there are unknown brands and auto-launch review tool"""
         try:
             print("[BRAND CHECK] Checking for unknown brands...")
-            count = self.count_unknown_brands()
-            print(f"[BRAND CHECK] Found {count} unknown/uncertain brands")
+            unknown_count, uncertain_count = self.count_unknown_brands()
+            total = unknown_count + uncertain_count
+            print(f"[BRAND CHECK] Found {unknown_count} unknown, {uncertain_count} uncertain brands")
             
-            if count > 0:
+            if total > 0:
+                message_parts = []
+                if unknown_count > 0:
+                    message_parts.append(f"{unknown_count} ad(s) with unknown brands (extraction failed)")
+                if uncertain_count > 0:
+                    message_parts.append(f"{uncertain_count} ad(s) with uncertain brands (need confirmation)")
+                
                 response = messagebox.askyesno(
-                    "Unknown Brands Found",
-                    f"Found {count} ad(s) with unknown or uncertain brands.\n\n"
+                    "Brand Review Needed",
+                    "Found:\n" + "\n".join(message_parts) + "\n\n"
+                    f"Total: {total} ad(s) need review.\n\n"
                     f"Would you like to review them now?",
                     icon='info'
                 )
@@ -1922,14 +1930,26 @@ class KeywordInputApp:
             traceback.print_exc()
     
     def count_unknown_brands(self):
-        """Count ads with unknown/uncertain brands"""
+        """Count ads with unknown/uncertain brands and return (unknown_count, uncertain_count)"""
         import glob
         import re
         
-        count = 0
-        json_files = glob.glob(os.path.join(get_base_dir(), 'output/kroger/*/runs/*.json'))
+        unknown_count = 0  # Ads with brand="unknown"
+        uncertain_count = 0  # Ads with uncertain brands (not "unknown")
         
-        for json_file in json_files[:50]:  # Limit check to avoid slowdown
+        # Scan all retailers (same as brand_review_tool.py)
+        json_files = []
+        base = get_base_dir()
+        for retailer in ['kroger', 'walmart', 'instacart']:
+            pattern1 = os.path.join(base, f'output/{retailer}/*/runs/*.json')
+            pattern2 = os.path.join(base, f'output/{retailer}/*/runs/*/*.json')
+            json_files.extend(glob.glob(pattern1))
+            json_files.extend(glob.glob(pattern2))
+        
+        # Remove duplicates
+        json_files = list(set(json_files))
+        
+        for json_file in json_files:  # Scan ALL files, not just 50
             try:
                 with open(json_file, 'r') as f:
                     data = json.load(f)
@@ -1937,32 +1957,48 @@ class KeywordInputApp:
                 for result in data.get('results', []):
                     for ad in result.get('ads', []):
                         advertisers = ad.get('advertisers', [])
+                        brand = advertisers[0] if advertisers else 'unknown'
                         
-                        # Check if unknown or uncertain
-                        is_unknown = (
-                            not advertisers or
-                            advertisers == ['unknown'] or
-                            any(self.is_uncertain_brand(adv) for adv in advertisers)
-                        )
-                        
-                        if is_unknown:
-                            count += 1
+                        # Separate "unknown" from other uncertain brands
+                        if not advertisers or brand == 'unknown':
+                            unknown_count += 1
+                        elif self.is_uncertain_brand(brand):
+                            uncertain_count += 1
             except:
                 continue
         
-        return count
+        return (unknown_count, uncertain_count)
     
     def is_uncertain_brand(self, brand):
         """Check if a brand name looks uncertain (same logic as brand_review_tool)"""
         if not brand or brand == 'unknown':
             return True
         
+        # Check if brand is in lexicon - if so, it's valid
+        try:
+            lexicon_path = os.path.join(get_base_dir(), 'config/brands.json')
+            with open(lexicon_path, 'r') as f:
+                lexicon_brands = json.load(f)
+            
+            brand_lower = brand.lower()
+            for lex_brand in lexicon_brands:
+                if lex_brand['name'].lower() == brand_lower:
+                    return False
+                if any(syn.lower() == brand_lower for syn in lex_brand.get('synonyms', [])):
+                    return False
+        except:
+            pass
+        
         # Kroger and Kroger-branded products are valid, not uncertain
         if brand.lower().startswith('kroger'):
             return False
         
+        # Single word that's too short or generic
+        if len(brand) <= 3:
+            return True
+        
         uncertain_patterns = [
-            r'^(TOAOB|MSM|SSM|ZB)',  # Removed KROG to avoid matching "Kroger" brand
+            r'^(TOAOB|MSM|SSM|ZB)',
             r'^\w+\d{4,}$',
             r'(KB|MB|TOA|Scale|Act)\d+',
             r'(Q\d+|FY\d+|H\d+)$',
@@ -1971,9 +2007,6 @@ class KeywordInputApp:
         for pattern in uncertain_patterns:
             if re.search(pattern, brand, re.IGNORECASE):
                 return True
-        
-        if len(brand) <= 3 and brand.lower() not in ['p&g', 'jif']:
-            return True
         
         return False
     

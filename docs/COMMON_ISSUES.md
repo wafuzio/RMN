@@ -1342,3 +1342,324 @@ Describe **which elements are constrained** and **what boundaries they're incorr
 You were rearranging furniture in a room without realizing the room's walls were too narrow. The furniture (content box) was fine - the room (button wrapper) needed to be bigger.
 
 **See:** Frontend component debugging, Tailwind layout issues
+
+---
+
+## Images failing to load in Vite dashboard (dual-backend architecture)
+
+**Status:** ✅ SOLVED
+
+**Problem & Root Cause:**
+
+Your application has two backends:
+- **Flask API (port 5006)** - serves real ad images from your filesystem
+- **Express/Node.js (port 3000)** - the Vite dev server and API layer
+
+When the frontend requested images from `/api/image/retailer/client/path/filename.png`, the Express server had no route to handle these requests. They failed silently, showing `[AdImage] Failed to load image` errors.
+
+**Solution: Image Proxy Route**
+
+Created a bridge between the two backends:
+
+**What Was Added:**
+
+1. **New file: `neon-sanctuary/server/routes/image.ts`**
+   - Intercepts requests to `/api/image/*`
+   - Proxies them to Flask at `http://localhost:5006`
+   - Returns the image with proper CORS headers
+
+2. **Updated: `neon-sanctuary/server/index.ts`**
+   - Registered a regex route pattern to capture image requests
+   - Uses: `^\/api\/image\/([^/]+)\/([^/]+)\/(.+)$` to extract:
+     - `retailer` (e.g., instacart)
+     - `client` (e.g., MilkPEP)
+     - `filename` with nested paths (e.g., `Shoppable_Display_Ads/instacart__nature_s_truth__...png?v=123`)
+
+3. **Enhanced: `neon-sanctuary/client/utils/imageUrl.ts`**
+   - Better type checking and validation
+   - Improved error logging
+
+**Key Watchouts for Future Building:**
+
+✅ **When you have multiple backend services** (Flask + Express), ensure the "main" backend (Express/Vite) knows how to route to or proxy requests for resources that live in other backends
+
+✅ **Regex route patterns matter** - Simple wildcard patterns like `/api/image/:retailer/:client/*` don't capture nested subdirectories properly. The regex `^\/api\/image\/([^/]+)\/([^/]+)\/(.+)$` correctly captures multi-level paths
+
+✅ **Preserve query strings** - When proxying, forward query parameters (`?ngrok-skip-browser-warning=true&v=123`) to the upstream service
+
+✅ **Cross-origin headers** - Set proper CORS headers (`Access-Control-Allow-Origin: *`) when proxying cross-origin requests
+
+**Files Involved:**
+- `neon-sanctuary/server/routes/image.ts` - Flask image proxy
+- `neon-sanctuary/server/routes/proxy-image.ts` - External URL proxy
+- `neon-sanctuary/server/index.ts` - Route registration
+- `neon-sanctuary/client/utils/imageUrl.ts` - Client-side URL routing
+
+**Verification:**
+```bash
+# Check Express is proxying to Flask
+curl -I "http://localhost:3000/api/image/instacart/client/Shoppable_Display_Ads/test.png"
+# Should return 200 or 404 (not 404 from Express routing)
+
+# Check Flask is serving images
+curl -I "http://localhost:5006/api/image/instacart/client/Shoppable_Display_Ads/test.png"
+# Should return image content-type
+
+# Check frontend logs
+# Should NOT see "[AdImage] Failed to load image" errors
+```
+
+**See:** `docs/BUILDER_GUIDE.md` → Architecture Overview
+
+---
+
+## Kroger Ad Dashboard - Multi-Backend Integration Issues & Fixes
+
+**Status:** ✅ SOLVED
+
+### Issue 1: Image Loading Errors - `[AdImage] Failed to load image: [object Object]`
+
+**Symptom:**
+- Ad images failed to load with console errors showing stringified objects
+
+**Root Cause:**
+- Console logging passed objects directly: `console.error('[AdImage] Failed to load image:', { src, ... })`
+- Browsers stringify objects to `[object Object]` in certain contexts
+
+**Solution:**
+
+File: `neon-sanctuary/client/components/dashboard/AdCard.tsx`
+- Use `JSON.stringify()` for object logging: `console.error('[AdImage] Failed to load image: ' + JSON.stringify(errorDetails))`
+
+File: `neon-sanctuary/client/utils/imageUrl.ts`
+- Added type checking for image URLs
+- Better error messages with explicit JSON formatting
+- Trim whitespace and handle undefined inputs
+
+---
+
+### Issue 2: Real Images Not Loading (Using Mock Data Instead)
+
+**Symptom:**
+- Placeholder images from Express served instead of real ad images from Flask backend
+
+**Root Cause:**
+- Flask backend at `localhost:5006` had real ad images
+- Express at port 3000 was using mock data with hardcoded `/api/placeholder-ad-N.jpg` URLs
+- Frontend couldn't reach Flask's `/api/image/*` endpoints
+
+**Solution:**
+Create image proxy route to bridge backends:
+
+**Files Created/Modified:**
+
+1. **Created:** `neon-sanctuary/server/routes/image.ts`
+   - Proxies `/api/image/:retailer/:client/*` requests to Flask
+   - Uses regex pattern: `^\/api\/image\/([^/]+)\/([^/]+)\/(.+)$` to capture nested subdirectories
+   - Preserves query strings (`?ngrok-skip-browser-warning=true&v=123`)
+   - Sets CORS headers for image response
+
+2. **Modified:** `neon-sanctuary/server/index.ts`
+   - Added image proxy route that extracts retailer/client/filename from URL pattern
+   - Routes all image requests through Flask backend
+
+**Key Pattern:**
+```typescript
+app.get(/^\/api\/image\/([^/]+)\/([^/]+)\/(.+)$/, (req, res, next) => {
+  req.params.retailer = req.params[0];
+  req.params.client = req.params[1];
+  req.params.filename = req.params[2];  // Captures nested paths like "Shoppable_Display_Ads/filename.png"
+  return handleImageProxy(req, res, next);
+});
+```
+
+---
+
+### Issue 3: Retailer Logos Missing (Amazon & Walmart Showing Alt Text)
+
+**Symptom:**
+- Kroger and Instacart logos displayed (hardcoded CDN URLs)
+- Amazon and Walmart showed text "AMAZON"/"WALMART" instead of logos
+- Component tried `/api/logo/amazon` which didn't exist
+
+**Root Cause:**
+- `RetailerLogo.tsx` had hardcoded CDN URLs for only 2 retailers
+- Fallback to `/api/logo/retailer` route didn't exist on Express
+- Express only had `/api/logo/brand/:brand` (for brand logos like BOOST Advanced)
+
+**Solution:**
+Create retailer logo serving route:
+
+**File Created:** `neon-sanctuary/server/routes/retailer-logo.ts`
+- Maps retailer names to actual files in `web/assets/logos/`:
+  - `amazon` → `AMZ.png`
+  - `walmart` → `WMT.png`
+  - `kroger` → `Kroger.png`
+  - `instacart` → `Instacart Long.png`
+
+**File Modified:** `neon-sanctuary/server/index.ts`
+- Added route: `app.get("/api/logo/:retailer", handleRetailerLogo);`
+- **Note:** Place before `/api/logo/brand/:brand` to prevent route conflicts
+
+---
+
+### Issue 4: Retailer Filters Not Working
+
+**Symptom:**
+- Changing retailer selection didn't update results
+- All retailers' data loading simultaneously regardless of selection
+- Ad counts didn't change when toggling retailers
+
+**Root Cause:**
+- All 12 queries (4 retailers × 3 clients) executed unconditionally
+- Code filtered results during render but didn't stop queries from running
+- Wasted API calls and state synchronization issues
+
+**Solution:**
+Add conditional `enabled` logic to queries:
+
+**File Modified:** `neon-sanctuary/client/pages/Index.tsx` (lines 166-269)
+
+**Pattern Applied to All 4 Retailers:**
+```typescript
+// Before: Query always runs
+const krogerQuery1 = useAds({
+  retailer: "kroger",  // Always queries
+  client: client1,
+  ...
+});
+
+// After: Query only runs when retailer is selected
+const isKrogerSelected = retailers.includes("kroger");
+const krogerQuery1 = useAds({
+  retailer: isKrogerSelected ? "kroger" : undefined,  // Disables query when not selected
+  client: client1,
+  ...
+});
+```
+
+**How it works:**
+- `useAds` hook checks: `const enabled = Boolean(retailer && client);`
+- When `retailer` is `undefined`, the query disables and stops fetching
+- Reduces backend load by only querying selected retailers
+
+---
+
+### Issue 5: Date Filters Not Working
+
+**Status:** ✅ FIXED - Now working fundamentally
+
+**Symptom:**
+- Selecting date ranges ("Yesterday", "Last 7 days") didn't filter results
+- Ad counts stayed the same regardless of date selection
+- Date parameters were being sent but ignored
+
+**Root Causes:**
+- Express proxy was forwarding dates correctly but...
+- Flask backend wasn't implementing date filter logic at all
+- Flask accepted `start` and `end` parameters but never used them
+
+**Solution:**
+Implement date filtering in Flask:
+
+**File Modified:** `web/builder_server_v2.py` (`api_ads_cards` function)
+
+**Step 1:** Extract date parameters (line 544-545)
+```python
+start_date = (request.args.get("start") or "").strip()  # YYYY-MM-DD
+end_date = (request.args.get("end") or "").strip()      # YYYY-MM-DD
+```
+
+**Step 2:** Filter cards by date (after advertiser filtering)
+```python
+if start_date or end_date:
+    filtered_cards = []
+    for card in all_cards:
+        # Extract card date from timestamp: "2025-10-24 15:30:00" → "2025-10-24"
+        timestamp = card.get("timestamp", "")
+        card_date = timestamp.split()[0] if timestamp else ""
+        
+        if not card_date:
+            continue  # Skip cards with no date
+        
+        if start_date and card_date < start_date:
+            continue  # Before range start
+        
+        if end_date and card_date > end_date:
+            continue  # After range end
+        
+        filtered_cards.append(card)
+    
+    all_cards = filtered_cards
+```
+
+**Key Points:**
+- Date format: `YYYY-MM-DD` (lexicographically sortable)
+- Timestamps in cards are Central Time (matching backend)
+- String comparison works because `YYYY-MM-DD` is naturally sortable
+- Frontend sends dates via `formatLocalDate()` function
+
+---
+
+### Data Flow Reference
+
+```
+Frontend (React)
+  ↓ formatLocalDate(date) → "2025-10-25"
+  ↓ useAds({ start: "2025-10-25", end: "2025-10-25" })
+  ↓
+Express Server (port 3000)
+  ↓ /api/ads/cards?start=2025-10-25&end=2025-10-25
+  ↓ (ads-proxy route)
+  ↓
+Flask Backend (port 5006)
+  ↓ api_ads_cards() - extracts and filters by date
+  ↓ Returns: { cards: [...filtered...], has_more: bool, total_cards: int }
+  ↓
+Express (passes through)
+  ↓
+Frontend (renders filtered results)
+```
+
+---
+
+### Common Watchouts for Future Building
+
+✅ **Multi-Backend Architecture:**
+- When you have multiple services (Flask + Express), ensure the primary service can proxy/route to others
+- Use environment variables for backend URLs: `const FLASK_BASE_URL = process.env.FLASK_BASE_URL || "http://localhost:5006"`
+
+✅ **Regex Route Patterns:**
+- Simple wildcards like `/api/image/:retailer/:client/*` don't capture nested paths properly
+- Use regex for complex paths: `^\/api\/image\/([^/]+)\/([^/]+)\/(.+)$`
+
+✅ **Query Parameter Forwarding:**
+- Always forward query strings when proxying: `new URLSearchParams(req.query as Record<string, string>)`
+
+✅ **React Query Conditional Execution:**
+- Use boolean `enabled` parameter to conditionally disable queries
+- Prevents unnecessary API calls and state synchronization issues
+
+✅ **Timezone Consistency:**
+- If backend stores timestamps in Central Time, ensure frontend formats dates accordingly
+- Use local date formatting: `getFullYear()`, `getMonth() + 1`, `getDate()` (not UTC methods)
+
+✅ **Console Logging Objects:**
+- Always stringify objects for logs: `JSON.stringify(obj)` instead of passing object directly
+- Some contexts will stringify to `[object Object]` automatically
+
+---
+
+### Files Modified Summary
+
+**Created:**
+- `neon-sanctuary/server/routes/image.ts`
+- `neon-sanctuary/server/routes/retailer-logo.ts`
+- `neon-sanctuary/server/routes/ads-proxy.ts`
+
+**Modified:**
+- `neon-sanctuary/server/index.ts` (routes registered)
+- `neon-sanctuary/client/pages/Index.tsx` (retailer query conditions)
+- `neon-sanctuary/client/components/dashboard/AdCard.tsx` (logging fix)
+- `neon-sanctuary/client/utils/imageUrl.ts` (URL validation)
+- `web/builder_server_v2.py` (date filter implementation)

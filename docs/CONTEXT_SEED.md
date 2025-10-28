@@ -1,13 +1,47 @@
-# Context Seed — Multi‑Retailer TOA Scraper
+# Multi-Retailer Ad Scraper
 
-USE MCP: wafuzio/RMN@insta_debug_login (read)
+**What it does:** Automated tool for capturing and analyzing retail media ads (TOA, Skyscraper, Display Ads, etc.) from Kroger, Walmart, Instacart, and Amazon.
 
-This is the canonical snapshot of how the tool is structured. Keep it short, current, and true.
+**Use case:** Competitive intelligence, ad monitoring, and retail media analysis for brands and agencies.
 
-## Objective
-- One GUI + scheduler that runs "search capture → image extraction" across multiple retailers.
-- Reuse a persistent browser profile per retailer so session‑gated CDN images (TOA/Skyscraper) render reliably.
-- Keep Kroger fully working; add retailers without breaking existing behavior.
+---
+
+## Quick Start
+
+### 1. Prerequisites
+- Python 3.9+
+- Playwright (for browser automation)
+- Node.js 18+ (for Builder GUI frontend)
+
+### 2. Installation
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
+playwright install chromium
+
+# Install frontend dependencies (optional - for Builder GUI)
+cd neon-sanctuary && pnpm install
+```
+
+### 3. First Run
+```bash
+# Set up authentication (one-time per retailer)
+python3 auth/retailer_auth.py --retailer kroger
+
+# Launch GUI
+python3 keyword_input.py
+```
+
+Select a retailer, enter a keyword (e.g., "ice cream"), and click "Start Scraping". Results appear in `output/<retailer>/<client>/`.
+
+---
+
+## Project Overview
+
+**Objective:**
+- One GUI + scheduler that runs "search capture → image extraction" across multiple retailers
+- Reuse persistent browser profiles so session-gated CDN images render reliably
+- Extensible architecture - add retailers without breaking existing ones
 
 ## Architecture (seam-first)
 
@@ -113,12 +147,54 @@ python3 auth/retailer_auth.py --retailer kroger --profile-dir ~/ChromeProfiles/k
 - `logs/<retailer>/image_extract_*.log` - Extraction logs
 - `logs/<retailer>/locks/*.lock` - Process locks (stale locks can hang extraction)
 
+## Canonical Schema Migration
+
+**Status:** Walmart ✅ COMPLETE | Kroger ⏳ TODO | Instacart ⏳ TODO | Amazon ⏳ TODO
+
+### Walmart Migration (Completed)
+Successfully migrated all Walmart data to canonical schema with 100% image coverage:
+
+**Process:**
+1. **Legacy Migration** (`tools/migrate_walmart_legacy_to_canonical.py`)
+   - Migrated 19 nested `results[].ads[]` JSONs → flat `ads[]` format
+   - Converted timestamps to ISO 8601 with Z
+   - Normalized ad types: `sba` → `SBA`, `sbv` → `SBV`, `tile_takeover` → `Tile_Takeover`
+
+2. **Cross-Contamination Fix**
+   - Fixed 58 JSONs with wrong `retailer: "kroger"` → `retailer: "walmart"`
+   - Deleted 61 malformed flat JSONs (wrong URLs, empty ads)
+
+3. **Orphaned Image Recovery** (`tools/create_json_for_orphaned_images.py`)
+   - Created 17 canonical JSONs for orphaned images matched by timestamp
+
+4. **Batch Rebuild** (`tools/batch_rebuild_walmart_runs_from_images.py`)
+   - Rebuilt 246 canonical run JSONs from image filenames
+   - Used filename metadata: retailer, brand, ad_type, client, keyword, timestamp
+   - Achieved 100% image coverage (283/283 images referenced)
+
+**Final Results:**
+- 354 ads in canonical format (161 SBA, 139 SBV, 54 Tile_Takeover)
+- 297 images properly linked
+- 0 orphaned images
+- All JSONs: `{retailer, client, keyword, timestamp (ISO Z), run_id, ads[]}`
+- All ads: `{id, type, brand, brand_logo, image_path, metadata}`
+
+**Tools Created:**
+- `tools/migrate_walmart_legacy_to_canonical.py` - Migrate legacy nested JSONs
+- `tools/create_json_for_orphaned_images.py` - Recover orphaned images by timestamp
+- `tools/batch_rebuild_walmart_runs_from_images.py` - Rebuild runs from image filenames
+- `tools/audit_adtype_mapping.py` - Audit JSON/image compliance
+
+**Next:** Apply same process to Kroger and Instacart (both use legacy `results[].ads[]` format)
+
+---
+
 ## Current Work
-- [ ] **JSON Schema Standardization** - PARTIALLY COMPLETE
-  - Many retailers now output consistent schema
-  - Some retailer-specific fields remain
-  - API has workarounds for legacy formats
-  - See: `docs/ARTIFACT_TAXONOMY.md` → JSON Schema
+- [x] **Walmart JSON Schema** - ✅ COMPLETE (100% canonical)
+- [ ] **Kroger JSON Schema** - TODO (legacy `results[].ads[]` format)
+- [ ] **Instacart JSON Schema** - TODO (legacy `results[].ads[]` format)
+- [ ] **Amazon JSON Schema** - TODO (not yet implemented)
+- [ ] **Brand Lexicon Integration** - Walmart uses `core/brands.py` for canonicalization
 
 - [ ] **Amazon selectors refinement**
   - Tighten selectors for SB/SBV/SP and right-rail SD

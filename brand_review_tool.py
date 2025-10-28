@@ -40,6 +40,7 @@ class BrandReviewTool:
         self.unknown_ads = []
         self.current_index = 0
         self.lexicon_path = "config/brands.json"
+        self.lexicon_brands = []  # Cache lexicon in memory
         
         # Initialize logo database
         if LOGO_DB_AVAILABLE:
@@ -54,6 +55,9 @@ class BrandReviewTool:
                 self.logo_db = None
         else:
             self.logo_db = None
+        
+        # Load lexicon into memory
+        self.load_lexicon()
         
         # Sync logo database brands to lexicon
         self.sync_logo_brands_to_lexicon()
@@ -152,8 +156,7 @@ class BrandReviewTool:
         
         ttk.Button(button_frame, text="← Previous", command=self.previous_ad).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Skip", command=self.next_ad).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Save & Next →", command=self.save_correction, style="Accent.TButton").pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Apply to All Similar", command=self.apply_to_all_similar, style="Accent.TButton").pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Save All Similar & Next →", command=self.save_correction, style="Accent.TButton").pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Mark as Kroger House Ad", command=self.mark_as_kroger).pack(side=tk.LEFT, padx=5)
         
         # Style
@@ -248,12 +251,53 @@ class BrandReviewTool:
                 self.brand_entries[i].delete(0, tk.END)
                 self.brand_entries[i].insert(0, brand)
     
+    def load_lexicon(self):
+        """Load brand lexicon into memory"""
+        try:
+            with open(self.lexicon_path, 'r') as f:
+                self.lexicon_brands = json.load(f)
+            print(f"[INFO] Loaded {len(self.lexicon_brands)} brands from lexicon")
+        except Exception as e:
+            print(f"[WARN] Failed to load lexicon: {e}")
+            self.lexicon_brands = []
+    
+    def is_brand_in_lexicon(self, brand):
+        """Check if a brand exists in the lexicon (uses cached data)"""
+        if not brand:
+            return False
+        
+        brand_lower = brand.lower()
+        
+        # Check if brand name matches (case-insensitive)
+        for lex_brand in self.lexicon_brands:
+            if lex_brand['name'].lower() == brand_lower:
+                return True
+            # Also check synonyms
+            if any(syn.lower() == brand_lower for syn in lex_brand.get('synonyms', [])):
+                return True
+        
+        return False
+    
     def load_unknown_brands(self):
         """Load all ads with unknown or uncertain brands"""
         print("Scanning for unknown brands...")
         
-        # Scan all Kroger JSON files
-        json_files = glob.glob('output/kroger/*/runs/*.json')
+        # Scan all retailer JSON files (Kroger, Walmart, Instacart, etc.)
+        json_files = []
+        for retailer in ['kroger', 'walmart', 'instacart']:
+            # Kroger/Instacart: output/retailer/client/runs/*.json
+            pattern1 = f'output/{retailer}/*/runs/*.json'
+            # Walmart: output/walmart/client/runs/TIMESTAMP/*.json
+            pattern2 = f'output/{retailer}/*/runs/*/*.json'
+            
+            retailer_files = glob.glob(pattern1) + glob.glob(pattern2)
+            # Remove duplicates
+            retailer_files = list(set(retailer_files))
+            json_files.extend(retailer_files)
+            if retailer_files:
+                print(f"  Found {len(retailer_files)} {retailer} files")
+        
+        print(f"Total: {len(json_files)} JSON files to scan")
         
         for json_file in json_files:
             try:
@@ -281,16 +325,24 @@ class BrandReviewTool:
                         # If image_path from JSON doesn't exist, search for unknown files
                         if image_path and not os.path.exists(image_path):
                             # Try to find an unknown file with similar timestamp
+                            # Handle nested timestamp dirs (Walmart: runs/TIMESTAMP/file.json)
                             base_dir = os.path.dirname(os.path.dirname(json_file))
+                            # If base_dir ends with a timestamp pattern, go up one more level
+                            if re.match(r'\d{14}$', os.path.basename(base_dir)):
+                                base_dir = os.path.dirname(base_dir)
+                            
                             ad_type = ad.get('type')
-                            if ad_type == 'TOA':
-                                subfolder = 'TOA'
-                            elif ad_type == 'Skyscraper':
-                                subfolder = 'Skyscraper'
-                            elif ad_type == 'CuratedCarousel':
-                                subfolder = 'Carousel'
-                            else:
-                                subfolder = None
+                            # Map ad types to subfolders
+                            type_to_folder = {
+                                'TOA': 'TOA',
+                                'Skyscraper': 'Skyscraper',
+                                'CuratedCarousel': 'Carousel',
+                                'sba': 'SBA',
+                                'sbv': 'SBV',
+                                'tile_takeover': 'Tile',
+                                'top_banner': 'Banner'
+                            }
+                            subfolder = type_to_folder.get(ad_type)
                             
                             if subfolder:
                                 search_dir = os.path.join(base_dir, subfolder)
@@ -318,12 +370,26 @@ class BrandReviewTool:
                                                     print(f"      Unknown file: {filename}")
                                                     break
                         
-                        # Also check if the existing path has unknown in it
+                        # Also check if the existing path looks like a campaign-code brand segment
                         if image_path and os.path.exists(image_path):
                             filename = os.path.basename(image_path)
+                            # Flag explicit unknown
                             if '__unknown__' in filename and not is_unknown_in_filename:
                                 is_unknown_in_filename = True
                                 print(f"[WARN] Found 'unknown' in filename but JSON has: {advertisers}")
+                            else:
+                                # Parse taxonomy filename: retailer__brand_slug__ad_type__client__search__Dts_idx.ext
+                                parts = filename.split('__')
+                                if len(parts) >= 2:
+                                    brand_slug_in_file = parts[1]
+                                    # Compare against advertiser slugs
+                                    adv_slugs = [self.to_slug(a) for a in (advertisers or [])]
+                                    if brand_slug_in_file not in adv_slugs:
+                                        # If filename brand slug looks like a campaign code per heuristics, flag it
+                                        looks_like_code = self.is_uncertain_brand(brand_slug_in_file.replace('_', ' '))
+                                        if looks_like_code:
+                                            is_unknown_in_filename = True
+                                            print(f"[WARN] Filename brand slug '{brand_slug_in_file}' doesn't match advertisers {adv_slugs}")
                         
                         # Flag as unknown if EITHER condition is true
                         if is_unknown_in_json or is_unknown_in_filename:
@@ -337,31 +403,74 @@ class BrandReviewTool:
                 print(f"Error reading {json_file}: {e}")
                 continue
         
-        print(f"Found {len(self.unknown_ads)} ads with unknown/uncertain brands")
+        print(f"\n📊 Scan complete:")
+        print(f"   Files scanned: {len(json_files)}")
+        print(f"   Uncertain ads found: {len(self.unknown_ads)}")
+        
+        # Show breakdown by reason
+        unknown_count = sum(1 for ad in self.unknown_ads if ad['current_brand'] == 'unknown')
+        pattern_count = sum(1 for ad in self.unknown_ads if ad['current_brand'] != 'unknown')
+        print(f"   - Explicitly 'unknown': {unknown_count}")
+        print(f"   - Uncertain patterns: {pattern_count}")
     
     def is_uncertain_brand(self, brand):
         """Check if a brand name looks uncertain or like a campaign code"""
         if not brand or brand == 'unknown':
             return True
         
+        # Check if brand is in lexicon - if so, it's valid
+        if self.is_brand_in_lexicon(brand):
+            return False
+        
         # Kroger and Kroger-branded products are valid, not uncertain
         if brand.lower().startswith('kroger'):
             return False
         
-        # Campaign code patterns
+        # Single word that's too short or generic
+        if len(brand) <= 3:
+            return True
+        
+        # Specific campaign code patterns
         uncertain_patterns = [
-            r'^(TOAOB|MSM|SSM|ZB)',  # Kroger prefixes (removed KROG to avoid matching "Kroger" brand)
-            r'^\w+\d{4,}$',  # Alphanumeric ending in 4+ digits
+            r'^(TOAOB|MSM|SSM|FWGOL)',  # Kroger campaign prefixes
             r'(KB|MB|TOA|Scale|Act)\d+',  # Campaign type codes
             r'(Q\d+|FY\d+|H\d+)$',  # Quarter/fiscal year codes
+            r'^NT\d+\s*NT$',  # NT codes
         ]
         
         for pattern in uncertain_patterns:
             if re.search(pattern, brand, re.IGNORECASE):
                 return True
         
-        # Single word that's too short or generic
-        if len(brand) <= 3 and brand.lower() not in ['p&g', 'jif']:
+        # HEURISTIC: Check if it looks like a campaign code vs a real brand
+        # Count digits
+        digit_count = sum(c.isdigit() for c in brand)
+        letter_count = sum(c.isalpha() for c in brand)
+        
+        # If more than 30% digits, likely a campaign code
+        if letter_count > 0 and digit_count / len(brand) > 0.3:
+            return True
+        
+        # If contains 4-digit year (2024, 2025, etc.)
+        if re.search(r'20\d{2}', brand):
+            return True
+        
+        # If has month names mixed with other stuff (as whole words, not substrings)
+        months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+        brand_lower = brand.lower()
+        for month in months:
+            # Use word boundary to avoid matching "may" in "Mayer"
+            if re.search(r'\b' + month + r'\b', brand_lower) and len(brand) > 8:
+                return True
+        
+        # If has weird capitalization (multiple capitals not at start)
+        capitals = [i for i, c in enumerate(brand) if c.isupper()]
+        if len(capitals) > 2:
+            if any(i > 0 and brand[i-1].islower() for i in capitals[1:]):
+                return True
+        
+        # If ends with 4+ digits
+        if re.search(r'\d{4,}$', brand):
             return True
         
         return False
@@ -370,10 +479,25 @@ class BrandReviewTool:
         """Find the image file associated with this ad"""
         ad_type = ad.get('type', '')
         
-        # Get base directory from JSON path (output/kroger/CLIENT/runs/...)
-        # We need to go up one level to get to output/kroger/CLIENT/
+        # Detect retailer from JSON path (output/RETAILER/CLIENT/runs/...)
+        retailer = None
+        try:
+            path_parts = Path(json_file).parts
+            output_idx = path_parts.index('output')
+            if output_idx + 1 < len(path_parts):
+                retailer = path_parts[output_idx + 1]  # kroger, walmart, instacart
+        except (ValueError, IndexError):
+            retailer = 'kroger'  # Default fallback
+        
+        # Get base directory from JSON path
+        # Kroger/Instacart: output/retailer/CLIENT/runs/*.json
+        # Walmart: output/walmart/CLIENT/runs/TIMESTAMP/*.json
         runs_dir = os.path.dirname(json_file)
         base_dir = os.path.dirname(runs_dir)
+        
+        # For Walmart, if runs_dir ends with timestamp, go up one more level
+        if retailer == 'walmart' and re.match(r'\d{14}$', os.path.basename(runs_dir)):
+            base_dir = os.path.dirname(base_dir)
         
         # Extract timestamp from JSON filename to match images from same run
         # Format: run_results_KEYWORD_YYYY-MM-DD_HH-MM-SS.json
@@ -381,13 +505,93 @@ class BrandReviewTool:
         timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})', json_basename)
         run_timestamp = timestamp_match.group(1) if timestamp_match else None
         
-        print(f"\n[DEBUG] Finding image for {ad_type} ad")
+        print(f"\n[DEBUG] Finding image for {ad_type} ad (retailer: {retailer})")
         print(f"[DEBUG] JSON file: {json_file}")
         print(f"[DEBUG] Base dir: {base_dir}")
         print(f"[DEBUG] Run timestamp: {run_timestamp}")
         print(f"[DEBUG] Search term: {search_term}")
         
-        # Look for image based on ad type
+        # Map ad types to subfolders based on retailer
+        if retailer == 'kroger':
+            type_to_folder = {
+                'TOA': 'TOA',
+                'Skyscraper': 'Skyscraper',
+                'CuratedCarousel': 'Carousel'
+            }
+            type_to_path_field = {
+                'TOA': 'toa_image_path',
+                'Skyscraper': 'skyscraper_image_path',
+                'CuratedCarousel': 'carousel_image_path'
+            }
+        elif retailer == 'walmart':
+            type_to_folder = {
+                'sba': 'SBA',
+                'sbv': 'SBV',
+                'tile_takeover': 'Tile',
+                'top_banner': 'Banner'
+            }
+            type_to_path_field = {
+                'sba': 'image_path',
+                'sbv': 'image_path',
+                'tile_takeover': 'image_path',
+                'top_banner': 'image_path'
+            }
+        elif retailer == 'instacart':
+            type_to_folder = {
+                'display_ad': 'DisplayAd',
+                'shoppable_recipe_ad': 'ShoppableRecipe',
+                'main': 'Main'
+            }
+            type_to_path_field = {
+                'display_ad': 'image_path',
+                'shoppable_recipe_ad': 'image_path',
+                'main': 'image_path'
+            }
+        else:
+            type_to_folder = {}
+            type_to_path_field = {}
+        
+        # Try to get image path from JSON first
+        path_field = type_to_path_field.get(ad_type, 'image_path')
+        image_path_from_json = ad.get(path_field, '')
+        
+        if image_path_from_json:
+            # Try relative to base_dir
+            full_path = os.path.join(base_dir, image_path_from_json)
+            if os.path.exists(full_path):
+                return full_path
+            # Try absolute path
+            if os.path.exists(image_path_from_json):
+                return image_path_from_json
+        
+        # Fallback: search by pattern in the appropriate subfolder
+        subfolder = type_to_folder.get(ad_type)
+        if subfolder:
+            search_dir = os.path.join(base_dir, subfolder)
+            if os.path.exists(search_dir):
+                advertiser = ad.get('advertisers', ['unknown'])[0] if ad.get('advertisers') else 'unknown'
+                advertiser_slug = self.to_slug(advertiser)
+                
+                # Search for images matching the advertiser
+                import glob as glob_module
+                pattern = os.path.join(search_dir, f"*__{advertiser_slug}__*.png")
+                matches = glob_module.glob(pattern)
+                
+                if matches:
+                    # Filter by timestamp if available
+                    if run_timestamp:
+                        date_part = run_timestamp.split('_')[0]
+                        time_part = run_timestamp.split('_')[1] if '_' in run_timestamp else ''
+                        time_formatted = time_part.rsplit('-', 1)[0] + '.' + time_part.rsplit('-', 1)[1] if time_part and '-' in time_part else time_part
+                        timestamp_matches = [m for m in matches if f"D{date_part}_T{time_formatted}" in m]
+                        if timestamp_matches:
+                            matches = timestamp_matches
+                    
+                    # Return most recent match
+                    matches.sort(key=os.path.getmtime, reverse=True)
+                    return matches[0]
+        
+        # Legacy Kroger-specific logic (keeping for backward compatibility)
         if ad_type == 'CuratedCarousel':
             carousel_path = ad.get('carousel_image_path', '')
             print(f"[DEBUG] Carousel path from JSON: {carousel_path}")
@@ -525,8 +729,11 @@ class BrandReviewTool:
         ad_data = self.unknown_ads[self.current_index]
         ad = ad_data['ad']
         
-        # Update progress
-        self.progress_label.config(text=f"Ad {self.current_index + 1} of {len(self.unknown_ads)}")
+        # Update progress - show unique brands count
+        unique_brands = len(set(ad['current_brand'] for ad in self.unknown_ads))
+        self.progress_label.config(
+            text=f"Ad {self.current_index + 1} of {len(self.unknown_ads)} ({unique_brands} unique brands)"
+        )
         
         # Update current brand(s) - show all if co-branded
         advertisers = ad.get('advertisers', ['unknown'])
@@ -588,7 +795,29 @@ class BrandReviewTool:
     
     def format_ad_details(self, ad):
         """Format ad details for display"""
+        # Get current ad data to access JSON file path
+        ad_data = self.unknown_ads[self.current_index]
+        json_file = ad_data.get('json_file', 'Unknown')
+        
+        # Extract client and search term from JSON path
+        # e.g., output/kroger/MilkPEP/runs/run_results_protein_drinks_2025-10-24_16-19-00.json
+        client = 'Unknown'
+        search_term = 'Unknown'
+        if json_file:
+            parts = json_file.split(os.sep)
+            if len(parts) >= 3:
+                client = parts[-3]  # MilkPEP
+            filename = os.path.basename(json_file)
+            # Extract search term from filename: run_results_<term>_<timestamp>.json
+            if filename.startswith('run_results_'):
+                term_part = filename.replace('run_results_', '').rsplit('_', 4)[0]
+                search_term = term_part.replace('_', ' ')
+        
         details = []
+        details.append(f"Client: {client}")
+        details.append(f"Search Term: {search_term}")
+        details.append(f"JSON: {os.path.basename(json_file) if json_file else 'Unknown'}")
+        details.append("")
         details.append(f"Type: {ad.get('type', 'Unknown')}")
         details.append(f"Position: {ad.get('position', 'N/A')}")
         details.append(f"Current Brand: {ad.get('advertisers', ['unknown'])[0]}")
@@ -668,6 +897,16 @@ class BrandReviewTool:
         
         suggestions = set()
         
+        # Extract brand from TOA campaign codes (e.g., TOABoostAugDec2025 -> Boost)
+        current_brand = ad.get('advertisers', [''])[0] if ad.get('advertisers') else ''
+        if current_brand:
+            # Pattern: TOA + BrandName + Month + Month + Year
+            toa_match = re.match(r'^TOA([A-Z][a-z]+)', current_brand, re.IGNORECASE)
+            if toa_match:
+                extracted_brand = toa_match.group(1)
+                suggestions.add(extracted_brand)
+                print(f"[SUGGESTION] Extracted '{extracted_brand}' from TOA code '{current_brand}'")
+        
         # Extract from URL
         href = ad.get('href', '')
         if href:
@@ -712,55 +951,9 @@ class BrandReviewTool:
         self.brand_entries[0].focus()
     
     def save_correction(self):
-        """Save the corrected brand name(s)"""
-        corrected_brands = self.get_all_brands()
-        
-        if not corrected_brands:
-            messagebox.showwarning("Missing Brand", "Please enter at least one brand name")
-            return
-        
-        ad_data = self.unknown_ads[self.current_index]
-        old_brand = ad_data['current_brand']
-        
-        try:
-            # Update JSON with all brands
-            self.update_json(ad_data, corrected_brands)
-            
-            # Rename image file (use first brand for filename)
-            if ad_data['image_path']:
-                self.rename_image_file(ad_data, old_brand, corrected_brands[0])
-            
-            # Update lexicon for each brand
-            for brand in corrected_brands:
-                self.update_lexicon(brand, old_brand)
-            
-            brand_text = ", ".join(corrected_brands) if len(corrected_brands) > 1 else corrected_brands[0]
-            messagebox.showinfo("Success", f"Updated brand to: {brand_text}")
-            
-            # Remove all ads with the old uncertain brand from the list
-            # (they've now been corrected to the new brand)
-            old_count = len(self.unknown_ads)
-            self.unknown_ads = [ad for ad in self.unknown_ads if ad['current_brand'] != old_brand]
-            removed_count = old_count - len(self.unknown_ads)
-            if removed_count > 1:
-                print(f"[INFO] Filtered out {removed_count} ads with brand '{old_brand}' from review list")
-            
-            # Adjust index if needed - stay at same index to show next ad in list
-            if self.current_index >= len(self.unknown_ads):
-                self.current_index = max(0, len(self.unknown_ads) - 1)
-            
-            # Show the ad at current index (don't increment - the list shifted)
-            if self.unknown_ads:
-                self.show_current_ad()
-            else:
-                messagebox.showinfo("Complete", "All unknown brands have been reviewed!")
-                self.root.quit()
-            
-        except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            print(f"\n[ERROR] Full traceback:\n{error_details}")
-            messagebox.showerror("Error", f"Failed to save correction:\n{str(e)}\n\nSee terminal for details")
+        """Save the corrected brand name(s) - applies to all similar ads"""
+        # Just call apply_to_all_similar with auto_confirm=True
+        self.apply_to_all_similar(auto_confirm=True)
     
     def update_json(self, ad_data, corrected_brands):
         """Update the JSON file with corrected brand(s)"""
@@ -804,14 +997,22 @@ class BrandReviewTool:
                 if (ad.get('type') == target_type and ad.get('position') == target_position) or ad == target_ad:
                     ad['advertisers'] = corrected_brands
                     
-                    # Update image path if it contains the old brand
+                    # Update image path even if it doesn't literally contain the old brand slug
                     for path_key in ['carousel_image_path', 'toa_image_path', 'skyscraper_image_path']:
                         if path_key in ad:
                             old_path = ad[path_key]
-                            # Replace brand slug in path (use first brand for filename)
-                            old_slug = self.to_slug(ad_data['current_brand'])
                             new_slug = self.to_slug(corrected_brands[0])
+                            # Try direct replacement using old_slug first
+                            old_slug = self.to_slug(ad_data['current_brand'])
                             new_path = old_path.replace(f'__{old_slug}__', f'__{new_slug}__')
+                            if new_path == old_path:
+                                # Generic replacement: swap the second segment of the basename
+                                dname, bname = os.path.split(old_path)
+                                parts = bname.split('__')
+                                if len(parts) >= 2:
+                                    parts[1] = new_slug
+                                    bname_new = '__'.join(parts)
+                                    new_path = os.path.join(dname, bname_new)
                             ad[path_key] = new_path
                     
                     updated = True
@@ -827,21 +1028,38 @@ class BrandReviewTool:
             json.dump(data, f, indent=2, ensure_ascii=False)
     
     def rename_image_file(self, ad_data, old_brand, new_brand):
-        """Rename the image file to match corrected brand"""
+        """Rename the image file to match corrected brand, regardless of previous slug"""
         old_path = ad_data['image_path']
-        
-        if not old_path or not os.path.exists(old_path):
+        if not old_path:
+            print(f"[WARN] No image path in ad_data, skipping rename")
             return
-        
-        # Generate new filename
-        old_slug = self.to_slug(old_brand)
+        if not os.path.exists(old_path):
+            print(f"[WARN] Image file doesn't exist: {old_path}")
+            return
+        # Build new filename by replacing the brand slug segment (second segment)
         new_slug = self.to_slug(new_brand)
-        
-        new_path = old_path.replace(f'__{old_slug}__', f'__{new_slug}__')
-        
+        dname, bname = os.path.split(old_path)
+        parts = bname.split('__')
+        if len(parts) >= 2:
+            parts[1] = new_slug
+            bname_new = '__'.join(parts)
+            new_path = os.path.join(dname, bname_new)
+        else:
+            # Fallback to simple replace using old brand slug
+            new_path = old_path.replace(f"__{self.to_slug(old_brand)}__", f"__{new_slug}__")
         if old_path != new_path:
-            shutil.move(old_path, new_path)
-            ad_data['image_path'] = new_path
+            try:
+                shutil.move(old_path, new_path)
+                ad_data['image_path'] = new_path
+                print(f"[FILE] Renamed image file:")
+                print(f"       {os.path.basename(old_path)}")
+                print(f"    -> {os.path.basename(new_path)}")
+            except Exception as e:
+                print(f"[ERROR] Failed to rename image file: {e}")
+                print(f"        Old: {old_path}")
+                print(f"        New: {new_path}")
+        else:
+            print(f"[INFO] Image filename already correct (no rename needed)")
     
     def sync_logo_brands_to_lexicon(self):
         """Sync brands from logo database into lexicon"""
@@ -859,9 +1077,13 @@ class BrandReviewTool:
             # Create a set of existing brand names (lowercase for comparison)
             existing_names = {brand['name'].lower() for brand in lexicon_brands}
             
-            # Add missing brands from logo database
+            # Add missing brands from logo database (skip "unknown")
             added_count = 0
             for logo_brand in logo_brands:
+                # NEVER add "unknown" to lexicon
+                if logo_brand.lower() == 'unknown':
+                    continue
+                
                 if logo_brand.lower() not in existing_names:
                     # Add to lexicon
                     lexicon_brands.append({
@@ -877,11 +1099,19 @@ class BrandReviewTool:
                 with open(self.lexicon_path, 'w') as f:
                     json.dump(lexicon_brands_sorted, f, indent=2, ensure_ascii=False)
                 print(f"[SYNC] Added {added_count} brands from logo database to lexicon")
+                
+                # Reload lexicon cache
+                self.lexicon_brands = lexicon_brands_sorted
         except Exception as e:
             print(f"[WARN] Failed to sync logo brands to lexicon: {e}")
     
     def update_lexicon(self, corrected_brand, old_brand):
         """Add corrected brand to lexicon and add old brand as alias"""
+        # NEVER add "unknown" to lexicon
+        if corrected_brand.lower() == 'unknown':
+            print(f"[LEXICON] Skipping - 'unknown' cannot be added to lexicon")
+            return
+        
         # Load lexicon (it's a list of {name, synonyms} objects)
         with open(self.lexicon_path, 'r') as f:
             brands = json.load(f)
@@ -894,15 +1124,15 @@ class BrandReviewTool:
                 break
         
         if existing_brand:
-            # Add old brand as synonym if it's not already there
-            if old_brand != 'unknown' and old_brand not in existing_brand['synonyms']:
+            # Add old brand as synonym if it's not already there and not "unknown"
+            if old_brand.lower() != 'unknown' and old_brand not in existing_brand['synonyms']:
                 existing_brand['synonyms'].append(old_brand)
                 print(f"[LEXICON] Added '{old_brand}' as synonym for '{existing_brand['name']}'")
         else:
             # Add new brand
             new_brand = {
                 'name': corrected_brand,
-                'synonyms': [old_brand] if old_brand != 'unknown' else []
+                'synonyms': [old_brand] if old_brand.lower() != 'unknown' else []
             }
             brands.append(new_brand)
             print(f"[LEXICON] Added new brand '{corrected_brand}' with synonym '{old_brand}'")
@@ -913,8 +1143,11 @@ class BrandReviewTool:
         # Save lexicon (keep it as a list)
         with open(self.lexicon_path, 'w') as f:
             json.dump(brands_sorted, f, indent=2, ensure_ascii=False)
+        
+        # Reload lexicon cache
+        self.lexicon_brands = brands_sorted
     
-    def apply_to_all_similar(self):
+    def apply_to_all_similar(self, auto_confirm=False):
         """Apply the corrected brand(s) to all similar ads with the same message/header/URL"""
         corrected_brands = self.get_all_brands()
         
@@ -948,28 +1181,29 @@ class BrandReviewTool:
             if matches:
                 similar_ads.append((i, ad))
         
-        # Show what we're matching on
-        match_criteria = []
-        if current_message:
-            match_criteria.append(f"Message: {current_message[:50]}...")
-        if current_header:
-            match_criteria.append(f"Header: {current_header[:50]}...")
-        if current_url:
-            match_criteria.append(f"URL: {current_url[:50]}...")
-        
-        criteria_text = "\n".join(match_criteria) if match_criteria else "No identifying content"
-        
-        # Confirm with user
-        count = len(similar_ads)
-        brand_text = ", ".join(corrected_brands) if len(corrected_brands) > 1 else corrected_brands[0]
-        response = messagebox.askyesno(
-            "Apply to All Similar",
-            f"Found {count} ad(s) matching:\n{criteria_text}\n\n"
-            f"Apply '{brand_text}' to all of them?"
-        )
-        
-        if not response:
-            return
+        # Confirm with user (unless auto_confirm is True)
+        if not auto_confirm:
+            # Show what we're matching on
+            match_criteria = []
+            if current_message:
+                match_criteria.append(f"Message: {current_message[:50]}...")
+            if current_header:
+                match_criteria.append(f"Header: {current_header[:50]}...")
+            if current_url:
+                match_criteria.append(f"URL: {current_url[:50]}...")
+            
+            criteria_text = "\n".join(match_criteria) if match_criteria else "No identifying content"
+            
+            count = len(similar_ads)
+            brand_text = ", ".join(corrected_brands) if len(corrected_brands) > 1 else corrected_brands[0]
+            response = messagebox.askyesno(
+                "Apply to All Similar",
+                f"Found {count} ad(s) matching:\n{criteria_text}\n\n"
+                f"Apply '{brand_text}' to all of them?"
+            )
+            
+            if not response:
+                return
         
         # Apply to all
         success_count = 0
@@ -987,9 +1221,6 @@ class BrandReviewTool:
                 if ad['image_path']:
                     self.rename_image_file(ad, old_brand_for_this_ad, corrected_brands[0])
                 
-                # Update the ad_data in our list
-                ad['current_brand'] = corrected_brands[0]
-                
                 success_count += 1
             except Exception as e:
                 print(f"[ERROR] Failed to update ad {idx}: {e}")
@@ -1002,20 +1233,28 @@ class BrandReviewTool:
         except Exception as e:
             print(f"[ERROR] Failed to update lexicon: {e}")
         
-        # Show result
-        messagebox.showinfo(
-            "Complete",
-            f"Updated {success_count} ad(s) successfully.\n"
-            f"{error_count} error(s)."
-        )
+        # Remove all ads that had the original uncertain brand BEFORE updating current_brand
+        # (otherwise the filter won't work)
+        old_count = len(self.unknown_ads)
+        self.unknown_ads = [ad for ad in self.unknown_ads if ad['current_brand'] != original_uncertain_brand]
+        removed_count = old_count - len(self.unknown_ads)
+        if removed_count > 1:
+            print(f"[INFO] Filtered out {removed_count} ads with brand '{original_uncertain_brand}' from review list")
         
-        # Reload to remove updated ads from the list
-        self.unknown_ads = [ad for ad in self.unknown_ads if ad['current_brand'] != corrected_brand]
-        
-        # Show next ad or finish
+        # Adjust index if needed - stay at same index to show next ad in list
         if self.current_index >= len(self.unknown_ads):
             self.current_index = max(0, len(self.unknown_ads) - 1)
         
+        # Show success message
+        brand_text = ", ".join(corrected_brands) if len(corrected_brands) > 1 else corrected_brands[0]
+        messagebox.showinfo(
+            "Success",
+            f"Updated brand to: {brand_text}\n"
+            f"({success_count} similar ads updated, {error_count} errors)\n"
+            f"({removed_count} ads removed from review queue)"
+        )
+        
+        # Show the ad at current index (don't increment - the list shifted)
         if self.unknown_ads:
             self.show_current_ad()
         else:

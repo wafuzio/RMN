@@ -70,5 +70,17 @@
   "halo top": [
     "healthy ice cream",
     "low calorie ice cream"
+  ],
+  "MilkPEP": [
+    "protein drinks",
+    "milk",
+    "protein powder"
+  ],
+  "Proactiv": [
+    "Proactiv",
+    "acne kit"
+  ],
+  "taxonomy_test_2": [
+    "ice cream"
   ]
 }

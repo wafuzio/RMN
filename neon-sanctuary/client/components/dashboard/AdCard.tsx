@@ -4,45 +4,112 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toLocalImageUrl } from "@/utils/imageUrl";
 import { RetailerLogo } from "@/components/dashboard/RetailerLogo";
-import { parse, format } from "date-fns";
+import { formatLocal } from "@/lib/date";
 
-// Robust image loader component
-function AdImage({ relUrl, alt }: { relUrl?: string; alt?: string }) {
+// Robust media loader component (handles both images and videos)
+function AdMedia({ imageUrl, videoUrl, alt, isTOA, isSBA, adType }: { imageUrl?: string; videoUrl?: string; alt?: string; isTOA?: boolean; isSBA?: boolean; adType?: string }) {
+  // Prefer video if available, otherwise use image
+  const hasVideo = !!videoUrl;
+  const relUrl = hasVideo ? videoUrl : imageUrl;
+
   if (!relUrl) {
-    return <div className="fallback-text text-gray-400 text-sm">No image</div>;
+    return <div className="fallback-text text-gray-400 text-sm">No media</div>;
   }
 
   const src = toLocalImageUrl(relUrl);
   const [loaded, setLoaded] = useState(false);
-  const [imgKey, setImgKey] = useState(0);
+  const [error, setError] = useState(false);
+  const [mediaKey, setMediaKey] = useState(0);
 
   useEffect(() => {
-    setLoaded(false); // reset whenever src changes
-    setImgKey(prev => prev + 1); // force new img element
-  }, [src]);
+    setLoaded(false);
+    setError(false);
+    setMediaKey(prev => prev + 1);
+    console.debug('[AdMedia] Loading ' + (hasVideo ? 'video' : 'image') + ':', { original: relUrl, resolved: src });
+  }, [src, relUrl, hasVideo]);
+
+  const heightClass = (isTOA || isSBA) ? "h-[120px]" : "h-[200px]";
+  const isShoppableDisplay = adType && (adType.toLowerCase().includes("shoppable") || adType.toLowerCase().includes("display_ads") || adType.toLowerCase().includes("sba"));
+  const objectPosition = isShoppableDisplay ? "left" : "center";
+
+  if (hasVideo) {
+    return (
+      <div id="video-frame" className={cn("video-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-center justify-center relative", heightClass)}>
+        <video
+          key={`${src}-${mediaKey}`}
+          src={src}
+          className="h-full w-full object-cover"
+          style={{ display: error ? 'none' : 'block', objectPosition }}
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
+          controls
+          preload="metadata"
+          onLoadedMetadata={() => {
+            console.debug('[AdMedia] Video loaded:', src);
+            setLoaded(true);
+            setError(false);
+          }}
+          onError={() => {
+            console.error('[AdMedia] Failed to load video:', src);
+            setLoaded(false);
+            setError(true);
+          }}
+        />
+        {!loaded && !error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+            <div className="fallback-text text-gray-400 text-sm">Loading...</div>
+          </div>
+        )}
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+            <div className="fallback-text text-gray-400 text-sm">Failed to load video</div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div id="image-frame" className="image-frame w-full h-[200px] overflow-hidden rounded-t-lg bg-gray-100 flex items-center justify-start relative">
+    <div id="image-frame" className={cn("image-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-center justify-start relative", heightClass)}>
       <img
-        key={`${src}-${imgKey}`}           // force a fresh element when URL changes
+        key={`${src}-${mediaKey}`}
         src={src}
         alt={alt || 'ad'}
-        className="h-full object-cover"
-        style={{ display: 'block', objectPosition: 'left' }}
-        crossOrigin="anonymous"            // Enable CORS for cross-origin images
-        referrerPolicy="no-referrer"       // Extra security
+        className="h-full w-full object-cover"
+        style={{ display: error ? 'none' : 'block', objectPosition }}
+        crossOrigin="anonymous"
+        referrerPolicy="no-referrer"
         decoding="async"
         loading="lazy"
         draggable={false}
-        onLoad={() => setLoaded(true)}
-        onError={() => {
-          console.log('img error', src);   // keep temporarily for debugging
+        onLoad={() => {
+          console.debug('[AdMedia] Image loaded:', src);
+          setLoaded(true);
+          setError(false);
+        }}
+        onError={(e) => {
+          const img = e.target as HTMLImageElement;
+          const errorDetails = {
+            src,
+            originalUrl: imageUrl,
+            status: img.naturalWidth === 0 ? 'not loaded' : 'partially loaded',
+            complete: img.complete,
+          };
+          console.error(
+            '[AdMedia] Failed to load image: ' + JSON.stringify(errorDetails)
+          );
           setLoaded(false);
+          setError(true);
         }}
       />
-      {!loaded && (
+      {!loaded && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
           <div className="fallback-text text-gray-400 text-sm">Loading...</div>
+        </div>
+      )}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+          <div className="fallback-text text-gray-400 text-sm">Failed to load image</div>
         </div>
       )}
     </div>
@@ -66,109 +133,10 @@ const TYPE_STYLES: Record<string, string> = {
   SBV: "bg-purple-700 text-white",
 };
 
-function formatDate(timestamp: string | number): string {
-  if (!timestamp) {
-    return "N/A";
-  }
-
-  let parsed: Date | null = null;
-
-  // Try parsing as number (Unix timestamp in seconds or milliseconds)
-  if (typeof timestamp === 'number') {
-    const ms = timestamp > 9999999999 ? timestamp : timestamp * 1000;
-    parsed = new Date(ms);
-  } else if (typeof timestamp === 'string') {
-    const ts = timestamp.trim();
-
-    // Handle Instacart format: YYYYMMdd_HHMMSS (e.g., 20251015_153000)
-    if (/^\d{8}_\d{6}$/.test(ts)) {
-      try {
-        const year = parseInt(ts.substring(0, 4), 10);
-        const month = parseInt(ts.substring(4, 6), 10);
-        const day = parseInt(ts.substring(6, 8), 10);
-        const hour = parseInt(ts.substring(9, 11), 10);
-        const minute = parseInt(ts.substring(11, 13), 10);
-        const second = parseInt(ts.substring(13, 15), 10);
-        parsed = new Date(year, month - 1, day, hour, minute, second);
-        if (!isNaN(parsed.getTime())) {
-          // Successfully parsed
-        } else {
-          parsed = null;
-        }
-      } catch {
-        parsed = null;
-      }
-    }
-
-    // Handle Walmart format: YYYYMMDDHHmmss (e.g., 20251015153000)
-    if (!parsed && /^\d{14}$/.test(ts)) {
-      try {
-        const year = parseInt(ts.substring(0, 4), 10);
-        const month = parseInt(ts.substring(4, 6), 10);
-        const day = parseInt(ts.substring(6, 8), 10);
-        const hour = parseInt(ts.substring(8, 10), 10);
-        const minute = parseInt(ts.substring(10, 12), 10);
-        const second = parseInt(ts.substring(12, 14), 10);
-        parsed = new Date(year, month - 1, day, hour, minute, second);
-        if (!isNaN(parsed.getTime())) {
-          // Successfully parsed
-        } else {
-          parsed = null;
-        }
-      } catch {
-        parsed = null;
-      }
-    }
-
-    // Try multiple date format patterns if not yet parsed
-    if (!parsed) {
-      const formats = [
-        "yyyy-MM-dd HH:mm:ss",      // 2025-10-21 15:30:00
-        "yyyy-MM-dd'T'HH:mm:ss",    // 2025-10-21T15:30:00
-        "yyyy-MM-dd'T'HH:mm:ss.SSS", // 2025-10-21T15:30:00.123
-        "yyyy-MM-dd'T'HH:mm:ss'Z'",  // 2025-10-21T15:30:00Z
-        "MM/dd/yyyy HH:mm:ss",      // 10/21/2025 15:30:00
-        "MM/dd/yyyy",               // 10/21/2025
-        "yyyy-MM-dd",               // 2025-10-21
-        "dd-MM-yyyy",               // 21-10-2025
-      ];
-
-      for (const fmt of formats) {
-        try {
-          const candidate = parse(ts, fmt, new Date());
-          if (!isNaN(candidate.getTime())) {
-            parsed = candidate;
-            break;
-          }
-        } catch {
-          // Try next format
-        }
-      }
-    }
-
-    // If no format matched, try native Date constructor
-    if (!parsed) {
-      const nativeDate = new Date(ts);
-      if (!isNaN(nativeDate.getTime())) {
-        parsed = nativeDate;
-      }
-    }
-  }
-
-  if (!parsed || isNaN(parsed.getTime())) {
-    return "N/A";
-  }
-
-  try {
-    return format(parsed, "MMM d, yyyy h:mm a");
-  } catch {
-    return "N/A";
-  }
-}
 
 export interface Ad {
   id: string;
-  retailer: string; client: string; keyword: string; ad_type: string; brand: string; message: string; image_url: string; timestamp: string;
+  retailer: string; client: string; keyword: string; ad_type: string; brand: string; message: string; image_url: string; video_url?: string; timestamp: string;
 }
 
 export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOverIndex, currentIndex }: { ad: Ad; onRemove: (id: string)=>void; onOpen: (ad: Ad)=>void; draggableProps?: any; dragIndex?: number | null; dragOverIndex?: number | null; currentIndex?: number; }) {
@@ -195,7 +163,7 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
     <div
       id="ad-card-outer"
       className={cn(
-        "content-frame card-surface mb-4 break-inside-avoid relative w-full transition-all duration-100 user-select-none",
+        "content-frame card-surface break-inside-avoid relative w-full transition-all duration-100 user-select-none",
         "group",
         isDragging && "opacity-70 shadow-lg scale-[0.98]",
         isDropTarget && "translate-y-2"
@@ -215,13 +183,13 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
       >
         ×
       </button>
-      <button onClick={() => onOpen(ad)} className={cn("text-left select-none", ad.ad_type === "Skyscraper" && "w-full block")} style={{ touchAction: 'none' }}>
-        <AdImage relUrl={ad.image_url} alt={`${ad.brand} ad`} />
-        <div id="content-frame" className={cn("card-text w-full p-4", ad.ad_type === "Skyscraper" && "flex flex-col")}>
+      <button onClick={() => onOpen(ad)} className={cn("text-left select-none w-full block")} style={{ touchAction: 'none' }}>
+        <AdMedia imageUrl={ad.image_url} videoUrl={ad.video_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} />
+        <div id="content-frame" className={cn("card-text w-full p-4 flex flex-col")}>
           <div className="flex items-center justify-between mb-1 w-full">
             <div className="font-bold text-[1.2em] text-[#111827]">{ad.brand}</div>
             <div className="relative">
-              <Badge className={cn("pill", TYPE_STYLES[ad.ad_type] || "bg-gray-200 text-gray-800 border-none")}>{ad.ad_type.replace(/_/g," ")}</Badge>
+              <Badge className={cn("pill", TYPE_STYLES[ad.ad_type] || "bg-gray-200 text-gray-800 border-none")}>{ad.ad_type.toLowerCase() === "sba" || ad.ad_type.toLowerCase() === "sbv" ? ad.ad_type.toUpperCase() : ad.ad_type.replace(/_/g," ")}</Badge>
               <div className="absolute z-20 bg-white/90 px-1 py-1" style={{ left: '-41px', top: '50%', transform: 'translateY(-50%)' }}>
                 <span className="sr-only">{ad.retailer}</span>
                 <RetailerLogo retailer={ad.retailer} className="h-6 w-auto" />
@@ -230,7 +198,7 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
           </div>
           <div className="italic text-[#6b7280]">{ad.keyword}</div>
           <div className="text-xs text-right text-[#6b7280] mt-2">
-            {formatDate(ad.timestamp)}
+            {formatLocal(ad.timestamp)}
           </div>
         </div>
       </button>

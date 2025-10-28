@@ -104,15 +104,53 @@ def _load_brands():
             _SYNONYM_TO_CANON[syn.lower()] = b["name"]
 
 def _brand_from_token(token: str, cutoff: float = 0.86):
-    """Return canonical brand for a candidate token, or the token itself if not in lexicon.
+    """Return canonical brand for a candidate token if it matches the lexicon.
     
-    The lexicon is used for canonicalization (e.g., 'magicspoon' -> 'Magic Spoon'),
-    not as a filter. This allows discovery of new brands.
+    Only returns brands that are in the lexicon (exact or fuzzy match).
+    Returns None if not found - never accepts arbitrary text as a brand.
     """
     if not token:
         return None
+    
+    # Blacklist promotional terms that should never be brands
+    promotional_blacklist = {
+        'digital deal', 'digital_deal', 'advertisement', 'sponsored',
+        'shop now', 'buy now', 'save now', 'learn more', 'click here',
+        'halloween', 'christmas', 'holiday', 'summer', 'spring', 'fall', 'winter',
+        'grab', 'get', 'buy', 'save', 'shop', 'now', 'better', 'best', 'new', 'fresh',
+        'treats', 'deals', 'sale', 'special', 'limited', 'exclusive', 'discover',
+        'kroji holdings', 'kroji_holdings', 'kroji holding', 'kroji_holding', 'kroji'
+    }
+    
+    # Campaign code suffixes to strip (e.g., "Campbell'sHoliday" → "Campbell's")
+    campaign_suffixes = [
+        'holiday', 'halloween', 'christmas', 'summer', 'spring', 'fall', 'winter',
+        'q1', 'q2', 'q3', 'q4', 'fy25', 'fy24', 'h1', 'h2',
+        '2024', '2025', '2026',
+        'alwayson', 'toa', 'scale', 'wave1', 'wave2', 'wave3'
+    ]
+    
+    low = token.lower().strip()
+    
+    # Reject promotional terms immediately
+    if low in promotional_blacklist:
+        return None
+    
+    # Try stripping campaign suffixes to extract the brand
+    # e.g., "Campbell'sHoliday" → "Campbell's"
+    original_low = low
+    for suffix in campaign_suffixes:
+        if low.endswith(suffix):
+            stripped = low[:-len(suffix)].rstrip("'s_- ")
+            if stripped:
+                low = stripped
+                break
+    
+    # After stripping, reject if what remains is a promotional term
+    if low in promotional_blacklist or any(promo in low for promo in promotional_blacklist):
+        return None
+    
     _load_brands()
-    low = token.lower()
     
     # Try exact match in lexicon
     if low in _SYNONYM_TO_CANON:
@@ -124,18 +162,15 @@ def _brand_from_token(token: str, cutoff: float = 0.86):
     if matches:
         return _SYNONYM_TO_CANON[matches[0]]
     
-    # Not in lexicon - return the token as-is (new brand discovery)
-    # Only return if it looks like a brand (starts with capital, reasonable length)
-    if token and token[0].isupper() and 2 <= len(token) <= 30:
-        return token
-    
+    # Not in lexicon - return None (do not accept as "new brand")
     return None
 
 def _best_brand_from_tokens(tokens):
     """Return first confident canonical brand from a list of tokens.
     
-    Tries 2-word combinations first (e.g., 'Magic Spoon') before single words.
+    Tries 2-word combinations first (e.g., 'Magic Spoon', 'General Mills') before single words.
     This prevents matching 'Magic' when 'Magic Spoon' is the actual brand.
+    Only returns brands that match the lexicon.
     """
     # First pass: try 2-word combinations
     for i in range(len(tokens) - 1):
@@ -149,6 +184,7 @@ def _best_brand_from_tokens(tokens):
         b = _brand_from_token(t)
         if b:
             return b
+    
     return None
 
 def _split_camel_pascal(s: str):
@@ -213,8 +249,15 @@ def _extract_kroger_advertiser(ad_dict):
     if b:
         return b
     
-    # 2) Parse message/header but only accept matches that map to a known brand
-    message = ad_dict.get("message", "") or ad_dict.get("header", "")
+    # 2) Parse message/header/alt_text but only accept matches that map to a known brand
+    # Combine message, header, and alt_text for comprehensive text analysis
+    text_sources = [
+        ad_dict.get("message", ""),
+        ad_dict.get("header", ""),
+        ad_dict.get("alt_text", "")
+    ]
+    message = " ".join(filter(None, text_sources))
+    
     if message:
         # a) "Parent SubBrand" pattern (e.g., "P&G Tide" → extract "Tide")
         # Look for patterns where a parent company is followed by a specific brand
@@ -236,7 +279,15 @@ def _extract_kroger_advertiser(ad_dict):
             if b:
                 return b
         
-        # c) Leading "<Brand>." pattern
+        # c) "Save on <Brand>" or "Shop <Brand>" promotional patterns
+        m = re.search(r'\b(?:Save on|Shop|Buy|Get|Try)\s+([A-Z][A-Za-z0-9&\'\-]+(?:\s+[A-Z][A-Za-z0-9&\'\-]+)?)', message)
+        if m:
+            candidate = m.group(1).strip()
+            b = _brand_from_token(candidate)
+            if b:
+                return b
+        
+        # d) Leading "<Brand>." pattern
         m = re.match(r'^([A-Z][A-Za-z0-9&\s\'\-]+?)\.', message)
         if m:
             candidate = m.group(1).strip()
@@ -244,7 +295,7 @@ def _extract_kroger_advertiser(ad_dict):
             if b:
                 return b
         
-        # c) Token scan with lexicon validation
+        # e) Token scan with lexicon validation
         b = _best_brand_from_tokens(_slug_tokens(message))
         if b:
             return b
@@ -1087,6 +1138,8 @@ def extract_ads_from_html(html, client=None, search_term=None, timestamp=None, s
                         
                         # Set relative path in ad data
                         ad['carousel_image_path'] = os.path.join('Carousel', filename)
+                        # Canonical: mirror to image_path
+                        ad['image_path'] = ad['carousel_image_path']
                         ad['capture_entire_carousel'] = True
                         log(f"Generated carousel_image_path: {ad['carousel_image_path']}")
                 except Exception as e:
@@ -1101,7 +1154,21 @@ def extract_ads_from_html(html, client=None, search_term=None, timestamp=None, s
                 ad['html'] = raw_html
                 results.append(ad)
         
+    # Normalize image_path fields (canonical fallback)
+    results = _normalize_image_path_fields(results)
     return results
+
+def _normalize_image_path_fields(ads):
+    """Ensure all ads have canonical image_path field, falling back to type-specific fields"""
+    for ad in ads:
+        if ad.get("image_path"):
+            continue
+        # Try type-specific fields in order of preference
+        for k in ("toa_image_path", "carousel_image_path", "skyscraper_image_path"):
+            if ad.get(k):
+                ad["image_path"] = ad[k]
+                break
+    return ads
 
 # For backward compatibility
 def extract_toa_ad(html):

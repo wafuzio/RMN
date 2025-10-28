@@ -665,6 +665,7 @@ find . -name "*.pyc" -delete 2>/dev/null
 
 Use this checklist when adding a new retailer:
 
+### Setup & Infrastructure
 - [ ] Research website and document ad types
 - [ ] Add retailer to `auth/retailer_auth.py`
 - [ ] Create setup script `scripts/setup_{retailer}_profile.sh`
@@ -677,15 +678,35 @@ Use this checklist when adding a new retailer:
 - [ ] Import adapter in `keyword_input.py`
 - [ ] **Add environment variables to `config/launcher.env`** ⚠️ CRITICAL #2
 - [ ] Add environment variables to `~/.zshrc` (for CLI)
+
+### Canonical Schema Implementation ⚠️ REQUIRED
+- [ ] Run JSON has `retailer`, `client`, `keyword`, `timestamp` (ISO Z), `run_id`, `ads[]`
+- [ ] Ads are in flat `ads[]` array (NOT nested in `results[]`)
+- [ ] Every ad has `id`, `type`, `brand`, `image_path`
+- [ ] `image_path` is relative to client root (not absolute)
+- [ ] Use `generate_ad_filename()` for all image filenames
+- [ ] Folders match ad type names exactly
+- [ ] All folders registered in `utils/path_taxonomy.py`
+- [ ] Timestamps use ISO 8601 with Z suffix (`now_iso_z()`)
+- [ ] `run_id` is 14-digit YYYYMMDDHHMMSS (`build_run_id()`)
+- [ ] Implement `build_ad_object()` helper function
+- [ ] Validate all ads with `validate_ad_object()`
+
+### Testing & Verification
 - [ ] Create test script `scripts/test_{retailer}_adapter.py`
 - [ ] Test adapter registration
 - [ ] Test end-to-end with test script
 - [ ] Test in GUI (`python3 keyword_input.py`)
+- [ ] **Run `python3 tools/audit_adtype_mapping.py`** ⚠️ CRITICAL #3
+- [ ] Verify all ad types show green checks in audit
 - [ ] Clear Python cache
 - [ ] Test in macOS app
+
+### Documentation
 - [ ] Create `retailers/{retailer}/README.md`
 - [ ] Update `docs/CONTEXT_SEED.md`
 - [ ] Create `docs/{RETAILER}_INTEGRATION.md`
+- [ ] Document canonical schema compliance
 - [ ] Commit all changes to git
 
 ---
@@ -721,6 +742,39 @@ Use this checklist when adding a new retailer:
 ### ❌ Incorrect ad selectors
 **Symptom**: No ads found in JSON
 **Fix**: Inspect page HTML and update selectors in search script
+
+### ❌ Missing `image_path` in ad objects
+**Symptom**: `audit_adtype_mapping.py` shows "Image MISSING" errors
+**Fix**: Ensure every ad has `image_path` field set to relative path
+**Why it happens**: Forgot to set `image_path` when building ad objects
+
+### ❌ Absolute paths in `image_path`
+**Symptom**: Builder GUI can't load images, audit shows path errors
+**Fix**: Use relative paths from client root (e.g., `"TOA/file.png"` not `"/full/path/TOA/file.png"`)
+**Why it happens**: Used `os.path.abspath()` instead of relative path
+
+### ❌ Ad type doesn't match folder name
+**Symptom**: `audit_adtype_mapping.py` shows "Folder FAIL"
+**Fix**: Ensure `ad["type"]` exactly matches folder name (case-sensitive)
+**Example**: `type: "Display_Ad"` must have images in `Display_Ad/` folder
+
+### ❌ Nested `results[]` instead of flat `ads[]`
+**Symptom**: Builder GUI shows no ads, audit fails
+**Fix**: Use flat `ads[]` array at top level, not nested in `results[]`
+**Legacy format**: `{"results": [{"ads": [...]}]}`  ❌
+**Canonical format**: `{"ads": [...]}`  ✅
+
+### ❌ Missing ISO Z timestamp
+**Symptom**: Timestamp sorting broken, audit shows format errors
+**Fix**: Use `now_iso_z()` helper for timestamps
+**Wrong**: `"timestamp": "2025-10-27 14:32:15"`  ❌
+**Correct**: `"timestamp": "2025-10-27T14:32:15Z"`  ✅
+
+### ❌ Wrong `run_id` format
+**Symptom**: Duplicate run detection fails, audit shows format errors
+**Fix**: Use `build_run_id()` helper for 14-digit format
+**Wrong**: `"run_id": "2025-10-27_14-32-15"`  ❌
+**Correct**: `"run_id": "20251027143215"`  ✅
 
 ---
 
@@ -995,6 +1049,326 @@ if _is_login_modal_visible(page):
 - User can complete 2FA or CAPTCHA
 - Script auto-resumes after login
 - Clear progress updates every 10 seconds
+
+---
+
+## Step 10: Canonical Schema Implementation
+
+**⚠️ CRITICAL**: All new retailers MUST implement canonical schema from day one. This ensures consistency across the platform and enables unified tooling.
+
+### 10.1 Canonical Run JSON Structure
+
+Your scraper MUST output JSON files with this exact structure:
+
+```json
+{
+  "retailer": "newretailer",
+  "client": "client_name",
+  "keyword": "search term",
+  "timestamp": "2025-10-27T03:42:33Z",
+  "run_id": "20251027034233",
+  "ads": [...]
+}
+```
+
+**Field Requirements:**
+- `retailer` (string): Lowercase retailer slug (e.g., "kroger", "walmart", "newretailer")
+- `client` (string): Client/brand name from output path
+- `keyword` (string): Search term used
+- `timestamp` (string): ISO 8601 with Z suffix (UTC timezone)
+- `run_id` (string): 14-digit YYYYMMDDHHMMSS format
+- `ads` (array): Flat array of ad objects (NOT nested in `results[]`)
+
+### 10.2 Canonical Ad Object Structure
+
+Each ad in the `ads[]` array MUST have:
+
+```json
+{
+  "id": "newretailer-20251027034233-1",
+  "type": "Ad_Type_Name",
+  "brand": "Brand Name",
+  "brand_logo": null,
+  "title": "Ad Title",
+  "description": "Ad description text",
+  "cta": "Shop Now",
+  "href": "https://...",
+  "image_url": "https://...",
+  "image_path": "Ad_Type_Folder/newretailer__brand__adtype__client__keyword__D2025-10-27_T03-42.33_1.png",
+  "products": [],
+  "metadata": {
+    "slot": 0,
+    "custom_field": "value"
+  }
+}
+```
+
+**Required Fields:**
+- `id` (string): Format: `{retailer}-{run_id}-{index}`
+- `type` (string): Canonical ad type name (matches folder name)
+- `brand` (string|null): Advertiser/brand name
+- `brand_logo` (string|null): Path to brand logo (null for now)
+- `image_path` (string|null): **CRITICAL** - Relative path from client root to image file
+- `metadata` (object): Retailer-specific fields
+
+**Optional Fields:**
+- `title`, `description`, `cta`, `href`, `image_url`, `products`
+
+### 10.3 Canonical Filename Format
+
+All image files MUST use this naming convention:
+
+```
+{retailer}__{brand}__{adtype}__{client}__{keyword}__D{date}_T{time}_{index}.{ext}
+```
+
+**Example:**
+```
+newretailer__nike__display_ad__footlocker__running_shoes__D2025-10-27_T14-32.15_1.png
+```
+
+**Use the `generate_ad_filename()` helper:**
+
+```python
+from filename_utils import generate_ad_filename
+
+filename = generate_ad_filename(
+    retailer="newretailer",
+    ad_type="display_ad",
+    client=client,
+    search_term=keyword,
+    timestamp=run_ts,  # YYYY-MM-DD_HH-MM-SS format
+    index=1,
+    extension="png",
+    advertiser=brand_name or "unknown",
+)
+```
+
+### 10.4 Canonical Folder Structure
+
+```
+output/
+  newretailer/
+    {client}/
+      Ad_Type_1/     # Ad type folder (matches ad.type)
+      Ad_Type_2/     # Another ad type
+      Main/          # Full page screenshots (optional)
+      runs/
+        {run_id}/    # Per-run directory (RECOMMENDED)
+          run_results_{run_id}.json      # Canonical JSON
+          search_results_{keyword}_{timestamp}.html
+        OR (flat structure, Kroger-style)
+        run_results_{run_id}.json        # Canonical JSON
+        search_results_{keyword}_{timestamp}.html
+```
+
+**Folder Naming Rules:**
+- Use PascalCase or snake_case consistently
+- Match ad type names exactly (e.g., `type: "Display_Ad"` → `Display_Ad/` folder)
+- Always include `Main/` and `runs/` in path taxonomy
+
+### 10.5 Timestamp Conversion Helpers
+
+**Add these helpers to your search script:**
+
+```python
+from datetime import datetime, timezone
+
+def build_run_id() -> str:
+    """Generate 14-digit run ID: YYYYMMDDHHMMSS"""
+    return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+
+def now_iso_z() -> str:
+    """Generate ISO 8601 timestamp with Z suffix"""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+# Usage in your search script:
+run_id = build_run_id()
+timestamp = now_iso_z()
+
+canonical_json = {
+    "retailer": "newretailer",
+    "client": client,
+    "keyword": keyword,
+    "timestamp": timestamp,
+    "run_id": run_id,
+    "ads": []
+}
+```
+
+### 10.6 Ad Builder Pattern
+
+**Create a helper function to build ad objects:**
+
+```python
+def build_ad_object(run_id: str, index: int, ad_type: str, brand: str, 
+                    image_path: str, **kwargs) -> dict:
+    """Build a canonical ad object."""
+    return {
+        "id": f"newretailer-{run_id}-{index}",
+        "type": ad_type,
+        "brand": brand,
+        "brand_logo": None,
+        "title": kwargs.get("title"),
+        "description": kwargs.get("description"),
+        "cta": kwargs.get("cta"),
+        "href": kwargs.get("href"),
+        "image_url": kwargs.get("image_url"),
+        "image_path": image_path,
+        "products": kwargs.get("products", []),
+        "metadata": {
+            "slot": kwargs.get("slot", 0),
+            **kwargs.get("metadata", {})
+        }
+    }
+
+# Usage during ad extraction:
+for i, ad_element in enumerate(ad_elements, 1):
+    ad = build_ad_object(
+        run_id=run_id,
+        index=i,
+        ad_type="Display_Ad",
+        brand=extract_brand(ad_element),
+        image_path=f"Display_Ad/{filename}",
+        title=extract_title(ad_element),
+        href=extract_link(ad_element),
+        slot=i-1,
+    )
+    ads_list.append(ad)
+```
+
+### 10.7 Image Path Requirements
+
+**CRITICAL**: Every ad MUST have `image_path` set to the relative path from client root:
+
+```python
+# ✅ CORRECT - Relative to client root
+ad["image_path"] = "Display_Ad/newretailer__nike__display_ad__...png"
+
+# ❌ WRONG - Absolute path
+ad["image_path"] = "/Users/dan/output/newretailer/client/Display_Ad/..."
+
+# ❌ WRONG - Missing image_path
+ad = {"type": "Display_Ad", "brand": "Nike"}  # No image_path!
+```
+
+**Validation helper:**
+
+```python
+def validate_ad_object(ad: dict) -> bool:
+    """Validate ad object has required canonical fields."""
+    required = ["id", "type", "brand", "image_path"]
+    for field in required:
+        if field not in ad:
+            print(f"⚠️ Ad missing required field: {field}")
+            return False
+    
+    # Validate image_path is relative
+    if ad["image_path"] and ad["image_path"].startswith("/"):
+        print(f"⚠️ image_path must be relative, not absolute: {ad['image_path']}")
+        return False
+    
+    return True
+```
+
+### 10.8 Path Taxonomy Registration
+
+**Add your ad types to `utils/path_taxonomy.py`:**
+
+```python
+ALLOWED_FOLDERS = {
+    "newretailer": {
+        "Display_Ad",      # Your ad type 1
+        "Video_Ad",        # Your ad type 2
+        "Sponsored_Product",  # Your ad type 3
+        "Main",            # Always include
+        "runs",            # Always include
+    },
+}
+
+# Map ad type names to folder names (if different)
+ADTYPE_TO_FOLDER = {
+    "newretailer": {
+        "DisplayAd": "Display_Ad",      # If JSON uses DisplayAd but folder is Display_Ad
+        "VideoAd": "Video_Ad",
+    }
+}
+```
+
+### 10.9 Audit Tool Integration
+
+**Test your canonical implementation:**
+
+```bash
+# Run a scrape
+python3 keyword_input.py
+# Select newretailer, enter keyword, run
+
+# Audit the output
+python3 tools/audit_adtype_mapping.py
+```
+
+**Expected output:**
+```
+- newretailer/Display_Ad: JSON-type OK | Folder OK | Filename OK | Image exists
+- newretailer/Video_Ad: JSON-type OK | Folder OK | Filename OK | Image exists
+- newretailer/Sponsored_Product: JSON-type OK | Folder OK | Filename OK | Image exists
+```
+
+**Common failures:**
+- `JSON-type FAIL` - Ad type doesn't match folder name
+- `Folder FAIL` - Images in wrong folder or folder not in taxonomy
+- `Filename FAIL` - Filename doesn't match canonical pattern
+- `Image MISSING` - `image_path` set but file doesn't exist
+
+### 10.10 Migration vs New Implementation
+
+**For NEW retailers (like you're adding now):**
+- ✅ Implement canonical schema from day one
+- ✅ Write only canonical JSON format
+- ✅ Use canonical filenames and folder structure
+- ✅ No legacy compatibility needed
+
+**For EXISTING retailers (Kroger, Walmart):**
+- ⚠️ May have legacy format alongside canonical
+- ⚠️ Backward compatibility required during transition
+- ⚠️ See `docs/KROGER_CANONICAL_MIGRATION.md` for migration pattern
+
+### 10.11 Canonical Schema Checklist
+
+Before marking your retailer integration complete:
+
+- [ ] Run JSON has all required fields: `retailer`, `client`, `keyword`, `timestamp` (ISO Z), `run_id`, `ads[]`
+- [ ] Ads are in flat `ads[]` array, NOT nested in `results[]`
+- [ ] Every ad has `id`, `type`, `brand`, `image_path`
+- [ ] `image_path` is relative to client root (not absolute)
+- [ ] Filenames use canonical pattern with `generate_ad_filename()`
+- [ ] Folders match ad type names exactly
+- [ ] All folders registered in `utils/path_taxonomy.py`
+- [ ] Timestamps use ISO 8601 with Z suffix
+- [ ] `run_id` is 14-digit YYYYMMDDHHMMSS
+- [ ] `audit_adtype_mapping.py` shows all green checks
+
+### 10.12 Reference Implementations
+
+**Study these for canonical schema examples:**
+
+- **Walmart** (nested runs): `walmart_search_and_capture.py`
+  - Nested structure: `runs/{run_id}/run_results_{run_id}.json`
+  - Ad types: SBA, SBV, Tile_Takeover
+  - See: `docs/CONTEXT_SEED.md` → Canonical Schema Migration
+
+- **Kroger** (flat runs): `archived/kroger_ad_core.py` + `process_saved_html.py`
+  - Flat structure: `runs/run_results_{run_id}.json`
+  - Ad types: TOA, Skyscraper, CuratedCarousel
+  - See: `docs/KROGER_CANONICAL_MIGRATION.md`
+
+**Key differences:**
+- Walmart: Nested `runs/{run_id}/` directories
+- Kroger: Flat `runs/` directory with run_id in filename
+- Both are valid! Choose based on your preference.
+
+---
 
 ### Deterministic Wait Strategies
 

@@ -12,13 +12,23 @@ import glob
 import argparse
 import requests
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List
 from bs4 import BeautifulSoup
 from archived.kroger_ad_core import extract_ads_from_html, extract_common_words_and_phrases
 from urllib.parse import urljoin
 
+
+def run_id_from_ts(ts: str) -> str:
+    """Convert YYYY-MM-DD_HH-MM-SS timestamp to YYYYMMDDHHMMSS run_id"""
+    dt = datetime.strptime(ts, "%Y-%m-%d_%H-%M-%S")
+    return dt.strftime("%Y%m%d%H%M%S")
+
+def iso_z_from_ts(ts: str) -> str:
+    """Convert YYYY-MM-DD_HH-MM-SS timestamp to ISO 8601 with Z"""
+    dt = datetime.strptime(ts, "%Y-%m-%d_%H-%M-%S").replace(tzinfo=timezone.utc)
+    return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 def _load_core_for_retailer(retailer: str):
     """Load the appropriate ad_core module for the given retailer."""
@@ -488,6 +498,31 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
         with open(results_path, "w", encoding="utf-8") as f:
             json.dump(run_results, f, indent=2)
         print(f"💾 Saved run JSON to {results_path}")
+        
+        # Canonical run JSON alongside legacy (safe during transition)
+        try:
+            # Compute client root and keyword
+            retailer_name = retailer or "kroger"
+            client_root = compute_client_root_local(retailer_name, client, output_dir)
+            # Enforce ISO Z and run_id
+            iso_ts = iso_z_from_ts(run_ts)
+            run_id = run_id_from_ts(run_ts)
+            # Build canonical payload
+            canonical = {
+                "retailer": "kroger",
+                "client": client or os.path.basename(client_root),
+                "keyword": (result.get("search_term") or result.get("keyword") or "").strip(),
+                "timestamp": iso_ts,
+                "run_id": run_id,
+                "ads": result.get("ads", []),
+            }
+            # Write canonical alongside (named by run_id to be stable)
+            canon_path = os.path.join(runs_root, f"run_results_{run_id}.json")
+            with open(canon_path, "w", encoding="utf-8") as cf:
+                json.dump(canonical, cf, indent=2, ensure_ascii=False)
+            print(f"💾 Saved canonical run JSON to {canon_path}")
+        except Exception as e:
+            print(f"⚠️ Could not write canonical run JSON: {e}")
         
         # Track existing source files within this run only
         existing_sources = set()

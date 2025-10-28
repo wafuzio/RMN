@@ -12,16 +12,6 @@ export default defineConfig(({ mode }) => ({
       allow: ["./client", "./shared", "./", "../"],
       deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**"],
     },
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5006',
-        changeOrigin: true,
-        secure: false,
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        }
-      }
-    }
   },
   build: {
     outDir: "dist/spa",

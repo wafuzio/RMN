@@ -1,0 +1,77 @@
+# Kroger Ad Type Hint Pack
+# Single source of truth for Kroger ad types, selectors, and extraction logic
+
+retailer: kroger
+display_name: Kroger
+requires_auth: true                                      # Kroger gates ads without login
+store_selection_required: false
+anti_bot_hint:
+  vendor: perimeterx
+  headless_allowed: false                                # PerimeterX blocks headless
+
+ad_types:
+  - canonical: TOA                                       # Targeted Onsite Ad
+    folder: TOA
+    priority: 100
+    selectors:
+      - "div[data-testid='StandardTOA']"
+      - "div.StandardTOA"
+    image:
+      element: "img.espot-image, img[class*='espot']"
+      crop_preferred: true                               # Prefer TOA crop over Main screenshot
+    href: "a.espot-link, a[href*='espot']"
+    title: "h2.espot-header, .espot-header"
+    description: ".espot-subText, .espot-description"
+    cta: ".espot-linkText, .espot-cta"
+    brand:
+      strategy:
+        - from_href_param: "brand"
+        - from_text_sources: ["title", "description"]
+      lexicon: true
+
+  - canonical: Skyscraper
+    folder: Skyscraper
+    priority: 90
+    selectors:
+      - "div[data-testid='monetization/search-page-top']"
+      - "div[data-testid='SkyscraperTOA']"
+      - "div.SkyscraperTOA"
+    image:
+      element: "img"
+      crop_preferred: false
+    href: "a"
+    title: "h2, .espot-header"
+    cta: ".espot-linkText"
+    brand:
+      strategy:
+        - from_href_brand_path: "/brand/"
+        - from_text_sources: ["title"]
+      lexicon: true
+
+  - canonical: CuratedCarousel
+    folder: Carousel                                     # Maps to Carousel/ folder
+    priority: 80
+    selectors:
+      - "div.CuratedCarousel"
+      - "div[data-testid='CuratedCarousel']"
+    featured_only: true                                  # Must have featured/sponsored badge
+    image:
+      capture_screenshot: true                           # Screenshot the entire carousel
+    brand:
+      strategy:
+        - from_first_product_title: true
+        - fallback_text_sources: ["header", "title"]
+      lexicon: true
+
+notes:
+  - "Persistent profile required - ads don't appear without login"
+  - "Use organic search to avoid PerimeterX triggers"
+  - "Store selection not required but may affect ad personalization"
+  - "TOA crops are preferred over full screenshots"
+  - "Carousel images are full container screenshots"
+
+# HTML samples location: docs/hints/kroger/samples/
+# Expected files:
+#   TOA_1.html, TOA_2.html
+#   Skyscraper_1.html
+#   CuratedCarousel_1.html

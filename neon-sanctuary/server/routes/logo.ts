@@ -50,6 +50,8 @@ export const handleBrandLogo: RequestHandler = async (req, res) => {
 
     res.set("Content-Type", mimeTypes[ext] || "application/octet-stream");
     res.set("Cache-Control", "public, max-age=3600");
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET");
     res.send(fileContent);
   } catch (error) {
     console.error("Error serving brand logo:", error);

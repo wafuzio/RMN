@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { isAdTypeNotBrand } from "@/lib/brand-utils";
+import { useState, useEffect, useRef } from "react";
 
 interface StatCardProps {
   value: string | number;
@@ -13,42 +14,69 @@ interface StatCardProps {
 
 export function StatCard({ value, label, hint, trend, className, brandName, onClick }: StatCardProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const logoUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!brandName) {
+    if (!brandName || isAdTypeNotBrand(brandName)) {
+      if (logoUrlRef.current) {
+        URL.revokeObjectURL(logoUrlRef.current);
+        logoUrlRef.current = null;
+      }
       setLogoUrl(null);
       return;
     }
 
+    let isMounted = true;
+
     const fetchLogo = async () => {
       try {
-        const response = await fetch(`/api/logo/brand/${encodeURIComponent(brandName)}`);
-        if (response.ok) {
+        const logoUrl = `/api/logo/brand/${encodeURIComponent(brandName)}`;
+        console.debug('[StatCard] Fetching brand logo:', { brandName, url: logoUrl });
+
+        const response = await fetch(logoUrl);
+        if (response.ok && isMounted) {
           const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          setLogoUrl(url);
-        } else {
+          const objectUrl = URL.createObjectURL(blob);
+
+          // Revoke previous URL if it exists
+          if (logoUrlRef.current) {
+            URL.revokeObjectURL(logoUrlRef.current);
+          }
+
+          logoUrlRef.current = objectUrl;
+          console.debug('[StatCard] Brand logo loaded successfully');
+          setLogoUrl(objectUrl);
+        } else if (isMounted) {
+          console.debug('[StatCard] Brand logo not found:', { status: response.status, brandName });
+          if (logoUrlRef.current) {
+            URL.revokeObjectURL(logoUrlRef.current);
+            logoUrlRef.current = null;
+          }
           setLogoUrl(null);
         }
       } catch (error) {
-        console.error("Failed to fetch brand logo:", error);
-        setLogoUrl(null);
+        if (isMounted) {
+          console.error("[StatCard] Failed to fetch brand logo:", error);
+          if (logoUrlRef.current) {
+            URL.revokeObjectURL(logoUrlRef.current);
+            logoUrlRef.current = null;
+          }
+          setLogoUrl(null);
+        }
       }
     };
 
     fetchLogo();
 
     return () => {
-      if (logoUrl) {
-        URL.revokeObjectURL(logoUrl);
-      }
+      isMounted = false;
     };
   }, [brandName]);
 
   return (
     <div
       className={cn(
-        "card-surface p-6 flex items-start",
+        "card-surface p-6 flex items-center gap-4",
         onClick && "cursor-pointer hover:shadow-cardHover transition-shadow",
         className
       )}
@@ -58,18 +86,16 @@ export function StatCard({ value, label, hint, trend, className, brandName, onCl
       onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
       aria-label={`${label} statistic`}
     >
-      <div className="flex-1 flex flex-col">
-        <div className="flex items-center gap-3">
-          <div className="text-[3em] leading-none font-extrabold bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent">{value}</div>
-          {trend && (
-            <span className={cn("pill", trend === "up" ? "bg-success text-white" : "bg-warning text-white")} aria-label={`trend ${trend}`}>{trend === "up" ? "▲" : "▼"}</span>
-          )}
-        </div>
-        <div className="mt-2 text-sm text-[#6b7280]">{label}</div>
+      <div className="w-1/2 flex flex-col">
+        <div className="text-xl leading-tight font-extrabold bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent line-clamp-2">{value}</div>
+        <div className="mt-3 text-sm text-[#6b7280]">{label}</div>
         {hint && <div className="mt-1 text-xs text-[#6b7280]">{hint}</div>}
+        {trend && (
+          <span className={cn("pill mt-2 w-fit", trend === "up" ? "bg-success text-white" : "bg-warning text-white")} aria-label={`trend ${trend}`}>{trend === "up" ? "▲" : "▼"}</span>
+        )}
       </div>
       {logoUrl && (
-        <div className="flex-1 flex justify-center">
+        <div className="flex-1 flex justify-center items-center">
           <img
             src={logoUrl}
             alt={`${brandName} logo`}

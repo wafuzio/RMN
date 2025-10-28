@@ -1,6 +1,8 @@
 # Builder.io Integration - Complete Guide
 
-**Your API URL:** `https://foilable-ruthie-consultive.ngrok-free.dev`
+**Your API URL:** `https://<your-ngrok-url>.ngrok-free.dev`
+
+> ⚠️ **Note:** The ngrok URL changes each time you restart. Get your current URL from `./restart_servers.sh` output.
 
 ---
 
@@ -24,9 +26,11 @@
 ### Start All Servers
 
 ```bash
-cd /Users/dan.maguire/Documents/Amazon_Scrape
+cd /path/to/Amazon_Scrape  # Update to your actual path
 ./restart_servers.sh
 ```
+
+> ⚠️ **Note:** Update `SCRAPER_DIR` in `restart_servers.sh` (line 20) to match your installation path.
 
 This script will:
 1. ✅ Kill any existing server processes
@@ -36,9 +40,9 @@ This script will:
 5. ✅ Start Vite dev server (port 3000)
 6. ✅ Display all URLs and PIDs
 
-**Dashboard:** http://localhost:3000
+**Dashboard:** http://localhost:3000 (or 3001 if port busy)
 **API:** http://localhost:5006
-**ngrok:** https://foilable-ruthie-consultive.ngrok-free.dev
+**ngrok:** https://<your-ngrok-url>.ngrok-free.dev (see script output)
 
 ---
 
@@ -215,6 +219,8 @@ Get ad cards with filtering and pagination.
 - `client` (required): Client name
 - `term` (optional): Filter by search term
 - `advertiser` (optional): Filter by advertiser/brand name
+- `start` (optional): Start date filter (YYYY-MM-DD format)
+- `end` (optional): End date filter (YYYY-MM-DD format)
 - `page` (optional): Page number (default: 1)
 - `page_size` (optional): Items per page (default: 24, max: 100)
 
@@ -400,7 +406,7 @@ if (!retailer || !client) {
   return;
 }
 
-fetch(`https://foilable-ruthie-consultive.ngrok-free.dev/api/ads/cards?retailer=${retailer}&client=${client}&page_size=24`, {
+fetch(`https://<your-ngrok-url>.ngrok-free.dev/api/ads/cards?retailer=${retailer}&client=${client}&page_size=24`, {
   headers: { 'ngrok-skip-browser-warning': 'true' }
 })
   .then(response => response.json())
@@ -499,12 +505,49 @@ export ALLOWED_ORIGINS="https://builder.io,https://cdn.builder.io,https://foilab
 ```
 
 #### Images not loading
-1. Check that image files exist in correct directories
-2. Test image URL directly in browser
-3. Verify the fuzzy matching is working:
-```bash
-curl "http://localhost:5006/api/image/kroger/blue_bunny/test.jpg"
-```
+
+**Common causes and fixes:**
+
+1. **Check Flask API is serving images:**
+   ```bash
+   curl -I "http://localhost:5006/api/image/kroger/client/TOA/image.png"
+   ```
+   Should return `200 OK` with `Content-Type: image/png`
+
+2. **Check Vite proxy is forwarding:**
+   - Open browser DevTools → Network tab
+   - Look for `/api/image/*` requests
+   - Should show `200 OK` (not `404` or `CORS error`)
+
+3. **Verify image files exist:**
+   ```bash
+   ls output/kroger/client/TOA/
+   ls output/walmart/client/runs/*/SBA/
+   ```
+
+4. **Test fuzzy matching:**
+   ```bash
+   # Even with typos, should find similar files
+   curl "http://localhost:5006/api/image/kroger/client/test.jpg"
+   ```
+
+5. **Check image_path in JSON:**
+   ```bash
+   cat output/kroger/client/runs/run_results_*.json | jq '.ads[0].image_path'
+   ```
+   Should be relative path like `"TOA/kroger__brand__toa__...png"`
+
+6. **Verify proxy route exists:**
+   ```bash
+   # Check neon-sanctuary/server/routes/image.ts exists
+   ls neon-sanctuary/server/routes/image.ts
+   ```
+
+**If images still don't load:**
+- Check browser console for errors
+- Verify ngrok URL is correct (changes on restart)
+- Ensure both Flask (5006) and Vite (3000) are running
+- Try clearing browser cache
 
 #### API returns empty data
 1. Verify runs exist:
@@ -575,6 +618,8 @@ card.image_url  // This is just "/api/image/..."
 
 ## Architecture
 
+### System Overview
+
 ```
 ┌─────────────────────┐
 │  Tkinter Admin GUI  │ ← Power users (scheduling, configuration)
@@ -602,6 +647,147 @@ card.image_url  // This is just "/api/image/..."
 │   Builder.io        │ ← Visual page builder (optional)
 └─────────────────────┘
 ```
+
+### Image Resolution Flow
+
+**How the frontend finds and displays images:**
+
+```
+1. Frontend requests ad cards
+   GET /api/ads/cards?retailer=kroger&client=cheese_dip
+   
+2. Flask API scans JSON files
+   - Reads run_results_*.json from runs/ directory
+   - Extracts ad.image_path (relative path)
+   - Example: "TOA/kroger__brand__toa__client__keyword__D2025-10-27_T14-32.15_1.png"
+   
+3. API returns cards with image_url
+   {
+     "image_url": "/api/image/kroger/cheese_dip/TOA/kroger__brand__toa__..."
+   }
+   
+4. Frontend requests image
+   GET /api/image/kroger/cheese_dip/TOA/kroger__brand__toa__...
+   
+5. Flask searches filesystem
+   - Checks: output/kroger/cheese_dip/TOA/
+   - Also searches: Carousel/, Skyscraper/, Main/, SBA/, SBV/, Tile_Takeover/
+   - Uses fuzzy matching if exact filename not found
+   
+6. Returns image file
+   Content-Type: image/png
+```
+
+**Key Features:**
+- ✅ **Fuzzy matching** - Finds images even with slight filename differences
+- ✅ **Multi-folder search** - Automatically checks all ad type folders
+- ✅ **Nested directory support** - Handles Walmart's `runs/{run_id}/` structure
+- ✅ **Canonical schema aware** - Prefers `image_path` field, falls back to legacy fields
+
+### Dual-Backend Proxy Architecture
+
+**Why we have two servers:**
+
+The system uses a **dual-backend architecture** for development:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     Browser / Builder.io                      │
+└──────────────────────────────────────────────────────────────┘
+                              ↓
+                    ┌─────────────────┐
+                    │  ngrok Tunnel   │
+                    └─────────────────┘
+                              ↓
+        ┌─────────────────────────────────────────┐
+        │                                         │
+        ↓                                         ↓
+┌──────────────────┐                    ┌──────────────────┐
+│  Vite Dev Server │                    │   Flask API      │
+│  (Express/Node)  │ ──── proxies ────→ │   (Python)       │
+│  Port 3000/3001  │    /api/image/*    │   Port 5006      │
+└──────────────────┘                    └──────────────────┘
+        ↓                                         ↓
+  Serves React UI                        Serves images from
+  & proxies API calls                    filesystem
+```
+
+**How the proxy works:**
+
+1. **Vite serves the frontend**
+   - React dashboard at http://localhost:3000
+   - Hot module reloading for development
+
+2. **Express middleware proxies image requests**
+   - Route: `neon-sanctuary/server/routes/image.ts`
+   - Pattern: `/api/image/:retailer/:client/*`
+   - Forwards to: `http://localhost:5006/api/image/...`
+
+3. **Flask serves images from filesystem**
+   - Reads from `output/{retailer}/{client}/` directories
+   - Handles CORS headers
+   - Supports nested paths (e.g., `TOA/subfolder/image.png`)
+
+**Why this architecture?**
+
+- ✅ **Development workflow** - Vite provides fast React HMR
+- ✅ **CORS handling** - Single origin for frontend requests
+- ✅ **Separation of concerns** - Flask focuses on data/images, Vite on UI
+- ✅ **Flexible deployment** - Can deploy separately in production
+
+**Critical proxy configuration:**
+
+```typescript
+// neon-sanctuary/server/routes/image.ts
+app.get(/^\/api\/image\/([^/]+)\/([^/]+)\/(.+)$/, async (req, res) => {
+  const flaskUrl = `http://localhost:5006${req.path}`;
+  // Proxy to Flask, preserve query strings
+  const response = await fetch(flaskUrl);
+  res.set('Content-Type', response.headers.get('content-type'));
+  response.body.pipe(res);
+});
+```
+
+**Why regex pattern?**
+- Simple wildcards (`/api/image/:retailer/:client/*`) don't capture multi-level paths
+- Regex `^\/api\/image\/([^/]+)\/([^/]+)\/(.+)$` captures nested subdirectories
+- Example: `/api/image/kroger/client/TOA/subfolder/image.png` ✅
+
+### Canonical Schema Integration
+
+**Recent Walmart changes affect this system:**
+
+1. **Nested directory structure**
+   ```
+   output/walmart/client/
+     runs/
+       20251027143215/              ← run_id directory
+         run_results_20251027143215.json
+         SBA/
+         SBV/
+         Tile_Takeover/
+   ```
+
+2. **Flask API handles both structures**
+   - **Kroger (flat):** `runs/run_results_{run_id}.json`
+   - **Walmart (nested):** `runs/{run_id}/run_results_{run_id}.json`
+   - API automatically detects and scans both
+
+3. **Image path resolution**
+   - Canonical: `ad.image_path` (relative to client root)
+   - Legacy: `ad.screenshot`, `ad.toa_image_path`, etc.
+   - API tries canonical first, falls back to legacy
+
+4. **Brand canonicalization**
+   - All brands normalized via `core/brands.canonicalize()`
+   - Filenames use canonical brand tokens
+   - Example: "lays" → "Lay's" in both JSON and filenames
+
+**API compatibility:**
+- ✅ Works with legacy Kroger JSONs (`results[].ads[]`)
+- ✅ Works with canonical Walmart JSONs (`ads[]`)
+- ✅ Works with canonical Kroger JSONs (after migration)
+- ✅ Handles missing `image_path` via fallback logic
 
 ---
 
@@ -783,6 +969,128 @@ When debugging "No image" issues:
 
 ---
 
+## Quick Reference: Image & Proxy System
+
+### How Images Flow Through the System
+
+```
+Scraper → Saves image to disk
+   ↓
+   output/{retailer}/{client}/{AdType}/canonical_filename.png
+   ↓
+Scraper → Writes JSON with image_path
+   ↓
+   runs/run_results_{run_id}.json
+   {
+     "ads": [{
+       "image_path": "TOA/canonical_filename.png"  ← relative path
+     }]
+   }
+   ↓
+Frontend → Requests ad cards
+   ↓
+   GET /api/ads/cards?retailer=kroger&client=cheese_dip
+   ↓
+Flask API → Scans JSONs, builds image URLs
+   ↓
+   Returns: { "image_url": "/api/image/kroger/cheese_dip/TOA/..." }
+   ↓
+Frontend → Requests image
+   ↓
+   GET /api/image/kroger/cheese_dip/TOA/canonical_filename.png
+   ↓
+Vite Proxy → Forwards to Flask
+   ↓
+   neon-sanctuary/server/routes/image.ts
+   ↓
+Flask API → Searches filesystem
+   ↓
+   1. Check exact path: output/kroger/cheese_dip/TOA/canonical_filename.png
+   2. Fuzzy match if not found
+   3. Search other folders (Carousel/, Skyscraper/, etc.)
+   ↓
+Returns image file → Browser displays
+```
+
+### Key Files
+
+**Backend (Flask):**
+- `web/builder_server_v2.py` - Main API server
+  - `/api/ads/cards` - Returns ad cards with image URLs
+  - `/api/image/<retailer>/<client>/<path>` - Serves images from filesystem
+  - Handles fuzzy matching, multi-folder search, nested directories
+
+**Frontend Proxy (Vite/Express):**
+- `neon-sanctuary/server/routes/image.ts` - Proxies image requests to Flask
+  - Pattern: `/api/image/:retailer/:client/*`
+  - Forwards to: `http://localhost:5006/api/image/...`
+  - Preserves query strings and headers
+
+**Canonical Schema:**
+- `ad.image_path` - Relative path from client root (preferred)
+- `ad.screenshot` - Legacy alias (fallback)
+- `ad.*_image_path` - Type-specific fields (fallback)
+
+### Walmart vs Kroger Differences
+
+**Kroger (Flat Structure):**
+```
+output/kroger/client/
+  TOA/
+    kroger__brand__toa__...png
+  Carousel/
+    kroger__brand__carousel__...png
+  runs/
+    run_results_20251027143215.json  ← flat
+```
+
+**Walmart (Nested Structure):**
+```
+output/walmart/client/
+  SBA/
+    walmart__brand__sba__...png
+  SBV/
+    walmart__brand__sbv__...png
+  runs/
+    20251027143215/                  ← nested by run_id
+      run_results_20251027143215.json
+```
+
+**API handles both automatically!**
+
+### Common Pitfalls
+
+❌ **Using absolute paths in JSON**
+```json
+{"image_path": "/Users/dan/output/kroger/client/TOA/image.png"}
+```
+✅ **Use relative paths**
+```json
+{"image_path": "TOA/image.png"}
+```
+
+❌ **Forgetting to proxy in Vite**
+```typescript
+// Missing: neon-sanctuary/server/routes/image.ts
+```
+✅ **Proxy configured**
+```typescript
+app.get(/^\/api\/image\/([^/]+)\/([^/]+)\/(.+)$/, ...)
+```
+
+❌ **Not prepending base URL in frontend**
+```javascript
+<img src={card.image_url} />  // Just "/api/image/..."
+```
+✅ **Prepend ngrok URL**
+```javascript
+<img src={`https://<ngrok-url>.ngrok-free.dev${card.image_url}`} />
+```
+
+---
+
+---
+
 ## Tips & Best Practices
 
 1. **Always use the restart script** - Prevents duplicate processes
@@ -817,6 +1125,6 @@ When debugging "No image" issues:
 
 ---
 
-**Last Updated:** 2025-10-10
+**Last Updated:** 2025-10-27
 **API Version:** 2.0
 **Dashboard Version:** 1.0

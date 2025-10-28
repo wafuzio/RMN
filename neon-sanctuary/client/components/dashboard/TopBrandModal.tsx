@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { isAdTypeNotBrand } from "@/lib/brand-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface BrandSovEntry {
@@ -21,7 +22,7 @@ function BrandLogoImage({ brandName }: { brandName: string }) {
     setFailed(false);
     setLogoUrl(null);
 
-    if (!brandName) {
+    if (!brandName || isAdTypeNotBrand(brandName)) {
       setFailed(true);
       return;
     }

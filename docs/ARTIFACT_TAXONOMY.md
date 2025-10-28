@@ -10,10 +10,10 @@ Each retailer has a specific set of allowed subdirectories based on their ad typ
 
 ## Brand Logos
 
-Brand logos are stored in a centralized database for reuse across all retailers:
+Brand logos are stored in a centralized database at project root for reuse across all retailers:
 
 ```
-output/brand_logos/
+brand_logos/                    # At project root (sibling to output/)
 ├── brand_logo_database.json    # Metadata database
 ├── boiron.png                  # Clean, numbered filenames
 ├── stonyfield_organic.png
@@ -22,10 +22,10 @@ output/brand_logos/
 ```
 
 **Features:**
-- **Content-based deduplication**: Identical images from different URLs share one file
+- **Content-based deduplication**: MD5 hash of image bytes (not URL) - identical images share one file
 - **Clean naming**: `brand_name.ext` or `brand_name_2.ext` (no hashes)
 - **Database tracking**: JSON tracks URLs, retailers, first/last seen dates
-- **Automatic enrichment**: Logo paths added to ad JSON via `brand_logo` field
+- **Automatic enrichment**: Logo paths added to ad JSON via `brand_logo` field (relative to project root)
 
 ### Kroger
 ```
@@ -63,13 +63,20 @@ output/amazon/<client>/
 ### Walmart
 ```
 output/walmart/<client>/
-├── Top_Banner/       # Top banner ads
 ├── SBA/              # Sponsored Brand Ads
-├── Tile_Takeover/    # Tile takeover ads
 ├── SBV/              # Sponsored Brand Video
+├── Tile_Takeover/    # Tile takeover ads
 ├── Main/             # Main search results
-└── runs/             # Run artifacts (JSON, HTML)
+└── runs/
+    └── <timestamp>/  # Run artifacts (JSON, HTML) in nested timestamp dirs
+        ├── run_results_*.json
+        ├── search_results_*.html
+        └── run_report.md
 ```
+
+**Notes:** 
+- Walmart uses nested timestamp directories (`runs/TIMESTAMP/*.json`) unlike other retailers.
+- Marquee_Banner/Top_Banner is a planned future ad type (not yet implemented).
 
 ---
 
@@ -97,35 +104,65 @@ instacart__nestle__shoppable_display_ad__bomb_pop__ice_pop__D2025-10-12_T14-22.3
 
 ## JSON Schema Standardization
 
-**STATUS: PARTIALLY COMPLETE - ONGOING WORK**
+**STATUS: WALMART COMPLETE ✅ | KROGER/INSTACART IN PROGRESS | AMAZON TODO**
 
 ### Problem
-Each retailer outputs different JSON structures, requiring retailer-specific code in the API and frontend. Many retailers now follow the standard schema, but some legacy formats and retailer-specific fields remain.
+Each retailer outputs different JSON structures, requiring retailer-specific code in the API and frontend. Walmart now follows the canonical schema. Kroger and Instacart use legacy nested formats.
 
-### Target Standard Schema
+### Canonical Schema (Walmart Implementation)
 ```json
 {
-  "retailer": "kroger|walmart|instacart|amazon",
+  "retailer": "walmart",
+  "client": "client_name",
   "keyword": "search term",
-  "timestamp": "2025-10-13T22:07:10",
-  "run_id": "20251013220710",
+  "timestamp": "2025-10-27T02:56:54Z",
+  "run_id": "20251026215556",
   "ads": [
     {
-      "id": "unique-ad-id",
-      "type": "TOA|Skyscraper|CuratedCarousel|SBA|SBV|TileTakeover",
-      "brand": "Brand Name",
-      "brand_logo": "brand_logos/brand_name.png",
-      "title": "Ad Title",
-      "description": "Ad Description",
-      "cta": "Call to Action",
-      "href": "https://...",
-      "image_url": "https://cdn.../original.jpg",
-      "image_path": "Shoppable_Display_Ads/instacart__brand__shoppable_display_ad__client__keyword__D2025-10-20_T10-45.43_1.png",
-      "screenshot": "Shoppable_Display_Ads/instacart__brand__shoppable_display_ad__client__keyword__D2025-10-20_T10-45.43_1.png",
+      "id": "walmart-20251026215556-1",
+      "type": "SBA",
+      "brand": "Breyers",
+      "brand_logo": null,
+      "title": null,
+      "description": null,
+      "cta": null,
+      "href": "https://www.walmart.com/search?q=breyers&facet=brand:Breyers",
+      "image_url": null,
+      "image_path": "SBA/walmart__breyers__sba__client__ice_cream__D2025-10-26_T21-55.56_1.png",
       "products": [],
-      "metadata": {}
+      "metadata": {
+        "slot": 0
+      }
     }
   ]
+}
+```
+
+**Schema Reference:**
+```typescript
+{
+  retailer: string;           // "kroger" | "walmart" | "instacart" | "amazon"
+  client: string;             // Client/brand name
+  keyword: string;            // Search term
+  timestamp: string;          // ISO 8601 with timezone (Z or +HH:MM)
+  run_id: string;             // 14-digit timestamp (YYYYMMDDHHMMSS)
+  ads: Array<{
+    id: string;               // Format: "<retailer>-<run_id>-<index>"
+    type: string;             // Canonical ad type (SBA, SBV, Tile_Takeover, TOA, etc.)
+    brand: string | null;     // Brand name (canonicalized via lexicon)
+    brand_logo: string | null;// Path to brand logo (relative to project root)
+    title: string | null;     // Ad title/headline
+    description: string | null;
+    cta: string | null;       // Call-to-action text
+    href: string | null;      // Destination URL
+    image_url: string | null; // Original CDN URL
+    image_path: string;       // Path to screenshot (relative to client root)
+    products: Array<any>;     // Product details (future)
+    metadata: {
+      slot?: number;          // Grid position/index
+      [key: string]: any;     // Retailer-specific metadata
+    };
+  }>;
 }
 ```
 
@@ -135,31 +172,50 @@ Each retailer outputs different JSON structures, requiring retailer-specific cod
   - Instacart: `screenshot`
   - Kroger: `image_path`, `screenshot_path`, or type-specific (e.g., `skyscraper_image_path`)
   - Backend checks all common field names to find the correct path
-- `brand_logo`: Relative path to brand logo file (automatically enriched from database)
-- `timestamp`: ISO 8601 format with `T` separator (e.g., `2025-10-20T10:45:43`)
+- `brand_logo`: Relative path to brand logo file from project root (e.g., `brand_logos/lays.png`)
+- `timestamp`: ISO 8601 format with timezone (e.g., `2025-10-20T10:45:43Z` or `2025-10-20T10:45:43+00:00`)
+- `type`: Ad type string must match folder name exactly (e.g., `CuratedCarousel` maps to `Carousel/` folder for Kroger)
 
 ### Current Status by Retailer
 
-**Kroger** (`kroger_search_and_capture.py`):
-- ✅ Uses flat `ads[]` array
-- ⚠️ Has multiple path fields (`carousel_image_path`, `skyscraper_image_path`) - needs consolidation
-- ⚠️ Timestamp format needs ISO 8601 check
+**✅ Walmart** (`walmart_search_and_capture.py`) - **CANONICAL COMPLIANT**:
+- ✅ Flat `ads[]` array at top level
+- ✅ All required fields: `retailer`, `client`, `keyword`, `timestamp` (ISO Z), `run_id`, `ads[]`
+- ✅ Per-ad fields: `id`, `type`, `brand`, `brand_logo`, `title`, `description`, `cta`, `href`, `image_url`, `image_path`, `products`, `metadata`
+- ✅ Ad types: `SBA`, `SBV`, `Tile_Takeover` (canonical names)
+- ✅ Images saved to correct folders (SBA/, SBV/, Tile_Takeover/)
+- ✅ Filenames follow standard pattern with correct ad_type tokens
+- ✅ Brand extraction with lexicon canonicalization
+- ✅ Nested runs structure: `output/walmart/<client>/runs/<run_id>/run_results_<run_id>.json`
+- **Status**: Production-ready, fully compliant with canonical schema
 
-**Walmart** (`walmart_search_and_capture.py`):
-- ✅ Outputs JSON with ad data
-- ✅ Saves images to ad-type folders
-- ⚠️ May have diagnostic fields that should be separated
+**⚠️ Kroger** (`kroger_search_and_capture.py`) - **LEGACY FORMAT**:
+- ❌ Uses nested `results[].ads[]` structure (not flat `ads[]`)
+- ❌ Missing top-level: `client`, `run_id`
+- ❌ Timestamp not ISO 8601 with timezone
+- ✅ Has `retailer`, `keyword` fields
+- ✅ Saves images to ad-type folders (TOA/, Skyscraper/, Carousel/)
+- ✅ Ad structure has: `type`, `message`, `description`, `cta`, `image_url`, `href`, `advertisers`
+- ℹ️ JSON type `CuratedCarousel` maps to `Carousel/` folder (explicit mapping)
+- **Needs**: Flatten to canonical schema, add missing fields, ISO timestamps
 
-**Instacart** (`instacart_search_and_capture.py`):
+**⚠️ Instacart** (`instacart_search_and_capture.py`) - **LEGACY FORMAT**:
+- ❌ Uses nested `results[].ads[]` structure (not flat `ads[]`)
+- ❌ Missing top-level: `client`, `run_id`
+- ❌ Timestamp not ISO 8601 with timezone
+- ✅ Has `retailer`, `keyword` fields
+- ✅ Ad structure has: `type`, `selector`, `id`, `index`, `bbox`, `advertisers`, `brand`, `screenshot`
 - ✅ Uses `screenshot` field for image path
-- ✅ ISO 8601 timestamp format
 - ✅ Saves images to ad-type folders
-- ✅ Includes `brand_logo` enrichment
-- ⚠️ Uses nested `results[].ads[]` structure - should be flat `ads[]`
+- **Needs**: Flatten to canonical schema, add missing fields, ISO timestamps, rename `screenshot` to `image_path`
+
+**❌ Amazon** - **NOT IMPLEMENTED**:
+- No output directory exists
+- **Needs**: Full implementation with canonical schema
 
 **API** (`builder_server_v2.py`):
-- ⚠️ Still has some retailer-specific code paths
-- ⚠️ Checks multiple image path fields (`image_path`, `screenshot`, etc.)
+- ✅ Has `resolve_image_path()` helper to handle both `image_path` and `screenshot` fields
+- ⚠️ Still has some retailer-specific code paths for legacy formats
 
 ### Implementation Checklist
 
@@ -178,10 +234,10 @@ When updating a scraper:
 
 **Allowed Folders:**
 - Kroger: `TOA`, `Skyscraper`, `Carousel`, `Display_Ads`, `Main`, `runs`
-- Walmart: `Top_Banner`, `SBA`, `Tile_Takeover`, `SBV`, `Main`, `runs`
+- Walmart: `SBA`, `SBV`, `Tile_Takeover`, `Main`, `runs/<timestamp>`
 - Instacart: `Shoppable_Display_Ads`, `Shoppable_Video_Ads`, `Shoppable_Recipe_Ads`, `Display_Ads`, `Main`, `runs`
 - Amazon: `Sponsored_Brand`, `Sponsored_Product`, `Sponsored_Display`, `Main`, `runs` (TODO: verify)
-- Global: `brand_logos/` (centralized brand logo database)
+- Global: `brand_logos/` at project root (centralized brand logo database)
 
 **File Naming:** `retailer__advertiser__ad_type__client__search_term__DYYYY-MM-DD_THH-MM.SS_index.ext`
 

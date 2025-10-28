@@ -4,31 +4,10 @@ import { api } from "@/lib/api";
 import { toLocalImageUrl } from "@/utils/imageUrl";
 
 function parseTs(ts: string, ad?: any) {
-  // Handle Instacart format: 20251022_002600 -> 2025-10-22T00:26:00
-  if (/^\d{8}_\d{6}$/.test(ts)) {
-    const date = ts.slice(0, 8);
-    const time = ts.slice(9, 15);
-    const yyyy = date.slice(0, 4);
-    const mm = date.slice(4, 6);
-    const dd = date.slice(6, 8);
-    const hh = time.slice(0, 2);
-    const min = time.slice(2, 4);
-    const ss = time.slice(4, 6);
-    return new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`);
-  }
-
-  // Handle Walmart format: "23-46-32" with date in run_file like "run_results_..._2025-10-21_23-46-32.json"
-  if (/^\d{2}-\d{2}-\d{2}$/.test(ts) && ad?.run_file) {
-    const match = ad.run_file.match(/(\d{4})-(\d{2})-(\d{2})_\d{2}-\d{2}-\d{2}/);
-    if (match) {
-      const [, yyyy, mm, dd] = match;
-      const [hh, min, ss] = ts.split('-');
-      return new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`);
-    }
-  }
-
-  // Handle Kroger format: 2025-10-22 00:26:00
-  return new Date(ts.replace(" ", "T"));
+  // All retailers now use ISO Z format (e.g., "2025-10-27T02:56:54Z")
+  // Handle legacy space-separated format: 2025-10-22 00:26:00 -> 2025-10-22T00:26:00
+  const normalized = ts.includes('T') ? ts : ts.replace(" ", "T");
+  return new Date(normalized);
 }
 
 function floorToGranularity(d: Date, g: Granularity) {

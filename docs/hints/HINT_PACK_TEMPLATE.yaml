@@ -1,0 +1,126 @@
+# Ad Type Hint Pack Template
+# This is the single source of truth for a retailer's ad types, selectors, and extraction logic.
+# Place retailer-specific hint packs at: docs/hints/{retailer}_ad_types.yaml
+
+retailer: newretailer                                    # slug (lowercase)
+display_name: NewRetailer
+requires_auth: false                                     # true for Kroger-like
+store_selection_required: false
+anti_bot_hint:                                           # optional nudge for composer
+  vendor: perimeterx | akamai | cloudflare | none
+  headless_allowed: true
+
+ad_types:
+  - canonical: TOA                                       # canonical JSON ad.type
+    folder: TOA                                          # folder must match taxonomy
+    priority: 100                                        # higher = more important (used by extractors/dedupe)
+    selectors:                                           # CSS selectors at container level
+      - "div[data-testid='StandardTOA']"
+      - "div.Standard-TOA"
+    image:
+      element: "img.espot-image"                         # where to fetch image_url
+      crop_preferred: true                               # set image_path to TOA/<file> if crop works; fallback to Main/
+    href: "a.espot-link"                                 # link element (optional)
+    title: "h2, .espot-header"                           # title/message
+    description: ".espot-subText"                        # description (optional)
+    cta: ".espot-linkText"                               # CTA text (optional)
+    brand:
+      strategy:                                          # brand extraction hints (in addition to lexicon)
+        - from_href_param: "brand"
+        - from_text_sources: ["title", "description"]
+      lexicon: true                                      # feed through config/brands.json
+
+  - canonical: Skyscraper
+    folder: Skyscraper
+    priority: 90
+    selectors:
+      - "div[data-testid='monetization/search-page-top']"
+      - "div[data-testid='SkyscraperTOA']"
+    image:
+      element: "img"                                     # generic; we'll normalize absolute URLs
+      crop_preferred: false
+    href: "a"
+    title: "h2, .espot-header"
+    cta: ".espot-linkText"
+    brand:
+      strategy:
+        - from_href_brand_path: "/brand/"                # e.g., /brand/kraft/…
+        - from_text_sources: ["title"]
+      lexicon: true
+
+  - canonical: CuratedCarousel
+    folder: Carousel                                     # JSON type → folder mapping
+    priority: 80
+    selectors:
+      - "div.CuratedCarousel"
+    featured_only: true                                  # require featured/sponsored badge
+    image:
+      capture_screenshot: true                           # we crop the container (carousel-level)
+    brand:
+      strategy:
+        - from_first_product_title: true
+        - fallback_text_sources: ["header"]
+      lexicon: true
+
+  - canonical: SBA
+    folder: SBA
+    priority: 95
+    selectors:
+      - "[data-testid*='sba-container']"
+      - "div.sponsored-brand-ad"
+    image:
+      element: "img.brand-logo"
+      crop_preferred: false
+    href: "a.brand-link"
+    title: "h2.brand-title"
+    description: ".brand-description"
+    cta: ".shop-now-button"
+    brand:
+      strategy:
+        - from_attribute: "data-brand-name"
+        - from_text_sources: ["title"]
+      lexicon: true
+
+  - canonical: SBV
+    folder: SBV
+    priority: 85
+    selectors:
+      - "[data-testid*='video-in-grid']"
+      - "div.sponsored-video"
+    image:
+      element: "video, img.video-thumbnail"
+      crop_preferred: false
+    href: "a"
+    title: "h2, .video-title"
+    brand:
+      strategy:
+        - from_product_tiles: true                       # extract from associated product tiles
+        - from_text_sources: ["title"]
+      lexicon: true
+
+  - canonical: Tile_Takeover
+    folder: Tile_Takeover
+    priority: 75
+    selectors:
+      - "[data-testid='tile-take-over']"
+      - "div.tile-takeover-ad"
+    image:
+      capture_screenshot: true                           # full tile screenshot
+    href: "a"
+    title: "h2"
+    brand:
+      strategy:
+        - from_text_sources: ["title", "description"]
+      lexicon: true
+
+# Optional: retailer-specific notes for profiler/composer
+notes:
+  - "Use organic search (avoid direct goto) to reduce bot triggers."
+  - "Expect intersection observers for lazy-loading images."
+  - "Store selection required for personalized ads."
+  - "PerimeterX challenge appears on headless; use persistent profile."
+
+# HTML sample expectations
+# Place HTML examples in: docs/hints/{retailer}/samples/
+# Naming: {canonical}_{index}.html
+# Example: TOA_1.html, TOA_2.html, Skyscraper_1.html

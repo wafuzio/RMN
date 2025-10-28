@@ -68,7 +68,8 @@ def is_partial_extraction(text):
         'big', 'for', 'enjoy', 'ice', 'hamburger',
         'advertisement', 'digital deal', 'solutions', 'simple',
         'size', 'same', 'tailgate', 'tailgate m',
-        'three', 'ghoul aid kool aid package'
+        'three', 'ghoul aid kool aid package',
+        'kroji holdings', 'kroji_holdings', 'kroji holding', 'kroji_holding', 'kroji'
     }
     
     return text.lower() in partial_words

@@ -6,9 +6,9 @@ Automatically downloads and manages brand logos from retailer ads for reuse in t
 
 The brand logo database system:
 - **Automatically downloads** brand logos when scraping ads
-- **Stores logos** in a centralized `brand_logos/` directory
+- **Stores logos** in a centralized `brand_logos/` directory at project root
 - **Creates a JSON database** mapping brands to logo files
-- **Prevents duplicates** using URL hashing
+- **Prevents duplicates** using content-based deduplication (MD5 hash of image bytes)
 - **Tracks metadata** (retailers, first/last seen, ad types)
 - **Works across retailers** (Instacart, Walmart, Kroger, Amazon)
 

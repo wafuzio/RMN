@@ -4,6 +4,13 @@
     "synonyms": []
   },
   {
+    "name": "Activia",
+    "synonyms": [
+      "ActiviaProactiveOnsiteDISP",
+      "Activia"
+    ]
+  },
+  {
     "name": "Ancient Harvest",
     "synonyms": []
   },
@@ -32,13 +39,15 @@
     "name": "Banquet",
     "synonyms": [
       "SSMAlwaysOn0625",
-      "Marie Callender's"
+      "Marie Callender's",
+      "SSMAlwaysOnadgroup6"
     ]
   },
   {
     "name": "Barilla",
     "synonyms": [
-      "Barilla Pasta"
+      "Barilla Pasta",
+      "Barilla"
     ]
   },
   {
@@ -76,9 +85,17 @@
     ]
   },
   {
+    "name": "Bloom",
+    "synonyms": [
+      "BloomTOA0225",
+      "Bloom"
+    ]
+  },
+  {
     "name": "Blue Buffalo",
     "synonyms": [
-      "Blue Buffalo"
+      "Blue Buffalo",
+      "F25May262025May31TOAAlwaysOn"
     ]
   },
   {
@@ -100,8 +117,25 @@
     ]
   },
   {
+    "name": "Boost",
+    "synonyms": [
+      "Boost",
+      "TOABoostAugDec2025"
+    ]
+  },
+  {
+    "name": "Boost Oxygen  with Red Cross",
+    "synonyms": []
+  },
+  {
     "name": "Boulder Canyon",
     "synonyms": []
+  },
+  {
+    "name": "BravoCon",
+    "synonyms": [
+      "BravoCon"
+    ]
   },
   {
     "name": "Breyers",
@@ -130,10 +164,25 @@
     "synonyms": []
   },
   {
+    "name": "Catalina Crunch",
+    "synonyms": []
+  },
+  {
+    "name": "CeraVe",
+    "synonyms": []
+  },
+  {
     "name": "Cheez-It",
     "synonyms": [
       "MSCCollegeFootballWave2101525",
       "Dr. Pepper"
+    ]
+  },
+  {
+    "name": "Claussen",
+    "synonyms": [
+      "SandwichScaleTOA",
+      "Oscar Mayer"
     ]
   },
   {
@@ -156,12 +205,52 @@
     ]
   },
   {
+    "name": "Coco",
+    "synonyms": []
+  },
+  {
+    "name": "Colgate",
+    "synonyms": []
+  },
+  {
+    "name": "Core",
+    "synonyms": []
+  },
+  {
+    "name": "Core Power",
+    "synonyms": []
+  },
+  {
+    "name": "Core Power  with Fairlife Cow",
+    "synonyms": []
+  },
+  {
+    "name": "Cottonelle",
+    "synonyms": [
+      "Cottonelle"
+    ]
+  },
+  {
+    "name": "Crest",
+    "synonyms": []
+  },
+  {
+    "name": "Curology",
+    "synonyms": []
+  },
+  {
     "name": "Dairy Farmers of America",
     "synonyms": []
   },
   {
     "name": "Danone",
     "synonyms": []
+  },
+  {
+    "name": "Dave's Killer Bread",
+    "synonyms": [
+      "DavesKillerBreadFamily"
+    ]
   },
   {
     "name": "Del Monte",
@@ -200,10 +289,40 @@
     ]
   },
   {
+    "name": "Enfamil",
+    "synonyms": []
+  },
+  {
+    "name": "Envy",
+    "synonyms": []
+  },
+  {
+    "name": "EOS",
+    "synonyms": [
+      "EOS"
+    ]
+  },
+  {
+    "name": "Fairlife",
+    "synonyms": []
+  },
+  {
+    "name": "Fairlife Reduced Fat",
+    "synonyms": []
+  },
+  {
     "name": "Frank's Red Hot",
     "synonyms": [
       "Late July"
     ]
+  },
+  {
+    "name": "Free",
+    "synonyms": []
+  },
+  {
+    "name": "Fresh",
+    "synonyms": []
   },
   {
     "name": "Fresh Pet",
@@ -226,6 +345,19 @@
     "name": "Frollies",
     "synonyms": [
       "Frollie"
+    ]
+  },
+  {
+    "name": "Garden of Life",
+    "synonyms": [
+      "Garden of Life",
+      "FWGOLTOAQ42025SDSB"
+    ]
+  },
+  {
+    "name": "Garnier",
+    "synonyms": [
+      "Loreal"
     ]
   },
   {
@@ -262,6 +394,14 @@
     "synonyms": []
   },
   {
+    "name": "GoMacro",
+    "synonyms": []
+  },
+  {
+    "name": "Good Foods",
+    "synonyms": []
+  },
+  {
     "name": "Goodpop",
     "synonyms": []
   },
@@ -278,6 +418,10 @@
     "synonyms": []
   },
   {
+    "name": "Haleon",
+    "synonyms": []
+  },
+  {
     "name": "Hamburger Helper",
     "synonyms": [
       "Hamburger Helper"
@@ -287,13 +431,16 @@
     "name": "Healthy Choice",
     "synonyms": [
       "SSMAlwaysOn0625",
-      "Marie Callender's"
+      "Marie Callender's",
+      "SSMAlwaysOnadgroup6"
     ]
   },
   {
     "name": "Heinz",
     "synonyms": [
-      "Heinz Ketchup"
+      "Heinz Ketchup",
+      "PinterestHeinzTailgate0825",
+      "Heinz"
     ]
   },
   {
@@ -301,6 +448,10 @@
     "synonyms": [
       "Hellmann's"
     ]
+  },
+  {
+    "name": "Hello",
+    "synonyms": []
   },
   {
     "name": "Herdez",
@@ -312,11 +463,21 @@
   {
     "name": "Hillshire Farm",
     "synonyms": [
-      "Hillshire Farm Hot"
+      "Hillshire Farm Hot",
+      "Hillshire",
+      "Hillshire Farm"
     ]
   },
   {
     "name": "Hillshire Farm Hot",
+    "synonyms": []
+  },
+  {
+    "name": "Horizon Organic",
+    "synonyms": []
+  },
+  {
+    "name": "Hot Brand Page",
     "synonyms": []
   },
   {
@@ -329,11 +490,23 @@
     ]
   },
   {
+    "name": "Icy Hot",
+    "synonyms": []
+  },
+  {
+    "name": "IFCN",
+    "synonyms": []
+  },
+  {
     "name": "Impossible",
     "synonyms": [
       "Impossible",
       "Impossible2025"
     ]
+  },
+  {
+    "name": "Irish Spring",
+    "synonyms": []
   },
   {
     "name": "Ithaca",
@@ -347,7 +520,9 @@
       "Jello",
       "Jell O",
       "JellO",
-      "Jell-O®"
+      "Jell-O®",
+      "LargeServeJelloPuddingTPR25",
+      "Jell-O"
     ]
   },
   {
@@ -382,8 +557,25 @@
     "synonyms": []
   },
   {
+    "name": "Kenvue",
+    "synonyms": []
+  },
+  {
     "name": "Kettle",
     "synonyms": []
+  },
+  {
+    "name": "Kleenex",
+    "synonyms": [
+      "Cottonelle"
+    ]
+  },
+  {
+    "name": "Kodiak",
+    "synonyms": [
+      "Q4FrozenBreakfastSandwichTOA",
+      "Kodiak"
+    ]
   },
   {
     "name": "Kraft",
@@ -399,13 +591,21 @@
     ]
   },
   {
+    "name": "Kraft Singles",
+    "synonyms": [
+      "SandwichScaleTOA",
+      "Oscar Mayer"
+    ]
+  },
+  {
     "name": "Kroger",
     "synonyms": [
       "Kroger Brand",
       "Kroger's",
       "Kroger",
       "TOABLBORExpandedDistroFY25H293",
-      "TOAOB0825BakeryFreshQ3"
+      "TOAOB0825BakeryFreshQ3",
+      "All"
     ]
   },
   {
@@ -418,7 +618,8 @@
   {
     "name": "Kroger Cereal",
     "synonyms": [
-      "Kroger Cereal"
+      "Kroger Cereal",
+      "TOAOB0825KBColdCerealDPQ3"
     ]
   },
   {
@@ -440,9 +641,19 @@
     "synonyms": []
   },
   {
+    "name": "LesserEvil",
+    "synonyms": []
+  },
+  {
     "name": "Litehouse",
     "synonyms": [
       "Litehouse"
+    ]
+  },
+  {
+    "name": "Loreal",
+    "synonyms": [
+      "Loreal"
     ]
   },
   {
@@ -467,14 +678,20 @@
     "synonyms": [
       "MagicSpoon",
       "Magic-Spoon",
-      "Magic Spoon®"
+      "Magic Spoon®",
+      "Magic Spoon"
     ]
+  },
+  {
+    "name": "MALK",
+    "synonyms": []
   },
   {
     "name": "Marie Callender's",
     "synonyms": [
       "SSMAlwaysOn0625",
-      "Marie Callender's"
+      "Marie Callender's",
+      "SSMAlwaysOnadgroup6"
     ]
   },
   {
@@ -486,7 +703,18 @@
     "synonyms": []
   },
   {
+    "name": "Maybelline",
+    "synonyms": [
+      "Save on Maybelline cosmetics",
+      "Maybelline"
+    ]
+  },
+  {
     "name": "Mayfield Dairy Farms",
+    "synonyms": []
+  },
+  {
+    "name": "Meyers Clean Day",
     "synonyms": []
   },
   {
@@ -500,6 +728,13 @@
     "synonyms": []
   },
   {
+    "name": "Milk-Bone",
+    "synonyms": [
+      "TOA0925",
+      "Milk-Bone"
+    ]
+  },
+  {
     "name": "Milton's Craft Bakers",
     "synonyms": []
   },
@@ -511,6 +746,12 @@
     "name": "Monster Energy",
     "synonyms": [
       "Monster Energy"
+    ]
+  },
+  {
+    "name": "Munchies",
+    "synonyms": [
+      "Munchies"
     ]
   },
   {
@@ -534,6 +775,12 @@
   },
   {
     "name": "Nature's Truth",
+    "synonyms": [
+      "Nature's Truth"
+    ]
+  },
+  {
+    "name": "Natures Truth",
     "synonyms": []
   },
   {
@@ -545,11 +792,23 @@
   },
   {
     "name": "Nestle Toll House",
+    "synonyms": [
+      "Nestle Toll House"
+    ]
+  },
+  {
+    "name": "Neutrogena",
     "synonyms": []
   },
   {
     "name": "New York Bakery",
     "synonyms": []
+  },
+  {
+    "name": "Now",
+    "synonyms": [
+      "Tyson"
+    ]
   },
   {
     "name": "NuTrail",
@@ -581,11 +840,27 @@
     ]
   },
   {
+    "name": "OLIPOP Prebiotic",
+    "synonyms": []
+  },
+  {
     "name": "Opti-free",
     "synonyms": []
   },
   {
+    "name": "Orgain",
+    "synonyms": []
+  },
+  {
+    "name": "Orgain Organic",
+    "synonyms": []
+  },
+  {
     "name": "Orgain: Clean Nutrition",
+    "synonyms": []
+  },
+  {
+    "name": "Organic",
     "synonyms": []
   },
   {
@@ -597,7 +872,9 @@
   {
     "name": "Oscar Mayer",
     "synonyms": [
-      "ColdCutsProjectElmer0825"
+      "ColdCutsProjectElmer0825",
+      "Oscar Mayer",
+      "SandwichScaleTOA"
     ]
   },
   {
@@ -626,6 +903,19 @@
     "synonyms": []
   },
   {
+    "name": "Pedigree",
+    "synonyms": [
+      "Pedigree"
+    ]
+  },
+  {
+    "name": "Peet's Coffee",
+    "synonyms": [
+      "PeetsFallCampaign2025TOA",
+      "Peet's Coffee"
+    ]
+  },
+  {
     "name": "PepsiCo",
     "synonyms": [
       "Pepsi Co",
@@ -636,7 +926,9 @@
   {
     "name": "Philadelphia",
     "synonyms": [
-      "Late July"
+      "Late July",
+      "PhillyHolidayTOA",
+      "Philadelphia"
     ]
   },
   {
@@ -646,13 +938,26 @@
     ]
   },
   {
+    "name": "Planet",
+    "synonyms": []
+  },
+  {
     "name": "Pompeian",
+    "synonyms": []
+  },
+  {
+    "name": "Power",
+    "synonyms": []
+  },
+  {
+    "name": "Premier Protein",
     "synonyms": []
   },
   {
     "name": "Pringles",
     "synonyms": [
-      "Pringles"
+      "Pringles",
+      "PringlesSuperStack"
     ]
   },
   {
@@ -661,7 +966,70 @@
       "Pull Ups",
       "PullUps",
       "Pull-Ups®",
-      "Pullups"
+      "Pullups",
+      "Pull-Ups"
+    ]
+  },
+  {
+    "name": "Pup-Peroni",
+    "synonyms": [
+      "PupperoniSept25TOA"
+    ]
+  },
+  {
+    "name": "Purina",
+    "synonyms": []
+  },
+  {
+    "name": "Qunol",
+    "synonyms": []
+  },
+  {
+    "name": "Qunol Black",
+    "synonyms": []
+  },
+  {
+    "name": "Red Baron",
+    "synonyms": [
+      "SchwansXFY25RedBaronDDXLSCUBA",
+      "Red Baron"
+    ]
+  },
+  {
+    "name": "Refresh",
+    "synonyms": []
+  },
+  {
+    "name": "Refresh Lubricant Eye Drops",
+    "synonyms": []
+  },
+  {
+    "name": "Ripple Foods",
+    "synonyms": []
+  },
+  {
+    "name": "Ripple Kids",
+    "synonyms": []
+  },
+  {
+    "name": "Ripple Milk",
+    "synonyms": []
+  },
+  {
+    "name": "Rohto",
+    "synonyms": []
+  },
+  {
+    "name": "Salonpas",
+    "synonyms": [
+      "SalonpasTOA0925",
+      "Salonpas"
+    ]
+  },
+  {
+    "name": "Scott",
+    "synonyms": [
+      "Cottonelle"
     ]
   },
   {
@@ -674,6 +1042,10 @@
   },
   {
     "name": "Snack Factory",
+    "synonyms": []
+  },
+  {
+    "name": "Softsoap",
     "synonyms": []
   },
   {
@@ -693,6 +1065,10 @@
     "synonyms": []
   },
   {
+    "name": "Suja Organic",
+    "synonyms": []
+  },
+  {
     "name": "Surprisingly Snackable Pecans",
     "synonyms": []
   },
@@ -701,6 +1077,14 @@
     "synonyms": [
       "Late July"
     ]
+  },
+  {
+    "name": "Sweeten",
+    "synonyms": []
+  },
+  {
+    "name": "Systane",
+    "synonyms": []
   },
   {
     "name": "Terra Delyssa",
@@ -715,6 +1099,14 @@
     "synonyms": []
   },
   {
+    "name": "Tom's",
+    "synonyms": []
+  },
+  {
+    "name": "Trolli Frozen",
+    "synonyms": []
+  },
+  {
     "name": "Trolli Gummi Pop",
     "synonyms": []
   },
@@ -724,11 +1116,28 @@
   },
   {
     "name": "Tyson",
-    "synonyms": []
+    "synonyms": [
+      "Now",
+      "Tyson"
+    ]
   },
   {
     "name": "Unilever",
     "synonyms": []
+  },
+  {
+    "name": "Utz",
+    "synonyms": []
+  },
+  {
+    "name": "Vita Coco",
+    "synonyms": []
+  },
+  {
+    "name": "Viva",
+    "synonyms": [
+      "Cottonelle"
+    ]
   },
   {
     "name": "Voltaren Arthritis Pain",
@@ -751,7 +1160,8 @@
   {
     "name": "Zbar",
     "synonyms": [
-      "Zbar"
+      "Zbar",
+      "ZBARWave2EquitySMG0825"
     ]
   }
 ]

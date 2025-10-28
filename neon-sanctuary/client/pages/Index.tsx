@@ -7,10 +7,13 @@ import { Timeline } from "@/components/dashboard/Timeline";
 import { Ad, AdCard } from "@/components/dashboard/AdCard";
 import { AdModal } from "@/components/dashboard/AdModal";
 import { TopBrandModal } from "@/components/dashboard/TopBrandModal";
+import { AllBrandsModal } from "@/components/dashboard/AllBrandsModal";
 import { SkeletonGrid } from "@/components/dashboard/SkeletonGrid";
 import { TemporalVisualMap } from "@/components/visual/TemporalVisualMap";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import GaleLogo from "../../../web/assets/logos/GALE.svg";
 
 // Stable ID builder for ads - prevents key collisions without index dependency
@@ -83,7 +86,7 @@ export default function Index() {
   // Use first selected retailer for single-retailer operations (filters, clients)
   const primaryRetailer = retailers[0];
 
-  const [filters, setFilters] = useState<FiltersState>({ types: [], search: "", keywords: [], datePreset: { type: "lifetime" } });
+  const [filters, setFilters] = useState<FiltersState>({ clients: [], types: [], search: "", keywords: [], datePreset: { type: "lifetime" } });
   const [leftFilters, setLeftFilters] = useState<FiltersState | null>(null);
   const [rightFilters, setRightFilters] = useState<FiltersState | null>(null);
   const { data: clientsResp } = useClients(primaryRetailer);
@@ -98,7 +101,7 @@ export default function Index() {
         setRetailers(saved.retailers);
       }
       if (saved.filters && typeof saved.filters === "object") {
-        const f = saved.filters as Partial<FiltersState> & { start?: string; end?: string };
+        const f = saved.filters as Partial<FiltersState> & { start?: string; end?: string; client?: string };
         const parsedStart = f.start ? new Date(f.start) : undefined;
         const parsedEnd = f.end ? new Date(f.end) : undefined;
         const start = parsedStart && isFinite(+parsedStart) ? parsedStart : undefined;
@@ -107,7 +110,7 @@ export default function Index() {
           types: Array.isArray(f.types) ? f.types : [],
           search: typeof f.search === "string" ? f.search : "",
           keywords: Array.isArray(f.keywords) ? f.keywords : [],
-          client: typeof f.client === "string" ? f.client : undefined,
+          clients: Array.isArray(f.clients) ? f.clients : (typeof f.client === "string" ? [f.client] : []),
           start,
           end,
           datePreset: f.datePreset || { type: "lifetime" },
@@ -134,83 +137,245 @@ export default function Index() {
 
   // Auto-select first client if none selected
   useEffect(() => {
-    if (clientsResp?.clients.length && !filters.client) {
-      setFilters(prev => ({ ...prev, client: clientsResp.clients[0] }));
+    if (clientsResp?.clients.length && !filters.clients?.length) {
+      setFilters(prev => ({ ...prev, clients: [clientsResp.clients[0]] }));
     }
-  }, [clientsResp, filters.client]);
+  }, [clientsResp, filters.clients]);
 
-  // Fetch ads for each possible retailer (must call hooks unconditionally)
-  const krogerQuery = useAds({
-    retailer: "kroger",
-    client: filters.client,
-    start: filters.start ? filters.start.toISOString().slice(0,10) : undefined,
-    end: filters.end ? filters.end.toISOString().slice(0,10) : undefined,
-    types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
-  });
-  const walmartQuery = useAds({
-    retailer: "walmart",
-    client: filters.client,
-    start: filters.start ? filters.start.toISOString().slice(0,10) : undefined,
-    end: filters.end ? filters.end.toISOString().slice(0,10) : undefined,
-    types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
-  });
-  const instacartQuery = useAds({
-    retailer: "instacart",
-    client: filters.client,
-    start: filters.start ? filters.start.toISOString().slice(0,10) : undefined,
-    end: filters.end ? filters.end.toISOString().slice(0,10) : undefined,
-    types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
-  });
-  const amazonQuery = useAds({
-    retailer: "amazon",
-    client: filters.client,
-    start: filters.start ? filters.start.toISOString().slice(0,10) : undefined,
-    end: filters.end ? filters.end.toISOString().slice(0,10) : undefined,
-    types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
-  });
-  
-  // Map selected retailers to their queries
-  const queryMap = {
-    kroger: krogerQuery,
-    walmart: walmartQuery,
-    instacart: instacartQuery,
-    amazon: amazonQuery,
+  // Handle multiple clients by creating queries for each
+  // When all clients are selected, use the special "all" client parameter
+  const selectedClients = filters.clients || [];
+  const allClientsAvailable = clientsResp?.clients || [];
+  const isAllClientsSelected = selectedClients.length > 0 && selectedClients.length === allClientsAvailable.length;
+
+  // If all clients are selected, use "all"; otherwise use selected clients (up to 3)
+  const clientsToQuery = isAllClientsSelected
+    ? ["all"]
+    : (selectedClients.length > 0 ? selectedClients : [""]);
+
+  // Pad to ensure we always call hooks the same number of times
+  const paddedClients = [...clientsToQuery];
+  while (paddedClients.length < 3) paddedClients.push("");
+
+  const client1 = paddedClients[0];
+  const client2 = paddedClients[1];
+  const client3 = paddedClients[2];
+
+  // Fetch ads for each possible retailer with each selected client
+  // Helper to format date as YYYY-MM-DD in local timezone (not UTC)
+  const formatLocalDate = (d: Date | undefined) => {
+    if (!d) return undefined;
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
-  const retailerQueries = retailers.map(r => queryMap[r]);
+
+  const isKrogerSelected = retailers.includes("kroger");
+  const krogerQuery1 = useAds({
+    retailer: isKrogerSelected ? "kroger" : undefined,
+    client: client1,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  const krogerQuery2 = useAds({
+    retailer: isKrogerSelected ? "kroger" : undefined,
+    client: client2,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  const krogerQuery3 = useAds({
+    retailer: isKrogerSelected ? "kroger" : undefined,
+    client: client3,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+
+  const isWalmartSelected = retailers.includes("walmart");
+  const walmartQuery1 = useAds({
+    retailer: isWalmartSelected ? "walmart" : undefined,
+    client: client1,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  const walmartQuery2 = useAds({
+    retailer: isWalmartSelected ? "walmart" : undefined,
+    client: client2,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  const walmartQuery3 = useAds({
+    retailer: isWalmartSelected ? "walmart" : undefined,
+    client: client3,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+
+  const isInstacartSelected = retailers.includes("instacart");
+  const instacartQuery1 = useAds({
+    retailer: isInstacartSelected ? "instacart" : undefined,
+    client: client1,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  const instacartQuery2 = useAds({
+    retailer: isInstacartSelected ? "instacart" : undefined,
+    client: client2,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  const instacartQuery3 = useAds({
+    retailer: isInstacartSelected ? "instacart" : undefined,
+    client: client3,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+
+  const isAmazonSelected = retailers.includes("amazon");
+  const amazonQuery1 = useAds({
+    retailer: isAmazonSelected ? "amazon" : undefined,
+    client: client1,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  const amazonQuery2 = useAds({
+    retailer: isAmazonSelected ? "amazon" : undefined,
+    client: client2,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
+  const amazonQuery3 = useAds({
+    retailer: isAmazonSelected ? "amazon" : undefined,
+    client: client3,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: filters.types,
+    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+  });
   
-  // For backwards compatibility, keep adsQuery as the primary retailer's query
+  // Collect all queries - flatten by retailer and client
+  const allQueries = [
+    krogerQuery1, krogerQuery2, krogerQuery3,
+    walmartQuery1, walmartQuery2, walmartQuery3,
+    instacartQuery1, instacartQuery2, instacartQuery3,
+    amazonQuery1, amazonQuery2, amazonQuery3,
+  ];
+
+  // Build retailer-based query map (for backward compatibility)
+  const queryMap = {
+    kroger: [krogerQuery1, krogerQuery2, krogerQuery3],
+    walmart: [walmartQuery1, walmartQuery2, walmartQuery3],
+    instacart: [instacartQuery1, instacartQuery2, instacartQuery3],
+    amazon: [amazonQuery1, amazonQuery2, amazonQuery3],
+  };
+  const retailerQueries = retailers.flatMap(r => queryMap[r]);
+
+  // For backwards compatibility, keep adsQuery as a reference query
   const adsQuery = retailerQueries[0];
 
   const lf = leftFilters ?? filters;
   const rf = rightFilters ?? filters;
-  const leftAdsQuery = useAds({
+
+  // For compare mode, we'll use the first client from each filter set
+  const leftClients = lf.clients || [];
+  const rightClients = rf.clients || [];
+
+  // Pad to 3 clients for query stability
+  const leftPadded = [...leftClients];
+  while (leftPadded.length < 3) leftPadded.push("");
+  const rightPadded = [...rightClients];
+  while (rightPadded.length < 3) rightPadded.push("");
+
+  const leftAdsQuery1 = useAds({
     retailer: primaryRetailer,
-    client: lf.client,
-    start: lf.start ? lf.start.toISOString().slice(0,10) : undefined,
-    end: lf.end ? lf.end.toISOString().slice(0,10) : undefined,
+    client: leftPadded[0],
+    start: formatLocalDate(lf.start),
+    end: formatLocalDate(lf.end),
     types: lf.types,
     search: lf.search,
   });
-  const rightAdsQuery = useAds({
+  const leftAdsQuery2 = useAds({
     retailer: primaryRetailer,
-    client: rf.client,
-    start: rf.start ? rf.start.toISOString().slice(0,10) : undefined,
-    end: rf.end ? rf.end.toISOString().slice(0,10) : undefined,
+    client: leftPadded[1],
+    start: formatLocalDate(lf.start),
+    end: formatLocalDate(lf.end),
+    types: lf.types,
+    search: lf.search,
+  });
+  const leftAdsQuery3 = useAds({
+    retailer: primaryRetailer,
+    client: leftPadded[2],
+    start: formatLocalDate(lf.start),
+    end: formatLocalDate(lf.end),
+    types: lf.types,
+    search: lf.search,
+  });
+
+  const rightAdsQuery1 = useAds({
+    retailer: primaryRetailer,
+    client: rightPadded[0],
+    start: formatLocalDate(rf.start),
+    end: formatLocalDate(rf.end),
+    types: rf.types,
+    search: rf.search,
+  });
+  const rightAdsQuery2 = useAds({
+    retailer: primaryRetailer,
+    client: rightPadded[1],
+    start: formatLocalDate(rf.start),
+    end: formatLocalDate(rf.end),
+    types: rf.types,
+    search: rf.search,
+  });
+  const rightAdsQuery3 = useAds({
+    retailer: primaryRetailer,
+    client: rightPadded[2],
+    start: formatLocalDate(rf.start),
+    end: formatLocalDate(rf.end),
     types: rf.types,
     search: rf.search,
   });
 
   const flatAds: Ad[] = useMemo(() => {
-    // Merge cards from all selected retailers with deduplication
+    // Merge cards from all selected retailers and clients with deduplication
     try {
-      const allCards = retailerQueries.flatMap(query => 
-        query.data?.pages?.flatMap(p => p.cards || []) || []
-      );
-      
+      const allCards = [
+        ...(krogerQuery1.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(krogerQuery2.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(krogerQuery3.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(walmartQuery1.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(walmartQuery2.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(walmartQuery3.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(instacartQuery1.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(instacartQuery2.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(instacartQuery3.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(amazonQuery1.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(amazonQuery2.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(amazonQuery3.data?.pages.flatMap(p => p.cards || []) || []),
+      ];
+
       // Dedupe using stable IDs (prevents duplicates from pagination/multiple queries)
       const uniq = new Map<string, Ad>();
       for (let i = 0; i < allCards.length; i++) {
@@ -227,9 +392,9 @@ export default function Index() {
         }
         // else duplicate from another page/query; ignore it
       }
-      
+
       const result = Array.from(uniq.values());
-      
+
       // Dev-only sanity check for duplicate IDs
       if (import.meta.env.DEV) {
         const seen = new Set<string>();
@@ -240,13 +405,30 @@ export default function Index() {
           seen.add(a.id);
         }
       }
-      
+
       return result;
     } catch (error) {
       console.error('Error in flatAds:', error);
       return [];
     }
-  }, [krogerQuery.data, walmartQuery.data, instacartQuery.data, amazonQuery.data, retailers]);
+  }, [
+    krogerQuery1.data, krogerQuery2.data, krogerQuery3.data,
+    walmartQuery1.data, walmartQuery2.data, walmartQuery3.data,
+    instacartQuery1.data, instacartQuery2.data, instacartQuery3.data,
+    amazonQuery1.data, amazonQuery2.data, amazonQuery3.data,
+    retailers
+  ]);
+
+  // Derive available ad types from the fetched data
+  const availableAdTypes = useMemo(() => {
+    const typeSet = new Set<string>();
+    for (const ad of flatAds) {
+      if (ad.ad_type?.trim()) {
+        typeSet.add(ad.ad_type.trim());
+      }
+    }
+    return Array.from(typeSet).sort();
+  }, [flatAds]);
 
   const [ads, setAds] = useState<Ad[]>([]);
   // sync local ads list with fetched pages (enables reordering/dismiss)
@@ -255,18 +437,29 @@ export default function Index() {
     setAds(flatAds); 
   }, [flatAds]);
   
-  // Clear ads when date filters change to force fresh render
+  // Clear ads when date filters change
   useEffect(() => {
     setAds([]);
+    console.log('🔄 Date filters changed:', { start: filters.start, end: filters.end });
   }, [filters.start, filters.end]);
 
   const dnd = useDnD(ads, setAds);
 
   const timestamps = useMemo(() => flatAds.map(a => a.timestamp), [flatAds]);
 
-  const totalCards = retailerQueries.reduce((sum, query) =>
-    sum + (query.data?.pages?.[0]?.total_cards || 0), 0
-  );
+  const totalCards = useMemo(() => {
+    return [
+      krogerQuery1, krogerQuery2, krogerQuery3,
+      walmartQuery1, walmartQuery2, walmartQuery3,
+      instacartQuery1, instacartQuery2, instacartQuery3,
+      amazonQuery1, amazonQuery2, amazonQuery3,
+    ].reduce((sum, query) => sum + (query.data?.pages?.[0]?.total_cards || 0), 0);
+  }, [
+    krogerQuery1.data, krogerQuery2.data, krogerQuery3.data,
+    walmartQuery1.data, walmartQuery2.data, walmartQuery3.data,
+    instacartQuery1.data, instacartQuery2.data, instacartQuery3.data,
+    amazonQuery1.data, amazonQuery2.data, amazonQuery3.data,
+  ]);
   const activeBrands = useMemo(() => {
     const uniqueBrands = new Set(flatAds.map(a => a.brand));
     return uniqueBrands.size;
@@ -303,11 +496,13 @@ export default function Index() {
 
   const [modalAd, setModalAd] = useState<Ad|null>(null);
   const [showTopBrandModal, setShowTopBrandModal] = useState(false);
+  const [showAllBrandsModal, setShowAllBrandsModal] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showVisualMap, setShowVisualMap] = useState(true);
   const [showLeftVisualMap, setShowLeftVisualMap] = useState(true);
   const [showRightVisualMap, setShowRightVisualMap] = useState(true);
+  const [sortBy, setSortBy] = useState<"latest" | "oldest" | "name">("latest");
 
   const dismiss = (id: string) => setAds(prev => prev.filter(a => a.id !== id));
 
@@ -315,8 +510,20 @@ export default function Index() {
   const selectAll = () => setSelected(new Set(ads.map(a=>a.id)));
   const hideSelected = () => setAds(prev => prev.filter(a => !selected.has(a.id)));
 
+  const sortedAds = useMemo(() => {
+    const sorted = [...ads];
+    if (sortBy === "latest") {
+      sorted.sort((a, b) => new Date(b.timestamp.replace(" ", "T")).getTime() - new Date(a.timestamp.replace(" ", "T")).getTime());
+    } else if (sortBy === "oldest") {
+      sorted.sort((a, b) => new Date(a.timestamp.replace(" ", "T")).getTime() - new Date(b.timestamp.replace(" ", "T")).getTime());
+    } else if (sortBy === "name") {
+      sorted.sort((a, b) => a.brand.localeCompare(b.brand));
+    }
+    return sorted;
+  }, [ads, sortBy]);
+
   const applyFilters = () => adsQuery.refetch();
-  const resetFilters = () => setFilters({ types: [], search: "", keywords: [], datePreset: { type: "lifetime" } });
+  const resetFilters = () => setFilters({ clients: [], types: [], search: "", keywords: [], datePreset: { type: "lifetime" } });
 
   const downloadCSV = () => {
     const rows = [
@@ -354,7 +561,11 @@ export default function Index() {
           <section className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <StatCard value={totalCards} label="Total Ad Cards" />
-              <StatCard value={activeBrands} label="Active Brands" />
+              <StatCard
+                value={activeBrands}
+                label="Active Brands"
+                onClick={() => setShowAllBrandsModal(true)}
+              />
               <StatCard
                 value={`${sov.brand}`}
                 label="Top Brand by SOV"
@@ -370,6 +581,7 @@ export default function Index() {
             <Filters
               retailer={primaryRetailer}
               clients={clientsResp?.clients || []}
+              availableAdTypes={availableAdTypes}
               value={filters}
               onChange={setFilters}
               onApply={applyFilters}
@@ -400,7 +612,22 @@ export default function Index() {
                 <span className="text-sm text-[#111827]">Select All</span>
               </div>
               <Button variant="outline" onClick={hideSelected}>Hide Selected</Button>
-              <div className="ml-auto text-sm text-white/80">{ads.length} results</div>
+              <div className="ml-auto flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <label htmlFor="sort-by" className="text-sm text-[#111827] font-medium">Sort by:</label>
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as "latest" | "oldest" | "name")}>
+                    <SelectTrigger id="sort-by" className="w-32 h-9 bg-white border-gray-300">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="latest">Latest</SelectItem>
+                      <SelectItem value="oldest">Oldest</SelectItem>
+                      <SelectItem value="name">Name</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <span className="text-sm text-white/80">{ads.length} results</span>
+              </div>
             </div>
 
             {adsQuery.isError ? (
@@ -413,15 +640,39 @@ export default function Index() {
             ) : ads.length === 0 ? (
               <div className="card-surface p-10 text-center text-[#111827]">No ads found for the selected filters.</div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {ads.map((ad, idx) => (
-                  <div key={ad.id} onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}>
-                    <div className="absolute z-10 m-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <input aria-label="Select ad" type="checkbox" className="h-4 w-4" checked={selected.has(ad.id)} onChange={()=>toggleSelect(ad.id)} />
+              <div className="grid gap-4" style={{ gridTemplateColumns: "1fr minmax(0, 300px)" }}>
+                <div className="space-y-4">
+                  {sortedAds.map((ad, idx) => {
+                    if (ad.ad_type === "Skyscraper") return null;
+                    return (
+                    <div
+                      key={ad.id}
+                      onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}
+                    >
+                      <div className="absolute z-10 m-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <input aria-label="Select ad" type="checkbox" className="h-4 w-4" checked={selected.has(ad.id)} onChange={()=>toggleSelect(ad.id)} />
+                      </div>
+                      <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} dragIndex={dnd.dragIndex} dragOverIndex={dnd.dragOverIndex} currentIndex={idx} />
                     </div>
-                    <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} dragIndex={dnd.dragIndex} dragOverIndex={dnd.dragOverIndex} currentIndex={idx} />
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
+                <div className="space-y-4">
+                  {sortedAds.map((ad, idx) => {
+                    if (ad.ad_type !== "Skyscraper") return null;
+                    return (
+                    <div
+                      key={ad.id}
+                      onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}
+                    >
+                      <div className="absolute z-10 m-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <input aria-label="Select ad" type="checkbox" className="h-4 w-4" checked={selected.has(ad.id)} onChange={()=>toggleSelect(ad.id)} />
+                      </div>
+                      <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} dragIndex={dnd.dragIndex} dragOverIndex={dnd.dragOverIndex} currentIndex={idx} />
+                    </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -436,15 +687,29 @@ export default function Index() {
         {compareMode && (
           <section className="grid md:grid-cols-2 gap-4">
             {(() => {
-              const leftAds = (leftAdsQuery.data?.pages.flatMap(p=>p.cards) || []).map((c,i)=>({ ...c, id: `L-${c.retailer}-${c.client}-${c.ad_type}-${c.brand}-${c.keyword}-${c.timestamp}-${i}`})) as Ad[];
-              const rightAds = (rightAdsQuery.data?.pages.flatMap(p=>p.cards) || []).map((c,i)=>({ ...c, id: `R-${c.retailer}-${c.client}-${c.ad_type}-${c.brand}-${c.keyword}-${c.timestamp}-${i}`})) as Ad[];
+              // Merge left ads from all 3 queries
+              const leftAllCards = [
+                ...(leftAdsQuery1.data?.pages.flatMap(p=>p.cards) || []),
+                ...(leftAdsQuery2.data?.pages.flatMap(p=>p.cards) || []),
+                ...(leftAdsQuery3.data?.pages.flatMap(p=>p.cards) || []),
+              ];
+              const leftAds = leftAllCards.map((c,i)=>({ ...c, id: `L-${c.retailer}-${c.client}-${c.ad_type}-${c.brand}-${c.keyword}-${c.timestamp}-${i}`})) as Ad[];
+
+              // Merge right ads from all 3 queries
+              const rightAllCards = [
+                ...(rightAdsQuery1.data?.pages.flatMap(p=>p.cards) || []),
+                ...(rightAdsQuery2.data?.pages.flatMap(p=>p.cards) || []),
+                ...(rightAdsQuery3.data?.pages.flatMap(p=>p.cards) || []),
+              ];
+              const rightAds = rightAllCards.map((c,i)=>({ ...c, id: `R-${c.retailer}-${c.client}-${c.ad_type}-${c.brand}-${c.keyword}-${c.timestamp}-${i}`})) as Ad[];
+
               const leftTs = leftAds.map(a=>a.timestamp);
               const rightTs = rightAds.map(a=>a.timestamp);
               return (
                 <>
                   <div className="space-y-4">
                     <h2 className="text-white font-semibold">Left View</h2>
-                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} value={lf} onChange={(v)=>setLeftFilters(v)} onApply={()=>leftAdsQuery.refetch()} onReset={()=>setLeftFilters({ types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
+                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} availableAdTypes={availableAdTypes} value={lf} onChange={(v)=>setLeftFilters(v)} onApply={()=>{leftAdsQuery1.refetch(); leftAdsQuery2.refetch(); leftAdsQuery3.refetch();}} onReset={()=>setLeftFilters({ clients: [], types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
                     <Timeline timestamps={leftTs} onRangeChange={(from,to)=> setLeftFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
                     <div className="card-surface">
                       <div className="flex items-center justify-between p-4 border-b border-gray-200 cursor-pointer" onClick={() => setShowLeftVisualMap(!showLeftVisualMap)}>
@@ -464,7 +729,7 @@ export default function Index() {
                   </div>
                   <div className="space-y-4">
                     <h2 className="text-white font-semibold">Right View</h2>
-                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} value={rf} onChange={(v)=>setRightFilters(v)} onApply={()=>rightAdsQuery.refetch()} onReset={()=>setRightFilters({ types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
+                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} availableAdTypes={availableAdTypes} value={rf} onChange={(v)=>setRightFilters(v)} onApply={()=>{rightAdsQuery1.refetch(); rightAdsQuery2.refetch(); rightAdsQuery3.refetch();}} onReset={()=>setRightFilters({ clients: [], types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
                     <Timeline timestamps={rightTs} onRangeChange={(from,to)=> setRightFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
                     <div className="card-surface">
                       <div className="flex items-center justify-between p-4 border-b border-gray-200 cursor-pointer" onClick={() => setShowRightVisualMap(!showRightVisualMap)}>
@@ -491,6 +756,18 @@ export default function Index() {
 
         <AdModal open={!!modalAd} ad={modalAd} onOpenChange={(v)=>!v && setModalAd(null)} onCompare={(ad)=>{ setModalAd(null); setCompareMode(true); }} />
         <TopBrandModal open={showTopBrandModal} onOpenChange={setShowTopBrandModal} topBrands={topBrands} />
+        <AllBrandsModal
+          open={showAllBrandsModal}
+          onOpenChange={setShowAllBrandsModal}
+          brands={topBrands}
+          filterParams={{
+            retailers: retailers,
+            clients: filters.clients || [],
+            dateRange: filters.start || filters.end ? { start: filters.start, end: filters.end } : undefined,
+            adTypes: filters.types || [],
+            keywords: filters.keywords || [],
+          }}
+        />
       </div>
     </main>
   );

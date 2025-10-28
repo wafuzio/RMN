@@ -214,6 +214,38 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/magic_spoon"
     },
     {
+      "id": "instacart_milkpep_protein_drinks_a361d02c",
+      "retailer": "instacart",
+      "client": "MilkPEP",
+      "keywords": [
+        "protein drinks",
+        "milk",
+        "protein powder"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:20",
+        "12:20",
+        "12:20",
+        "16:20",
+        "20:20"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T15:31:13Z",
+      "updated_at": "2025-10-24T15:31:13Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__milkpep__protein_drinks.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/milkpep"
+    },
+    {
       "id": "instacart_pickle_pickle_spears_9fc88c44",
       "retailer": "instacart",
       "client": "pickle",
@@ -240,6 +272,38 @@
       "updated_at": "2025-10-22T04:52:13Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__pickle__pickle_spears.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/pickle"
+    },
+    {
+      "id": "instacart_proactiv_proactiv_f645c3bb",
+      "retailer": "instacart",
+      "client": "Proactiv",
+      "keywords": [
+        "Proactiv",
+        "acne kit",
+        "acne skin care",
+        "benzoyl peroxide"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:45",
+        "12:25",
+        "15:40",
+        "20:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-26T04:52:15Z",
+      "updated_at": "2025-10-26T04:52:15Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__proactiv__proactiv.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/proactiv"
     },
     {
       "id": "instacart_sour_cream_light_sour_cream_546f03d1",
@@ -561,6 +625,38 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/magic_spoon"
     },
     {
+      "id": "kroger_milkpep_protein_drinks_e4f56475",
+      "retailer": "kroger",
+      "client": "MilkPEP",
+      "keywords": [
+        "protein drinks",
+        "milk",
+        "protein powder"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:20",
+        "12:20",
+        "12:20",
+        "16:20",
+        "20:20"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T15:31:13Z",
+      "updated_at": "2025-10-24T15:31:13Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__milkpep__protein_drinks.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/milkpep"
+    },
+    {
       "id": "kroger_pickle_default_dfe6b621",
       "retailer": "kroger",
       "client": "pickle",
@@ -665,6 +761,38 @@
       "updated_at": "2025-10-22T03:27:17Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__pork_rinds__pork_rinds.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pork_rinds"
+    },
+    {
+      "id": "kroger_proactiv_proactiv_95fe29f6",
+      "retailer": "kroger",
+      "client": "Proactiv",
+      "keywords": [
+        "Proactiv",
+        "acne kit",
+        "acne skin care",
+        "benzoyl peroxide"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:45",
+        "12:25",
+        "15:40",
+        "20:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-26T04:52:15Z",
+      "updated_at": "2025-10-26T04:52:15Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__proactiv__proactiv.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/proactiv"
     },
     {
       "id": "kroger_sour_cream_light_sour_cream_2a1eba81",
@@ -908,6 +1036,38 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/magic_spoon"
     },
     {
+      "id": "walmart_milkpep_protein_drinks_00b3c294",
+      "retailer": "walmart",
+      "client": "MilkPEP",
+      "keywords": [
+        "protein drinks",
+        "milk",
+        "protein powder"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:20",
+        "12:20",
+        "12:20",
+        "16:20",
+        "20:20"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T15:31:13Z",
+      "updated_at": "2025-10-24T15:31:13Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__milkpep__protein_drinks.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/milkpep"
+    },
+    {
       "id": "walmart_pickle_pickle_spears_2dac17be",
       "retailer": "walmart",
       "client": "pickle",
@@ -934,6 +1094,38 @@
       "updated_at": "2025-10-22T04:52:13Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__pickle__pickle_spears.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/pickle"
+    },
+    {
+      "id": "walmart_proactiv_proactiv_9527ad3a",
+      "retailer": "walmart",
+      "client": "Proactiv",
+      "keywords": [
+        "Proactiv",
+        "acne kit",
+        "acne skin care",
+        "benzoyl peroxide"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:45",
+        "12:25",
+        "15:40",
+        "20:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-26T04:52:15Z",
+      "updated_at": "2025-10-26T04:52:15Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__proactiv__proactiv.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/proactiv"
     },
     {
       "id": "walmart_sour_cream_light_sour_cream_2b034c8a",

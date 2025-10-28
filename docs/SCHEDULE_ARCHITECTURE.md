@@ -40,12 +40,12 @@ Each schedule file uses a normalized schema with 24-hour times and lowercase day
 - **id** (string): Unique identifier for the schedule
 - **retailer** (string): Retailer slug (kroger, walmart, instacart, etc.)
 - **client** (string): Client/product name
-- **keywords** (array): Search terms to scrape
+- **keywords** (array): Search terms to scrape (must be non-empty, minimum 1 keyword)
 - **days** (array): Days of week (lowercase: monday, tuesday, etc.)
 - **times** (array): Run times in 24-hour HH:MM format
 - **enabled** (boolean): Whether this schedule is active
-- **created_at** (string): ISO 8601 timestamp
-- **updated_at** (string): ISO 8601 timestamp
+- **created_at** (string): ISO 8601 timestamp with timezone (e.g., `2025-10-16T18:32:00Z`)
+- **updated_at** (string): ISO 8601 timestamp with timezone (e.g., `2025-10-16T18:32:00Z`)
 
 ## Master Schedule Index
 
@@ -146,10 +146,14 @@ Schedule filenames follow this pattern:
 <retailer>__<client>__<keyword_slug>.json
 ```
 
+**Policy for multiple keywords:**
+- **Preferred:** One schedule file per keyword (e.g., `keywords: ["ice cream"]`)
+- **Multi-keyword schedules:** Use `default` slug (e.g., `kroger__blue_bunny__default.json`)
+
 Examples:
-- `kroger__blue_bunny__ice_cream.json`
-- `walmart__bandaid__first_aid.json`
-- `instacart__stonyfield__yogurt.json`
+- `kroger__blue_bunny__ice_cream.json` - Single keyword schedule
+- `walmart__bandaid__first_aid.json` - Single keyword schedule
+- `instacart__stonyfield__default.json` - Multi-keyword schedule
 
 If multiple schedules exist for the same retailer/client/keyword, a hash suffix is added:
 - `kroger__blue_bunny__ice_cream__7d181867.json`
@@ -165,8 +169,9 @@ All components (daemon, GUI, CLI tools) now use a shared library for consistent 
 - `scan_schedules()` - Load from both new and legacy locations
 - `build_master_index()` - Generate master_schedule.json
 - `detect_conflicts()` - Find scheduling conflicts (5-minute window)
-- `now_in_tz()` - Timezone-aware time handling
+- `now_in_tz()` - Timezone-aware time handling (uses system timezone)
 - Normalized day/time parsing
+- Validation: Rejects empty `keywords` arrays (minimum 1 required)
 
 **Usage Example:**
 ```python
@@ -275,13 +280,27 @@ SCRAPE_LAUNCHED_ASYNC: [kroger] blue bunny
 - One place to add features
 - Clear upgrade path
 
+## Timezone Handling
+
+**Current:** Scheduler uses **system timezone** (OS-level) for all schedule matching.
+
+**How it works:**
+- `now_in_tz()` reads the system timezone
+- All schedule times are interpreted in this timezone
+- No per-schedule timezone field exists
+
+**Future considerations:**
+- Add optional `timezone` field to schedule schema for per-schedule TZ support
+- Add `SCHEDULER_TZ` environment variable as global override
+
 ## Future Enhancements
 
 Potential improvements to the schedule system:
 
-1. **Schedule Templates** - Reusable schedule patterns
-2. **Schedule Groups** - Bulk enable/disable related schedules
-3. **Schedule History** - Track changes over time
-4. **Web UI** - Browser-based schedule management
-5. **Multi-timezone Dashboard** - View schedules across timezones
-6. **Schedule Import/Export** - Share schedules between environments
+1. **Per-schedule timezones** - Support schedules in different timezones
+2. **Schedule Templates** - Reusable schedule patterns
+3. **Schedule Groups** - Bulk enable/disable related schedules
+4. **Schedule History** - Track changes over time
+5. **Web UI** - Browser-based schedule management
+6. **Multi-timezone Dashboard** - View schedules across timezones
+7. **Schedule Import/Export** - Share schedules between environments

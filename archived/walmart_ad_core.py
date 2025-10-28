@@ -3,6 +3,9 @@ from __future__ import annotations
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs, unquote
 from typing import Dict, Any, List
+import json
+import os
+from difflib import get_close_matches
 
 # Walmart ad module selectors (align with your scraper)
 SEL_TOP_BANNER = "a.ad, a.adctr"
@@ -146,8 +149,11 @@ def _extract_block(soup, selector, ad_type) -> List[Dict[str, Any]]:
             else:
                 # No sponsored indicators - this is Walmart promotional content
                 d["advertiser"] = "Walmart"
+                d["advertisers"] = ["Walmart"]
         elif advertiser:
             d["advertiser"] = advertiser
+            # Also set advertisers array for consistency with Kroger format
+            d["advertisers"] = [advertiser]
 
         items.append(d)
     return items

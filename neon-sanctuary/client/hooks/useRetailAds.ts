@@ -20,21 +20,26 @@ export function useClients(retailer?: string) {
   });
 }
 
-export function useAds(params: { 
-  retailer?: string; 
-  client?: string; 
+export function useAds(params: {
+  retailer?: string;
+  client?: string;
   term?: string;
   advertiser?: string;
-  start?: string; 
-  end?: string; 
-  types?: string[]; 
-  search?: string; 
-  pageSize?: number; 
+  start?: string;
+  end?: string;
+  types?: string[];
+  search?: string;
+  pageSize?: number;
 }) {
   const { retailer, client, term, advertiser, start, end, types, search, pageSize = 24 } = params;
-  
+
   // Guard: don't fire query until both retailer and client are present
   const enabled = Boolean(retailer && client);
+
+  // Log params to see if dates are included
+  if (enabled && (start || end)) {
+    console.log(`📍 useAds(${retailer}, ${client}):`, { start, end });
+  }
   
   return useInfiniteQuery<AdsCardsResponse>({
     queryKey: ["ads", retailer, client, term, advertiser, start, end, types?.join("|"), search, pageSize],

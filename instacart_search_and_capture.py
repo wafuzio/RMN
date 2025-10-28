@@ -8,11 +8,164 @@ import os
 import sys
 import json
 import time
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from filename_utils import generate_ad_filename
 from brand_logo_database import BrandLogoDatabase
+from core.brands import canonicalize
+
+# ============================================================================
+# Canonical Schema Helpers for Instacart
+# ============================================================================
+
+ADTYPE_MAP = {
+    # Legacy → Canonical JSON type
+    "Shoppable Display Ad": "Shoppable_Display_Ad",
+    "Shoppable Video Ad": "Shoppable_Video_Ad",
+    "Display Ad": "Display_Ad",
+    # Already canonical types pass through unchanged
+    "Shoppable_Display_Ad": "Shoppable_Display_Ad",
+    "Shoppable_Video_Ad": "Shoppable_Video_Ad",
+    "Display_Ad": "Display_Ad",
+}
+
+def now_iso_z() -> str:
+    """Return current UTC time in ISO 8601 Z format"""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+def build_run_id(dt: datetime | None = None) -> str:
+    """Generate run_id from timestamp (YYYYMMDDHHMMSS)"""
+    dt = dt or datetime.now(timezone.utc)
+    return dt.strftime("%Y%m%d%H%M%S")
+
+def ensure_ad_type(t: str | None) -> str:
+    """Normalize ad type to canonical format"""
+    t = (t or "").strip()
+    return ADTYPE_MAP.get(t, t or "Display_Ad")
+
+def rel_path(*parts) -> str:
+    """Create relative path string"""
+    return str(Path(*parts).as_posix())
+
+def normalize_rel_from_client(image_path: str, client_root: Path) -> str | None:
+    """
+    Accept absolute or relative image_path and return a relative-to-client path (folder/filename).
+    """
+    if not image_path: 
+        return None
+    p = Path(image_path)
+    try:
+        # already relative to client root?
+        if not p.is_absolute():
+            return rel_path(p)
+        # absolute: try to relativize under client_root
+        return rel_path(p.relative_to(client_root))
+    except Exception:
+        # As last resort: take just folder/filename if possible
+        return rel_path(p.name)
+
+def pick_brand(ad: dict) -> str | None:
+    """
+    Pick a brand from advertisers[] or brand/text fields; then canonicalize using lexicon.
+    """
+    # 1) advertisers array
+    advs = ad.get("advertisers")
+    if isinstance(advs, list) and advs:
+        b = canonicalize(str(advs[0]))
+        if b: return b
+    # 2) brand field
+    b = canonicalize(ad.get("brand"))
+    if b: return b
+    # 3) fallback from title/message if present
+    for key in ("title", "message"):
+        v = ad.get(key)
+        if isinstance(v, str) and v.strip():
+            b = canonicalize(v.strip())
+            if b: return b
+    return None
+
+def build_ad_object(run_id: str, idx: int, ad: dict, retailer: str, client: str, keyword: str, run_iso: str, client_root: Path) -> dict:
+    """
+    Convert a raw Instacart ad dict to canonical ad object.
+    - Ensures type, brand (canonical), image_path (relative), and optional video_url.
+    - Filenames must be generated via generate_ad_filename at capture time; here we consume saved rel paths.
+    """
+    ad_type = ensure_ad_type(ad.get("type"))
+    brand = pick_brand(ad) or "unknown"
+
+    # Prefer pre-saved relative path if present (normalize if absolute)
+    rel_img = normalize_rel_from_client(ad.get("image_path") or ad.get("screenshot"), client_root)
+
+    # If nothing in image_path but we know the filename we saved, try fallback keys
+    if not rel_img:
+        # Some extractors use type-specific keys, tolerate them
+        for k, v in ad.items():
+            if isinstance(k, str) and k.endswith("_image_path") and isinstance(v, str):
+                rel_img = normalize_rel_from_client(v, client_root)
+                if rel_img: break
+
+    # Optional: if ad holds a local video file path set by extractor (rare)
+    video_rel = None
+    v_url = ad.get("video_url") or ad.get("image_url")
+    if isinstance(v_url, str) and v_url.lower().endswith(".mp4"):
+        # if extractor saved to disk, it should have put a relative path in ad["video_path"]
+        video_rel = normalize_rel_from_client(ad.get("video_path"), client_root)
+
+    # Build canonical object
+    can = {
+        "id": f"{retailer}-{run_id}-{idx}",
+        "type": ad_type,
+        "brand": brand,
+        "brand_logo": None,
+        "title": ad.get("title"),
+        "description": ad.get("description"),
+        "cta": ad.get("cta"),
+        "href": ad.get("href"),
+        "image_url": ad.get("image_url"),    # optional CDN reference (not used for local serving)
+        "image_path": rel_img,               # critical for serving via /api/image
+        "products": ad.get("products", []),
+        "metadata": {
+            "slot": ad.get("slot"),
+            "keyword_token": keyword,
+            "source": "instacart",
+        },
+        "timestamp": run_iso,                # keep capture timestamp on ad for convenience
+    }
+    # If we have a local video file, attach a canonical key the API can later translate to /api/video
+    if video_rel:
+        can["video_path"] = video_rel
+    
+    # Preserve advertisers array for filtering
+    if ad.get("advertisers"):
+        can["advertisers"] = ad["advertisers"]
+    
+    return can
+
+def build_run_payload(retailer: str, client: str, keyword: str, run_id: str, run_iso: str, canonical_ads: list[dict]) -> dict:
+    """Build canonical run payload"""
+    return {
+        "retailer": retailer,
+        "client": client,
+        "keyword": keyword,
+        "timestamp": run_iso,   # ISO Z
+        "run_id": run_id,
+        "ads": canonical_ads,
+    }
+
+def save_run_artifacts(client_root: Path, run_id: str, payload: dict, html_content: str | None, html_keyword: str) -> Path:
+    """
+    Write nested runs/<run_id>/run_results_<run_id>.json and the SRP HTML (optional).
+    """
+    run_dir = client_root / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    json_path = run_dir / f"run_results_{run_id}.json"
+    json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    if html_content:
+        safe_kw = re.sub(r"[^A-Za-z0-9]+", "_", html_keyword).strip("_") or "search"
+        (run_dir / f"search_results_{safe_kw}_{run_id}.html").write_text(html_content)
+    return json_path
 
 
 def force_window_and_metrics(context, page, width=1920, height=1080, dpr=1, log=None):
@@ -344,14 +497,16 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
         except Exception as e:
             print(f"   Warning: Could not remove lock file: {e}")
     
-    # Create runs directory
-    runs_dir = os.path.join(output_dir, "runs")
-    os.makedirs(runs_dir, exist_ok=True)
-    log(f"Runs directory: {runs_dir}")
+    # Generate run ID and timestamp (canonical)
+    run_iso = now_iso_z()
+    run_id = build_run_id()
+    client_root = Path(output_dir)
     
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    html_file = os.path.join(runs_dir, f"search_results_{timestamp}.html")
-    json_file = os.path.join(runs_dir, f"run_results_{timestamp}.json")
+    # Also create timestamp string for filename generation (YYYYMMDD_HHMMSS format)
+    timestamp = run_id[:8] + "_" + run_id[8:10] + "-" + run_id[10:12] + "-" + run_id[12:14]
+    
+    log(f"Run ID: {run_id}")
+    log(f"Timestamp: {run_iso}")
         
     # Extract client name from output directory (e.g., /path/to/output/instacart/pickle -> pickle)
     client_name = os.path.basename(output_dir)
@@ -512,17 +667,8 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             search_url = page.url
             log("✅ Authenticated session active")
             
-            # Extract ad data for JSON (matching Kroger structure)
-            ad_data = {
-                "keyword": keyword,
-                "search_term": keyword,
-                "store": store,
-                "timestamp": timestamp,
-                "retailer": "instacart",
-                "url": search_url,
-                "source_file": html_file,
-                "results": [{"ads": []}]  # Nested structure like Kroger
-            }
+            # Collect raw ads (will be converted to canonical at end)
+            raw_ads = []
             
             # Find all ad containers using structural selectors (hash classes change)
             log("🧭 Finding ad containers via structural navigation...")
@@ -781,20 +927,17 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     else:
                         log(f"      ⚠️  No brand extracted for ad #{i} (title: {ad_info.get('title', 'NO TITLE')})")
                     
-                    ad_data["results"][0]["ads"].append(ad_info)
+                    raw_ads.append(ad_info)
                 except Exception as e:
                     print(f"⚠️  Could not extract data from {ad_type} #{i}: {e}")
             
-            ad_count = len(ad_data['results'][0]['ads'])
-            ad_data['count'] = ad_count
+            ad_count = len(raw_ads)
             print(f"📊 Found {ad_count} ad units")
             
-            # Save HTML AFTER all ad extraction (includes all lazy-loaded content)
-            log("\n💾 Saving HTML with all lazy-loaded content...")
+            # Capture HTML content for later saving
+            log("\n💾 Capturing HTML content...")
             html_content = page.content()
-            with open(html_file, 'w', encoding='utf-8') as f:
-                f.write(html_content)
-            log(f"   ✅ HTML saved: {html_file}")
+            log(f"   ✅ HTML captured")
             
             # Take screenshots of ads
             log("\n📸 Taking screenshots...")
@@ -826,7 +969,7 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     timestamp=timestamp,
                     index=1,
                     extension='png',
-                    advertiser=None
+                    advertiser="unknown"  # Use "unknown" for full page screenshots
                 )
                 fullpage_path = os.path.join(main_dir, fullpage_filename)
                 page.screenshot(path=fullpage_path, full_page=True)
@@ -846,12 +989,14 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     log(f"   Ad type: {actual_ad_type} (video={is_video})")
                     
                     # Extract advertiser from ad data if available
-                    advertiser = None
-                    if idx < len(ad_data['results'][0]['ads']):
-                        ad_info = ad_data['results'][0]['ads'][idx]
+                    advertiser = "unknown"  # Default to "unknown" instead of None
+                    if idx < len(raw_ads):
+                        ad_info = raw_ads[idx]
                         if 'advertisers' in ad_info and ad_info['advertisers']:
                             advertiser = ad_info['advertisers'][0]
                             log(f"   Advertiser: {advertiser}")
+                        else:
+                            log(f"   Advertiser: unknown (no advertiser data in raw_ads[{idx}])")
                     
                     # Generate filename
                     screenshot_filename = generate_ad_filename(
@@ -879,21 +1024,41 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     else:
                         log(f"   ⚠️ Screenshot file not found: {screenshot_path}")
                     
-                    # Add screenshot path to ad_info
-                    if idx < len(ad_data['results'][0]['ads']):
-                        rel_path = os.path.relpath(screenshot_path, output_dir)
-                        ad_data['results'][0]['ads'][idx]['screenshot'] = rel_path
-                        log(f"   Added to JSON: {rel_path}")
+                    # Add screenshot path to ad_info (relative to client root)
+                    if idx < len(raw_ads):
+                        rel_path_str = str(Path(screenshot_path).relative_to(client_root))
+                        raw_ads[idx]['image_path'] = rel_path_str
+                        log(f"   Added to JSON: {rel_path_str}")
                         
                 except Exception as e:
                     log(f"   ⚠️ Screenshot failed for ad #{idx + 1}: {e}")
                     import traceback
                     log(f"   Traceback: {traceback.format_exc()}")
             
-            # Save JSON (with screenshot paths now included)
-            with open(json_file, 'w', encoding='utf-8') as f:
-                json.dump(ad_data, f, indent=2)
-            print(f"💾 JSON saved: {json_file}")
+            # Convert raw ads to canonical format
+            log("\n🔄 Converting to canonical schema...")
+            canonical_ads = []
+            for i, raw in enumerate(raw_ads, start=1):
+                can = build_ad_object(
+                    run_id=run_id,
+                    idx=i,
+                    ad=raw,
+                    retailer="instacart",
+                    client=client_name,
+                    keyword=keyword,
+                    run_iso=run_iso,
+                    client_root=client_root,
+                )
+                canonical_ads.append(can)
+            
+            # Build canonical payload
+            payload = build_run_payload("instacart", client_name, keyword, run_id, run_iso, canonical_ads)
+            
+            # Save canonical run artifacts
+            json_path = save_run_artifacts(client_root, run_id, payload, html_content, keyword)
+            print(f"💾 Canonical run written: {json_path}")
+            log(f"   Ads: {len(canonical_ads)}")
+            log(f"   Structure: canonical (flat ads[])")
             
             context.close()
             

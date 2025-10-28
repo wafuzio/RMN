@@ -13,41 +13,88 @@ function Calendar({
   showOutsideDays = true,
   ...props
 }: CalendarProps) {
+  React.useEffect(() => {
+    // Add CSS rules for table alignment
+    const styleId = "calendar-alignment-styles";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+        .rdp table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .rdp tbody tr, .rdp thead tr {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+        }
+        .rdp thead th, .rdp tbody td {
+          padding: 0;
+          text-align: center;
+        }
+        .rdp thead th {
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+          font-size: 12px;
+          color: #4b5563;
+        }
+        .rdp tbody td {
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .rdp-day_selected:not([disabled]) {
+          background-color: #3b82f6 !important;
+          color: white !important;
+          border-radius: 50% !important;
+          font-weight: 600 !important;
+        }
+        .rdp-day_selected:not([disabled]):hover {
+          background-color: #2563eb !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn("p-3", className)}
+      className={cn("p-3 rdp", className)}
       classNames={{
-        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-        month: "space-y-4",
-        caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
-        nav: "space-x-1 flex items-center",
+        months: "flex flex-col sm:flex-row gap-8",
+        month: "space-y-4 relative",
+        caption: "flex justify-center items-center py-2 relative",
+        caption_label: "text-sm font-semibold",
+        nav: "flex gap-2 absolute top-1 inset-x-0 justify-between px-1",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
+          "h-7 w-7 bg-white p-0 opacity-60 hover:opacity-100 transition-opacity border border-gray-300",
         ),
-        nav_button_previous: "absolute left-1",
-        nav_button_next: "absolute right-1",
-        table: "w-full border-collapse space-y-1",
-        head_row: "flex",
+        nav_button_previous: "",
+        nav_button_next: "",
+        table: "w-full",
+        head_row: "",
         head_cell:
-          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-        row: "flex w-full mt-2",
-        cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+          "text-gray-600",
+        row: "",
+        cell: "[&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-blue-100 [&:has([aria-selected])]:bg-blue-100 first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
         day: cn(
-          buttonVariants({ variant: "ghost" }),
-          "h-9 w-9 p-0 font-normal aria-selected:opacity-100",
+          "h-9 w-9 p-0 font-normal transition-all hover:bg-gray-100",
         ),
         day_range_end: "day-range-end",
         day_selected:
-          "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-        day_today: "bg-accent text-accent-foreground",
+          "bg-blue-500 text-white font-semibold rounded-full",
+        day_today: "bg-white border-2 border-blue-500 text-blue-600 font-semibold rounded-full",
         day_outside:
-          "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
-        day_disabled: "text-muted-foreground opacity-50",
+          "day-outside text-gray-300 aria-selected:bg-blue-100 aria-selected:text-gray-700 aria-selected:opacity-70",
+        day_disabled: "text-gray-200 opacity-50 cursor-not-allowed",
         day_range_middle:
-          "aria-selected:bg-accent aria-selected:text-accent-foreground",
+          "aria-selected:bg-blue-100 aria-selected:text-gray-900",
         day_hidden: "invisible",
         ...classNames,
       }}

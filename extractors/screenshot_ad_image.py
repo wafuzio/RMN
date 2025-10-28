@@ -331,6 +331,7 @@ def extract_image_urls_from_json(
                 "alt_text": ad.get("message", "") or "",
                 "source_file": result.get("source_file", ""),
                 "ad_type": ad_type_raw,
+                "position": ad.get("position"),  # Include position for matching
                 "advertisers": advertisers,  # Array of brand names (can be None)
                 "retailer": data.get("retailer", "kroger"),  # Retailer name from top-level JSON
                 "id": image_url.split('/')[-1].split('.')[0] if '/' in image_url else None
@@ -689,8 +690,11 @@ def process_images(
                             else:
                                 print(f"❌ All download methods failed for: {image_url}")
                         
-                        # OCR brand detection for co-branded ads
+                        # Save the output path for JSON update (do this FIRST, before OCR)
                         if ok and os.path.exists(output_path):
+                            image_info['saved_image_path'] = output_path
+                            
+                            # OCR brand detection for co-branded ads
                             try:
                                 print("🔍 Running OCR brand detection...")
                                 detected_brands = detect_brands_from_image(output_path)
@@ -719,15 +723,14 @@ def process_images(
                                         os.rename(output_path, new_output_path)
                                         print(f"✓ Renamed to: {new_filename}")
                                         output_path = new_output_path
+                                        # Update saved path with new filename
+                                        image_info['saved_image_path'] = output_path
                                 elif detected_brands and len(detected_brands) == 1:
                                     print(f"✓ Single brand confirmed: {detected_brands[0]}")
                                     # Update with single detected brand
                                     image_info['advertisers'] = detected_brands
                             except Exception as ocr_err:
                                 print(f"⚠️ OCR detection skipped: {ocr_err}")
-                            
-                            # Save the final output path for JSON update
-                            image_info['saved_image_path'] = output_path
                     except Exception as e:
                         print(f"❌ Image download error: {e}")
 
@@ -924,8 +927,25 @@ def process_images(
                                     # Image docs don't reliably fire domcontentloaded; use commit
                                     page.goto(image_url, wait_until="commit", timeout=30000)
                                     page.wait_for_timeout(400)
-                                    page.screenshot(path=output_path, full_page=False)
-                                    print(f"✅ Fallback screenshot saved to: {output_path}")
+                                    
+                                    # Try to find and screenshot just the img element to avoid black borders
+                                    try:
+                                        img_element = page.locator("img").first
+                                        if img_element:
+                                            # Wait for image to load
+                                            page.wait_for_load_state("networkidle", timeout=5000)
+                                            img_element.screenshot(path=output_path)
+                                            print(f"✅ Element screenshot saved to: {output_path}")
+                                        else:
+                                            # No img element, use full viewport
+                                            page.screenshot(path=output_path, full_page=False)
+                                            print(f"✅ Viewport screenshot saved to: {output_path}")
+                                    except Exception as elem_err:
+                                        # Fallback to viewport screenshot
+                                        print(f"⚠️ Element screenshot failed ({elem_err}), using viewport")
+                                        page.screenshot(path=output_path, full_page=False)
+                                        print(f"✅ Fallback screenshot saved to: {output_path}")
+                                    
                                     ok = True
                                     saved_count += 1
                                 except Exception as e:

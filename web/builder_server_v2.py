@@ -25,7 +25,8 @@ import json
 import glob
 import mimetypes
 import requests
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from utils.path_taxonomy import allowed_subdirs
 
 app = Flask(__name__)
@@ -39,6 +40,334 @@ OUTPUT_ROOT = os.path.join(SCRAPER_HOME, "output")
 ASSETS_ROOT = os.path.join(SCRAPER_HOME, "web", "assets")
 ALLOWED_ORIGINS = set((os.environ.get("ALLOWED_ORIGINS") or "").split(",")) - {""}
 API_KEY = os.environ.get("API_KEY")  # For future POST endpoints
+
+# ============================================================================
+# Utility Functions
+# ============================================================================
+
+def to_iso_z(ts: str | None, run_id: str | None = None) -> str:
+    """
+    Normalize legacy timestamps to ISO 8601 Z (UTC).
+    Accepts:
+      - 2025-10-27T02:56:54Z  (already ISO Z)
+      - 2025-10-27 02:56:54   (assume UTC)
+      - 2025-10-27_02-56-54   (assume UTC)
+    Fallback to run_id or now() in UTC.
+    """
+    ts = (ts or "").strip()
+    try:
+        # ISO with Z
+        if re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$', ts):
+            return ts
+        # Space-separated UTC
+        m1 = re.match(r'^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}):(\d{2})$', ts)
+        if m1:
+            dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+        # Underscore-separated UTC
+        m2 = re.match(r'^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})$', ts)
+        if m2:
+            dt = datetime.strptime(ts, "%Y-%m-%d_%H-%M-%S").replace(tzinfo=timezone.utc)
+            return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+    except Exception:
+        pass
+    # Fallback from run_id
+    if run_id:
+        try:
+            dt = datetime.strptime(run_id, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+            return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+        except Exception:
+            pass
+    # Last resort: now UTC
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def iso_to_epoch_ms(iso_z: str) -> int:
+    """Convert ISO Z timestamp to epoch milliseconds"""
+    try:
+        dt = datetime.fromisoformat(iso_z.replace("Z", "+00:00"))
+        return int(dt.timestamp() * 1000)
+    except Exception:
+        return 0
+
+
+def parse_utc(iso_z: str) -> datetime:
+    """Parse ISO Z timestamp to datetime object"""
+    return datetime.fromisoformat(iso_z.replace("Z", "+00:00"))
+
+
+def utc_range_for(filter_name: str, start: str | None, end: str | None) -> tuple[datetime, datetime]:
+    """
+    Get UTC datetime range for filtering.
+    filter_name: 'lifetime', 'mtd', 'ytd', or 'custom'
+    start/end: YYYY-MM-DD strings for custom range
+    """
+    now = datetime.now(timezone.utc)
+    
+    if filter_name == "lifetime":
+        return datetime.min.replace(tzinfo=timezone.utc), datetime.max.replace(tzinfo=timezone.utc)
+    
+    if filter_name == "mtd":
+        start_dt = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return start_dt, now
+    
+    if filter_name == "ytd":
+        start_dt = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        return start_dt, now
+    
+    # Custom yyyy-mm-dd range
+    def parse_date_utc(d: str) -> datetime:
+        return datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    
+    if start and end:
+        start_dt = parse_date_utc(start)  # 00:00Z that day
+        # Inclusive end-of-day
+        end_dt = parse_date_utc(end).replace(hour=23, minute=59, second=59)
+        return start_dt, end_dt
+    
+    # Default: lifetime
+    return datetime.min.replace(tzinfo=timezone.utc), datetime.max.replace(tzinfo=timezone.utc)
+
+
+def type_label_for(ad_type: str | None) -> str:
+    """
+    Convert ad type to human-readable label.
+    Replaces underscores and hyphens with spaces, strips whitespace.
+    """
+    return (ad_type or "").replace("_", " ").replace("-", " ").strip()
+
+
+# Blocked brands - ad types that should never be used as brand names
+BLOCKED_BRANDS = {
+    "display ad",
+    "shoppable display ad",
+    "shoppable video ad",
+    "video ad",
+    "sponsored product",
+    "sponsored products",
+    "sponsored brand",
+    "sponsored brand video",
+    "carousel",
+    "skyscraper",
+    "toa",
+    "sba",
+    "sbv",
+    "top banner",
+    "tile takeover",
+    "featured brand",
+    "native ad",
+    "display ads",
+    "video ads",
+    "top of aisle",
+    "shelf banner",
+    "category banner",
+}
+
+
+def is_blocked_brand(brand_name: str | None) -> bool:
+    """
+    Check if a brand name is actually an ad type (in blocked list).
+    Returns True if brand should be filtered out.
+    """
+    if not brand_name:
+        return True
+    normalized = brand_name.lower().strip()
+    return normalized in BLOCKED_BRANDS or type_label_for(normalized) in BLOCKED_BRANDS
+
+
+def resolve_image_path(ad: dict) -> str | None:
+    """
+    Canonical first, then legacy fallbacks. Returns a path relative to client root:
+      e.g., 'SBA/walmart__brand__sba__client__kw__D2025-10-27_T13-22.33_1.png'.
+    """
+    # Canonical
+    p = ad.get("image_path") or ad.get("screenshot")
+    if p:
+        return p
+    # Legacy per-type fallbacks (Walmart, Kroger, etc.)
+    for k, v in ad.items():
+        if isinstance(k, str) and k.endswith("_image_path") and isinstance(v, str) and v:
+            return v
+    return None
+
+
+def client_root_for(retailer: str, client: str) -> Path:
+    """Get client root directory"""
+    return Path(OUTPUT_ROOT) / retailer / client
+
+
+def find_image_file(retailer: str, client: str, req_relpath: str) -> tuple[Path | None, str | None]:
+    """
+    Try to locate the requested image for a retailer/client.
+    Returns (absolute_path, relative_path_from_client) or (None, None).
+    
+    Strategy:
+      1) Exact match under client_root
+      2) Exact match under nested runs/* directories (Walmart)
+      3) Fuzzy match by filename under allowed ad folders (top-level) then nested
+    """
+    cr = client_root_for(retailer, client)
+    req_relpath = req_relpath.strip().lstrip("/")
+
+    # 1) Exact under client root
+    p1 = cr / req_relpath
+    if p1.is_file():
+        return p1, str(Path(req_relpath))
+
+    # 2) Exact under nested runs/<run_id>/
+    runs_dir = cr / "runs"
+    if runs_dir.is_dir():
+        candidates = list(runs_dir.glob(f"*/{req_relpath}"))
+        for c in candidates:
+            if c.is_file():
+                # Return path relative to client root (flattened for API URL)
+                rel = str(req_relpath)
+                return c, rel
+
+    # 3) Fuzzy by filename
+    req_name = Path(req_relpath).name.lower()
+    try:
+        allowed = allowed_subdirs(retailer)  # e.g., {'SBA','SBV','Tile_Takeover','Main','runs'}
+    except ValueError:
+        allowed = {'Main', 'runs'}
+    
+    # Preferred: ad-type folders (not 'runs')
+    scan_dirs = [cr / d for d in allowed if d != "runs" and (cr / d).is_dir()]
+    
+    # Also scan nested runs/<run_id>/<folder>/*
+    if runs_dir.is_dir():
+        for rd in runs_dir.iterdir():
+            if rd.is_dir():
+                for d in allowed:
+                    if d == "runs":
+                        continue
+                    psub = rd / d
+                    if psub.is_dir():
+                        scan_dirs.append(psub)
+
+    # Find best match by exact filename first, then loose contains
+    exact_hits = []
+    loose_hits = []
+    for d in scan_dirs:
+        for f in d.glob("*"):
+            if not f.is_file():
+                continue
+            name = f.name.lower()
+            if name == req_name:
+                exact_hits.append(f)
+            elif req_name and (req_name in name or name in req_name):
+                loose_hits.append(f)
+
+    # Prefer exact; else first loose
+    pick = exact_hits[0] if exact_hits else (loose_hits[0] if loose_hits else None)
+    if pick:
+        # Build relative path from client root (folder/filename)
+        try:
+            rel = str(pick.relative_to(cr))
+        except Exception:
+            # When under runs/*/, return folder/filename if possible
+            rel = f"{pick.parent.name}/{pick.name}"
+        return pick, rel
+
+    return None, None
+
+
+def is_video_filename(name: str) -> bool:
+    """Check if filename is a video file"""
+    return str(name).lower().endswith((".mp4", ".webm", ".mov", ".m4v"))
+
+
+def find_poster_for_video(retailer: str, client: str, rel_video_path: str) -> str | None:
+    """
+    Try to find a poster image with the same basename as the video.
+    Looks in the same folder and in Main/.
+    Returns relative path from client root if found, else None.
+    """
+    base = Path(rel_video_path).with_suffix("")
+    # same folder
+    for ext in (".png", ".jpg", ".jpeg", ".webp"):
+        candidate = f"{base}{ext}"
+        f2, r2 = find_image_file(retailer, client, candidate)
+        if f2:
+            return r2
+    # fallback: Main/<basename>.png|.jpg...
+    for ext in (".png", ".jpg", ".jpeg", ".webp"):
+        candidate = f"Main/{base.name}{ext}"
+        f2, r2 = find_image_file(retailer, client, candidate)
+        if f2:
+            return r2
+    return None
+
+
+def build_media_urls_for_ad(retailer: str, client: str, ad: dict) -> dict:
+    """
+    Returns a dict with:
+      image_url: str  (always used for grid card)
+      video_url: str  (optional; used in modal detail)
+      poster_url: str (optional; used in video tag poster)
+    """
+    media = {}
+
+    rel = (ad.get("image_path") or ad.get("screenshot"))
+    if not rel:
+        # legacy fallback keys
+        for k, v in ad.items():
+            if isinstance(k, str) and k.endswith("_image_path") and isinstance(v, str) and v:
+                rel = v
+                break
+
+    # If we have a declared path
+    if rel:
+        if is_video_filename(rel):
+            # Try to attach video_url and find a poster for the image grid
+            f, r = find_image_file(retailer, client, rel)
+            if f:
+                media["video_url"] = f"/api/video/{retailer}/{client}/{r}"
+                poster_rel = find_poster_for_video(retailer, client, r)
+                if poster_rel:
+                    media["image_url"] = f"/api/image/{retailer}/{client}/{poster_rel}"
+                    media["poster_url"] = f"/api/image/{retailer}/{client}/{poster_rel}"
+            # If no poster found, we will try CDN filename fallback below
+        else:
+            # It's an image
+            f, r = find_image_file(retailer, client, rel)
+            if f:
+                media["image_url"] = f"/api/image/{retailer}/{client}/{r}"
+
+    # Fallbacks: if image_url still missing and ad has CDN url, try fuzzy by filename
+    if "image_url" not in media:
+        cdn = ad.get("image_url")
+        if isinstance(cdn, str) and cdn.strip():
+            name = Path(cdn.split("?")[0]).name
+            if name and not is_video_filename(name):
+                f, r = find_image_file(retailer, client, name)
+                if f:
+                    media["image_url"] = f"/api/image/{retailer}/{client}/{r}"
+
+    # Video fallback by CDN filename (optional convenience)
+    if "video_url" not in media:
+        cdn_v = ad.get("video_url") or ad.get("image_url")
+        if isinstance(cdn_v, str) and is_video_filename(cdn_v):
+            name = Path(cdn_v.split("?")[0]).name
+            f, r = find_image_file(retailer, client, name)
+            if f:
+                media["video_url"] = f"/api/video/{retailer}/{client}/{r}"
+                # Try a poster
+                poster_rel = find_poster_for_video(retailer, client, r)
+                if poster_rel:
+                    media["poster_url"] = f"/api/image/{retailer}/{client}/{poster_rel}"
+
+    return media
+
+
+def build_image_url_for_ad(retailer: str, client: str, ad: dict) -> str | None:
+    """
+    DEPRECATED: Use build_media_urls_for_ad() instead.
+    Build image URL for an ad, trying canonical path first, then fuzzy matching.
+    Returns /api/image/{retailer}/{client}/{path} or None if not resolvable.
+    """
+    media = build_media_urls_for_ad(retailer, client, ad)
+    return media.get("image_url")
 
 # ============================================================================
 # Security & CORS
@@ -382,8 +711,18 @@ def api_runs():
             with open(fpath, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
-            # Extract timestamp from various possible fields
-            timestamp = data.get("timestamp") or data.get("ts") or data.get("date")
+            # Extract and normalize timestamp
+            raw_ts = data.get("timestamp") or data.get("ts") or data.get("date")
+            run_id = data.get("run_id")
+            # Try to extract run_id from filename if not in JSON
+            if not run_id:
+                run_id_match = re.search(r'(\d{14})', fn)
+                if run_id_match:
+                    run_id = run_id_match.group(1)
+            
+            iso_ts = to_iso_z(raw_ts, run_id)
+            epoch_ms = iso_to_epoch_ms(iso_ts)
+            
             keyword = data.get("keyword") or data.get("search_term") or data.get("term")
             
             # Count ads
@@ -398,7 +737,8 @@ def api_runs():
             
             runs.append({
                 "file": fn,
-                "timestamp": timestamp,
+                "timestamp": iso_ts,  # Normalized ISO Z
+                "timestamp_ms": epoch_ms,  # Epoch milliseconds
                 "keyword": keyword,
                 "url": data.get("url") or data.get("search_url") or data.get("srp_url"),
                 "ads_count": ads_count,
@@ -529,7 +869,7 @@ def api_ads_cards():
     
     Query params:
     - retailer (required): retailer slug
-    - client (required): client name
+    - client (required): client name or "all" for all clients
     - term (optional): filter by search term
     - advertiser (optional): filter by advertiser/brand name
     - page (optional): page number (default 1)
@@ -539,23 +879,61 @@ def api_ads_cards():
     client = (request.args.get("client") or "").strip()
     term = (request.args.get("term") or "").strip().lower()
     advertiser_filter = (request.args.get("advertiser") or "").strip().lower()
-    
+    start_date = (request.args.get("start") or "").strip()  # YYYY-MM-DD format
+    end_date = (request.args.get("end") or "").strip()      # YYYY-MM-DD format
+
     try:
         page = max(int(request.args.get("page", 1)), 1)
     except Exception:
         page = 1
-    
+
     try:
         page_size = min(max(int(request.args.get("page_size", 24)), 1), 100)
     except Exception:
         page_size = 24
     
-    if not (retailer and client):
-        return jsonify({"error": "retailer and client parameters required"}), 400
+    if not retailer:
+        return jsonify({"error": "retailer parameter required"}), 400
     
-    rdir = runs_dir(retailer, client)
+    if not client:
+        return jsonify({"error": "client parameter required"}), 400
     
-    if not os.path.isdir(rdir):
+    # Support client=all to query across all clients
+    if client.lower() == "all":
+        clients_to_query = []
+        retailer_root = os.path.join(OUTPUT_ROOT, retailer)
+        if os.path.isdir(retailer_root):
+            for item in os.listdir(retailer_root):
+                item_path = os.path.join(retailer_root, item)
+                if os.path.isdir(item_path):
+                    clients_to_query.append(item)
+    else:
+        clients_to_query = [client]
+    
+    # Collect files from all clients
+    files = []
+    for client_name in clients_to_query:
+        rdir = runs_dir(retailer, client_name)
+        
+        if not os.path.isdir(rdir):
+            continue
+        
+        # Get all run files (newest first) - handle both flat and nested structures
+        for item in os.listdir(rdir):
+            item_path = os.path.join(rdir, item)
+            if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                files.append((item, item_path, client_name))
+            elif os.path.isdir(item_path):
+                # Check subdirectories (Walmart structure)
+                for subitem in os.listdir(item_path):
+                    if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                        files.append((subitem, os.path.join(item_path, subitem), client_name))
+    
+    # Sort by filename (most recent first)
+    files = sorted(files, key=lambda x: x[0], reverse=True)
+    
+    # Return empty if no files found
+    if not files:
         return jsonify({
             "retailer": retailer,
             "client": client,
@@ -566,24 +944,9 @@ def api_ads_cards():
             "total_cards": 0
         })
     
-    # Get all run files (newest first) - handle both flat and nested structures
-    files = []
-    for item in os.listdir(rdir):
-        item_path = os.path.join(rdir, item)
-        if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
-            files.append((item, item_path))
-        elif os.path.isdir(item_path):
-            # Check subdirectories (Walmart structure)
-            for subitem in os.listdir(item_path):
-                if subitem.startswith("run_results_") and subitem.endswith(".json"):
-                    files.append((subitem, os.path.join(item_path, subitem)))
-    
-    # Sort by filename (most recent first)
-    files = sorted(files, key=lambda x: x[0], reverse=True)
-    
     # Collect all cards
     all_cards = []
-    for fn, fpath in files:
+    for fn, fpath, file_client in files:
         try:
             with open(fpath, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -657,8 +1020,18 @@ def api_ads_cards():
                         filename = p  # e.g., "Skyscraper/file.png" or "SBA/file.png"
                     else:
                         filename = os.path.basename(p)
-                    has_local_path = True
-                    break
+                    
+                    # CRITICAL: Check if this file actually exists on disk
+                    # If not, we need to run fallback search (file might be named "unknown")
+                    full_path = os.path.join(OUTPUT_ROOT, retailer, client, filename)
+                    if os.path.exists(full_path):
+                        has_local_path = True
+                        break
+                    else:
+                        # Path in JSON but file doesn't exist - clear filename to trigger fallback
+                        print(f"⚠️  [{retailer}] Path in JSON doesn't exist: {filename}")
+                        filename = ""
+                        has_local_path = False
                 
                 # Fallback to extracting from image_url if no path field found
                 # BUT mark it as not having a local path so we can search for taxonomy files
@@ -695,56 +1068,96 @@ def api_ads_cards():
                                 # For Walmart: strip date suffix if present (e.g., "ice_cream_cones_2025-10-14" -> "ice_cream_cones")
                                 if retailer == "walmart" and "_20" in kw:
                                     kw = kw.split("_20")[0]  # Remove date suffix
+                                
+                                # Get timestamp from JSON for matching
+                                timestamp_str = data.get("timestamp", "")
+                                # Extract date and hour from timestamp for flexible matching
+                                # Screenshots may be taken a few minutes after the scrape
+                                import re
+                                ts_date = None
+                                ts_hour = None
+                                ts_minute = None
+                                if timestamp_str:
+                                    # Try to extract YYYY-MM-DD HH:MM pattern
+                                    ts_pattern = re.search(r'(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})', str(timestamp_str))
+                                    if ts_pattern:
+                                        ts_date = ts_pattern.group(1)  # 2025-10-23
+                                        ts_hour = ts_pattern.group(2)  # 23
+                                        ts_minute = int(ts_pattern.group(3))  # 3
+                                
+                                # Get brand names from ad for matching
+                                ad_brands = ad.get("advertisers", [])
+                                if not ad_brands:
+                                    ad_brands = [ad.get("brand") or ad.get("advertiser") or ""]
+                                ad_brands_lower = [b.lower().replace(" ", "_").replace("'", "") for b in ad_brands if b]
+                                
                                 # List files and find matches (prefer image extensions over videos)
                                 files = os.listdir(search_dir)
-                                print(f"🔍 [{retailer}] Found {len(files)} files in {leaf}/, keyword={kw}")
+                                print(f"��� [{retailer}] Found {len(files)} files in {leaf}/, keyword={kw}, timestamp={ts_date}_{ts_hour}:{ts_minute}, brands={ad_brands_lower}")
+                                
                                 # Sort files to prefer .png, .jpg, .jpeg, .webp over .mp4
                                 image_exts = ('.png', '.jpg', '.jpeg', '.webp')
                                 files_sorted = sorted(files, key=lambda f: (not f.endswith(image_exts), f))
+                                
+                                # First pass: Match by timestamp + keyword + brand
+                                candidates = []
                                 for f in files_sorted:
-                                    # Match pattern: retailer__*__ad_type__*__keyword__*
                                     # Only match image files (not videos)
-                                    if f.startswith(f"{retailer}__") and kw in f.lower() and f.endswith(image_exts):
+                                    if not (f.startswith(f"{retailer}__") and kw in f.lower() and f.endswith(image_exts)):
+                                        continue
+                                    
+                                    f_lower = f.lower()
+                                    
+                                    # Check if timestamp matches (flexible - within 10 minutes)
+                                    timestamp_matches = False
+                                    if ts_date and ts_hour is not None:
+                                        # Extract timestamp from filename: D2025-10-24_T10-36.55
+                                        file_ts = re.search(r'D(\d{4}-\d{2}-\d{2})_T(\d{2})-(\d{2})', f)
+                                        if file_ts:
+                                            file_date = file_ts.group(1)
+                                            file_hour = file_ts.group(2)
+                                            file_minute = int(file_ts.group(3))
+                                            
+                                            # Match if same date+hour and within 10 minutes
+                                            if file_date == ts_date and file_hour == ts_hour:
+                                                minute_diff = abs(file_minute - ts_minute)
+                                                if minute_diff <= 10:
+                                                    timestamp_matches = True
+                                    else:
+                                        # No timestamp in JSON, don't filter by timestamp
+                                        timestamp_matches = True
+                                    
+                                    # Check if brand matches
+                                    brand_match = any(brand in f_lower for brand in ad_brands_lower if brand)
+                                    
+                                    # Perfect match: timestamp + keyword + brand
+                                    if timestamp_matches and brand_match:
                                         filename = os.path.join(leaf, f)
-                                        print(f"✅ [{retailer}] Matched image: {filename}")
+                                        print(f"✅ [{retailer}] Perfect match (timestamp+brand): {filename}")
                                         break
+                                    
+                                    # Good match: save as candidate
+                                    # Priority: timestamp match > brand match > any match
+                                    if timestamp_matches or brand_match:
+                                        candidates.append(f)
+                                
+                                # If no perfect match, use best candidate
+                                if not filename and candidates:
+                                    filename = os.path.join(leaf, candidates[0])
+                                    print(f"⚠️  [{retailer}] Using candidate match: {filename}")
+                                
                                 if not filename:
-                                    print(f"⚠️  [{retailer}] No matching image found for keyword={kw} in {leaf}/")
+                                    print(f"⚠️  [{retailer}] No matching image found for keyword={kw}, timestamp={ts_date}_{ts_hour}:{ts_minute}, brands={ad_brands_lower} in {leaf}/")
                             except Exception as e:
                                 print(f"❌ [{retailer}] Error searching for images: {e}")
                 
-                # Build API image URL using deterministic path resolution
-                image_api = ""
-                if filename:
-                    # If filename already includes subdir (e.g., "Skyscraper/foo.png"), use as-is
-                    if "/" in filename:
-                        filename_for_url = filename
-                    else:
-                        # Use find_image_rel to locate the actual file on disk
-                        ad_type_hint = ad.get("type") or ad.get("ad_type") or ""
-                        leaf_hint = leaf_for(ad_type_hint)
-                        
-                        # Extract basename without extension for searching
-                        basename_no_ext = os.path.splitext(filename)[0]
-                        
-                        # Find the actual relative path
-                        rel_path = find_image_rel(OUTPUT_ROOT, retailer, client, leaf_hint, basename_no_ext)
-                        
-                        if rel_path:
-                            filename_for_url = rel_path
-                        else:
-                            # File not found on disk - still include the ad but with empty image_url
-                            # This preserves the ad data even if screenshot failed
-                            print(f"⚠️  Ad has missing image file: {filename}")
-                            filename_for_url = None
-                    
-                    if filename_for_url:
-                        image_api = f"/api/image/{retailer}/{client}/{filename_for_url}"
-                        # Add ngrok bypass param so images load without interstitial (images can't set headers)
-                        sep = "&" if "?" in image_api else "?"
-                        image_api += f"{sep}ngrok-skip-browser-warning=true"
-                    else:
-                        image_api = ""  # Empty string indicates missing image
+                # Build media URLs (image for grid, optional video for modal)
+                media = build_media_urls_for_ad(retailer, file_client, ad)
+                
+                # Only include cards with an image for the grid (skip if no image available)
+                image_api = media.get("image_url")
+                if not image_api:
+                    continue
                 
                 # Extract advertisers - handle new array format and legacy fields
                 advertisers = ad.get("advertisers")  # New array format
@@ -752,13 +1165,18 @@ def api_ads_cards():
                     # Fallback to legacy fields
                     legacy_brand = ad.get("brand") or ad.get("advertiser") or ad.get("title")
                     advertisers = [legacy_brand] if legacy_brand else []
-                
+
+                # Filter out blocked brands (ad types that shouldn't be brand names)
+                advertisers = [adv for adv in (advertisers or []) if adv and not is_blocked_brand(adv)]
+
                 # Campaign slogan detection - words that indicate this is NOT a brand name
                 campaign_keywords = {'halloween', 'christmas', 'holiday', 'summer', 'spring', 'fall', 'winter',
                                     'grab', 'get', 'buy', 'save', 'shop', 'now', 'better', 'best', 'new', 'fresh',
                                     'treats', 'deals', 'sale', 'special', 'limited', 'exclusive', 'discover',
-                                    'shop now', 'buy now', 'save now', 'learn more', 'click here'}
-                
+                                    'shop now', 'buy now', 'save now', 'learn more', 'click here',
+                                    'digital deal', 'digital_deal', 'advertisement', 'sponsored',
+                                    'kroji holdings', 'kroji_holdings', 'kroji holding', 'kroji_holding', 'kroji'}
+
                 # If advertisers look like campaign slogans, prefer filename parsing
                 looks_like_slogan = False
                 if advertisers:
@@ -766,7 +1184,7 @@ def api_ads_cards():
                         if adv and any(keyword in adv.lower() for keyword in campaign_keywords):
                             looks_like_slogan = True
                             break
-                
+
                 # If no advertisers OR looks like slogan, try parsing from filename
                 if (not advertisers or looks_like_slogan) and filename:
                     # New taxonomy: retailer__advertiser(s)__ad_type__client__search_term__timestamp_index.ext
@@ -777,17 +1195,32 @@ def api_ads_cards():
                         # Split on + for co-branded ads
                         parsed_advertisers = advertiser_segment.split('+')
                         # Clean up (remove underscores, capitalize)
-                        advertisers = [adv.replace('_', ' ').title() for adv in parsed_advertisers if adv and adv != 'unknown']
-                
+                        parsed_advertisers = [adv.replace('_', ' ').title() for adv in parsed_advertisers if adv and adv != 'unknown']
+                        # Filter out blocked brands (ad types)
+                        advertisers = [adv for adv in parsed_advertisers if not is_blocked_brand(adv)]
+
                 # Format brand string for display
                 brand = ' + '.join(advertisers) if advertisers else "Unknown"
                 
                 # Extract message/headline
                 message = ad.get("message") or ad.get("headline") or ad.get("description") or ""
                 
-                all_cards.append({
+                # Normalize timestamp to ISO Z (UTC)
+                raw_ts = data.get("timestamp") or data.get("ts") or ""
+                run_id = data.get("run_id")
+                # Try to extract run_id from filename if not in JSON
+                if not run_id:
+                    run_id_match = re.search(r'(\d{14})', fn)
+                    if run_id_match:
+                        run_id = run_id_match.group(1)
+                
+                iso_ts = to_iso_z(raw_ts, run_id)
+                epoch_ms = iso_to_epoch_ms(iso_ts)
+                
+                # Build card with image (required) and optional video/poster
+                card = {
                     "retailer": retailer,
-                    "client": client,
+                    "client": file_client,
                     "keyword": data.get("keyword") or data.get("search_term"),
                     "ad_type": ad.get("type") or ad.get("ad_type"),
                     "brand": brand,
@@ -795,10 +1228,19 @@ def api_ads_cards():
                     "message": message,
                     "image_url": image_api,
                     "run_file": fn,
-                    "timestamp": data.get("timestamp") or data.get("ts"),
+                    "timestamp": iso_ts,  # Normalized ISO Z
+                    "timestamp_ms": epoch_ms,  # Epoch milliseconds for easy filtering
                     "featured": ad.get("featured", False),
                     "ad_index": idx  # Add index for unique identification
-                })
+                }
+                
+                # Attach optional video for modal/detail use
+                if media.get("video_url"):
+                    card["video_url"] = media["video_url"]
+                if media.get("poster_url"):
+                    card["poster_url"] = media["poster_url"]
+                
+                all_cards.append(card)
         except Exception as e:
             print(f"Error processing {fn}: {e}")
             pass
@@ -812,7 +1254,33 @@ def api_ads_cards():
             if any(advertiser_filter in adv.lower() for adv in advertisers):
                 filtered_cards.append(card)
         all_cards = filtered_cards
-    
+
+    # Filter by date range if specified (UTC-aware)
+    if start_date or end_date:
+        # Determine filter type and get UTC range
+        filter_name = "custom"  # Default to custom range
+        start_dt, end_dt = utc_range_for(filter_name, start_date, end_date)
+        
+        filtered_cards = []
+        for card in all_cards:
+            timestamp = card.get("timestamp", "")
+            if not timestamp:
+                continue
+            
+            try:
+                # Parse normalized ISO Z timestamp
+                ad_dt = parse_utc(timestamp)
+                
+                # Check if within range (inclusive)
+                if start_dt <= ad_dt <= end_dt:
+                    filtered_cards.append(card)
+            except Exception as e:
+                # Skip cards with unparseable timestamps
+                print(f"Warning: Could not parse timestamp '{timestamp}': {e}")
+                continue
+        
+        all_cards = filtered_cards
+
     # Paginate
     start = (page - 1) * page_size
     end = start + page_size
@@ -836,55 +1304,45 @@ def api_ads_cards():
 @app.route("/api/image/<retailer>/<client>/<path:filename>", methods=["GET"])
 def api_image(retailer, client, filename):
     """
-    Serve ad image with leaf-agnostic fallback.
+    Serve ad image with robust resolution for Walmart nested directories.
     
     Strategy:
-    1. Try exact path as requested
-    2. Fallback: search all allowed subfolders by basename
-    3. Try extension variants (.jpg, .jpeg, .png)
+    1. Exact match under client_root
+    2. Exact match under nested runs/<run_id>/ (Walmart)
+    3. Fuzzy match by filename across all allowed folders
     """
-    retailer = retailer.lower()
-    
-    # Decode and normalize filename
-    clean = unquote(filename).lstrip("/").replace("\\", "/")
-    base = os.path.basename(clean)
-    
-    # Get allowed subdirs for this retailer
-    try:
-        leaves = allowed_subdirs(retailer)
-    except ValueError:
-        return jsonify({"error": f"unknown retailer: {retailer}"}), 404
-    
-    # 1) Try exact path as requested
-    try:
-        exact = _safe_join(OUTPUT_ROOT, retailer, client, clean)
-        if os.path.isfile(exact):
-            return _image_response(exact)
-    except (ValueError, OSError):
-        pass
-    
-    # 2) Fallback: search all allowed subfolders for basename
-    for leaf in leaves:
-        try:
-            alt = _safe_join(OUTPUT_ROOT, retailer, client, leaf, base)
-            if os.path.isfile(alt):
-                return _image_response(alt)
-        except (ValueError, OSError):
-            continue
-    
-    # 3) Extension variants (jpg/jpeg/png) if needed
-    name, _ext = os.path.splitext(base)
-    for leaf in leaves:
-        for ext2 in (".png", ".jpg", ".jpeg", ".webp"):
-            try:
-                alt2 = _safe_join(OUTPUT_ROOT, retailer, client, leaf, name + ext2)
-                if os.path.isfile(alt2):
-                    return _image_response(alt2)
-            except (ValueError, OSError):
-                continue
-    
-    # IMPORTANT: Keep this as a real 404 for API routes (don't let SPA catch-all override)
-    return jsonify({"error": "image not found", "requested": clean}), 404
+    # Normalize
+    retailer = (retailer or "").lower()
+    client = (client or "").strip()
+    if not retailer or not client or not filename:
+        abort(400, description="Missing retailer/client/path")
+
+    # Lookup using robust resolver
+    fpath, rel = find_image_file(retailer, client, filename)
+    if not fpath or not fpath.is_file():
+        return jsonify({"error": "image not found", "requested": filename}), 404
+
+    # Content type
+    ctype = mimetypes.guess_type(str(fpath))[0] or "application/octet-stream"
+    return send_file(str(fpath), mimetype=ctype, as_attachment=False, conditional=True)
+
+@app.route("/api/video/<retailer>/<client>/<path:req_relpath>", methods=["GET"])
+def api_video(retailer, client, req_relpath):
+    """
+    Serve ad video with same robust resolution as images.
+    Supports .mp4, .webm, .mov, .m4v files.
+    """
+    retailer = (retailer or "").lower().strip()
+    client = (client or "").strip()
+    if not retailer or not client or not req_relpath:
+        abort(400, description="Missing retailer/client/path")
+
+    fpath, rel = find_image_file(retailer, client, req_relpath)
+    if not fpath or not fpath.is_file():
+        abort(404, description=f"Video not found: {req_relpath}")
+
+    ctype = "video/mp4" if str(fpath).lower().endswith(".mp4") else (mimetypes.guess_type(str(fpath))[0] or "application/octet-stream")
+    return send_file(str(fpath), mimetype=ctype, as_attachment=False, conditional=True)
 
 @app.route("/proxy-image")
 def proxy_image():

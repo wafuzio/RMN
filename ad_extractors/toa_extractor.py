@@ -65,29 +65,25 @@ class TOAExtractor(AdExtractor):
                 # Pass the HTML element to extract precise TOA dimensions and search term
                 image_paths = self.save_image_with_crop(img_url, html_element=toa_div, out_dir=client_dir, search_term=self.search_term)
                 if image_paths:
-                    result["image_path"] = image_paths["full"]
+                    # Canonical: prefer TOA crop; fallback to full (Main/)
+                    preferred = image_paths.get("toa") or image_paths.get("full")
+                    result["image_path"] = preferred
+                    # Keep type-specific key for back-compat
                     result["toa_image_path"] = image_paths.get("toa")
             except ImportError:
                 # Fall back to regular save if PIL is not available
                 result["image_path"] = self.save_image(img_url, out_dir=client_dir)
             
-            # Try to extract brand from alt text
+            # Store alt text for potential brand extraction by kroger_ad_core
             alt_text = self.extract_attribute(toa_div, "img.espot-image", "alt")
             if alt_text:
-                brand = self.extract_brand_from_text(alt_text)
-                if brand:
-                    result["brand"] = brand
+                result["alt_text"] = alt_text
         
         # Href (link URL)
         href = self.extract_attribute(toa_div, "a.espot-link", "href")
         if href:
             result["href"] = href
-            
-            # Try to extract brand from href if not already found
-            if "brand" not in result:
-                brand = self.extract_brand_from_href(href)
-                if brand:
-                    result["brand"] = brand
+            # Brand extraction will be handled by _extract_kroger_advertiser() with lexicon validation
         
         return result
 

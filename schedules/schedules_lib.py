@@ -108,6 +108,10 @@ class Schedule:
         if not isinstance(keywords, list):
             keywords = [str(keywords)]
         keywords = [k for k in (kw.strip() for kw in keywords) if k]
+        
+        # Enforce non-empty keywords (canonical requirement)
+        if not keywords or len(keywords) == 0:
+            raise ValueError(f"keywords must be a non-empty array in {path}")
 
         days = normalize_days(data.get("days", []))
         times = [validate_hhmm(t) for t in data.get("times", [])]

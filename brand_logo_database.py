@@ -12,6 +12,8 @@ import requests
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any
+from utils.time_utils import now_iso_z
+from core.brands import canonicalize
 
 
 class BrandLogoDatabase:
@@ -50,7 +52,7 @@ class BrandLogoDatabase:
     
     def _save_database(self):
         """Save the brand logo database to JSON"""
-        self.database["metadata"]["last_updated"] = datetime.now().isoformat()
+        self.database["metadata"]["last_updated"] = now_iso_z()
         self.database["metadata"]["total_brands"] = len(self.database["brands"])
         
         with open(self.db_file, 'w', encoding='utf-8') as f:
@@ -158,7 +160,19 @@ class BrandLogoDatabase:
         Returns:
             True if logo was added/updated, False otherwise
         """
-        brand_key = self._normalize_brand_name(brand)
+        # NEVER add "unknown" to logo database
+        if not brand or brand.lower() == 'unknown':
+            return False
+        
+        # Canonicalize brand name using lexicon
+        canon = canonicalize(brand) if brand else None
+        display_name = canon or brand
+        
+        # Double-check after canonicalization
+        if display_name.lower() == 'unknown':
+            return False
+        
+        brand_key = self._normalize_brand_name(display_name)
         
         # Check if we already have this logo
         if brand_key in self.database["brands"]:
@@ -167,7 +181,7 @@ class BrandLogoDatabase:
             if existing.get("logo_url") == logo_url:
                 if retailer not in existing.get("retailers", []):
                     existing["retailers"].append(retailer)
-                existing["last_seen"] = datetime.now().isoformat()
+                existing["last_seen"] = now_iso_z()
                 self._save_database()
                 return True
         
@@ -178,12 +192,12 @@ class BrandLogoDatabase:
         
         # Add to database
         self.database["brands"][brand_key] = {
-            "brand_name": brand,  # Original brand name with proper casing
+            "brand_name": display_name,  # Canonical brand name with proper casing
             "logo_url": logo_url,  # Original URL
             "logo_file": logo_path,  # Local file path
             "retailers": [retailer],
-            "first_seen": datetime.now().isoformat(),
-            "last_seen": datetime.now().isoformat(),
+            "first_seen": now_iso_z(),
+            "last_seen": now_iso_z(),
             "metadata": metadata or {}
         }
         

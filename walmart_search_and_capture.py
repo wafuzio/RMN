@@ -13,10 +13,20 @@ import inspect
 import re
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
-from typing import List, Dict, Optional, Callable, Tuple
+from datetime import datetime, timezone
+from typing import List, Dict, Optional, Callable, Tuple, Any
 from urllib.parse import urlparse, parse_qs, unquote, quote_plus
+from pathlib import Path
 from playwright.sync_api import sync_playwright, Page, BrowserContext, Browser
+
+# Canonical timestamp helper
+from utils.time_utils import now_iso_z
+
+# Folder mapping/validation
+from utils.path_taxonomy import folder_for_adtype, validate_folder
+
+# Brand canonicalization
+from core.brands import canonicalize
 
 # Import standardized filename generation
 try:
@@ -31,6 +41,12 @@ try:
     from brand_logo_database import BrandLogoDatabase
 except ImportError:
     BrandLogoDatabase = None
+
+# Import brand lexicon canonicalization
+try:
+    from core.brands import canonicalize as canonicalize_brand
+except ImportError:
+    canonicalize_brand = None
 # --- BEGIN: debug configuration ---
 @dataclass
 class DebugConfig:
@@ -250,7 +266,196 @@ def safe_filename(name: str) -> str:
     return "".join(c if c.isalnum() or c in ("-", "_", ".") else "_" for c in name)
 
 
-def _write_run_report(base_dir: str, report: dict):
+# --- BEGIN: Walmart run helpers (canonical schema and artifact writing) ---
+
+def build_run_id() -> str:
+    """
+    Build 14-digit run ID in UTC, e.g., 20251026161402.
+    Walmart uses nested timestamp directories: runs/<run_id>/
+    """
+    return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+
+def build_run_payload(retailer: str, client: str, keyword: str, run_id: str, ads: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Canonical run JSON payload:
+    {
+      "retailer": "...",
+      "client": "...",
+      "keyword": "...",
+      "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+      "run_id": "YYYYMMDDHHMMSS",
+      "ads": [ {...}, ... ]
+    }
+    """
+    return {
+        "retailer": retailer,
+        "client": client,
+        "keyword": keyword,
+        "timestamp": now_iso_z(),  # ISO 8601 with Z
+        "run_id": run_id,
+        "ads": ads,
+    }
+
+def save_run_artifacts(client_root: Path, run_id: str, html_content: str, run_payload: Dict[str, Any]) -> Path:
+    """
+    Save Walmart run artifacts under:
+      <client_root>/runs/<run_id>/
+        - search_results_<run_id>.html
+        - run_results_<run_id>.json
+    client_root must be the path: output/walmart/<client>
+    """
+    run_dir = client_root / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save HTML
+    (run_dir / f"search_results_{run_id}.html").write_text(html_content, encoding="utf-8")
+
+    # Save canonical JSON
+    (run_dir / f"run_results_{run_id}.json").write_text(json.dumps(run_payload, indent=2, ensure_ascii=False))
+
+    return run_dir
+
+# --- END: Walmart run helpers ---
+
+
+# --- BEGIN: Walmart ad object builder (canonical) ---
+
+def _ensure_str_or_none(val: Optional[str]) -> Optional[str]:
+    """Convert value to string or None, stripping whitespace."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    return s if s else None
+
+def _relative_image_path(saved_path: Path, client_root: Path) -> str:
+    """
+    Return path like 'SBA/walmart__brand__sba__client__kw__D2025-10-26_T16-14.02_1.png'
+    saved_path MUST be under output/walmart/<client> (client_root).
+    """
+    return str(saved_path.relative_to(client_root))
+
+def build_ad_object(
+    run_id: str,
+    ad_index: int,
+    ad_type: str,                  # "SBA" | "SBV" | "Tile_Takeover"
+    client_root: Path,             # output/walmart/<client>
+    saved_path: Path,              # absolute path to saved image file
+    brand_name: Optional[str] = None,
+    ad_title: Optional[str] = None,
+    cta_text: Optional[str] = None,
+    destination_url: Optional[str] = None,
+    cdn_image_url: Optional[str] = None,
+    slot_index: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Build a canonical ad object with safe defaults.
+    """
+    # Defensive checks
+    assert ad_type in {"SBA", "SBV", "Tile_Takeover"}, f"Unexpected ad_type: {ad_type}"
+    folder = folder_for_adtype("walmart", ad_type)
+    assert validate_folder("walmart", folder), f"Invalid Walmart folder: {folder}"
+
+    rel_path = _relative_image_path(saved_path, client_root)
+    ad_id = f"walmart-{run_id}-{ad_index}"
+
+    # Canonicalize brand name using lexicon
+    raw_brand = _ensure_str_or_none(brand_name)
+    canon_brand = canonicalize(raw_brand) if raw_brand else None
+
+    ad_obj: Dict[str, Any] = {
+        "id": ad_id,
+        "type": ad_type,                                 # exact canonical type
+        "brand": canon_brand or raw_brand,               # prefer canonical; fallback to raw
+        "brand_logo": None,                              # to be enriched later
+        "title": _ensure_str_or_none(ad_title),
+        "description": None,                             # capture later if you have it
+        "cta": _ensure_str_or_none(cta_text),
+        "href": _ensure_str_or_none(destination_url),
+        "image_url": _ensure_str_or_none(cdn_image_url), # original CDN, if known
+        "image_path": rel_path,                          # relative to client_root
+        "products": [],                                  # reserved for future
+        "metadata": {
+            "slot": slot_index,
+        },
+    }
+    return ad_obj
+
+# --- END: Walmart ad object builder ---
+
+
+def _extract_brand_from_title(title: str) -> Optional[str]:
+    """
+    Extract brand name from product title.
+    Flexible approach - brand could be 1-3 words at the start.
+    
+    Examples:
+      "Keto Pint Salted Caramel..." -> "Keto Pint"
+      "Breyers Ice Cream..." -> "Breyers"
+      "Ben & Jerry's Cherry Garcia..." -> "Ben & Jerry's"
+    """
+    if not title or len(title) < 2:
+        return None
+    
+    # Split into words
+    words = title.split()
+    if not words:
+        return None
+    
+    # Common patterns for brand extraction:
+    # 1. Single capitalized word (e.g., "Breyers")
+    # 2. Two words, both capitalized (e.g., "Keto Pint", "Blue Bunny")
+    # 3. Brand with & (e.g., "Ben & Jerry's")
+    # 4. Brand with apostrophe (e.g., "Reese's")
+    
+    # Try 1-3 words, stop at common product descriptors
+    stop_words = {
+        'ice', 'cream', 'bar', 'bars', 'pint', 'pints', 'oz', 'fl', 'count',
+        'pack', 'box', 'tub', 'carton', 'sandwich', 'cone', 'cones',
+        'chocolate', 'vanilla', 'strawberry', 'caramel', 'cookie', 'fudge',
+        'with', 'in', 'of', 'the', 'and', 'or', 'for', 'no', 'added', 'sugar',
+        'low', 'fat', 'free', 'dairy', 'non', 'organic', 'natural',
+        'gelato', 'sorbet', 'yogurt', 'butter', 'cups', 'cup', 'sea', 'salt',
+        'sweet', 'freedom', 'keto', 'top', 'cherry', 'garcia', 'peanut'
+    }
+    
+    brand_words = []
+    for i, word in enumerate(words[:4]):  # Check first 4 words max
+        word_lower = word.lower().rstrip(',')
+        
+        # Stop if we hit a common product descriptor
+        if word_lower in stop_words and i > 0:
+            break
+        
+        # Include word if:
+        # - It's capitalized (brand names are usually capitalized)
+        # - It's a connector (&, 'n, ')
+        # - It's part of a possessive (ends with 's or ')
+        if word[0].isupper() or word in ['&', "'n", "n'"] or word.endswith("'s") or word.endswith("'"):
+            brand_words.append(word)
+            # Limit to 3 words max for brand
+            if len(brand_words) >= 3:
+                break
+        else:
+            # Stop at first non-capitalized word (unless it's a connector)
+            if i > 0:  # Allow at least one word
+                break
+    
+    if not brand_words:
+        # Fallback: just use first word if it's capitalized
+        if words[0][0].isupper():
+            return words[0].rstrip(',')
+        return None
+    
+    # Join brand words
+    brand = ' '.join(brand_words).strip()
+    
+    # Clean up trailing punctuation
+    brand = brand.rstrip('.,;:')
+    
+    return brand if len(brand) > 1 else None
+
+
+def _write_run_report(base_dir, report): 
     """Write both JSON and Markdown report into the run dir."""
     try:
         # JSON
@@ -688,12 +893,14 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
     return browser, ctx, page, False
 
 
-def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, meta: Dict, SL=None, client_name: str = None, client_root: str = None, timestamp: str = None, filter_fn=None) -> Tuple[int, List[str]]:
+def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, meta: Dict, SL=None, client_name: str = None, client_root: str = None, timestamp: str = None, filter_fn=None, run_id: str = None, ads_list: List[Dict[str, Any]] = None) -> Tuple[int, List[str]]:
     """
     Capture ad elements with optional filtering.
     
     Args:
         filter_fn: Optional function(item) -> bool to filter elements before capturing
+        run_id: 14-digit run ID for canonical ad objects
+        ads_list: List to append canonical ad objects to
     """
     shots: List[str] = []
     loc = page.locator(css)
@@ -744,7 +951,17 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                             full_text = sponsored_text.text_content()
                             match = re.search(r'Sponsored by\s+(.+)', full_text, re.IGNORECASE)
                             if match:
-                                advertiser = match.group(1).strip()
+                                extracted_text = match.group(1).strip()
+                                # Try lexicon match first
+                                if canonicalize_brand:
+                                    canonical = canonicalize_brand(extracted_text)
+                                    if canonical:
+                                        advertiser = canonical
+                                        if SL: SL.log("sba_brand_lexicon_match", brand=advertiser, text=extracted_text)
+                                    else:
+                                        advertiser = extracted_text
+                                else:
+                                    advertiser = extracted_text
                         
                         # Method 2: For SBV/video ads, try multiple extraction strategies
                         if not advertiser and label == 'sbv':
@@ -813,7 +1030,17 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                                 href = link.get_attribute('href') or ''
                                 brand_match = re.search(r'facet[^&]*brand[^&]*[:%]([^&%]+)', href, re.IGNORECASE)
                                 if brand_match:
-                                    advertiser = brand_match.group(1).replace('%20', ' ').replace('+', ' ')
+                                    extracted_text = brand_match.group(1).replace('%20', ' ').replace('+', ' ')
+                                    # Try lexicon match
+                                    if canonicalize_brand:
+                                        canonical = canonicalize_brand(extracted_text)
+                                        if canonical:
+                                            advertiser = canonical
+                                            if SL: SL.log("brand_lexicon_match_facet", brand=advertiser, text=extracted_text)
+                                        else:
+                                            advertiser = extracted_text
+                                    else:
+                                        advertiser = extracted_text
                                     break
                         
                         # Method 4: For tile takeovers, extract from product brand
@@ -904,15 +1131,20 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                         if SL: SL.log("advertiser_extraction_error", error=str(e), label=label, index=i+1)
                         advertiser = "unknown"  # Ensure we have a value even on error
                     
-                    # Map label to ad type folder name
+                    # Map label to ad type folder name (canonical: SBA, SBV, Tile_Takeover only)
                     ad_type_map = {
                         'sba': 'SBA',
                         'sbv': 'SBV',
                         'tile_takeover': 'Tile_Takeover',
-                        'top_banner': 'Top_Banner',
-                        'marquee_banner': 'Marquee_Banner'
+                        # top_banner and marquee_banner are future features (not yet implemented)
                     }
                     ad_type_folder = ad_type_map.get(label, label.title())
+                    
+                    # Validate folder is allowed for Walmart
+                    from utils.path_taxonomy import validate_folder
+                    if not validate_folder('walmart', ad_type_folder):
+                        if SL: SL.log("invalid_folder", label=label, folder=ad_type_folder, reason="not_in_allowed_folders")
+                        continue  # Skip this ad if folder not allowed
                     # Save images to client_root (like Kroger), metadata goes to base_dir/runs
                     ad_folder = os.path.join(client_root, ad_type_folder)
                     print(f"[DEBUG] client_root={client_root}, ad_type_folder={ad_type_folder}, ad_folder={ad_folder}, advertiser={advertiser}")
@@ -943,20 +1175,51 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
             item.screenshot(path=out)
             shots.append(out)
             
+            # Build and append canonical ad object (if run_id and ads_list provided)
+            if run_id and ads_list is not None and client_root and client_name:
+                try:
+                    # Extract destination URL
+                    destination_url = None
+                    try:
+                        ahref = item.locator("a[href]").first
+                        if ahref.count() > 0:
+                            href = ahref.get_attribute("href") or ""
+                            if href:
+                                destination_url = _parse_walmart_redirect(href)
+                    except Exception:
+                        pass
+                    
+                    # Build ad object
+                    ad_index = len(ads_list) + 1
+                    saved_path = Path(out)
+                    client_root_path = Path(client_root)
+                    
+                    ad_obj = build_ad_object(
+                        run_id=run_id,
+                        ad_index=ad_index,
+                        ad_type=ad_type_folder,  # "SBA" | "SBV" | "Tile_Takeover"
+                        client_root=client_root_path,
+                        saved_path=saved_path,
+                        brand_name=advertiser if advertiser != "unknown" else None,
+                        ad_title=None,  # TODO: extract title when available
+                        cta_text=None,  # TODO: extract CTA when available
+                        destination_url=destination_url,
+                        cdn_image_url=None,  # TODO: extract CDN URL when available
+                        slot_index=i,  # grid position
+                    )
+                    ads_list.append(ad_obj)
+                    if SL: SL.log("ad_object_built", ad_id=ad_obj["id"], type=ad_obj["type"], brand=ad_obj["brand"])
+                except Exception as e:
+                    if SL: SL.log("ad_object_build_error", error=str(e), label=label, index=i+1)
+            
             # Store advertiser in metadata with ad type and index
             if advertiser:
                 ad_key = f"{label}_{i+1}"  # e.g., "sba_1", "tile_takeover_2"
                 meta.setdefault("advertisers", {})[ad_key] = advertiser
             
-            # attempt to store a landing URL
-            try:
-                ahref = item.locator("a[href]").first
-                if ahref.count() > 0:
-                    href = ahref.get_attribute("href") or ""
-                    if href:
-                        meta.setdefault("links", []).append(_parse_walmart_redirect(href))
-            except Exception:
-                pass
+            # Store landing URL in legacy metadata
+            if destination_url:
+                meta.setdefault("links", []).append(destination_url)
             # Throttle per-element operations to avoid rapid-fire actions
             time.sleep(random.uniform(0.12, 0.28))
         except Exception:
@@ -1864,6 +2127,11 @@ def search_and_capture(
         pass  # Will use fallback naming if extraction fails
     
     print(f"[EXTRACTION] client_name={client_name}, client_root={client_root}, run_timestamp={run_timestamp}")
+    
+    # Initialize canonical run tracking (retailer will be set later from DISPLAY_NAME)
+    run_id = run_timestamp if run_timestamp else build_run_id()
+    ads_list: List[Dict[str, Any]] = []
+    print(f"[CANONICAL] run_id={run_id}, will collect ads into canonical schema")
 
     # 3) WALMART_PROFILE_DIR must exist and be writable (stable persistent profile)
     resolved_profile = profile_dir or os.environ.get(PROFILE_ENV)
@@ -1918,7 +2186,7 @@ def search_and_capture(
     artifacts = {"steps_log": SL.path, "trace_zip": None, "no_results_html": None, 
                  "no_results_png": None, "saved_html": None, "meta_json": None}
     
-    retailer = DISPLAY_NAME
+    retailer = "walmart"  # Canonical lowercase for JSON schema (DISPLAY_NAME is for UI)
     shots: List[str] = []
     assets: List[str] = []
     meta: Dict = {"links": [], "videos": []}
@@ -2605,33 +2873,18 @@ def search_and_capture(
             except Exception as e:
                 say("warn", f"[{retailer}] HTML save failed: {e}")
             
-            # Post-process saved HTML into Kroger-shaped run_results JSON
-            try:
-                # Add project root to import path if needed
-                project_root = os.path.dirname(os.path.abspath(__file__))
-                if project_root not in sys.path:
-                    sys.path.insert(0, project_root)
-                from process_saved_html import process_html_to_run_results
-                created_json = process_html_to_run_results(
-                    runs_root=base_dir,
-                    retailer="walmart",
-                    html_paths=[html_path],
-                )
-                if created_json:
-                    SL.log("run_results_created", files=created_json)
-                    say("info", f"[{retailer}] Created run_results JSON: {len(created_json)} file(s)")
-            except Exception as e:
-                SL.log("run_results_post_process_error", error=str(e))
-                say("warn", f"[{retailer}] run_results post-process failed: {e}")
+            # Save canonical JSON schema (will be populated after ad capture)
+            # Note: ads_list will be built during ad capture below, then saved at the end
+            SL.log("canonical_json_prep", run_id=run_id, client=client_name, keyword=keyword)
             
-            # 1) Programmatic banners
-            n, s = _capture_elements(page, base_dir, keyword, "top_banner", SELECTORS["top_banner"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp)
-            shots.extend(s)
-            if n:
-                say("info", f"[{retailer}] Top banner found ({n})")
+            # 1) Programmatic banners (top_banner/marquee_banner - future feature, not yet implemented)
+            # n, s = _capture_elements(page, base_dir, keyword, "top_banner", SELECTORS["top_banner"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp)
+            # shots.extend(s)
+            # if n:
+            #     say("info", f"[{retailer}] Top banner found ({n})")
             
             # 2) SBA
-            n, s = _capture_elements(page, base_dir, keyword, "sba", SELECTORS["sba"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp)
+            n, s = _capture_elements(page, base_dir, keyword, "sba", SELECTORS["sba"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, run_id=run_id, ads_list=ads_list)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] SBA found ({n})")
@@ -2647,7 +2900,7 @@ def search_and_capture(
                     # If we can't determine, skip it (safer to miss than capture organic)
                     return False
             
-            n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, filter_fn=is_sponsored_tile)
+            n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, filter_fn=is_sponsored_tile, run_id=run_id, ads_list=ads_list)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] Sponsored tile takeover found ({n})")
@@ -2667,28 +2920,56 @@ def search_and_capture(
                     advertiser = None
                     try:
                         # Method 1: Extract from first product in carousel (MOST RELIABLE)
-                        # This matches the HTML parser's approach
+                        # Try both old and new product tile selectors
                         if not advertiser:
                             try:
-                                products = mod.locator('[data-testid^="item-stack-"]').all()
+                                # Try new selector first (search-in-grid-*)
+                                products = mod.locator('[data-testid^="search-in-grid-"]').all()
+                                
+                                # Fallback to old selector (item-stack-*)
+                                if not products:
+                                    products = mod.locator('[data-testid^="item-stack-"]').all()
+                                
                                 if products:
                                     first_product = products[0]
-                                    # Try product brand element
+                                    
+                                    # Try product brand element (old structure)
                                     brand_elem = first_product.locator('[data-automation-id="product-brand"]').first
                                     if brand_elem.count() > 0:
                                         advertiser = brand_elem.inner_text().strip()
                                     
-                                    # Alternative: extract from product title
+                                    # Try product title element (old structure)
                                     if not advertiser:
                                         product_title = first_product.locator('[data-automation-id="product-title"]').first
                                         if product_title.count() > 0:
                                             title_text = product_title.inner_text().strip()
-                                            # First word is usually the brand
-                                            brand_parts = title_text.split()
-                                            if brand_parts:
-                                                advertiser = brand_parts[0]
+                                            # Extract brand from title (flexible - could be 1-3 words)
+                                            advertiser = _extract_brand_from_title(title_text)
                                     
-                                    # Alternative: extract from first product link URL (matches HTML parser)
+                                    # Try span elements (new structure - search-in-grid-*)
+                                    if not advertiser:
+                                        # Look for product title in spans with common classes
+                                        span_selectors = ['span.w_iUH7', 'span.w_V_DM', 'span[class*="product"]']
+                                        for selector in span_selectors:
+                                            span = first_product.locator(selector).first
+                                            if span.count() > 0:
+                                                title_text = span.inner_text().strip()
+                                                if title_text and len(title_text) > 5:
+                                                    # Try lexicon match first (most accurate)
+                                                    if canonicalize_brand:
+                                                        canonical = canonicalize_brand(title_text)
+                                                        if canonical:
+                                                            advertiser = canonical
+                                                            if SL: SL.log("sbv_brand_lexicon_match", brand=advertiser, title=title_text[:50])
+                                                            break
+                                                    # Fallback to title extraction
+                                                    if not advertiser:
+                                                        advertiser = _extract_brand_from_title(title_text)
+                                                        if advertiser:
+                                                            if SL: SL.log("sbv_brand_title_extract", brand=advertiser, title=title_text[:50])
+                                                            break
+                                    
+                                    # Try product link URL (works for both structures)
                                     if not advertiser:
                                         product_link = first_product.locator('a[href*="/ip/"]').first
                                         if product_link.count() > 0:
@@ -2741,6 +3022,40 @@ def search_and_capture(
                     
                     mod.screenshot(path=out)
                     shots.append(out)
+                    
+                    # Build and append canonical ad object for SBV
+                    if run_id and ads_list is not None and client_root and client_name:
+                        try:
+                            # Extract video URL
+                            video_url = None
+                            try:
+                                v = mod.locator("video").first
+                                if v.count() > 0:
+                                    video_url = v.get_attribute("src") or None
+                            except Exception:
+                                pass
+                            
+                            ad_index = len(ads_list) + 1
+                            saved_path = Path(out)
+                            client_root_path = Path(client_root)
+                            
+                            ad_obj = build_ad_object(
+                                run_id=run_id,
+                                ad_index=ad_index,
+                                ad_type="SBV",
+                                client_root=client_root_path,
+                                saved_path=saved_path,
+                                brand_name=advertiser if advertiser != "unknown" else None,
+                                ad_title=None,  # TODO: extract title when available
+                                cta_text=None,  # TODO: extract CTA when available
+                                destination_url=None,  # TODO: extract destination when available
+                                cdn_image_url=video_url,  # Store video URL in image_url for now
+                                slot_index=i,
+                            )
+                            ads_list.append(ad_obj)
+                            if SL: SL.log("ad_object_built", ad_id=ad_obj["id"], type=ad_obj["type"], brand=ad_obj["brand"])
+                        except Exception as e:
+                            if SL: SL.log("ad_object_build_error", error=str(e), label="sbv", index=i+1)
                     
                     # Store advertiser in metadata with ad type and index
                     if advertiser:
@@ -2922,6 +3237,44 @@ def search_and_capture(
         SL.log("run_report_paths", **paths)
     
     SL.log("run_complete", html_saved=html_saved, shots_count=len(shots), assets_count=len(assets))
+    
+    # Save canonical JSON schema
+    try:
+        if client_root and client_name:
+            # Build canonical payload with collected ads
+            # ads_list was populated during capture (SBA, SBV, Tile_Takeover)
+            payload = build_run_payload(
+                retailer=retailer,
+                client=client_name,
+                keyword=keyword,
+                run_id=run_id,
+                ads=ads_list  # Populated during ad capture
+            )
+            
+            # Save to Walmart's nested structure: output/walmart/<client>/runs/<run_id>/
+            # Read HTML from saved file if content variable not available
+            html_content = ""
+            if 'content' in locals():
+                html_content = content
+            elif 'html_path' in locals() and os.path.exists(html_path):
+                try:
+                    with open(html_path, 'r', encoding='utf-8') as f:
+                        html_content = f.read()
+                except:
+                    pass
+            
+            run_dir = save_run_artifacts(
+                client_root=Path(client_root),
+                run_id=run_id,
+                html_content=html_content,
+                run_payload=payload
+            )
+            
+            SL.log("canonical_json_saved", run_dir=str(run_dir), ads_count=len(ads_list))
+            say("info", f"[{retailer}] Canonical JSON saved: {run_dir}/run_results_{run_id}.json")
+    except Exception as e:
+        SL.log("canonical_json_error", error=str(e))
+        say("warn", f"[{retailer}] Failed to save canonical JSON: {e}")
     
     # Final summary
     summary = MT.summary()
