@@ -26,6 +26,8 @@ type ViewState = { type: 'detail' } | { type: 'retailer-ads'; retailer: string }
 
 export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetailModalProps) {
   const [viewState, setViewState] = useState<ViewState>({ type: 'detail' });
+  const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
+  const [competitorColorMap, setCompetitorColorMap] = useState<Map<string, string>>(new Map());
 
   const { data: brandDetail, isLoading, error } = useQuery({
     queryKey: ["brand-detail", brand, retailers],
@@ -37,6 +39,32 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
       if (!response.ok) throw new Error("Failed to fetch brand details");
       return response.json() as Promise<BrandDetail>;
     },
+  });
+
+  const { data: competitorDetails } = useQuery({
+    queryKey: ["competitor-details", Array.from(selectedCompetitors), retailers],
+    queryFn: async () => {
+      if (selectedCompetitors.size === 0) return {};
+
+      const retailerParam = retailers.join(',');
+      const details: Record<string, BrandDetail> = {};
+
+      for (const competitorBrand of selectedCompetitors) {
+        try {
+          const response = await fetch(
+            `/api/brand-details?brand=${encodeURIComponent(competitorBrand)}&retailers=${encodeURIComponent(retailerParam)}`
+          );
+          if (response.ok) {
+            details[competitorBrand] = await response.json();
+          }
+        } catch (err) {
+          console.error(`Failed to fetch competitor details for ${competitorBrand}:`, err);
+        }
+      }
+
+      return details;
+    },
+    enabled: selectedCompetitors.size > 0,
   });
 
   const { data: filteredAds, isLoading: adsLoading } = useQuery({
@@ -81,6 +109,68 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
   });
 
   const handleGoBack = () => setViewState({ type: 'detail' });
+
+  const toggleCompetitor = (competitorBrand: string) => {
+    setSelectedCompetitors(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(competitorBrand)) {
+        newSet.delete(competitorBrand);
+      } else {
+        newSet.add(competitorBrand);
+        // Assign a locked color to this competitor on first selection
+        if (!competitorColorMap.has(competitorBrand)) {
+          setCompetitorColorMap(prevMap => {
+            const newMap = new Map(prevMap);
+            const colorIndex = newMap.size;
+            newMap.set(competitorBrand, competitorColors[colorIndex % competitorColors.length]);
+            return newMap;
+          });
+        }
+      }
+      return newSet;
+    });
+  };
+
+  // Color palette for competitors - colors that blend nicely with transparency
+  const competitorColors = [
+    '#e91e63', // Magenta/Pink
+    '#fbbf24', // Amber/Yellow
+    '#06b6d4', // Cyan
+    '#f97316', // Orange
+    '#a855f7', // Purple
+    '#ec4899', // Rose
+  ];
+
+  const getCompetitorColor = (competitorBrand: string): string => {
+    return competitorColorMap.get(competitorBrand) || competitorColors[0];
+  };
+
+  // Merge monthly activity data from brand and competitors
+  const mergedMonthlyData = () => {
+    if (!brandDetail?.monthly_activity) return [];
+
+    // Start with brand's data
+    const monthMap = new Map<string, Record<string, number>>();
+    brandDetail.monthly_activity.forEach(item => {
+      monthMap.set(item.month, { [brand]: item.count });
+    });
+
+    // Add competitor data
+    if (competitorDetails) {
+      Object.entries(competitorDetails).forEach(([compBrand, compDetail]) => {
+        (compDetail.monthly_activity || []).forEach(item => {
+          const existing = monthMap.get(item.month) || {};
+          monthMap.set(item.month, { ...existing, [compBrand]: item.count });
+        });
+      });
+    }
+
+    // Convert to array
+    return Array.from(monthMap.entries()).map(([month, data]) => ({
+      month,
+      ...data,
+    }));
+  };
 
   return (
     <Dialog open={true} onOpenChange={onOpenChange}>
@@ -189,20 +279,35 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
             {brandDetail.top_competitors.length > 0 && (
               <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-3">Top Competitors on Keywords</h3>
+                <p className="text-xs text-gray-600 mb-2">Click a competitor to compare activity on the chart</p>
                 <div className="space-y-2">
-                  {brandDetail.top_competitors.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-3 bg-orange-50 rounded-lg p-2 text-sm">
+                  {brandDetail.top_competitors.map((item, idx) => {
+                    const isSelected = selectedCompetitors.has(item.brand);
+                    const color = getCompetitorColor(item.brand);
+                    return (
+                    <button
+                      key={idx}
+                      onClick={() => toggleCompetitor(item.brand)}
+                      className="w-full flex items-center gap-3 rounded-lg p-2 text-sm transition-all hover:bg-gray-100"
+                      style={isSelected ? {
+                        backgroundColor: `${color}20`,
+                        border: `2px solid ${color}`,
+                      } : {
+                        backgroundColor: '#f3f4f6',
+                      }}
+                    >
                       <div className="h-8 w-8 flex-shrink-0">
                         <BrandLogo brand={item.brand} className="h-8 w-8" />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 text-left">
                         <p className="font-medium text-gray-900">
                           {item.brand} <span className="text-gray-500 font-normal">— {item.keyword}</span>
                         </p>
                       </div>
                       <span className="text-gray-600 bg-white px-2 py-1 rounded text-xs flex-shrink-0">{item.count}</span>
-                    </div>
-                  ))}
+                    </button>
+                  );
+                  })}
                 </div>
               </div>
             )}
@@ -212,7 +317,7 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
                 <h3 className="text-lg font-bold text-gray-900 mb-3">Ad Activity - Last 12 Months</h3>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={brandDetail.monthly_activity}>
+                    <BarChart data={mergedMonthlyData()} barGap={selectedCompetitors.size > 0 ? "-20%" : "10%"}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis
                         dataKey="month"
@@ -228,9 +333,27 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
                           border: "1px solid #e5e7eb",
                           borderRadius: "6px"
                         }}
-                        formatter={(value) => [value, "Ads"]}
+                        formatter={(value, name) => [value, name === brand ? `${brand} (Original)` : name]}
                       />
-                      <Bar dataKey="count" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                      {/* Original brand in blue with transparency */}
+                      <Bar
+                        dataKey={brand}
+                        fill="#3b82f6"
+                        radius={[8, 8, 0, 0]}
+                        fillOpacity={0.6}
+                        name={brand}
+                      />
+                      {/* Competitors with distinct colors and transparency for blending */}
+                      {Array.from(selectedCompetitors).map((competitorBrand) => (
+                        <Bar
+                          key={competitorBrand}
+                          dataKey={competitorBrand}
+                          fill={getCompetitorColor(competitorBrand)}
+                          radius={[8, 8, 0, 0]}
+                          fillOpacity={0.6}
+                          name={competitorBrand}
+                        />
+                      ))}
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
