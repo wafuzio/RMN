@@ -1,0 +1,347 @@
+================================================================================
+INSTACART CANONICAL MIGRATION - AFFECTED SCRIPTS & INTEGRATIONS
+================================================================================
+
+This document identifies all scripts that interact with Instacart data and
+need to be verified/updated when migrating to canonical schema.
+
+================================================================================
+CATEGORY 1: CORE SCRAPING & DATA GENERATION
+================================================================================
+
+1. instacart_search_and_capture.py ⚠️ PRIMARY MIGRATION TARGET
+   - Main scraper that generates JSON files
+   - Currently uses legacy structure: {"results": [{"ads": [...]}]}
+   - NEEDS: Migration to canonical schema
+   - INTEGRATIONS:
+     * BrandLogoDatabase - saves logos during scraping
+     * filename_utils.generate_ad_filename() - generates filenames
+     * utils/time_utils.now_iso_z() - NEEDS: timestamp normalization
+
+2. retailers/instacart/adapter.py ✅ ADAPTER LAYER
+   - Calls instacart_search_and_capture.py
+   - collect_pairs_for_run() - expects runs/ directory structure
+   - extract_images() - counts screenshots
+   - NEEDS: Update collect_pairs_for_run() to match canonical paths
+   - CURRENT: Looks for "run_results_*.json" in runs/ ✅ (already correct)
+   - CURRENT: Expects HTML files as "search_results_*.html" ⚠️ (verify)
+
+================================================================================
+CATEGORY 2: BRAND LOGO & LEXICON INTEGRATION
+================================================================================
+
+3. brand_logo_database.py ✅ BRAND LOGO MANAGER
+   - Used BY instacart_search_and_capture.py during scraping
+   - add_brand_logo(brand, logo_url, retailer, metadata)
+   - INTEGRATION POINT:
+     * Instacart scraper calls: logo_db.add_brand_logo(
+         brand=advertiser,
+         logo_url=logo_src,
+         retailer="instacart",
+         metadata={"ad_type": actual_ad_type, "keyword": keyword}
+       )
+   - IMPACT: ✅ NO CHANGES NEEDED
+     * Works with brand names (strings)
+     * Doesn't depend on JSON structure
+     * Already uses now_iso_z() for timestamps
+
+4. brand_logo_database.py::sync_to_lexicon() ✅ LEXICON SYNC
+   - Syncs brands from logo database to config/brands.json
+   - IMPACT: ✅ NO CHANGES NEEDED
+     * Independent of JSON structure
+     * Works with brand names only
+
+5. config/brands.json ✅ BRAND LEXICON
+   - Canonical brand names and synonyms
+   - Used by core/brands.py::canonicalize()
+   - IMPACT: ✅ NO CHANGES NEEDED
+     * Static configuration file
+     * Not affected by JSON structure changes
+
+================================================================================
+CATEGORY 3: IMAGE PATH MANAGEMENT
+================================================================================
+
+6. scripts/auto_add_image_paths.py ⚠️ IMAGE PATH RECONCILIATION
+   - Automatically adds image_path to ads in JSON files
+   - CURRENT: Supports kroger, walmart, instacart (line 170)
+   - CURRENT: Expects nested structure: data["results"][0]["ads"]
+   - NEEDS: Update to handle canonical flat structure: data["ads"]
+   - LOCATION: Lines 96-165 (process_json_file function)
+   - CHANGE NEEDED:
+     ```python
+     # FROM:
+     if "results" in data and data["results"]:
+         ads = data["results"][0].get("ads", [])
+     
+     # TO (support both):
+     if "ads" in data:  # Canonical
+         ads = data["ads"]
+     elif "results" in data and data["results"]:  # Legacy
+         ads = data["results"][0].get("ads", [])
+     ```
+
+7. scripts/fix_missing_image_paths.py ⚠️ IMAGE PATH FIXER
+   - Similar to auto_add_image_paths.py
+   - NEEDS: Same changes as auto_add_image_paths.py
+   - CHECK: If it handles Instacart specifically
+
+8. scripts/reextract_missing_images.py ⚠️ IMAGE RE-EXTRACTION
+   - Re-extracts images for ads missing screenshots
+   - NEEDS: Verify it handles Instacart JSON structure
+   - CHECK: If it uses results[] or ads[] structure
+
+================================================================================
+CATEGORY 4: BACKEND API
+================================================================================
+
+9. web/builder_server_v2.py ✅ FLASK API
+   - Serves ad cards to Builder.io frontend
+   - CURRENT: Already handles both structures (lines 884-888):
+     ```python
+     if "ads" in data:
+         ads = data["ads"]
+     elif "results" in data:
+         for result in data.get("results", []):
+             ads.extend(result.get("ads", []))
+     ```
+   - CURRENT: Has Instacart-specific logic:
+     * Ad type mapping (lines 551-554)
+     * Sponsored Label filtering (lines 936-938)
+     * Retailer logo (line 1319)
+   - IMPACT: ✅ ALREADY SUPPORTS BOTH STRUCTURES
+   - VERIFY: Test with canonical Instacart data
+
+================================================================================
+CATEGORY 5: MAINTENANCE & MIGRATION TOOLS
+================================================================================
+
+10. scripts/maintenance/migrate_taxonomy.py ⚠️ TAXONOMY MIGRATION
+    - Migrates files to new taxonomy structure
+    - CHECK: If it handles Instacart
+    - NEEDS: Verify it doesn't break with canonical schema
+
+11. scripts/maintenance/cleanup_taxonomy.py ⚠️ TAXONOMY CLEANUP
+    - Cleans up old taxonomy violations
+    - CHECK: If it handles Instacart
+    - NEEDS: Verify compatibility
+
+12. tools/audit_adtype_mapping.py ⚠️ AD TYPE AUDITOR
+    - Audits ad type mappings across retailers
+    - CHECK: If it handles Instacart JSON structure
+    - NEEDS: Update if it expects results[] structure
+
+13. tools/compose_retailer.py ⚠️ RETAILER COMPOSER
+    - Composes retailer data for analysis
+    - CHECK: If it handles Instacart
+    - NEEDS: Verify JSON structure handling
+
+14. tools/repo_consistency_check.py ⚠️ CONSISTENCY CHECKER
+    - Checks repository consistency
+    - CHECK: If it validates Instacart JSON structure
+    - NEEDS: Update validation rules for canonical schema
+
+================================================================================
+CATEGORY 6: TESTING & DEBUG SCRIPTS
+================================================================================
+
+15. scripts/test_instacart_adapter.py ✅ ADAPTER TEST
+    - Tests the Instacart adapter
+    - IMPACT: ⚠️ May need updates if it validates JSON structure
+    - VERIFY: After migration
+
+16. scripts/test_instacart_ads_with_auth.py ✅ AUTH TEST
+    - Tests Instacart authentication
+    - IMPACT: ✅ Likely no changes needed (tests auth, not JSON)
+
+17. scripts/test_instacart_requirements.py ✅ REQUIREMENTS TEST
+    - Tests Instacart requirements
+    - IMPACT: ✅ Likely no changes needed
+
+18. test_instacart_from_gui.py ⚠️ GUI TEST
+    - Tests Instacart from GUI
+    - CHECK: If it validates JSON output
+    - VERIFY: After migration
+
+19. debug_instacart_extraction.py ✅ DEBUG TOOL
+    - Debug tool for Instacart extraction
+    - IMPACT: ✅ Likely no changes needed
+
+20. debug_instacart_detailed.py ✅ DEBUG TOOL
+    - Detailed debug tool
+    - IMPACT: ✅ Likely no changes needed
+
+================================================================================
+CATEGORY 7: UI & LAUNCHER
+================================================================================
+
+21. launcher.py ✅ GUI LAUNCHER
+    - Main GUI launcher
+    - IMPACT: ✅ NO CHANGES NEEDED
+    - Uses adapter layer (retailers/instacart/adapter.py)
+
+22. keyword_input.py ✅ KEYWORD INPUT UI
+    - Keyword input widget
+    - IMPACT: ✅ NO CHANGES NEEDED
+    - Doesn't interact with JSON structure
+
+23. widgets/retailer_picker.py ✅ RETAILER PICKER
+    - Retailer selection widget
+    - IMPACT: ✅ NO CHANGES NEEDED
+
+24. brand_review_tool.py ⚠️ BRAND REVIEW TOOL
+    - Reviews brands in ad data
+    - CHECK: If it reads Instacart JSON files
+    - NEEDS: Verify JSON structure handling
+
+================================================================================
+CATEGORY 8: SCHEDULER
+================================================================================
+
+25. scheduler_daemon.py ✅ SCHEDULER
+    - Runs scheduled scraping jobs
+    - IMPACT: ✅ NO CHANGES NEEDED
+    - Uses adapter layer
+
+26. schedules/instacart__*.json (12 files) ✅ SCHEDULE CONFIGS
+    - Schedule configuration files
+    - IMPACT: ✅ NO CHANGES NEEDED
+    - Configuration only, not affected by output structure
+
+================================================================================
+CATEGORY 9: AUTHENTICATION
+================================================================================
+
+27. auth/retailer_auth.py ✅ AUTHENTICATION
+    - Handles retailer authentication
+    - IMPACT: ✅ NO CHANGES NEEDED
+    - Authentication layer, independent of JSON structure
+
+================================================================================
+CATEGORY 10: UTILITIES
+================================================================================
+
+28. filename_utils.py ✅ FILENAME GENERATOR
+    - Generates ad filenames following taxonomy
+    - IMPACT: ✅ NO CHANGES NEEDED
+    - Already follows taxonomy rules
+    - Used BY instacart_search_and_capture.py
+
+29. utils/path_taxonomy.py ✅ PATH TAXONOMY
+    - Defines allowed folders per retailer
+    - CURRENT: Instacart folders defined (line 10):
+      {"Shoppable_Display_Ads", "Shoppable_Video_Ads", 
+       "Shoppable_Recipe_Ads", "Display_Ads", "Main", "runs"}
+    - IMPACT: ✅ NO CHANGES NEEDED
+    - Already includes "runs" folder
+
+30. core/brands.py ✅ BRAND CANONICALIZATION
+    - Canonicalizes brand names
+    - IMPACT: ✅ NO CHANGES NEEDED
+    - Works with brand strings, not JSON structure
+
+================================================================================
+MIGRATION CHECKLIST
+================================================================================
+
+CRITICAL (Must Update):
+[ ] 1. instacart_search_and_capture.py - Migrate to canonical schema
+[ ] 2. scripts/auto_add_image_paths.py - Support both structures
+[ ] 3. scripts/fix_missing_image_paths.py - Support both structures
+
+HIGH PRIORITY (Verify & Test):
+[ ] 4. retailers/instacart/adapter.py - Verify collect_pairs_for_run()
+[ ] 5. web/builder_server_v2.py - Test with canonical Instacart data
+[ ] 6. scripts/reextract_missing_images.py - Verify structure handling
+
+MEDIUM PRIORITY (Check & Update if Needed):
+[ ] 7. tools/audit_adtype_mapping.py - Check JSON structure handling
+[ ] 8. tools/compose_retailer.py - Check JSON structure handling
+[ ] 9. tools/repo_consistency_check.py - Update validation rules
+[ ] 10. brand_review_tool.py - Check JSON structure handling
+[ ] 11. scripts/maintenance/migrate_taxonomy.py - Verify compatibility
+[ ] 12. scripts/maintenance/cleanup_taxonomy.py - Verify compatibility
+
+LOW PRIORITY (Verify After Migration):
+[ ] 13. test_instacart_from_gui.py - Test GUI integration
+[ ] 14. scripts/test_instacart_adapter.py - Test adapter
+
+NO CHANGES NEEDED (Verified):
+[✓] brand_logo_database.py - Works with brand names only
+[✓] filename_utils.py - Already follows taxonomy
+[✓] utils/path_taxonomy.py - Already has "runs" folder
+[✓] launcher.py - Uses adapter layer
+[✓] scheduler_daemon.py - Uses adapter layer
+[✓] auth/retailer_auth.py - Independent layer
+
+================================================================================
+INTEGRATION POINTS TO PRESERVE
+================================================================================
+
+1. BRAND LOGO INTEGRATION:
+   - instacart_search_and_capture.py calls logo_db.add_brand_logo()
+   - PRESERVE: This call should remain in the migrated code
+   - LOCATION: After advertiser extraction (around line 768)
+   - ENSURE: Advertiser name is passed correctly
+
+2. LEXICON INTEGRATION:
+   - BrandLogoDatabase.sync_to_lexicon() syncs to config/brands.json
+   - PRESERVE: No changes needed (independent of JSON structure)
+
+3. FILENAME GENERATION:
+   - Uses filename_utils.generate_ad_filename()
+   - PRESERVE: Keep using this function (already canonical)
+   - ENSURE: Pass correct parameters (retailer, ad_type, client, etc.)
+
+4. TIMESTAMP FORMAT:
+   - CHANGE: Use utils/time_utils.now_iso_z() instead of manual formatting
+   - ENSURE: All timestamps are ISO 8601 Z format
+
+5. ADVERTISER ARRAY:
+   - PRESERVE: Keep advertisers[] array in ad objects
+   - ENSURE: Maintain existing extraction strategies (brand links, logo alt, etc.)
+
+================================================================================
+TESTING STRATEGY
+================================================================================
+
+PHASE 1: Unit Testing
+1. Test canonical JSON generation
+2. Test timestamp normalization
+3. Test directory structure creation
+4. Test ad object building
+
+PHASE 2: Integration Testing
+1. Run full scrape with one client (halo_top)
+2. Verify JSON structure matches canonical schema
+3. Verify image paths are correct
+4. Verify brand logos are saved
+5. Test auto_add_image_paths.py with new data
+
+PHASE 3: API Testing
+1. Test /api/ads/cards with Instacart data
+2. Verify image resolution works
+3. Verify advertiser filtering works
+4. Test timestamp filtering
+
+PHASE 4: Frontend Testing
+1. Load Instacart cards in Builder.io
+2. Verify grid display
+3. Verify modal display
+4. Test all filters
+
+PHASE 5: Backward Compatibility
+1. Verify old Kroger data still works
+2. Verify old Walmart data still works
+3. Verify mixed old/new Instacart data works
+
+================================================================================
+ROLLBACK PLAN
+================================================================================
+
+1. Backup current instacart_search_and_capture.py
+2. Keep legacy JSON files in place
+3. API already supports both structures (no rollback needed)
+4. If issues arise, can run old scraper in parallel
+
+================================================================================

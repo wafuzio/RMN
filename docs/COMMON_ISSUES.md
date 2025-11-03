@@ -1663,3 +1663,92 @@ Frontend (renders filtered results)
 - `neon-sanctuary/client/components/dashboard/AdCard.tsx` (logging fix)
 - `neon-sanctuary/client/utils/imageUrl.ts` (URL validation)
 - `web/builder_server_v2.py` (date filter implementation)
+
+---
+
+## Brand Logo Endpoints Confusion (Dual Backend)
+
+**Status:** ✅ SOLVED
+
+**Problem:**
+Brand logos not displaying in frontend modals. Confusion between two different logo endpoints serving different purposes.
+
+**Root Cause:**
+The system has TWO logo endpoints across two different backends:
+
+1. **`/api/brand_logo/<filename>`** - Flask backend (port 5006)
+   - Direct file serving by exact filename
+   - Input: `cerave.png`, `tide.png`
+   - Use case: When you already know the exact logo filename
+
+2. **`/api/logo/brand/<brandname>`** - Express backend (port 3000/8080)
+   - Smart brand name lookup with normalization
+   - Input: `CeraVe`, `Blue Buffalo`, `Tide`
+   - Use case: When you have brand names from ad data
+
+**The Confusion:**
+Frontend components have **brand names** from ad data (e.g., "CeraVe", "Blue Buffalo"), not filenames. Using the Flask endpoint requires knowing the exact filename, which the frontend doesn't have.
+
+**Solution:**
+Use the Express endpoint `/api/logo/brand/<brandname>` which:
+1. Takes brand name: `"CeraVe"`
+2. Normalizes it: `"cerave"` (lowercase, removes spaces/special chars)
+3. Searches `output/brand_logos/` for matching files
+4. Finds: `cerave.png`
+5. Serves the image with proper content-type
+
+**Implementation:**
+
+```typescript
+// ✅ CORRECT - Use Express endpoint with brand names
+const response = await fetch(`/api/logo/brand/${encodeURIComponent(brandName)}`);
+
+// ❌ WRONG - Flask endpoint expects filenames, not brand names
+const response = await fetch(`/api/brand_logo/${encodeURIComponent(brandName)}`);
+```
+
+**Express Handler (`server/routes/logo.ts`):**
+```typescript
+export const handleBrandLogo: RequestHandler = async (req, res) => {
+  const { brand } = req.params;
+  
+  // Normalize: "CeraVe" → "cerave"
+  const normalizedBrand = brand
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_-]/g, "");
+  
+  // Find matching file (cerave.png, cerave.jpg, etc.)
+  const logoFile = files.find(f => {
+    const normalized = f.replace(/\.(png|jpg|jpeg)$/i, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "");
+    return normalized === normalizedBrand;
+  });
+  
+  // Serve with proper content-type
+  res.set("Content-Type", mimeTypes[ext]);
+  res.send(fileContent);
+};
+```
+
+**Components Fixed:**
+- `TopBrandModal.tsx` - Uses `/api/logo/brand/`
+- `AllBrandsModal.tsx` - Uses `BrandLogo` component → `/api/logo/brand/`
+- `BrandLogo.tsx` - Uses `/api/logo/brand/`
+
+**Fallback Behavior:**
+When logo not found (404), components display colored initials:
+- "CeraVe" → "CE" in blue circle
+- "Blue Buffalo" → "BB" in purple circle
+- Uses consistent color mapping based on first character
+
+**Key Insight:**
+In a dual-backend architecture, use the backend that provides the most convenient interface for your data. The Express endpoint handles the brand name → filename translation, while Flask just serves files directly.
+
+**See Also:**
+- Multi-backend architecture patterns
+- API endpoint design
+- Brand logo database integration
+
+---

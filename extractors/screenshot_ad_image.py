@@ -393,13 +393,8 @@ def update_json_with_image_paths(json_file: str, image_urls: List[Dict[str, Any]
             if key in path_map:
                 saved_path = path_map[key]
                 
-                # Determine the field name based on ad type
-                if ad_type == 'CuratedCarousel':
-                    field_name = 'carousel_image_path'
-                elif ad_type == 'Skyscraper':
-                    field_name = 'skyscraper_image_path'
-                else:  # TOA or other
-                    field_name = 'toa_image_path'
+                # Use canonical 'image_path' field (not type-specific fields)
+                field_name = 'image_path'
                 
                 # Save relative path (from output/ directory)
                 # Convert absolute path to relative: /path/to/output/kroger/client/TOA/file.png -> TOA/file.png

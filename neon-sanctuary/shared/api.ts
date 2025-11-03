@@ -39,8 +39,17 @@ export interface AdCardItem {
   ad_index?: number; // Index of ad within its run
 }
 
+export interface BrandAggregation {
+  brand: string;
+  count: number;
+  percentage: number;
+}
+
 export interface AdsCardsResponse { 
   cards: AdCardItem[]; 
   has_more: boolean; 
   total_cards: number; 
+  brands?: BrandAggregation[];
+  page?: number;
+  page_size?: number;
 }

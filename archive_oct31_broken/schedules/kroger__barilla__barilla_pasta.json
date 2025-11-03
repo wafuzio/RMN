@@ -1,0 +1,26 @@
+{
+  "id": "kroger_barilla_barilla_pasta_c54e9124",
+  "retailer": "kroger",
+  "client": "barilla",
+  "keywords": [
+    "barilla pasta",
+    "boxed pasta"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "08:15",
+    "17:05"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-10-16T22:11:32Z",
+  "updated_at": "2025-10-16T22:11:32Z"
+}

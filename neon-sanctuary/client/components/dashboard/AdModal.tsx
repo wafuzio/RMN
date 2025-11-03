@@ -66,7 +66,20 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
               <div className="text-sm"><span className="font-semibold">Client:</span> {ad.client}</div>
               <div className="text-sm"><span className="font-semibold">Date:</span> {formatLocal(ad.timestamp)}</div>
               <div className="pt-4 flex gap-2">
-                <Button onClick={() => { const a = document.createElement('a'); a.href = toLocalImageUrl(ad.image_url); a.download = `${ad.brand}-${ad.ad_type}.png`; a.click(); }}>Download</Button>
+                <Button onClick={async () => {
+                  try {
+                    const response = await fetch(toLocalImageUrl(ad.image_url));
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${ad.brand}-${ad.ad_type}.png`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch (error) {
+                    console.error('Failed to download image:', error);
+                  }
+                }}>Download</Button>
                 <Button variant="secondary" onClick={() => onCompare(ad)}>Compare</Button>
               </div>
             </div>
@@ -74,24 +87,26 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
         )}
       </DialogContent>
 
-      <Dialog open={fullscreenOpen} onOpenChange={setFullscreenOpen}>
-        <DialogContent className="max-w-full w-screen h-screen max-h-screen p-0 border-0 flex items-center justify-center" onClick={() => setFullscreenOpen(false)}>
-          <DialogTitle className="sr-only">Full size preview</DialogTitle>
-          <div
-            className="w-full h-full flex items-center justify-center p-4 bg-black/90"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              src={toLocalImageUrl(ad?.image_url || "")}
-              alt={`${ad?.brand} full preview`}
-              className="max-w-full max-h-full object-contain cursor-pointer"
-              crossOrigin="anonymous"
-              referrerPolicy="no-referrer"
-              onClick={() => setFullscreenOpen(false)}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+      {ad?.image_url && (
+        <Dialog open={fullscreenOpen} onOpenChange={setFullscreenOpen}>
+          <DialogContent className="max-w-full w-screen h-screen max-h-screen p-0 border-0 flex items-center justify-center" onClick={() => setFullscreenOpen(false)}>
+            <DialogTitle className="sr-only">Full size preview</DialogTitle>
+            <div
+              className="w-full h-full flex items-center justify-center p-4 bg-black/90"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={toLocalImageUrl(ad.image_url)}
+                alt={`${ad?.brand} full preview`}
+                className="max-w-full max-h-full object-contain cursor-pointer"
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
+                onClick={() => setFullscreenOpen(false)}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   );
 }

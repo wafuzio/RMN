@@ -51,13 +51,14 @@ type GetAdsOpts = {
   end?: string;
   types?: string[];
   search?: string;
+  sort?: "latest" | "oldest" | "name";  // Sorting applied on backend before pagination
 };
 
 export const api = {
   getRetailers: () => http<RetailersResponse>(`/api/retailers`),
   getClients: (retailer: string) => http<ClientsResponse>(`/api/clients?retailer=${encodeURIComponent(retailer)}`),
   getAds: (params: GetAdsOpts) => {
-    const { retailer, client, term, advertiser, page = 1, pageSize = 24, start, end, types, search } = params;
+    const { retailer, client, term, advertiser, page = 1, pageSize = 24, start, end, types, search, sort } = params;
 
     // Validate required params
     if (!retailer) throw new Error('getAds: retailer is required');
@@ -77,9 +78,10 @@ export const api = {
     if (end?.trim()) q.set('end', end.trim());
     if (search?.trim()) q.set('search', search.trim());
     if (types?.length) q.set('types', types.join(','));
+    if (sort) q.set('sort', sort);
 
     const url = `/api/ads/cards?${q.toString()}`;
-    console.debug('📡 getAds request:', { start, end, url });
+    console.debug('📡 getAds request:', { start, end, sort, url });
 
     return http<AdsCardsResponse>(url).then((response) => {
       console.debug('📡 getAds response received:', {

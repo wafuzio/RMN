@@ -93,7 +93,11 @@ def build_ad_object(run_id: str, idx: int, ad: dict, retailer: str, client: str,
     - Filenames must be generated via generate_ad_filename at capture time; here we consume saved rel paths.
     """
     ad_type = ensure_ad_type(ad.get("type"))
-    brand = pick_brand(ad) or "unknown"
+    # Main ad types are full-page screengrabs - use "Main" instead of "unknown"
+    if ad_type.lower() == "main":
+        brand = "Main"
+    else:
+        brand = pick_brand(ad) or "unknown"
 
     # Prefer pre-saved relative path if present (normalize if absolute)
     rel_img = normalize_rel_from_client(ad.get("image_path") or ad.get("screenshot"), client_root)
@@ -969,7 +973,7 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     timestamp=timestamp,
                     index=1,
                     extension='png',
-                    advertiser="unknown"  # Use "unknown" for full page screenshots
+                    advertiser="Main"  # Main ad type for full page screenshots
                 )
                 fullpage_path = os.path.join(main_dir, fullpage_filename)
                 page.screenshot(path=fullpage_path, full_page=True)

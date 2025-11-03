@@ -89,6 +89,7 @@ export default function Index() {
   const [filters, setFilters] = useState<FiltersState>({ clients: [], types: [], search: "", keywords: [], datePreset: { type: "lifetime" } });
   const [leftFilters, setLeftFilters] = useState<FiltersState | null>(null);
   const [rightFilters, setRightFilters] = useState<FiltersState | null>(null);
+  const [sortBy, setSortBy] = useState<"latest" | "oldest" | "name">("latest");
   const { data: clientsResp } = useClients(primaryRetailer);
 
   // Restore last session state
@@ -175,104 +176,128 @@ export default function Index() {
   const krogerQuery1 = useAds({
     retailer: isKrogerSelected ? "kroger" : undefined,
     client: client1,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
   const krogerQuery2 = useAds({
     retailer: isKrogerSelected ? "kroger" : undefined,
     client: client2,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
   const krogerQuery3 = useAds({
     retailer: isKrogerSelected ? "kroger" : undefined,
     client: client3,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
 
   const isWalmartSelected = retailers.includes("walmart");
   const walmartQuery1 = useAds({
     retailer: isWalmartSelected ? "walmart" : undefined,
     client: client1,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
   const walmartQuery2 = useAds({
     retailer: isWalmartSelected ? "walmart" : undefined,
     client: client2,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
   const walmartQuery3 = useAds({
     retailer: isWalmartSelected ? "walmart" : undefined,
     client: client3,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
 
   const isInstacartSelected = retailers.includes("instacart");
   const instacartQuery1 = useAds({
     retailer: isInstacartSelected ? "instacart" : undefined,
     client: client1,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
   const instacartQuery2 = useAds({
     retailer: isInstacartSelected ? "instacart" : undefined,
     client: client2,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
   const instacartQuery3 = useAds({
     retailer: isInstacartSelected ? "instacart" : undefined,
     client: client3,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
 
   const isAmazonSelected = retailers.includes("amazon");
   const amazonQuery1 = useAds({
     retailer: isAmazonSelected ? "amazon" : undefined,
     client: client1,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
   const amazonQuery2 = useAds({
     retailer: isAmazonSelected ? "amazon" : undefined,
     client: client2,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
   const amazonQuery3 = useAds({
     retailer: isAmazonSelected ? "amazon" : undefined,
     client: client3,
+    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
     types: filters.types,
-    search: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : filters.search,
+    search: filters.search,
+    sort: sortBy,
   });
   
   // Collect all queries - flatten by retailer and client
@@ -315,6 +340,7 @@ export default function Index() {
     end: formatLocalDate(lf.end),
     types: lf.types,
     search: lf.search,
+    sort: sortBy,
   });
   const leftAdsQuery2 = useAds({
     retailer: primaryRetailer,
@@ -323,6 +349,7 @@ export default function Index() {
     end: formatLocalDate(lf.end),
     types: lf.types,
     search: lf.search,
+    sort: sortBy,
   });
   const leftAdsQuery3 = useAds({
     retailer: primaryRetailer,
@@ -331,6 +358,7 @@ export default function Index() {
     end: formatLocalDate(lf.end),
     types: lf.types,
     search: lf.search,
+    sort: sortBy,
   });
 
   const rightAdsQuery1 = useAds({
@@ -340,6 +368,7 @@ export default function Index() {
     end: formatLocalDate(rf.end),
     types: rf.types,
     search: rf.search,
+    sort: sortBy,
   });
   const rightAdsQuery2 = useAds({
     retailer: primaryRetailer,
@@ -348,6 +377,7 @@ export default function Index() {
     end: formatLocalDate(rf.end),
     types: rf.types,
     search: rf.search,
+    sort: sortBy,
   });
   const rightAdsQuery3 = useAds({
     retailer: primaryRetailer,
@@ -356,6 +386,7 @@ export default function Index() {
     end: formatLocalDate(rf.end),
     types: rf.types,
     search: rf.search,
+    sort: sortBy,
   });
 
   const flatAds: Ad[] = useMemo(() => {
@@ -460,30 +491,45 @@ export default function Index() {
     instacartQuery1.data, instacartQuery2.data, instacartQuery3.data,
     amazonQuery1.data, amazonQuery2.data, amazonQuery3.data,
   ]);
-  const activeBrands = useMemo(() => {
-    const uniqueBrands = new Set(flatAds.map(a => a.brand));
-    return uniqueBrands.size;
-  }, [flatAds]);
+  // Get brand aggregations from API response (first page has the full aggregation)
+  const apiBrands = useMemo(() => {
+    const allBrands = retailerQueries
+      .flatMap(q => q.data?.pages?.[0]?.brands || [])
+      .filter(b => b.brand !== "Unknown");
+    
+    // Merge brands across queries
+    const merged: Record<string, { count: number; percentage: number }> = {};
+    for (const b of allBrands) {
+      if (!merged[b.brand]) {
+        merged[b.brand] = { count: 0, percentage: 0 };
+      }
+      merged[b.brand].count += b.count;
+    }
+    
+    // Recalculate percentages
+    const totalCount = Object.values(merged).reduce((sum, b) => sum + b.count, 0);
+    return Object.entries(merged)
+      .map(([brand, data]) => ({
+        brand,
+        count: data.count,
+        percentage: totalCount > 0 ? Math.round((data.count / totalCount) * 100) : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [
+    krogerQuery1.data, krogerQuery2.data, krogerQuery3.data,
+    walmartQuery1.data, walmartQuery2.data, walmartQuery3.data,
+    instacartQuery1.data, instacartQuery2.data, instacartQuery3.data,
+    amazonQuery1.data, amazonQuery2.data, amazonQuery3.data,
+  ]);
+  
+  const activeBrands = apiBrands.length;
   const sov = useMemo(() => {
-    const countByBrand: Record<string, number> = {};
-    for (const a of flatAds) countByBrand[a.brand] = (countByBrand[a.brand]||0)+1;
-    const entries = Object.entries(countByBrand).sort((a,b)=>b[1]-a[1]);
-    if (!entries.length) return { brand: "-", pct: 0 };
-    const top = entries[0];
-    const pct = Math.round((top[1] / flatAds.length) * 100);
-    return { brand: top[0], pct: isFinite(pct) ? pct : 0 };
-  }, [flatAds]);
+    if (!apiBrands.length) return { brand: "-", pct: 0 };
+    const top = apiBrands[0];
+    return { brand: top.brand, pct: top.percentage };
+  }, [apiBrands]);
 
-  const topBrands = useMemo(() => {
-    const countByBrand: Record<string, number> = {};
-    for (const a of flatAds) countByBrand[a.brand] = (countByBrand[a.brand]||0)+1;
-    const entries = Object.entries(countByBrand).sort((a,b)=>b[1]-a[1]);
-    return entries.map(([brand, count]) => ({
-      brand,
-      count,
-      percentage: flatAds.length > 0 ? Math.round((count / flatAds.length) * 100) : 0,
-    }));
-  }, [flatAds]);
+  const topBrands = apiBrands;
 
   const trend: "up"|"down"|null = useMemo(()=>{
     if (timestamps.length < 2) return null;
@@ -502,7 +548,6 @@ export default function Index() {
   const [showVisualMap, setShowVisualMap] = useState(true);
   const [showLeftVisualMap, setShowLeftVisualMap] = useState(true);
   const [showRightVisualMap, setShowRightVisualMap] = useState(true);
-  const [sortBy, setSortBy] = useState<"latest" | "oldest" | "name">("latest");
 
   const dismiss = (id: string) => setAds(prev => prev.filter(a => a.id !== id));
 
@@ -511,16 +556,10 @@ export default function Index() {
   const hideSelected = () => setAds(prev => prev.filter(a => !selected.has(a.id)));
 
   const sortedAds = useMemo(() => {
-    const sorted = [...ads];
-    if (sortBy === "latest") {
-      sorted.sort((a, b) => new Date(b.timestamp.replace(" ", "T")).getTime() - new Date(a.timestamp.replace(" ", "T")).getTime());
-    } else if (sortBy === "oldest") {
-      sorted.sort((a, b) => new Date(a.timestamp.replace(" ", "T")).getTime() - new Date(b.timestamp.replace(" ", "T")).getTime());
-    } else if (sortBy === "name") {
-      sorted.sort((a, b) => a.brand.localeCompare(b.brand));
-    }
-    return sorted;
-  }, [ads, sortBy]);
+    // Sorting is now handled by the backend (in api_ads_cards endpoint)
+    // This ensures consistent ordering across all pages, not just the current page
+    return ads;
+  }, [ads]);
 
   const applyFilters = () => adsQuery.refetch();
   const resetFilters = () => setFilters({ clients: [], types: [], search: "", keywords: [], datePreset: { type: "lifetime" } });

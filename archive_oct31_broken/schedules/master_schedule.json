@@ -1,0 +1,1160 @@
+{
+  "schedules": [
+    {
+      "id": "instacart_blue_bunny_ice_cream_bar_1a875879",
+      "retailer": "instacart",
+      "client": "blue bunny",
+      "keywords": [
+        "ice cream bar"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "10:15",
+        "12:20",
+        "13:15",
+        "15:25"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:58:20Z",
+      "updated_at": "2025-10-23T03:58:20Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__blue_bunny__ice_cream_bar.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/blue_bunny"
+    },
+    {
+      "id": "instacart_bomb_pop_ice_pop_b9ce50b3",
+      "retailer": "instacart",
+      "client": "bomb pop",
+      "keywords": [
+        "ice pop"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00",
+        "22:40",
+        "23:55"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:58:37Z",
+      "updated_at": "2025-10-23T03:58:37Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__bomb_pop__ice_pop.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/bomb_pop"
+    },
+    {
+      "id": "instacart_halo_top_healthy_ice_cream_ec247958",
+      "retailer": "instacart",
+      "client": "halo top",
+      "keywords": [
+        "healthy ice cream",
+        "low calorie ice cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:15",
+        "12:15",
+        "14:15",
+        "16:15",
+        "20:15"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T04:08:51Z",
+      "updated_at": "2025-10-24T04:08:51Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__halo_top__healthy_ice_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/halo_top"
+    },
+    {
+      "id": "instacart_jenis_jenis_ice_cream_73ce6189",
+      "retailer": "instacart",
+      "client": "jenis",
+      "keywords": [
+        "jenis ice cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00",
+        "22:45",
+        "23:45"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T03:51:29Z",
+      "updated_at": "2025-10-22T03:51:29Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__jenis__jenis_ice_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/jenis"
+    },
+    {
+      "id": "instacart_keto_chips_keto_chips_625458b3",
+      "retailer": "instacart",
+      "client": "keto chips",
+      "keywords": [
+        "keto chips"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00",
+        "22:05",
+        "23:05"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T04:03:14Z",
+      "updated_at": "2025-10-22T04:03:14Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__keto_chips__keto_chips.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/keto_chips"
+    },
+    {
+      "id": "instacart_land_o_frost_honey_ham_37a6126a",
+      "retailer": "instacart",
+      "client": "land o frost",
+      "keywords": [
+        "honey ham",
+        "black forest ham"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "03:00",
+        "09:00",
+        "11:00",
+        "15:00",
+        "19:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:47:53Z",
+      "updated_at": "2025-10-23T03:47:53Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__land_o_frost__honey_ham.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/land_o_frost"
+    },
+    {
+      "id": "instacart_magic_spoon_protein_cereal_9028d7e1",
+      "retailer": "instacart",
+      "client": "magic spoon",
+      "keywords": [
+        "protein cereal",
+        "healthy cereal"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "00:25",
+        "13:15",
+        "16:00",
+        "22:35",
+        "23:50"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T18:12:45Z",
+      "updated_at": "2025-10-22T18:12:45Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__magic_spoon__protein_cereal.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/magic_spoon"
+    },
+    {
+      "id": "instacart_milkpep_protein_drinks_a361d02c",
+      "retailer": "instacart",
+      "client": "MilkPEP",
+      "keywords": [
+        "protein drinks",
+        "milk",
+        "protein powder"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:20",
+        "12:20",
+        "12:20",
+        "16:20",
+        "20:20"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T15:31:13Z",
+      "updated_at": "2025-10-24T15:31:13Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__milkpep__protein_drinks.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/milkpep"
+    },
+    {
+      "id": "instacart_pickle_pickle_spears_9fc88c44",
+      "retailer": "instacart",
+      "client": "pickle",
+      "keywords": [
+        "pickle spears"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday"
+      ],
+      "times": [
+        "01:10",
+        "12:00",
+        "13:20",
+        "16:05",
+        "20:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T04:52:13Z",
+      "updated_at": "2025-10-22T04:52:13Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__pickle__pickle_spears.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/pickle"
+    },
+    {
+      "id": "instacart_proactiv_proactiv_f645c3bb",
+      "retailer": "instacart",
+      "client": "Proactiv",
+      "keywords": [
+        "Proactiv",
+        "acne kit",
+        "acne skin care",
+        "benzoyl peroxide"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:45",
+        "12:25",
+        "15:40",
+        "20:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-26T04:52:15Z",
+      "updated_at": "2025-10-26T04:52:15Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__proactiv__proactiv.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/proactiv"
+    },
+    {
+      "id": "instacart_sour_cream_light_sour_cream_546f03d1",
+      "retailer": "instacart",
+      "client": "sour cream",
+      "keywords": [
+        "light sour cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T04:22:47Z",
+      "updated_at": "2025-10-22T04:22:47Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__sour_cream__light_sour_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/sour_cream"
+    },
+    {
+      "id": "kroger_bandaid_default_bb730234",
+      "retailer": "kroger",
+      "client": "bandaid",
+      "keywords": [],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "11:55"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-16T18:32:00.029721Z",
+      "updated_at": "2025-10-16T18:32:00.029721Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__bandaid__default.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/bandaid"
+    },
+    {
+      "id": "kroger_barilla_barilla_pasta_c54e9124",
+      "retailer": "kroger",
+      "client": "barilla",
+      "keywords": [
+        "barilla pasta",
+        "boxed pasta"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:15",
+        "17:05"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-16T22:11:32Z",
+      "updated_at": "2025-10-16T22:11:32Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__barilla__barilla_pasta.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/barilla"
+    },
+    {
+      "id": "kroger_blue_bunny_default_7d181867",
+      "retailer": "kroger",
+      "client": "blue bunny",
+      "keywords": [],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday"
+      ],
+      "times": [
+        "09:10",
+        "09:15",
+        "09:20",
+        "09:25",
+        "10:15"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-16T18:32:00.029215Z",
+      "updated_at": "2025-10-16T18:32:00.029215Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__blue bunny__default.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/blue_bunny"
+    },
+    {
+      "id": "kroger_blue_bunny_ice_cream_bar_68c4af98",
+      "retailer": "kroger",
+      "client": "blue bunny",
+      "keywords": [
+        "ice cream bar"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "10:15",
+        "12:20",
+        "13:15",
+        "15:25"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:58:20Z",
+      "updated_at": "2025-10-23T03:58:20Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__blue_bunny__ice_cream_bar.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/blue_bunny"
+    },
+    {
+      "id": "kroger_bomb_pop_ice_pop_a5e9ef35",
+      "retailer": "kroger",
+      "client": "bomb pop",
+      "keywords": [
+        "ice pop"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00",
+        "22:40",
+        "23:55"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:58:37Z",
+      "updated_at": "2025-10-23T03:58:37Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__bomb_pop__ice_pop.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/bomb_pop"
+    },
+    {
+      "id": "kroger_halo_top_healthy_ice_cream_eb6e34cd",
+      "retailer": "kroger",
+      "client": "halo top",
+      "keywords": [
+        "healthy ice cream",
+        "low calorie ice cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:15",
+        "12:15",
+        "14:15",
+        "16:15",
+        "20:15"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T04:08:51Z",
+      "updated_at": "2025-10-24T04:08:51Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__halo_top__healthy_ice_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/halo_top"
+    },
+    {
+      "id": "kroger_jenis_jenis_ice_cream_e50e0a09",
+      "retailer": "kroger",
+      "client": "jenis",
+      "keywords": [
+        "jenis ice cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00",
+        "22:45",
+        "23:45"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T03:51:29Z",
+      "updated_at": "2025-10-22T03:51:29Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__jenis__jenis_ice_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/jenis"
+    },
+    {
+      "id": "kroger_keto_chips_keto_chips_43c3ddf9",
+      "retailer": "kroger",
+      "client": "keto chips",
+      "keywords": [
+        "keto chips"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00",
+        "22:05",
+        "23:05"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T04:03:14Z",
+      "updated_at": "2025-10-22T04:03:14Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__keto_chips__keto_chips.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/keto_chips"
+    },
+    {
+      "id": "kroger_land_o_frost_honey_ham_cad95639",
+      "retailer": "kroger",
+      "client": "land o frost",
+      "keywords": [
+        "honey ham",
+        "black forest ham"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "03:00",
+        "09:00",
+        "11:00",
+        "15:00",
+        "19:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:47:53Z",
+      "updated_at": "2025-10-23T03:47:53Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__land_o_frost__honey_ham.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/land_o_frost"
+    },
+    {
+      "id": "kroger_magic_spoon_protein_cereal_9738274d",
+      "retailer": "kroger",
+      "client": "magic spoon",
+      "keywords": [
+        "protein cereal",
+        "healthy cereal"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "00:25",
+        "13:15",
+        "16:00",
+        "22:35",
+        "23:50"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T18:12:45Z",
+      "updated_at": "2025-10-22T18:12:45Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__magic_spoon__protein_cereal.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/magic_spoon"
+    },
+    {
+      "id": "kroger_milkpep_protein_drinks_e4f56475",
+      "retailer": "kroger",
+      "client": "MilkPEP",
+      "keywords": [
+        "protein drinks",
+        "milk",
+        "protein powder"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:20",
+        "12:20",
+        "12:20",
+        "16:20",
+        "20:20"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T15:31:13Z",
+      "updated_at": "2025-10-24T15:31:13Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__milkpep__protein_drinks.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/milkpep"
+    },
+    {
+      "id": "kroger_pickle_default_dfe6b621",
+      "retailer": "kroger",
+      "client": "pickle",
+      "keywords": [],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday"
+      ],
+      "times": [
+        "08:10",
+        "13:20",
+        "16:05"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-16T18:32:00.029949Z",
+      "updated_at": "2025-10-16T18:32:00.029949Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__pickle__default.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pickle"
+    },
+    {
+      "id": "kroger_pickle_pickle_spears_0f600cb6",
+      "retailer": "kroger",
+      "client": "pickle",
+      "keywords": [
+        "pickle spears"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday"
+      ],
+      "times": [
+        "01:10",
+        "12:00",
+        "13:20",
+        "16:05",
+        "20:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T04:52:13Z",
+      "updated_at": "2025-10-22T04:52:13Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__pickle__pickle_spears.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pickle"
+    },
+    {
+      "id": "kroger_pork_rinds_default_762c7d02",
+      "retailer": "kroger",
+      "client": "pork rinds",
+      "keywords": [],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "12:00",
+        "16:00",
+        "20:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-16T18:32:00.031913Z",
+      "updated_at": "2025-10-16T18:32:00.031913Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__pork rinds__default.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pork_rinds"
+    },
+    {
+      "id": "kroger_pork_rinds_pork_rinds_e207573e",
+      "retailer": "kroger",
+      "client": "pork rinds",
+      "keywords": [
+        "pork rinds"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "12:00",
+        "16:00",
+        "20:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T03:27:17Z",
+      "updated_at": "2025-10-22T03:27:17Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__pork_rinds__pork_rinds.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pork_rinds"
+    },
+    {
+      "id": "kroger_proactiv_proactiv_95fe29f6",
+      "retailer": "kroger",
+      "client": "Proactiv",
+      "keywords": [
+        "Proactiv",
+        "acne kit",
+        "acne skin care",
+        "benzoyl peroxide"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:45",
+        "12:25",
+        "15:40",
+        "20:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-26T04:52:15Z",
+      "updated_at": "2025-10-26T04:52:15Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__proactiv__proactiv.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/proactiv"
+    },
+    {
+      "id": "kroger_sour_cream_light_sour_cream_2a1eba81",
+      "retailer": "kroger",
+      "client": "sour cream",
+      "keywords": [
+        "light sour cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T04:22:47Z",
+      "updated_at": "2025-10-22T04:22:47Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__sour_cream__light_sour_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/sour_cream"
+    },
+    {
+      "id": "walmart_blue_bunny_ice_cream_bar_8c6c4d72",
+      "retailer": "walmart",
+      "client": "blue bunny",
+      "keywords": [
+        "ice cream bar"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "10:15",
+        "12:20",
+        "13:15",
+        "15:25"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:58:20Z",
+      "updated_at": "2025-10-23T03:58:20Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__blue_bunny__ice_cream_bar.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/blue_bunny"
+    },
+    {
+      "id": "walmart_bomb_pop_ice_pop_4284ae10",
+      "retailer": "walmart",
+      "client": "bomb pop",
+      "keywords": [
+        "ice pop"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00",
+        "22:40",
+        "23:55"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:58:37Z",
+      "updated_at": "2025-10-23T03:58:37Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__bomb_pop__ice_pop.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/bomb_pop"
+    },
+    {
+      "id": "walmart_halo_top_healthy_ice_cream_4eb2de4d",
+      "retailer": "walmart",
+      "client": "halo top",
+      "keywords": [
+        "healthy ice cream",
+        "low calorie ice cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:15",
+        "12:15",
+        "14:15",
+        "16:15",
+        "20:15"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T04:08:51Z",
+      "updated_at": "2025-10-24T04:08:51Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__halo_top__healthy_ice_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/halo_top"
+    },
+    {
+      "id": "walmart_jenis_jenis_ice_cream_d51f04aa",
+      "retailer": "walmart",
+      "client": "jenis",
+      "keywords": [
+        "jenis ice cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00",
+        "22:45",
+        "23:45"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T03:51:29Z",
+      "updated_at": "2025-10-22T03:51:29Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__jenis__jenis_ice_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/jenis"
+    },
+    {
+      "id": "walmart_keto_chips_keto_chips_f09ffccc",
+      "retailer": "walmart",
+      "client": "keto chips",
+      "keywords": [
+        "keto chips"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00",
+        "22:05",
+        "23:05"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T04:03:14Z",
+      "updated_at": "2025-10-22T04:03:14Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__keto_chips__keto_chips.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/keto_chips"
+    },
+    {
+      "id": "walmart_land_o_frost_honey_ham_b00718ae",
+      "retailer": "walmart",
+      "client": "land o frost",
+      "keywords": [
+        "honey ham",
+        "black forest ham"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "03:00",
+        "09:00",
+        "11:00",
+        "15:00",
+        "19:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-23T03:47:53Z",
+      "updated_at": "2025-10-23T03:47:53Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__land_o_frost__honey_ham.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/land_o_frost"
+    },
+    {
+      "id": "walmart_magic_spoon_protein_cereal_5f73f5d2",
+      "retailer": "walmart",
+      "client": "magic spoon",
+      "keywords": [
+        "protein cereal",
+        "healthy cereal"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "00:25",
+        "13:15",
+        "16:00",
+        "22:35",
+        "23:50"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T18:12:45Z",
+      "updated_at": "2025-10-22T18:12:45Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__magic_spoon__protein_cereal.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/magic_spoon"
+    },
+    {
+      "id": "walmart_milkpep_protein_drinks_00b3c294",
+      "retailer": "walmart",
+      "client": "MilkPEP",
+      "keywords": [
+        "protein drinks",
+        "milk",
+        "protein powder"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:20",
+        "12:20",
+        "12:20",
+        "16:20",
+        "20:20"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-24T15:31:13Z",
+      "updated_at": "2025-10-24T15:31:13Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__milkpep__protein_drinks.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/milkpep"
+    },
+    {
+      "id": "walmart_pickle_pickle_spears_2dac17be",
+      "retailer": "walmart",
+      "client": "pickle",
+      "keywords": [
+        "pickle spears"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday"
+      ],
+      "times": [
+        "01:10",
+        "12:00",
+        "13:20",
+        "16:05",
+        "20:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T04:52:13Z",
+      "updated_at": "2025-10-22T04:52:13Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__pickle__pickle_spears.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/pickle"
+    },
+    {
+      "id": "walmart_proactiv_proactiv_9527ad3a",
+      "retailer": "walmart",
+      "client": "Proactiv",
+      "keywords": [
+        "Proactiv",
+        "acne kit",
+        "acne skin care",
+        "benzoyl peroxide"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:45",
+        "12:25",
+        "15:40",
+        "20:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-26T04:52:15Z",
+      "updated_at": "2025-10-26T04:52:15Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__proactiv__proactiv.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/proactiv"
+    },
+    {
+      "id": "walmart_sour_cream_light_sour_cream_2b034c8a",
+      "retailer": "walmart",
+      "client": "sour cream",
+      "keywords": [
+        "light sour cream"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-10-22T04:22:47Z",
+      "updated_at": "2025-10-22T04:22:47Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__sour_cream__light_sour_cream.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/sour_cream"
+    }
+  ],
+  "version": "1.0"
+}

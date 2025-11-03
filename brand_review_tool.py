@@ -13,14 +13,15 @@ Features:
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox, font, scrolledtext
 from PIL import Image, ImageTk
 import json
 import os
 import glob
+import shutil
 import re
 from pathlib import Path
-import shutil
+from utils.lexicon_utils import save_lexicon
 
 # Import brand logo database
 try:
@@ -284,18 +285,27 @@ class BrandReviewTool:
         
         # Scan all retailer JSON files (Kroger, Walmart, Instacart, etc.)
         json_files = []
-        for retailer in ['kroger', 'walmart', 'instacart']:
-            # Kroger/Instacart: output/retailer/client/runs/*.json
-            pattern1 = f'output/{retailer}/*/runs/*.json'
-            # Walmart: output/walmart/client/runs/TIMESTAMP/*.json
-            pattern2 = f'output/{retailer}/*/runs/*/*.json'
-            
-            retailer_files = glob.glob(pattern1) + glob.glob(pattern2)
-            # Remove duplicates
-            retailer_files = list(set(retailer_files))
+        
+        # Kroger/Instacart: output/retailer/client/runs/*.json
+        for retailer in ['kroger', 'instacart']:
+            pattern = f'output/{retailer}/*/runs/*.json'
+            retailer_files = glob.glob(pattern)
+            # Filter out malformed paths where "runs" is treated as a client
+            retailer_files = [f for f in retailer_files if '/runs/runs/' not in f]
             json_files.extend(retailer_files)
             if retailer_files:
                 print(f"  Found {len(retailer_files)} {retailer} files")
+        
+        # Walmart: output/walmart/client/TIMESTAMP/run_results_*.json (new structure)
+        #          output/walmart/client/runs/run_results_*.json (legacy structure)
+        walmart_pattern1 = 'output/walmart/*/*/run_results_*.json'
+        walmart_pattern2 = 'output/walmart/*/runs/run_results_*.json'
+        walmart_files = glob.glob(walmart_pattern1) + glob.glob(walmart_pattern2)
+        # Remove duplicates
+        walmart_files = list(set(walmart_files))
+        json_files.extend(walmart_files)
+        if walmart_files:
+            print(f"  Found {len(walmart_files)} walmart files")
         
         print(f"Total: {len(json_files)} JSON files to scan")
         
@@ -304,8 +314,26 @@ class BrandReviewTool:
                 with open(json_file, 'r') as f:
                     data = json.load(f)
                 
-                for result in data.get('results', []):
-                    for ad in result.get('ads', []):
+                # Handle both canonical and legacy structures
+                ads_to_check = []
+                
+                # Canonical structure takes priority: {"ads": [...]}
+                if 'ads' in data and isinstance(data['ads'], list):
+                    ads_to_check = data['ads']
+                # Legacy structure: {"results": [{"ads": [...]}]}
+                elif 'results' in data:
+                    for result in data.get('results', []):
+                        ads_to_check.extend(result.get('ads', []))
+                
+                for ad in ads_to_check:
+                        # Skip Kroji house ads entirely
+                        if self.is_kroji_house_ad(ad):
+                            continue
+                        
+                        # Skip "Main" ad types (full-page screengrabs, intentionally brandless)
+                        if ad.get('type') == 'main':
+                            continue
+                        
                         advertisers = ad.get('advertisers', [])
                         
                         # Check if unknown or uncertain in JSON
@@ -412,6 +440,25 @@ class BrandReviewTool:
         pattern_count = sum(1 for ad in self.unknown_ads if ad['current_brand'] != 'unknown')
         print(f"   - Explicitly 'unknown': {unknown_count}")
         print(f"   - Uncertain patterns: {pattern_count}")
+    
+    def is_kroji_house_ad(self, ad):
+        """Check if ad is a Kroger house ad (Kroji mascot)"""
+        # Check message field for "Kroji"
+        message = ad.get('message', '')
+        if 'kroji' in message.lower():
+            return True
+        
+        # Check header field
+        header = ad.get('header', '')
+        if 'kroji' in header.lower():
+            return True
+        
+        # Check advertisers
+        advertisers = ad.get('advertisers', [])
+        if any('kroji' in str(adv).lower() for adv in advertisers):
+            return True
+        
+        return False
     
     def is_uncertain_brand(self, brand):
         """Check if a brand name looks uncertain or like a campaign code"""
@@ -952,8 +999,24 @@ class BrandReviewTool:
     
     def save_correction(self):
         """Save the corrected brand name(s) - applies to all similar ads"""
-        # Just call apply_to_all_similar with auto_confirm=True
-        self.apply_to_all_similar(auto_confirm=True)
+        try:
+            print("[DEBUG] save_correction called")
+            corrected_brands = self.get_all_brands()
+            print(f"[DEBUG] Corrected brands: {corrected_brands}")
+            
+            if not corrected_brands:
+                print("[DEBUG] No brands entered, showing warning")
+                messagebox.showwarning("Missing Brand", "Please enter at least one brand name")
+                return
+            
+            # Just call apply_to_all_similar with auto_confirm=True
+            print("[DEBUG] Calling apply_to_all_similar")
+            self.apply_to_all_similar(auto_confirm=True)
+        except Exception as e:
+            print(f"[ERROR] Exception in save_correction: {e}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Error", f"Failed to save correction: {e}")
     
     def update_json(self, ad_data, corrected_brands):
         """Update the JSON file with corrected brand(s)"""
@@ -975,49 +1038,59 @@ class BrandReviewTool:
             raise Exception(f"target_ad is not a dict: {type(target_ad)}, value: {target_ad}")
         
         updated = False
-        results = data.get('results', [])
         
-        if not isinstance(results, list):
-            raise Exception(f"'results' is not a list: {type(results)}")
+        # Handle both canonical and legacy formats
+        ads_to_check = []
         
-        for result_idx, result in enumerate(results):
-            if not isinstance(result, dict):
-                raise Exception(f"result[{result_idx}] is not a dict: {type(result)}")
+        # Canonical format: {"ads": [...]}
+        if 'ads' in data and isinstance(data['ads'], list):
+            ads_to_check = data['ads']
+        # Legacy format: {"results": [{"ads": [...]}]}
+        elif 'results' in data:
+            results = data.get('results', [])
+            if not isinstance(results, list):
+                raise Exception(f"'results' is not a list: {type(results)}")
             
-            ads = result.get('ads', [])
-            
-            if not isinstance(ads, list):
-                raise Exception(f"'ads' in result[{result_idx}] is not a list: {type(ads)}")
-            
-            for i, ad in enumerate(ads):
-                if not isinstance(ad, dict):
-                    raise Exception(f"ad[{i}] is not a dict: {type(ad)}")
+            for result_idx, result in enumerate(results):
+                if not isinstance(result, dict):
+                    raise Exception(f"result[{result_idx}] is not a dict: {type(result)}")
                 
-                # Match by type and position, or by exact match
-                if (ad.get('type') == target_type and ad.get('position') == target_position) or ad == target_ad:
-                    ad['advertisers'] = corrected_brands
-                    
-                    # Update image path even if it doesn't literally contain the old brand slug
-                    for path_key in ['carousel_image_path', 'toa_image_path', 'skyscraper_image_path']:
-                        if path_key in ad:
-                            old_path = ad[path_key]
-                            new_slug = self.to_slug(corrected_brands[0])
-                            # Try direct replacement using old_slug first
-                            old_slug = self.to_slug(ad_data['current_brand'])
-                            new_path = old_path.replace(f'__{old_slug}__', f'__{new_slug}__')
-                            if new_path == old_path:
-                                # Generic replacement: swap the second segment of the basename
-                                dname, bname = os.path.split(old_path)
-                                parts = bname.split('__')
-                                if len(parts) >= 2:
-                                    parts[1] = new_slug
-                                    bname_new = '__'.join(parts)
-                                    new_path = os.path.join(dname, bname_new)
-                            ad[path_key] = new_path
-                    
-                    updated = True
-                    break
-            if updated:
+                ads = result.get('ads', [])
+                if not isinstance(ads, list):
+                    raise Exception(f"'ads' in result[{result_idx}] is not a list: {type(ads)}")
+                
+                ads_to_check.extend(ads)
+        
+        # Update the matching ad
+        for i, ad in enumerate(ads_to_check):
+            if not isinstance(ad, dict):
+                raise Exception(f"ad[{i}] is not a dict: {type(ad)}")
+            
+            # Match by type and position, or by exact match
+            if (ad.get('type') == target_type and ad.get('position') == target_position) or ad == target_ad:
+                ad['advertisers'] = corrected_brands
+                # Also update 'brand' field to match first advertiser
+                ad['brand'] = corrected_brands[0] if corrected_brands else None
+                
+                # Update image path even if it doesn't literally contain the old brand slug
+                for path_key in ['carousel_image_path', 'toa_image_path', 'skyscraper_image_path', 'image_path']:
+                    if path_key in ad:
+                        old_path = ad[path_key]
+                        new_slug = self.to_slug(corrected_brands[0])
+                        # Try direct replacement using old_slug first
+                        old_slug = self.to_slug(ad_data['current_brand'])
+                        new_path = old_path.replace(f'__{old_slug}__', f'__{new_slug}__')
+                        if new_path == old_path:
+                            # Generic replacement: swap the second segment of the basename
+                            dname, bname = os.path.split(old_path)
+                            parts = bname.split('__')
+                            if len(parts) >= 2:
+                                parts[1] = new_slug
+                                bname_new = '__'.join(parts)
+                                new_path = os.path.join(dname, bname_new)
+                        ad[path_key] = new_path
+                
+                updated = True
                 break
         
         if not updated:
@@ -1094,10 +1167,8 @@ class BrandReviewTool:
                     print(f"[SYNC] Added '{logo_brand}' from logo database to lexicon")
             
             if added_count > 0:
-                # Sort and save
-                lexicon_brands_sorted = sorted(lexicon_brands, key=lambda x: x['name'].lower())
-                with open(self.lexicon_path, 'w') as f:
-                    json.dump(lexicon_brands_sorted, f, indent=2, ensure_ascii=False)
+                # Save with validation and deduplication
+                lexicon_brands_sorted = save_lexicon(lexicon_brands, self.lexicon_path)
                 print(f"[SYNC] Added {added_count} brands from logo database to lexicon")
                 
                 # Reload lexicon cache
@@ -1105,8 +1176,8 @@ class BrandReviewTool:
         except Exception as e:
             print(f"[WARN] Failed to sync logo brands to lexicon: {e}")
     
-    def update_lexicon(self, corrected_brand, old_brand):
-        """Add corrected brand to lexicon and add old brand as alias"""
+    def update_lexicon(self, corrected_brand, old_brand, message_signal=None):
+        """Add corrected brand to lexicon and add old brand + message as aliases"""
         # NEVER add "unknown" to lexicon
         if corrected_brand.lower() == 'unknown':
             print(f"[LEXICON] Skipping - 'unknown' cannot be added to lexicon")
@@ -1116,53 +1187,82 @@ class BrandReviewTool:
         with open(self.lexicon_path, 'r') as f:
             brands = json.load(f)
         
-        # Check if brand already exists
+        # Check if corrected_brand exists as a synonym anywhere - if so, remove it
+        for brand in brands:
+            if corrected_brand in brand['synonyms']:
+                brand['synonyms'].remove(corrected_brand)
+                print(f"[LEXICON] Removed '{corrected_brand}' from synonyms of '{brand['name']}' (promoting to main brand)")
+        
+        # Check if brand already exists as a main entry
         existing_brand = None
         for brand in brands:
             if brand['name'].lower() == corrected_brand.lower():
                 existing_brand = brand
                 break
         
+        # Collect synonyms to add
+        synonyms_to_add = []
+        if old_brand.lower() != 'unknown':
+            synonyms_to_add.append(old_brand)
+        if message_signal and message_signal.strip():
+            # Add message as a synonym (for future scraper matching)
+            synonyms_to_add.append(f"MSG:{message_signal.strip()}")
+        
         if existing_brand:
-            # Add old brand as synonym if it's not already there and not "unknown"
-            if old_brand.lower() != 'unknown' and old_brand not in existing_brand['synonyms']:
-                existing_brand['synonyms'].append(old_brand)
-                print(f"[LEXICON] Added '{old_brand}' as synonym for '{existing_brand['name']}'")
+            # Add synonyms if not already there
+            for syn in synonyms_to_add:
+                if syn not in existing_brand['synonyms']:
+                    existing_brand['synonyms'].append(syn)
+                    if syn.startswith('MSG:'):
+                        print(f"[LEXICON] Added message signal for '{existing_brand['name']}'")
+                    else:
+                        print(f"[LEXICON] Added '{syn}' as synonym for '{existing_brand['name']}'")
         else:
             # Add new brand
             new_brand = {
                 'name': corrected_brand,
-                'synonyms': [old_brand] if old_brand.lower() != 'unknown' else []
+                'synonyms': synonyms_to_add
             }
             brands.append(new_brand)
-            print(f"[LEXICON] Added new brand '{corrected_brand}' with synonym '{old_brand}'")
+            if synonyms_to_add:
+                print(f"[LEXICON] Added new brand '{corrected_brand}' with {len(synonyms_to_add)} synonym(s)")
+            else:
+                print(f"[LEXICON] Added new brand '{corrected_brand}'")
         
-        # Sort brands alphabetically by name (case-insensitive)
-        brands_sorted = sorted(brands, key=lambda x: x['name'].lower())
-        
-        # Save lexicon (keep it as a list)
-        with open(self.lexicon_path, 'w') as f:
-            json.dump(brands_sorted, f, indent=2, ensure_ascii=False)
+        # Save with validation and deduplication
+        brands_sorted = save_lexicon(brands, self.lexicon_path)
         
         # Reload lexicon cache
         self.lexicon_brands = brands_sorted
     
     def apply_to_all_similar(self, auto_confirm=False):
         """Apply the corrected brand(s) to all similar ads with the same message/header/URL"""
+        print(f"[DEBUG] apply_to_all_similar called, auto_confirm={auto_confirm}")
         corrected_brands = self.get_all_brands()
+        print(f"[DEBUG] Corrected brands in apply_to_all_similar: {corrected_brands}")
         
         if not corrected_brands:
+            print("[DEBUG] No brands, returning")
             messagebox.showwarning("Missing Brand", "Please enter at least one brand name")
+            return
+        
+        # Prevent saving "unknown" as a brand
+        if any(brand.lower() == 'unknown' for brand in corrected_brands):
+            messagebox.showerror("Invalid Brand", "'unknown' cannot be used as a brand name.\n\nPlease enter the actual brand name.")
             return
         
         ad_data = self.unknown_ads[self.current_index]
         current_ad = ad_data['ad']
         original_uncertain_brand = ad_data['current_brand']  # Save for lexicon update
         
+        print(f"[DEBUG] Current ad: type={current_ad.get('type')}, brand={original_uncertain_brand}")
+        
         # Get identifying features from current ad
-        current_message = current_ad.get('message', '').strip()
-        current_header = current_ad.get('header', '').strip()
-        current_url = current_ad.get('href', '').strip()
+        current_message = (current_ad.get('message') or '').strip()
+        current_header = (current_ad.get('header') or '').strip()
+        current_url = (current_ad.get('href') or '').strip()
+        
+        print(f"[DEBUG] Matching criteria: message={bool(current_message)}, header={bool(current_header)}, url={bool(current_url)}")
         
         # Find all ads with matching content
         similar_ads = []
@@ -1171,15 +1271,17 @@ class BrandReviewTool:
             
             # Match by message, header, or URL
             matches = False
-            if current_message and ad_obj.get('message', '').strip() == current_message:
+            if current_message and (ad_obj.get('message') or '').strip() == current_message:
                 matches = True
-            elif current_header and ad_obj.get('header', '').strip() == current_header:
+            elif current_header and (ad_obj.get('header') or '').strip() == current_header:
                 matches = True
-            elif current_url and ad_obj.get('href', '').strip() == current_url:
+            elif current_url and (ad_obj.get('href') or '').strip() == current_url:
                 matches = True
             
             if matches:
                 similar_ads.append((i, ad))
+        
+        print(f"[DEBUG] Found {len(similar_ads)} similar ads")
         
         # Confirm with user (unless auto_confirm is True)
         if not auto_confirm:
@@ -1208,6 +1310,7 @@ class BrandReviewTool:
         # Apply to all
         success_count = 0
         error_count = 0
+        updated_indices = set()
         
         for idx, ad in similar_ads:
             try:
@@ -1222,21 +1325,25 @@ class BrandReviewTool:
                     self.rename_image_file(ad, old_brand_for_this_ad, corrected_brands[0])
                 
                 success_count += 1
+                updated_indices.add(idx)
             except Exception as e:
                 print(f"[ERROR] Failed to update ad {idx}: {e}")
                 error_count += 1
         
-        # Update lexicon for each brand with the original uncertain brand
+        # Update lexicon for each brand with the original uncertain brand and message signal
         try:
+            # Get message from current ad as a signal
+            current_ad = ad_data['ad']
+            message_signal = (current_ad.get('message') or '').strip()
+            
             for brand in corrected_brands:
-                self.update_lexicon(brand, original_uncertain_brand)
+                self.update_lexicon(brand, original_uncertain_brand, message_signal=message_signal)
         except Exception as e:
             print(f"[ERROR] Failed to update lexicon: {e}")
         
-        # Remove all ads that had the original uncertain brand BEFORE updating current_brand
-        # (otherwise the filter won't work)
+        # Remove only the ads that were actually updated (by index)
         old_count = len(self.unknown_ads)
-        self.unknown_ads = [ad for ad in self.unknown_ads if ad['current_brand'] != original_uncertain_brand]
+        self.unknown_ads = [ad for i, ad in enumerate(self.unknown_ads) if i not in updated_indices]
         removed_count = old_count - len(self.unknown_ads)
         if removed_count > 1:
             print(f"[INFO] Filtered out {removed_count} ads with brand '{original_uncertain_brand}' from review list")
@@ -1297,7 +1404,63 @@ class BrandReviewTool:
                 self.current_index -= 1
             self.show_current_ad()
 
+def run_kroger_reconciliation():
+    """Run image reconciliation for all Kroger clients before starting brand review"""
+    import subprocess
+    from pathlib import Path
+    
+    print("\n" + "="*60)
+    print("🔗 Running Kroger Image Reconciliation")
+    print("="*60)
+    print("This ensures all images are properly linked to JSON files...")
+    
+    # Find all Kroger clients
+    kroger_output = Path("output/kroger")
+    if not kroger_output.exists():
+        print("⚠️  No Kroger output directory found, skipping reconciliation")
+        return
+    
+    clients = [d.name for d in kroger_output.iterdir() if d.is_dir()]
+    
+    if not clients:
+        print("⚠️  No Kroger clients found, skipping reconciliation")
+        return
+    
+    print(f"📋 Found {len(clients)} Kroger clients")
+    
+    total_updated = 0
+    for client in clients:
+        try:
+            result = subprocess.run(
+                ["python3", "tools/reconcile_kroger_images_to_json.py", "--client", client],
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            if result.returncode == 0:
+                # Extract summary from output
+                for line in result.stdout.split('\n'):
+                    if 'Total ads updated:' in line:
+                        count = line.split(':')[-1].strip()
+                        if count != '0':
+                            print(f"  ✅ {client}: {count} ads updated")
+                            total_updated += int(count)
+                        break
+            else:
+                print(f"  ⚠️  {client}: reconciliation failed")
+                
+        except Exception as e:
+            print(f"  ⚠️  {client}: {e}")
+    
+    print(f"\n✅ Reconciliation complete: {total_updated} total ads updated")
+    print("="*60 + "\n")
+
 if __name__ == "__main__":
+    # Run reconciliation first
+    run_kroger_reconciliation()
+    
+    # Then start the brand review tool
     root = tk.Tk()
     app = BrandReviewTool(root)
     root.mainloop()

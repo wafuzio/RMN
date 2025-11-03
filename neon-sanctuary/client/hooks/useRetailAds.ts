@@ -30,8 +30,9 @@ export function useAds(params: {
   types?: string[];
   search?: string;
   pageSize?: number;
+  sort?: "latest" | "oldest" | "name";
 }) {
-  const { retailer, client, term, advertiser, start, end, types, search, pageSize = 24 } = params;
+  const { retailer, client, term, advertiser, start, end, types, search, pageSize = 100, sort } = params;
 
   // Guard: don't fire query until both retailer and client are present
   const enabled = Boolean(retailer && client);
@@ -42,7 +43,19 @@ export function useAds(params: {
   }
   
   return useInfiniteQuery<AdsCardsResponse>({
-    queryKey: ["ads", retailer, client, term, advertiser, start, end, types?.join("|"), search, pageSize],
+    queryKey: [
+      "ads",
+      retailer,
+      client,
+      term,
+      advertiser,
+      start, // These are already strings from formatLocalDate
+      end,   // These are already strings from formatLocalDate
+      types?.join("|"),
+      search,
+      sort,  // Include sort in queryKey for proper cache invalidation
+      pageSize
+    ],
     initialPageParam: 1,
     getNextPageParam: (lastPage, pages) => lastPage.has_more ? pages.length + 1 : undefined,
     queryFn: ({ pageParam }) => {
@@ -50,17 +63,18 @@ export function useAds(params: {
       if (!retailer || !client) {
         throw new Error('retailer and client are required');
       }
-      return api.getAds({ 
-        retailer, 
-        client, 
+      return api.getAds({
+        retailer,
+        client,
         term,
         advertiser,
-        start, 
-        end, 
-        types, 
-        search, 
-        page: pageParam as number, 
-        pageSize 
+        start,
+        end,
+        types,
+        search,
+        sort,  // Pass sort to backend
+        page: pageParam as number,
+        pageSize
       });
     },
     enabled,  // Only run when both retailer and client are present

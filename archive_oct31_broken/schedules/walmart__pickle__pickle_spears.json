@@ -1,0 +1,26 @@
+{
+  "id": "walmart_pickle_pickle_spears_2dac17be",
+  "retailer": "walmart",
+  "client": "pickle",
+  "keywords": [
+    "pickle spears"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "01:10",
+    "12:00",
+    "13:20",
+    "16:05",
+    "20:00"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-10-22T04:52:13Z",
+  "updated_at": "2025-10-22T04:52:13Z"
+}

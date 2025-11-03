@@ -1,0 +1,12 @@
+{
+  "no_login_access": true,
+  "requires_store_selection": false,
+  "requires_location": false,
+  "ads_visible_without_login": false,
+  "working_url_patterns": [
+    "https://www.instacart.com/search?q={keyword}"
+  ],
+  "notes": [
+    "Store search failed: Page.goto: Timeout 30000ms exceeded.\nCall log:\n  - navigating to \"https://www.instacart.com/store/publix/search?q=eggs\", waiting until \"networkidle\"\n"
+  ]
+}

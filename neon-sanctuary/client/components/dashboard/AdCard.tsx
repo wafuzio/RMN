@@ -7,16 +7,21 @@ import { RetailerLogo } from "@/components/dashboard/RetailerLogo";
 import { formatLocal } from "@/lib/date";
 
 // Robust media loader component (handles both images and videos)
-function AdMedia({ imageUrl, videoUrl, alt, isTOA, isSBA, adType }: { imageUrl?: string; videoUrl?: string; alt?: string; isTOA?: boolean; isSBA?: boolean; adType?: string }) {
-  // Prefer video if available, otherwise use image
+function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType }: { imageUrl?: string; videoUrl?: string; posterUrl?: string; alt?: string; isTOA?: boolean; isSBA?: boolean; adType?: string }) {
+  // Prefer video if available, otherwise use image, then poster (for Skyscraper ads)
   const hasVideo = !!videoUrl;
-  const relUrl = hasVideo ? videoUrl : imageUrl;
+  const relUrl = hasVideo ? videoUrl : (imageUrl || posterUrl || null);
 
   if (!relUrl) {
     return <div className="fallback-text text-gray-400 text-sm">No media</div>;
   }
 
   const src = toLocalImageUrl(relUrl);
+  
+  // If toLocalImageUrl returns null, show no media
+  if (!src) {
+    return <div className="fallback-text text-gray-400 text-sm">No media</div>;
+  }
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
   const [mediaKey, setMediaKey] = useState(0);
@@ -41,7 +46,6 @@ function AdMedia({ imageUrl, videoUrl, alt, isTOA, isSBA, adType }: { imageUrl?:
           className="h-full w-full object-cover"
           style={{ display: error ? 'none' : 'block', objectPosition }}
           crossOrigin="anonymous"
-          referrerPolicy="no-referrer"
           controls
           preload="metadata"
           onLoadedMetadata={() => {
@@ -88,18 +92,21 @@ function AdMedia({ imageUrl, videoUrl, alt, isTOA, isSBA, adType }: { imageUrl?:
           setError(false);
         }}
         onError={(e) => {
-          const img = e.target as HTMLImageElement;
-          const errorDetails = {
-            src,
-            originalUrl: imageUrl,
-            status: img.naturalWidth === 0 ? 'not loaded' : 'partially loaded',
-            complete: img.complete,
-          };
-          console.error(
-            '[AdMedia] Failed to load image: ' + JSON.stringify(errorDetails)
-          );
-          setLoaded(false);
-          setError(true);
+          const img = e.currentTarget;
+          
+          // First attempt: try placeholder (only if not already a placeholder)
+          if (!img.src.includes('/api/image/placeholder')) {
+            console.warn('[AdMedia] Image load failed, trying placeholder:', src);
+            img.onerror = null; // prevent loop
+            // Use a simple label instead of the full URL
+            const label = adType || 'ad';
+            img.src = `/api/image/placeholder?text=${encodeURIComponent(label)}`;
+            setError(false); // Reset error state to try placeholder
+          } else {
+            // Placeholder also failed, just show error state silently
+            setLoaded(false);
+            setError(true);
+          }
         }}
       />
       {!loaded && !error && (
@@ -136,7 +143,7 @@ const TYPE_STYLES: Record<string, string> = {
 
 export interface Ad {
   id: string;
-  retailer: string; client: string; keyword: string; ad_type: string; brand: string; message: string; image_url: string; video_url?: string; timestamp: string;
+  retailer: string; client: string; keyword: string; ad_type: string; brand: string; message: string; image_url: string; video_url?: string; poster_url?: string; timestamp: string;
 }
 
 export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOverIndex, currentIndex }: { ad: Ad; onRemove: (id: string)=>void; onOpen: (ad: Ad)=>void; draggableProps?: any; dragIndex?: number | null; dragOverIndex?: number | null; currentIndex?: number; }) {
@@ -184,7 +191,7 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
         ×
       </button>
       <button onClick={() => onOpen(ad)} className={cn("text-left select-none w-full block")} style={{ touchAction: 'none' }}>
-        <AdMedia imageUrl={ad.image_url} videoUrl={ad.video_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} />
+        <AdMedia imageUrl={ad.image_url} videoUrl={ad.video_url} posterUrl={ad.poster_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} />
         <div id="content-frame" className={cn("card-text w-full p-4 flex flex-col")}>
           <div className="flex items-center justify-between mb-1 w-full">
             <div className="font-bold text-[1.2em] text-[#111827]">{ad.brand}</div>

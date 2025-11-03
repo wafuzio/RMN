@@ -1,0 +1,1 @@
+/usr/libexec/dtrace/vm_map_delete_permanent_prot_none.d

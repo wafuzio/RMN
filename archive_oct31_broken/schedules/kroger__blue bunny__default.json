@@ -1,0 +1,23 @@
+{
+  "id": "kroger_blue_bunny_default_7d181867",
+  "retailer": "kroger",
+  "client": "blue bunny",
+  "keywords": [],
+  "days": [
+    "friday",
+    "monday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "09:10",
+    "09:15",
+    "09:20",
+    "09:25",
+    "10:15"
+  ],
+  "enabled": true,
+  "created_at": "2025-10-16T18:32:00.029215Z",
+  "updated_at": "2025-10-16T18:32:00.029215Z"
+}

@@ -1,0 +1,30 @@
+{
+  "id": "kroger_proactiv_proactiv_95fe29f6",
+  "retailer": "kroger",
+  "client": "Proactiv",
+  "keywords": [
+    "Proactiv",
+    "acne kit",
+    "acne skin care",
+    "benzoyl peroxide"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "09:45",
+    "12:25",
+    "15:40",
+    "20:10"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-10-26T04:52:15Z",
+  "updated_at": "2025-10-26T04:52:15Z"
+}

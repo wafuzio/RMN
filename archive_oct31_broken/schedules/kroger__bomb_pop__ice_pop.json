@@ -1,0 +1,28 @@
+{
+  "id": "kroger_bomb_pop_ice_pop_a5e9ef35",
+  "retailer": "kroger",
+  "client": "bomb pop",
+  "keywords": [
+    "ice pop"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "08:00",
+    "12:00",
+    "16:00",
+    "22:40",
+    "23:55"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-10-23T03:58:37Z",
+  "updated_at": "2025-10-23T03:58:37Z"
+}

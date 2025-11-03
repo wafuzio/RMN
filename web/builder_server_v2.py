@@ -20,14 +20,16 @@ sys.path.insert(0, project_root)
 
 from flask import Flask, jsonify, request, send_from_directory, make_response, send_file, Response, abort
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, quote
+from functools import lru_cache
 import json
 import glob
 import mimetypes
 import requests
 import re
 from datetime import datetime, timezone
-from utils.path_taxonomy import allowed_subdirs
+from utils.path_taxonomy import allowed_subdirs, ADTYPE_TO_FOLDER
+from core.brands import canonicalize
 
 app = Flask(__name__)
 
@@ -36,10 +38,15 @@ app = Flask(__name__)
 # ============================================================================
 
 SCRAPER_HOME = os.environ.get("SCRAPER_HOME", project_root)
-OUTPUT_ROOT = os.path.join(SCRAPER_HOME, "output")
+OUTPUT_ROOT = Path(os.path.join(SCRAPER_HOME, "output"))
 ASSETS_ROOT = os.path.join(SCRAPER_HOME, "web", "assets")
 ALLOWED_ORIGINS = set((os.environ.get("ALLOWED_ORIGINS") or "").split(",")) - {""}
 API_KEY = os.environ.get("API_KEY")  # For future POST endpoints
+
+# Brand assets/config
+BRAND_LOGOS_DIR = Path(os.getenv("BRAND_LOGOS_DIR", os.path.join(SCRAPER_HOME, "output/brand_logos")))
+BRAND_LOGO_DB_PATH = Path(os.getenv("BRAND_LOGO_DB_PATH", os.path.join(SCRAPER_HOME, "output/brand_logos/brand_logo_database.json")))
+BRAND_LEXICON_PATH = Path(os.getenv("BRAND_LEXICON_PATH", os.path.join(SCRAPER_HOME, "config/brands.json")))
 
 # ============================================================================
 # Utility Functions
@@ -103,30 +110,107 @@ def utc_range_for(filter_name: str, start: str | None, end: str | None) -> tuple
     start/end: YYYY-MM-DD strings for custom range
     """
     now = datetime.now(timezone.utc)
-    
+
     if filter_name == "lifetime":
         return datetime.min.replace(tzinfo=timezone.utc), datetime.max.replace(tzinfo=timezone.utc)
-    
+
     if filter_name == "mtd":
         start_dt = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         return start_dt, now
-    
+
     if filter_name == "ytd":
         start_dt = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         return start_dt, now
-    
+
     # Custom yyyy-mm-dd range
     def parse_date_utc(d: str) -> datetime:
         return datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    
-    if start and end:
-        start_dt = parse_date_utc(start)  # 00:00Z that day
-        # Inclusive end-of-day
-        end_dt = parse_date_utc(end).replace(hour=23, minute=59, second=59)
+
+    if start or end:
+        # Handle cases where only start or only end is provided
+        start_dt = parse_date_utc(start) if start else parse_date_utc(end)
+        # If only start is provided, use it as the end date too (same day)
+        # If only end is provided, use it as the start date too (same day)
+        # If both are provided, use both with inclusive end-of-day
+        end_dt = parse_date_utc(end) if end else parse_date_utc(start)
+
+        # Ensure start <= end
+        if start_dt > end_dt:
+            start_dt, end_dt = end_dt, start_dt
+
+        # Inclusive end-of-day for end date
+        end_dt = end_dt.replace(hour=23, minute=59, second=59)
         return start_dt, end_dt
-    
+
     # Default: lifetime
     return datetime.min.replace(tzinfo=timezone.utc), datetime.max.replace(tzinfo=timezone.utc)
+
+
+def brand_slug(name: str) -> str:
+    """Normalize to DB's underscore keys: 'Sour Patch Kids' -> 'sour_patch_kids'"""
+    return re.sub(r'[^a-z0-9]+', '_', (name or '').lower()).strip('_')
+
+
+@lru_cache(maxsize=1)
+def get_brand_logo_db() -> dict:
+    """Load brand logo database from JSON file"""
+    if BRAND_LOGO_DB_PATH.is_file():
+        try:
+            return json.loads(BRAND_LOGO_DB_PATH.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+@lru_cache(maxsize=1)
+def get_brand_lexicon() -> dict:
+    """
+    Returns {'by_name': {canonical_name: set(synonyms...)}, 'by_token': {token: canonical_name}}
+    token normalization is lowercase, punctuation-stripped.
+    """
+    out = {"by_name": {}, "by_token": {}}
+    if not BRAND_LEXICON_PATH.is_file():
+        return out
+    try:
+        arr = json.loads(BRAND_LEXICON_PATH.read_text())
+    except Exception:
+        return out
+
+    def norm_token(s: str) -> str:
+        # lower, strip non-alphanumerics (keep letters/numbers only)
+        return re.sub(r'[^a-z0-9]+', '', (s or '').lower())
+
+    for entry in arr:
+        cname = (entry.get("name") or "").strip()
+        if not cname:
+            continue
+        toks = set()
+        toks.add(norm_token(cname))
+        for syn in entry.get("synonyms") or []:
+            syn = (syn or "").strip()
+            if syn:
+                toks.add(norm_token(syn))
+        out["by_name"].setdefault(cname, set()).update(toks)
+        for t in toks:
+            out["by_token"][t] = cname
+    return out
+
+
+def canonicalize_brand(raw: str | None) -> str | None:
+    """
+    Map raw brand to canonical name via brands.json (names + synonyms).
+    Falls back to titlecase raw if not found.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    L = get_brand_lexicon()
+    token = re.sub(r'[^a-z0-9]+', '', raw.lower())
+    cname = L["by_token"].get(token)
+    if cname:
+        return cname
+    # fallback: return cleaned raw (retain user-friendly casing if it looks like a real word)
+    return raw
 
 
 def type_label_for(ad_type: str | None) -> str:
@@ -153,6 +237,7 @@ BLOCKED_BRANDS = {
     "sba",
     "sbv",
     "top banner",
+    "kroger",  # Filter out Kroger house ads
     "tile takeover",
     "featured brand",
     "native ad",
@@ -161,7 +246,49 @@ BLOCKED_BRANDS = {
     "top of aisle",
     "shelf banner",
     "category banner",
+    "unknown",
+    "n/a",
 }
+
+
+def normalize_brand(brand: str | None, ad_type: str | None) -> str | None:
+    """
+    Remove false 'brands' that are actually ad types or placeholders.
+    """
+    if not brand:
+        return None
+    b = brand.strip().lower()
+    t = type_label_for(ad_type).lower()
+    if b == t:
+        return None
+    if b in BLOCKED_BRANDS:
+        return None
+    if "shoppable" in b:
+        return None
+    return brand.strip()
+
+
+def brand_logo_url_for(brand_canonical: str | None, retailer: str | None) -> str | None:
+    """
+    Resolve logo file from brand_logo_database.json (by slug of canonical name).
+    """
+    if not brand_canonical:
+        return None
+    db = get_brand_logo_db()
+    brands = db.get("brands") or {}
+    rec = brands.get(brand_slug(brand_canonical))
+    if not rec:
+        return None
+    allowed = rec.get("retailers")
+    if allowed and retailer and retailer not in allowed:
+        return None
+    filename = os.path.basename(rec.get("logo_file") or "")
+    if not filename:
+        return None
+    path = (BRAND_LOGOS_DIR / filename)
+    if not path.is_file():
+        return None
+    return f"/api/brand_logo/{filename}"
 
 
 def is_blocked_brand(brand_name: str | None) -> bool:
@@ -357,6 +484,20 @@ def build_media_urls_for_ad(retailer: str, client: str, ad: dict) -> dict:
                 if poster_rel:
                     media["poster_url"] = f"/api/image/{retailer}/{client}/{poster_rel}"
 
+    # Last resort: proxy CDN URL if no local file found
+    # This handles Kroger TOA/Skyscraper ads that only have remote URLs
+    if "image_url" not in media:
+        cdn = ad.get("image_url")
+        if isinstance(cdn, str) and cdn.strip():
+            # If it's a relative path (starts with /), prepend Kroger domain
+            if cdn.startswith("/"):
+                full_url = f"https://www.kroger.com{cdn}"
+            else:
+                full_url = cdn
+
+            # Proxy through Express backend to handle CORS and caching
+            media["image_url"] = f"/api/proxy-image?url={quote(full_url, safe='')}"
+
     return media
 
 
@@ -368,6 +509,73 @@ def build_image_url_for_ad(retailer: str, client: str, ad: dict) -> str | None:
     """
     media = build_media_urls_for_ad(retailer, client, ad)
     return media.get("image_url")
+
+# ============================================================================
+# Fail-Closed Image Resolution (Always Returns Image URL)
+# ============================================================================
+
+# Folder synonyms (plural ↔ singular etc.)
+FOLDER_SYNONYMS = {
+    "Shoppable_Display_Ads": "Shoppable_Display_Ad",
+    "Shoppable_Video_Ads": "Shoppable_Video_Ad",
+    "Display_Ads": "Display_Ad",
+}
+
+def normalize_relpath(rel: str) -> str:
+    """Normalize folder names using synonyms (plural/singular)"""
+    parts = rel.split("/", 1)
+    head = parts[0]
+    tail = parts[1] if len(parts) > 1 else ""
+    head = FOLDER_SYNONYMS.get(head, head)
+    return f"{head}/{tail}" if tail else head
+
+def find_file_fallback(root: Path, rel: str) -> Path | None:
+    """
+    Try to find the file even if rel has wrong folder (plural/singular) or casing differences.
+    Last resort: search by basename under client folder.
+    """
+    # 1) exact normalized
+    rel_norm = normalize_relpath(rel)
+    p = (root / rel_norm)
+    if p.is_file():
+        return p
+
+    # 2) try by basename anywhere under client
+    base = Path(rel).name
+    if base:
+        for pp in root.rglob(base):
+            if pp.is_file():
+                return pp
+
+    return None
+
+def build_image_fields(retailer: str, client: str, ad: dict) -> tuple[str, bool, str | None, str | None]:
+    """
+    Returns (image_url: str, has_image: bool, debug_path: str|None, skip_reason: str|None)
+    Always returns a non-empty image_url (real file or placeholder).
+    Handles local files, CDN/remote URLs, and fallback to placeholder.
+    """
+    from urllib.parse import quote_plus, quote
+
+    rel = ad.get("image_path") or ad.get("screenshot") or ad.get("display_image_path")
+    client_root = (OUTPUT_ROOT / retailer / client)
+
+    # 1) Try to resolve local file first
+    if rel:
+        p = find_file_fallback(client_root, rel)
+        if p and p.is_file():
+            rel_url = str(p.relative_to(client_root)).replace("\\", "/")
+            return (f"/api/image/{retailer}/{client}/{rel_url}", True, rel, None)
+
+    # 2) If no local file, try to use the media URL building logic (handles CDN/remote URLs)
+    media = build_media_urls_for_ad(retailer, client, ad)
+    if "image_url" in media:
+        return (media["image_url"], True, rel, None)
+
+    # 3) Last resort: return placeholder with debug context
+    ad_id = ad.get("id") or ad.get("type") or "noid"
+    label = f"{retailer}/{client}/{ad_id}"
+    return (f"/api/image/placeholder?text={quote_plus(label)}", False, rel, "file_not_found")
 
 # ============================================================================
 # Security & CORS
@@ -544,7 +752,12 @@ def list_retailers():
     """List all retailers with output directories"""
     try:
         # Filter out non-retailer directories
-        exclude = {'runs', '.DS_Store', '__pycache__'}
+        # System directories and legacy brand directories
+        exclude = {
+            'runs', 'brand_logos', '.DS_Store', '__pycache__',
+            # Legacy brand directories (should be moved under retailers)
+            'Proactiv', 'land_o_frost', 'pickle'
+        }
         return sorted([
             d for d in os.listdir(OUTPUT_ROOT)
             if os.path.isdir(os.path.join(OUTPUT_ROOT, d)) 
@@ -636,8 +849,8 @@ def index():
             "advertiser_array": "Each ad card includes 'advertisers' array for multi-brand support"
         },
         "environment": {
-            "SCRAPER_HOME": SCRAPER_HOME,
-            "OUTPUT_ROOT": OUTPUT_ROOT,
+            "SCRAPER_HOME": str(SCRAPER_HOME),
+            "OUTPUT_ROOT": str(OUTPUT_ROOT),
             "ALLOWED_ORIGINS": list(ALLOWED_ORIGINS) if ALLOWED_ORIGINS else ["*"],
             "API_KEY_SET": bool(API_KEY)
         }
@@ -846,12 +1059,15 @@ def api_advertisers():
                         # Get advertisers array
                         ad_advertisers = ad.get("advertisers", [])
                         if ad_advertisers:
-                            advertisers.update(ad_advertisers)
+                            # Canonicalize brand names
+                            canonical_names = [canonicalize(adv) or adv for adv in ad_advertisers]
+                            advertisers.update(canonical_names)
                         else:
                             # Fallback to legacy fields
                             legacy = ad.get("brand") or ad.get("advertiser")
                             if legacy:
-                                advertisers.add(legacy)
+                                canonical = canonicalize(legacy) or legacy
+                                advertisers.add(canonical)
                 except Exception:
                     pass
     
@@ -866,21 +1082,35 @@ def api_advertisers():
 def api_ads_cards():
     """
     Get ad cards with filtering and pagination
-    
+
     Query params:
     - retailer (required): retailer slug
     - client (required): client name or "all" for all clients
     - term (optional): filter by search term
     - advertiser (optional): filter by advertiser/brand name
+    - brands (optional): comma-separated list of brands to filter by
+    - types (optional): comma-separated list of ad types to filter by
     - page (optional): page number (default 1)
     - page_size (optional): items per page (default 24, max 100)
+    - start (optional): start date in YYYY-MM-DD format
+    - end (optional): end date in YYYY-MM-DD format
+    - sort (optional): sort order - "latest" (newest first), "oldest" (oldest first), or "name" (by brand A-Z)
+    - include_unresolved (optional): "1", "true", or "yes" to include cards without images (debug mode)
+
+    Note: Sorting is applied to ALL matching cards before pagination, ensuring consistent ordering across pages.
+    By default, cards without resolvable images are excluded. Set include_unresolved=1 to include them
+    with has_image=False and skip_reason="unresolved_image" for debugging purposes.
     """
     retailer = (request.args.get("retailer") or "").strip().lower()
     client = (request.args.get("client") or "").strip()
     term = (request.args.get("term") or "").strip().lower()
     advertiser_filter = (request.args.get("advertiser") or "").strip().lower()
+    brands_filter = (request.args.get("brands") or "").strip()  # comma-separated list
+    types_filter = (request.args.get("types") or "").strip()    # comma-separated list
     start_date = (request.args.get("start") or "").strip()  # YYYY-MM-DD format
     end_date = (request.args.get("end") or "").strip()      # YYYY-MM-DD format
+    sort_order = (request.args.get("sort") or "").strip().lower()  # "latest", "oldest", or "name"
+    include_unresolved = request.args.get("include_unresolved") in ("1", "true", "yes")  # Debug mode
 
     try:
         page = max(int(request.args.get("page", 1)), 1)
@@ -919,15 +1149,24 @@ def api_ads_cards():
             continue
         
         # Get all run files (newest first) - handle both flat and nested structures
+        # Prefer canonical files (run_results_YYYYMMDDHHMMSS.json) over legacy files
         for item in os.listdir(rdir):
             item_path = os.path.join(rdir, item)
             if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
-                files.append((item, item_path, client_name))
+                # Only include canonical format (run_results_YYYYMMDDHHMMSS.json)
+                # Skip legacy format (run_results_{keyword}_{timestamp}.json)
+                filename_base = item.replace("run_results_", "").replace(".json", "")
+                # Canonical format is exactly 14 digits (YYYYMMDDHHMMSS)
+                if filename_base.isdigit() and len(filename_base) == 14:
+                    files.append((item, item_path, client_name))
             elif os.path.isdir(item_path):
                 # Check subdirectories (Walmart structure)
                 for subitem in os.listdir(item_path):
                     if subitem.startswith("run_results_") and subitem.endswith(".json"):
-                        files.append((subitem, os.path.join(item_path, subitem), client_name))
+                        # Same canonical check for nested files
+                        filename_base = subitem.replace("run_results_", "").replace(".json", "")
+                        if filename_base.isdigit() and len(filename_base) == 14:
+                            files.append((subitem, os.path.join(item_path, subitem), client_name))
     
     # Sort by filename (most recent first)
     files = sorted(files, key=lambda x: x[0], reverse=True)
@@ -1093,7 +1332,7 @@ def api_ads_cards():
                                 
                                 # List files and find matches (prefer image extensions over videos)
                                 files = os.listdir(search_dir)
-                                print(f"��� [{retailer}] Found {len(files)} files in {leaf}/, keyword={kw}, timestamp={ts_date}_{ts_hour}:{ts_minute}, brands={ad_brands_lower}")
+                                print(f"����� [{retailer}] Found {len(files)} files in {leaf}/, keyword={kw}, timestamp={ts_date}_{ts_hour}:{ts_minute}, brands={ad_brands_lower}")
                                 
                                 # Sort files to prefer .png, .jpg, .jpeg, .webp over .mp4
                                 image_exts = ('.png', '.jpg', '.jpeg', '.webp')
@@ -1151,13 +1390,12 @@ def api_ads_cards():
                             except Exception as e:
                                 print(f"❌ [{retailer}] Error searching for images: {e}")
                 
-                # Build media URLs (image for grid, optional video for modal)
-                media = build_media_urls_for_ad(retailer, file_client, ad)
+                # Build image fields using fail-closed approach (always returns image_url)
+                img_url, has_img, dbg_rel, reason = build_image_fields(retailer, file_client, ad)
                 
-                # Only include cards with an image for the grid (skip if no image available)
-                image_api = media.get("image_url")
-                if not image_api:
-                    continue
+                # Log misses for monitoring
+                if not has_img:
+                    print(f"⚠️  [{retailer}/{file_client}] Image miss: {reason} - {dbg_rel or 'no path'}")
                 
                 # Extract advertisers - handle new array format and legacy fields
                 advertisers = ad.get("advertisers")  # New array format
@@ -1166,8 +1404,11 @@ def api_ads_cards():
                     legacy_brand = ad.get("brand") or ad.get("advertiser") or ad.get("title")
                     advertisers = [legacy_brand] if legacy_brand else []
 
+                # Canonicalize brand names using lexicon
+                advertisers = [canonicalize(adv) or adv for adv in (advertisers or []) if adv]
+
                 # Filter out blocked brands (ad types that shouldn't be brand names)
-                advertisers = [adv for adv in (advertisers or []) if adv and not is_blocked_brand(adv)]
+                advertisers = [adv for adv in advertisers if not is_blocked_brand(adv)]
 
                 # Campaign slogan detection - words that indicate this is NOT a brand name
                 campaign_keywords = {'halloween', 'christmas', 'holiday', 'summer', 'spring', 'fall', 'winter',
@@ -1196,6 +1437,8 @@ def api_ads_cards():
                         parsed_advertisers = advertiser_segment.split('+')
                         # Clean up (remove underscores, capitalize)
                         parsed_advertisers = [adv.replace('_', ' ').title() for adv in parsed_advertisers if adv and adv != 'unknown']
+                        # Canonicalize brand names
+                        parsed_advertisers = [canonicalize(adv) or adv for adv in parsed_advertisers]
                         # Filter out blocked brands (ad types)
                         advertisers = [adv for adv in parsed_advertisers if not is_blocked_brand(adv)]
 
@@ -1217,7 +1460,7 @@ def api_ads_cards():
                 iso_ts = to_iso_z(raw_ts, run_id)
                 epoch_ms = iso_to_epoch_ms(iso_ts)
                 
-                # Build card with image (required) and optional video/poster
+                # Build card with image (always present - real or placeholder)
                 card = {
                     "retailer": retailer,
                     "client": file_client,
@@ -1226,7 +1469,8 @@ def api_ads_cards():
                     "brand": brand,
                     "advertisers": advertisers,  # NEW: array of advertisers for filtering
                     "message": message,
-                    "image_url": image_api,
+                    "image_url": img_url,  # NEVER empty - real file or placeholder
+                    "has_image": has_img,  # true when real file served, false when placeholder
                     "run_file": fn,
                     "timestamp": iso_ts,  # Normalized ISO Z
                     "timestamp_ms": epoch_ms,  # Epoch milliseconds for easy filtering
@@ -1234,11 +1478,32 @@ def api_ads_cards():
                     "ad_index": idx  # Add index for unique identification
                 }
                 
-                # Attach optional video for modal/detail use
-                if media.get("video_url"):
-                    card["video_url"] = media["video_url"]
-                if media.get("poster_url"):
-                    card["poster_url"] = media["poster_url"]
+                # Add debug fields for unresolved images
+                if not has_img:
+                    card["skip_reason"] = reason
+                    # Optional: keep original path for audits (only when include_unresolved=1)
+                    if include_unresolved and dbg_rel:
+                        card["image_path"] = dbg_rel
+                
+                # Normalize brand via lexicon and attach logo
+                card["type_label"] = type_label_for(card.get("ad_type"))
+                
+                # 1) Canonicalize brand via lexicon
+                raw_brand = card.get("brand")
+                brand_canonical = canonicalize_brand(raw_brand)
+                
+                # 2) Drop false brands that equal ad types/placeholders
+                brand_canonical = normalize_brand(brand_canonical, card.get("ad_type"))
+                
+                # 3) Set brand fields
+                card["brand_canonical"] = brand_canonical
+                card["brand"] = brand_canonical  # keep brand = canonical for UI simplicity
+                
+                # 4) Attach logo URL if present in DB/files
+                card["brand_logo_url"] = brand_logo_url_for(brand_canonical, retailer)
+                
+                # Note: Video/poster support can be added later if needed
+                # For now, focus on ensuring every card has an image
                 
                 all_cards.append(card)
         except Exception as e:
@@ -1255,32 +1520,116 @@ def api_ads_cards():
                 filtered_cards.append(card)
         all_cards = filtered_cards
 
+    # Filter by brands if specified (comma-separated list)
+    if brands_filter:
+        brands_list = [b.strip().lower() for b in brands_filter.split(',') if b.strip()]
+        if brands_list:
+            filtered_cards = []
+            for card in all_cards:
+                card_brand = (card.get("brand") or "").lower()
+                if card_brand in brands_list:
+                    filtered_cards.append(card)
+            all_cards = filtered_cards
+
+    # Filter by ad types if specified (comma-separated list)
+    if types_filter:
+        types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
+        if types_list:
+            filtered_cards = []
+            for card in all_cards:
+                card_type = (card.get("ad_type") or "").lower()
+                # Normalize for comparison: replace underscores and hyphens with spaces
+                card_type_normalized = card_type.replace("_", " ").replace("-", " ")
+                # Check if any requested type matches the card type (exact or substring)
+                if any(req_type in card_type_normalized or card_type_normalized in req_type for req_type in types_list):
+                    filtered_cards.append(card)
+            all_cards = filtered_cards
+
     # Filter by date range if specified (UTC-aware)
+    # If start_date is provided (even without end_date), apply the filter
+    # Empty/missing parameters mean lifetime (all dates)
     if start_date or end_date:
+        # Log the filtering operation for debugging
+        print(f"[{retailer}/{client}] 📅 Date filter requested: start={start_date}, end={end_date}")
+
         # Determine filter type and get UTC range
         filter_name = "custom"  # Default to custom range
         start_dt, end_dt = utc_range_for(filter_name, start_date, end_date)
-        
+
+        print(f"[{retailer}/{client}] 📅 UTC range: {start_dt.isoformat()} to {end_dt.isoformat()}")
+        print(f"[{retailer}/{client}] 📅 Filtering {len(all_cards)} cards...")
+
         filtered_cards = []
         for card in all_cards:
             timestamp = card.get("timestamp", "")
             if not timestamp:
                 continue
-            
+
             try:
                 # Parse normalized ISO Z timestamp
                 ad_dt = parse_utc(timestamp)
-                
+
                 # Check if within range (inclusive)
                 if start_dt <= ad_dt <= end_dt:
                     filtered_cards.append(card)
             except Exception as e:
                 # Skip cards with unparseable timestamps
-                print(f"Warning: Could not parse timestamp '{timestamp}': {e}")
+                print(f"Warning: [{retailer}/{client}] Could not parse timestamp '{timestamp}': {e}")
                 continue
-        
-        all_cards = filtered_cards
 
+        all_cards = filtered_cards
+        print(f"[{retailer}/{client}] ✅ After date filtering: {len(all_cards)} cards remain")
+    else:
+        # No date range filtering - return all cards (lifetime)
+        print(f"[{retailer}/{client}] 📅 No date filter specified (lifetime mode) - returning all {len(all_cards)} cards")
+
+    # Apply sorting to all cards (before pagination)
+    if sort_order:
+        print(f"[{retailer}/{client}] 📊 Sorting cards by: {sort_order}")
+        if sort_order == "latest":
+            # Sort by timestamp descending (newest first)
+            all_cards.sort(key=lambda c: c.get("timestamp_ms", 0), reverse=True)
+        elif sort_order == "oldest":
+            # Sort by timestamp ascending (oldest first)
+            all_cards.sort(key=lambda c: c.get("timestamp_ms", 0))
+        elif sort_order == "name":
+            # Sort by brand name alphabetically
+            all_cards.sort(key=lambda c: (c.get("brand") or "").lower())
+        print(f"[{retailer}/{client}] ✅ Cards sorted by {sort_order}")
+
+    # Deduplicate cards based on unique key (run_file + ad_index is the true unique identifier)
+    seen = set()
+    deduped_cards = []
+    duplicates_removed = 0
+    for card in all_cards:
+        # Create unique key: run_file + ad_index uniquely identifies an ad
+        # This prevents the same ad from appearing multiple times even if processed differently
+        key = (
+            card.get("run_file"),  # The JSON filename
+            card.get("ad_index")   # Position in that JSON's ads array
+        )
+        if key not in seen:
+            seen.add(key)
+            deduped_cards.append(card)
+        else:
+            duplicates_removed += 1
+    
+    all_cards = deduped_cards
+    if duplicates_removed > 0:
+        print(f"[{retailer}/{client}] ⚠️  Deduplication: Removed {duplicates_removed} duplicate cards")
+    
+    # Calculate brand aggregations from ALL cards (before pagination)
+    brand_counts = {}
+    for card in all_cards:
+        brand = card.get("brand") or card.get("brand_canonical") or "Unknown"
+        brand_counts[brand] = brand_counts.get(brand, 0) + 1
+    
+    # Sort brands by count (descending)
+    brands_list = [
+        {"brand": brand, "count": count, "percentage": round((count / len(all_cards)) * 100, 1) if all_cards else 0}
+        for brand, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True)
+    ]
+    
     # Paginate
     start = (page - 1) * page_size
     end = start + page_size
@@ -1295,10 +1644,191 @@ def api_ads_cards():
         "page_size": page_size,
         "has_more": has_more,
         "total_cards": len(all_cards),
+        "brands": brands_list,
         "filters": {
             "term": term or None,
             "advertiser": advertiser_filter or None
         }
+    })
+
+@app.route("/api/ads/batch", methods=["GET"])
+def api_ads_batch():
+    """
+    Get ads in batch mode across multiple retailers/clients
+    
+    Query params:
+    - retailers (required): comma-separated list of retailers
+    - clients (required): comma-separated list of clients  
+    - page (optional): page number (default 1)
+    - page_size (optional): items per page (default 100, max 200)
+    - start (optional): start date filter
+    - end (optional): end date filter
+    - search (optional): search term filter
+    - types (optional): comma-separated ad types
+    - brands (optional): comma-separated brands
+    """
+    retailers_param = (request.args.get("retailers") or "").strip()
+    clients_param = (request.args.get("clients") or "").strip()
+    
+    if not retailers_param or not clients_param:
+        return jsonify({"error": "retailers and clients parameters required"}), 400
+    
+    retailers = [r.strip().lower() for r in retailers_param.split(",") if r.strip()]
+    clients = [c.strip() for c in clients_param.split(",") if c.strip()]
+    
+    try:
+        page = max(int(request.args.get("page", 1)), 1)
+    except Exception:
+        page = 1
+    
+    try:
+        page_size = min(max(int(request.args.get("page_size", 100)), 1), 200)
+    except Exception:
+        page_size = 100
+    
+    # Collect all cards from all retailer/client combinations
+    all_cards = []
+    for retailer in retailers:
+        for client in clients:
+            # Reuse the cards endpoint logic
+            rdir = runs_dir(retailer, client)
+            if not os.path.isdir(rdir):
+                continue
+            
+            # Get run files
+            files = []
+            for item in os.listdir(rdir):
+                item_path = os.path.join(rdir, item)
+                if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                    filename_base = item.replace("run_results_", "").replace(".json", "")
+                    if filename_base.isdigit() and len(filename_base) == 14:
+                        files.append((item, item_path))
+                elif os.path.isdir(item_path):
+                    for subitem in os.listdir(item_path):
+                        if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                            filename_base = subitem.replace("run_results_", "").replace(".json", "")
+                            if filename_base.isdigit() and len(filename_base) == 14:
+                                files.append((subitem, os.path.join(item_path, subitem)))
+            
+            # Process each file
+            for _, fpath in files:
+                try:
+                    with open(fpath, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    # Handle both canonical and legacy structures
+                    ads = data.get("ads", [])
+                    if not ads and "results" in data:
+                        for result in data["results"]:
+                            ads.extend(result.get("ads", []))
+                    
+                    # Build cards
+                    for ad in ads:
+                        image_url = build_image_url_for_ad(retailer, client, ad)
+                        if image_url:  # Only include ads with resolvable images
+                            all_cards.append({
+                                "id": ad.get("id", ""),
+                                "retailer": retailer,
+                                "client": client,
+                                "type": ad.get("type", ""),
+                                "brand": ad.get("brand", ""),
+                                "image_url": image_url,
+                                "timestamp": ad.get("timestamp", ""),
+                                "advertisers": ad.get("advertisers", [])
+                            })
+                except Exception:
+                    continue
+    
+    # Sort by timestamp (newest first)
+    all_cards.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    
+    # Paginate
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    page_cards = all_cards[start_idx:end_idx]
+    
+    return jsonify({
+        "cards": page_cards,
+        "page": page,
+        "page_size": page_size,
+        "has_more": end_idx < len(all_cards),
+        "total_cards": len(all_cards)
+    })
+
+@app.route("/api/ads/stats", methods=["GET"])
+def api_ads_stats():
+    """
+    Get statistics for ads across retailers/clients
+    
+    Query params:
+    - retailers (required): comma-separated list of retailers
+    - clients (required): comma-separated list of clients
+    - start (optional): start date filter
+    - end (optional): end date filter
+    - search (optional): search term filter
+    - types (optional): comma-separated ad types
+    - brands (optional): comma-separated brands
+    """
+    retailers_param = (request.args.get("retailers") or "").strip()
+    clients_param = (request.args.get("clients") or "").strip()
+    
+    if not retailers_param or not clients_param:
+        return jsonify({"error": "retailers and clients parameters required"}), 400
+    
+    retailers = [r.strip().lower() for r in retailers_param.split(",") if r.strip()]
+    clients = [c.strip() for c in clients_param.split(",") if c.strip()]
+    
+    total_ads = 0
+    total_brands = set()
+    total_types = set()
+    
+    for retailer in retailers:
+        for client in clients:
+            rdir = runs_dir(retailer, client)
+            if not os.path.isdir(rdir):
+                continue
+            
+            # Get run files
+            files = []
+            for item in os.listdir(rdir):
+                item_path = os.path.join(rdir, item)
+                if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                    filename_base = item.replace("run_results_", "").replace(".json", "")
+                    if filename_base.isdigit() and len(filename_base) == 14:
+                        files.append(item_path)
+                elif os.path.isdir(item_path):
+                    for subitem in os.listdir(item_path):
+                        if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                            filename_base = subitem.replace("run_results_", "").replace(".json", "")
+                            if filename_base.isdigit() and len(filename_base) == 14:
+                                files.append(os.path.join(item_path, subitem))
+            
+            # Count ads and collect metadata
+            for fpath in files:
+                try:
+                    with open(fpath, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    ads = data.get("ads", [])
+                    if not ads and "results" in data:
+                        for result in data["results"]:
+                            ads.extend(result.get("ads", []))
+                    
+                    total_ads += len(ads)
+                    for ad in ads:
+                        if ad.get("brand"):
+                            total_brands.add(ad["brand"])
+                        if ad.get("type"):
+                            total_types.add(ad["type"])
+                except Exception:
+                    continue
+    
+    return jsonify({
+        "total_ads": total_ads,
+        "total_brands": len(total_brands),
+        "total_types": len(total_types),
+        "brands": sorted(list(total_brands)),
+        "types": sorted(list(total_types))
     })
 
 @app.route("/api/image/<retailer>/<client>/<path:filename>", methods=["GET"])
@@ -1344,7 +1874,60 @@ def api_video(retailer, client, req_relpath):
     ctype = "video/mp4" if str(fpath).lower().endswith(".mp4") else (mimetypes.guess_type(str(fpath))[0] or "application/octet-stream")
     return send_file(str(fpath), mimetype=ctype, as_attachment=False, conditional=True)
 
+@app.route("/api/image/placeholder")
+def api_image_placeholder():
+    """
+    Generate a placeholder image with debug text.
+    Used when actual image file cannot be found.
+    """
+    from io import BytesIO
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        # Fallback if PIL not installed
+        return Response("MISSING IMAGE", mimetype="text/plain", status=200)
+    
+    text = request.args.get("text", "MISSING")
+    w = int(request.args.get("w", 640))
+    h = int(request.args.get("h", 360))
+    bg = (240, 243, 247)  # light gray
+    fg = (60, 65, 70)
+    
+    img = Image.new("RGB", (max(100, w), max(60, h)), color=bg)
+    draw = ImageDraw.Draw(img)
+    
+    # Use default font
+    try:
+        font = ImageFont.load_default()
+    except Exception:
+        font = None
+    
+    # Simple text centering
+    try:
+        # Modern PIL uses textbbox
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+    except AttributeError:
+        # Older PIL uses textsize
+        tw, th = draw.textsize(text, font=font)
+    
+    x = (img.width - tw) // 2
+    y = (img.height - th) // 2
+    draw.text((x, y), text, fill=fg, font=font)
+    
+    bio = BytesIO()
+    img.save(bio, format="PNG", optimize=True)
+    bio.seek(0)
+    
+    resp = Response(bio.read(), mimetype="image/png")
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    return resp
+
 @app.route("/proxy-image")
+@app.route("/api/proxy-image")
 def proxy_image():
     """
     Proxy for absolute image URLs (e.g., historical ngrok URLs).
@@ -1353,18 +1936,18 @@ def proxy_image():
     url = request.args.get("url")
     if not url:
         return jsonify(error="missing url"), 400
-    
+
     try:
         upstream = requests.get(url, stream=True, timeout=15, headers={
             'ngrok-skip-browser-warning': 'true'
         })
         if not upstream.ok:
             abort(upstream.status_code)
-        
+
         ct = upstream.headers.get('Content-Type', '')
         if not ct.startswith('image/'):
             return jsonify(error='upstream not image', content_type=ct), 415
-        
+
         resp = Response(upstream.iter_content(64 * 1024), status=200, mimetype=ct)
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Cross-Origin-Resource-Policy'] = 'cross-origin'
@@ -1372,6 +1955,46 @@ def proxy_image():
         return resp
     except requests.RequestException as e:
         return jsonify(error='upstream request failed', details=str(e)), 502
+
+@app.route("/api/proxy-json")
+def proxy_json():
+    """
+    JSON proxy endpoint for Builder.io to avoid CORS/headers issues.
+    Proxies whitelisted internal API paths with ACAO: *.
+    """
+    from urllib.parse import urljoin
+    
+    # Get path parameter
+    path = request.args.get("path", "")
+    
+    # Whitelist only /api/ paths to prevent SSRF
+    if not path.startswith("/api/"):
+        return jsonify({"error": "invalid path - must start with /api/"}), 400
+    
+    # Build upstream URL
+    upstream_url = urljoin("http://localhost:5006", path)
+    
+    try:
+        # Forward the request to local Flask
+        r = requests.get(
+            upstream_url,
+            timeout=10,
+            headers={'ngrok-skip-browser-warning': 'true'}
+        )
+        
+        # Return response with permissive CORS
+        return Response(
+            r.content,
+            status=r.status_code,
+            headers={
+                "Content-Type": r.headers.get("Content-Type", "application/json"),
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+            }
+        )
+    except requests.RequestException as e:
+        return jsonify({"error": "upstream request failed", "details": str(e)}), 502
 
 @app.route("/api/logo/<retailer>", methods=["GET"])
 def api_logo(retailer):
@@ -1421,6 +2044,84 @@ def api_logo(retailer):
             return _image_response(logo_path)
     
     return jsonify({"error": f"logo not found for {retailer}"}), 404
+
+
+@app.route("/api/brand_logo/<path:brand_name>")
+def api_brand_logo(brand_name: str):
+    """
+    Serve brand logo files from output/brand_logos.
+    Accepts either a brand name (e.g., "Outshine") or filename (e.g., "outshine.png").
+    Looks up the actual filename in the brand logo database.
+    """
+    brand_name = os.path.basename(brand_name)  # Security: prevent path traversal
+    
+    # If it already has an extension, try to serve it directly
+    if '.' in brand_name:
+        path = (BRAND_LOGOS_DIR / brand_name).resolve()
+        if path.exists() and path.is_file():
+            return send_file(path, as_attachment=False)
+    
+    # Otherwise, look up the brand in the database
+    db = get_brand_logo_db()
+    brand_key = brand_slug(brand_name)  # Normalize to database key format
+    
+    if brand_key in db.get("brands", {}):
+        logo_file = db["brands"][brand_key].get("logo_file")
+        if logo_file:
+            path = (BRAND_LOGOS_DIR / logo_file).resolve()
+            if path.exists() and path.is_file():
+                return send_file(path, as_attachment=False)
+    
+    # Fallback: try case-insensitive filename match
+    for file in BRAND_LOGOS_DIR.glob("*"):
+        if file.stem.lower() == brand_name.lower():
+            return send_file(file, as_attachment=False)
+    
+    abort(404)
+
+
+
+@app.route("/api/brand-logos/status")
+def api_brand_logos_status():
+    """Coverage API to see what brands are missing logos"""
+    retailer = request.args.get("retailer") or "instacart"
+    client = request.args.get("client")
+    
+    # Gather brands from cards API (one page is fine for a snapshot)
+    url = f"{request.host_url.rstrip('/')}/api/ads/cards?retailer={retailer}&client={client}&page_size=500"
+    try:
+        resp = requests.get(url, timeout=10)
+        cards = resp.json().get("cards", [])
+    except Exception:
+        cards = []
+
+    L = get_brand_lexicon()
+    db = get_brand_logo_db().get("brands", {})
+    seen = {}
+    for c in cards:
+        rb = (c.get("brand") or c.get("brand_canonical") or "").strip()
+        if not rb:
+            continue
+        canon = canonicalize_brand(rb)
+        canon = normalize_brand(canon, c.get("ad_type"))
+        if not canon:
+            continue
+        slug = brand_slug(canon)
+        has_logo = slug in db
+        seen.setdefault(slug, {"brand": canon, "has_logo": has_logo, "count": 0})
+        seen[slug]["count"] += 1
+
+    total = len(seen)
+    covered = sum(1 for v in seen.values() if v["has_logo"])
+    return jsonify({
+        "retailer": retailer,
+        "client": client,
+        "total_canonical_brands": total,
+        "covered": covered,
+        "coverage_pct": (covered / total * 100.0) if total else 0.0,
+        "brands": sorted(seen.values(), key=lambda x: (-x["has_logo"], -x["count"], x["brand"].lower()))
+    })
+
 
 # ============================================================================
 # Legacy Endpoints (for backward compatibility)
@@ -1551,6 +2252,62 @@ def health():
         "timestamp": datetime.now().isoformat(),
         "retailers_available": len(list_retailers())
     })
+
+@app.route("/api/audit/images")
+def api_audit_images():
+    """
+    Audit endpoint to measure image resolution coverage.
+    Returns counts of resolvable vs. missing images for a retailer/client.
+    """
+    retailer = request.args.get("retailer")
+    client = request.args.get("client")
+    if not retailer or not client:
+        abort(400, description="retailer and client are required")
+
+    data = {
+        "retailer": retailer,
+        "client": client,
+        "total_cards": 0,
+        "resolvable": 0,
+        "missing": 0,
+        "examples": []
+    }
+
+    # Fetch cards with include_unresolved=1 to see all cards
+    try:
+        import requests as _r
+        base = request.host_url.rstrip("/")
+        r = _r.get(
+            f"{base}/api/ads/cards",
+            params={
+                "retailer": retailer,
+                "client": client,
+                "page_size": 1000,
+                "include_unresolved": "1"
+            },
+            timeout=15
+        )
+        cards = r.json().get("cards", [])
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch cards", "details": str(e)}), 500
+
+    data["total_cards"] = len(cards)
+    for c in cards:
+        if c.get("has_image") is True:
+            data["resolvable"] += 1
+        else:
+            data["missing"] += 1
+            if len(data["examples"]) < 10:
+                data["examples"].append({
+                    "ad_type": c.get("ad_type"),
+                    "brand": c.get("brand"),
+                    "image_path": c.get("image_path"),
+                    "skip_reason": c.get("skip_reason"),
+                    "run_file": c.get("run_file")
+                })
+    
+    data["coverage_pct"] = (data["resolvable"] / data["total_cards"] * 100.0) if data["total_cards"] else 0.0
+    return jsonify(data)
 
 # ============================================================================
 # Error Handlers

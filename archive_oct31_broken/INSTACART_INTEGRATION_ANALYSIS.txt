@@ -1,0 +1,325 @@
+================================================================================
+INSTACART INTEGRATION ANALYSIS
+================================================================================
+
+CURRENT STATUS: ⚠️ PARTIALLY IMPLEMENTED
+
+Instacart scraper exists but uses LEGACY JSON structure (Kroger-style).
+Needs migration to CANONICAL schema to work with Builder.io system.
+
+================================================================================
+KEY DIFFERENCES: INSTACART vs WALMART
+================================================================================
+
+1. JSON STRUCTURE
+   
+   INSTACART (Current - Legacy):
+   {
+     "keyword": "ice cream",
+     "search_term": "ice cream",
+     "store": "Whole Foods",
+     "timestamp": "2025-10-27 14:30:00",  // ❌ Legacy format
+     "retailer": "instacart",
+     "url": "https://...",
+     "source_file": "search_results_ice_cream_2025-10-27_14-30-00.html",
+     "results": [                          // ❌ Nested structure
+       {
+         "ads": [
+           {
+             "type": "Shoppable Display Ad",
+             "selector": "structural",
+             "id": "abc123",
+             "index": 0,
+             "bbox": {...},
+             "advertisers": ["GoodPop"],   // ✅ Already has advertisers array
+             "screenshot": "Shoppable_Display_Ads/instacart__goodpop__..."
+           }
+         ]
+       }
+     ]
+   }
+
+   WALMART (Canonical):
+   {
+     "retailer": "walmart",
+     "client": "halo_top",
+     "keyword": "ice cream",
+     "timestamp": "2025-10-27T14:30:00Z",  // ✅ ISO Z
+     "run_id": "20251027143000",
+     "ads": [                               // ✅ Flat structure
+       {
+         "id": "sba_1",
+         "type": "SBA",
+         "brand": "Outshine",
+         "brand_logo": null,
+         "advertisers": ["Outshine"],
+         "title": "...",
+         "description": "...",
+         "cta": "...",
+         "href": "...",
+         "image_url": "...",
+         "image_path": "SBA/walmart__outshine__...",
+         "products": [],
+         "metadata": {"slot": 1}
+       }
+     ]
+   }
+
+2. AD TYPES
+
+   INSTACART:
+   - Shoppable Display Ads (image-based carousel ads)
+   - Shoppable Video Ads (video carousel ads)
+   - Shoppable Recipe Ads (future)
+   - Display Ads (banner ads)
+
+   WALMART:
+   - SBA (Sponsored Brand Ads)
+   - SBV (Sponsored Brand Video)
+   - Tile_Takeover
+
+3. DIRECTORY STRUCTURE
+
+   INSTACART (Current):
+   output/instacart/
+     ├── halo_top/
+     │   ├── Shoppable_Display_Ads/
+     │   │   └── instacart__goodpop__shoppable_display_ad__halo_top__ice_cream__D2025-10-27_T14-30.00_1.png
+     │   ├── Shoppable_Video_Ads/
+     │   ├── Main/
+     │   └── search_results_ice_cream_2025-10-27_14-30-00.json  // ❌ Flat JSON
+
+   WALMART (Canonical):
+   output/walmart/
+     ├── halo_top/
+     │   └── runs/
+     │       └── 20251027143000/
+     │           ├── SBA/
+     │           │   └── walmart__outshine__sba__halo_top__ice_cream__D2025-10-27_T14-30.00_1.png
+     │           ├── SBV/
+     │           └── run_results_20251027143000.json  // ✅ Nested in run folder
+
+4. ADVERTISER EXTRACTION
+
+   INSTACART: ✅ Already extracts advertisers array
+   - Strategy 1: Brand link (/brands/goodpop)
+   - Strategy 2: Logo alt text
+   - Strategy 3: Heading text
+
+   WALMART: ✅ Extracts brand from ad data
+   - Parses from filename if needed
+
+5. AUTHENTICATION
+
+   INSTACART: ⚠️ Requires authenticated session
+   - Uses persistent browser profile
+   - Needs login credentials
+   - Session management required
+
+   WALMART: ✅ No auth required
+   - Public search results
+
+================================================================================
+WHAT NEEDS TO BE DONE
+================================================================================
+
+PHASE 1: CANONICAL SCHEMA MIGRATION (CRITICAL)
+-----------------------------------------------
+
+1. Update instacart_search_and_capture.py:
+
+   A. Add canonical helpers (copy from walmart_search_and_capture.py):
+      - build_run_id() - Generate run_id from timestamp
+      - build_run_payload() - Create canonical JSON structure
+      - save_run_artifacts() - Save to runs/<run_id>/ directory
+      - build_ad_object() - Create canonical ad objects
+
+   B. Change JSON structure:
+      FROM: {"results": [{"ads": [...]}]}
+      TO:   {"retailer": "instacart", "client": "...", "ads": [...]}
+
+   C. Update timestamp format:
+      FROM: "2025-10-27 14:30:00"
+      TO:   "2025-10-27T14:30:00Z" (use utils/time_utils.py::now_iso_z())
+
+   D. Add run_id field:
+      run_id = build_run_id()  # "20251027143000"
+
+   E. Flatten ad structure:
+      - Move ads from results[0].ads to top-level ads[]
+      - Add required fields: id, brand, brand_logo, title, description, cta, href, image_url, image_path, products, metadata
+
+   F. Update directory structure:
+      - Create runs/<run_id>/ directory
+      - Move ad type folders inside run directory
+      - Save JSON as run_results_<run_id>.json
+
+   G. Update image_path field:
+      - Change from: "Shoppable_Display_Ads/instacart__..."
+      - To: "Shoppable_Display_Ads/instacart__..." (relative to client root)
+
+PHASE 2: BACKEND API SUPPORT (MINOR)
+-------------------------------------
+
+2. Flask API (web/builder_server_v2.py):
+
+   ✅ Already supports Instacart:
+      - Ad type mapping exists (lines 551-554)
+      - Sponsored Label filtering (lines 936-938)
+      - Retailer logo mapping (line 1319)
+
+   ⚠️ Needs verification:
+      - Test /api/ads/cards with Instacart data
+      - Verify image resolution works with Instacart paths
+      - Check advertiser extraction from advertisers[] array
+
+PHASE 3: FRONTEND SUPPORT (MINOR)
+----------------------------------
+
+3. Builder.io Integration:
+
+   ✅ Should work automatically once canonical schema is in place
+   - Grid displays cards from /api/ads/cards
+   - Modal shows ad details
+   - Filters work with normalized timestamps
+
+   ⚠️ May need:
+      - Instacart-specific ad type labels
+      - Store selector (Whole Foods, Kroger, etc.)
+
+PHASE 4: TESTING
+----------------
+
+4. Test Workflow:
+
+   A. Run Instacart scraper with updated canonical schema:
+      python3 instacart_search_and_capture.py --client halo_top --keyword "ice cream"
+
+   B. Verify directory structure:
+      output/instacart/halo_top/runs/20251027143000/
+        ├── Shoppable_Display_Ads/
+        ├── Shoppable_Video_Ads/
+        ├── Main/
+        └── run_results_20251027143000.json
+
+   C. Verify JSON structure:
+      {
+        "retailer": "instacart",
+        "client": "halo_top",
+        "keyword": "ice cream",
+        "timestamp": "2025-10-27T14:30:00Z",
+        "run_id": "20251027143000",
+        "ads": [
+          {
+            "id": "shoppable_display_ad_1",
+            "type": "Shoppable Display Ad",
+            "brand": "GoodPop",
+            "advertisers": ["GoodPop"],
+            "image_path": "Shoppable_Display_Ads/instacart__goodpop__...",
+            ...
+          }
+        ]
+      }
+
+   D. Test API:
+      curl "http://localhost:5006/api/ads/cards?retailer=instacart&client=halo_top" | jq
+
+   E. Test Builder.io:
+      - Load Instacart cards in grid
+      - Verify images display
+      - Test modal opens
+      - Check filters work
+
+================================================================================
+MIGRATION PRIORITY
+================================================================================
+
+HIGH PRIORITY:
+1. ✅ Canonical JSON schema (Phase 1A-G)
+2. ✅ Timestamp normalization (use now_iso_z())
+3. ✅ Directory structure (runs/<run_id>/)
+
+MEDIUM PRIORITY:
+4. ⚠️ API testing (Phase 2)
+5. ⚠️ Builder.io integration testing (Phase 3)
+
+LOW PRIORITY:
+6. ⏳ Store selector UI
+7. ⏳ Recipe ads support (future ad type)
+
+================================================================================
+CODE CHANGES NEEDED
+================================================================================
+
+FILE: instacart_search_and_capture.py
+
+1. Add imports:
+   from utils.time_utils import now_iso_z
+
+2. Add helpers (copy from walmart_search_and_capture.py):
+   def build_run_id():
+       return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+   
+   def build_run_payload(retailer, client, keyword, run_id):
+       return {
+           "retailer": retailer,
+           "client": client,
+           "keyword": keyword,
+           "timestamp": now_iso_z(),
+           "run_id": run_id,
+           "ads": []
+       }
+   
+   def build_ad_object(ad_type, index, advertiser, image_path, ...):
+       return {
+           "id": f"{ad_type}_{index}",
+           "type": ad_type,
+           "brand": advertiser or "Unknown",
+           "advertisers": [advertiser] if advertiser else [],
+           "image_path": image_path,
+           ...
+       }
+
+3. Update main scraping logic:
+   - Initialize run_id at start
+   - Create runs/<run_id>/ directory
+   - Build canonical ad objects
+   - Save to run_results_<run_id>.json
+
+4. Update screenshot paths:
+   - Save relative to client root
+   - Include in image_path field
+
+================================================================================
+ESTIMATED EFFORT
+================================================================================
+
+Phase 1 (Canonical Schema): 2-3 hours
+- Copy helpers from Walmart adapter
+- Update JSON structure
+- Update directory creation
+- Test with one client
+
+Phase 2 (API Testing): 30 minutes
+- Verify API endpoints work
+- Test image resolution
+
+Phase 3 (Frontend Testing): 30 minutes
+- Load in Builder.io
+- Verify display
+
+TOTAL: ~3-4 hours
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Create backup of current instacart_search_and_capture.py
+2. Implement Phase 1 changes (canonical schema)
+3. Test with one client (halo_top)
+4. Verify API returns correct data
+5. Test in Builder.io
+6. Update all Instacart schedules if needed
+7. Document Instacart-specific features (store selector, etc.)
+
+================================================================================

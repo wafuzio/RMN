@@ -860,6 +860,34 @@ def search_and_capture(search_term=None, output_dir=None):
             for f in toa_files + sky_files:
                 print(f"   - {os.path.basename(f)}")
             
+            # Run reconciliation to link images to JSON
+            print("\n🔗 Running image reconciliation...")
+            try:
+                import subprocess
+                client_name = os.path.basename(saved_output_dir)
+                reconcile_cmd = [
+                    "python3",
+                    "tools/reconcile_kroger_images_to_json.py",
+                    "--client", client_name
+                ]
+                reconcile_result = subprocess.run(
+                    reconcile_cmd,
+                    cwd=os.path.dirname(os.path.dirname(saved_output_dir)),
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                if reconcile_result.returncode == 0:
+                    print("✅ Image reconciliation complete")
+                    # Print last few lines of output
+                    output_lines = reconcile_result.stdout.strip().split('\n')
+                    for line in output_lines[-5:]:
+                        print(f"   {line}")
+                else:
+                    print(f"⚠️ Reconciliation failed: {reconcile_result.stderr}")
+            except Exception as reconcile_err:
+                print(f"⚠️ Could not run reconciliation: {reconcile_err}")
+            
         except Exception as e:
             import traceback
             print(f"⚠️ Post-processing exception: {e}")
