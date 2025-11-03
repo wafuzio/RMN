@@ -12,7 +12,11 @@ interface BrandDetail {
   retailer_ads: { [retailer: string]: number };
   last_seen: string;
   top_keywords: Array<{ keyword: string; count: number }>;
-  top_competitors: Array<{ brand: string; keyword: string; count: number }>;
+  top_competitors: Array<{
+    brand: string;
+    total: number;
+    keywords: { [keyword: string]: number };
+  }>;
   monthly_activity: Array<{ month: string; count: number }>;
 }
 
@@ -42,17 +46,18 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
   });
 
   const { data: competitorDetails } = useQuery({
-    queryKey: ["competitor-details", Array.from(selectedCompetitors), retailers],
+    queryKey: ["competitor-details", Array.from(selectedCompetitors), retailers, brandDetail?.top_keywords],
     queryFn: async () => {
-      if (selectedCompetitors.size === 0) return {};
+      if (selectedCompetitors.size === 0 || !brandDetail?.top_keywords) return {};
 
       const retailerParam = retailers.join(',');
+      const keywordsParam = brandDetail.top_keywords.map(k => k.keyword).join(',');
       const details: Record<string, BrandDetail> = {};
 
       for (const competitorBrand of selectedCompetitors) {
         try {
           const response = await fetch(
-            `/api/brand-details?brand=${encodeURIComponent(competitorBrand)}&retailers=${encodeURIComponent(retailerParam)}`
+            `/api/brand-details?brand=${encodeURIComponent(competitorBrand)}&retailers=${encodeURIComponent(retailerParam)}&keywords=${encodeURIComponent(keywordsParam)}`
           );
           if (response.ok) {
             details[competitorBrand] = await response.json();
@@ -64,7 +69,7 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
 
       return details;
     },
-    enabled: selectedCompetitors.size > 0,
+    enabled: selectedCompetitors.size > 0 && !!brandDetail?.top_keywords,
   });
 
   const { data: filteredAds, isLoading: adsLoading } = useQuery({
@@ -284,28 +289,40 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
                   {brandDetail.top_competitors.map((item, idx) => {
                     const isSelected = selectedCompetitors.has(item.brand);
                     const color = getCompetitorColor(item.brand);
+                    const keywordList = Object.entries(item.keywords)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([kw, count]) => `${kw}: ${count}`)
+                      .join(', ');
+
                     return (
-                    <button
-                      key={idx}
-                      onClick={() => toggleCompetitor(item.brand)}
-                      className="w-full flex items-center gap-3 rounded-lg p-2 text-sm transition-all hover:bg-gray-100"
-                      style={isSelected ? {
-                        backgroundColor: `${color}20`,
-                        border: `2px solid ${color}`,
-                      } : {
-                        backgroundColor: '#f3f4f6',
-                      }}
-                    >
-                      <div className="h-8 w-8 flex-shrink-0">
-                        <BrandLogo brand={item.brand} className="h-8 w-8" />
+                    <div key={idx} className="relative group">
+                      <button
+                        onClick={() => toggleCompetitor(item.brand)}
+                        className="w-full flex items-center gap-3 rounded-lg p-2 text-sm transition-all hover:bg-gray-100"
+                        style={isSelected ? {
+                          backgroundColor: `${color}20`,
+                          border: `2px solid ${color}`,
+                        } : {
+                          backgroundColor: '#f3f4f6',
+                        }}
+                      >
+                        <div className="h-8 w-8 flex-shrink-0">
+                          <BrandLogo brand={item.brand} className="h-8 w-8" />
+                        </div>
+                        <div className="flex-1 min-w-0 text-left">
+                          <p className="font-medium text-gray-900">
+                            {item.brand}
+                          </p>
+                        </div>
+                        <span className="text-gray-600 bg-white px-2 py-1 rounded text-xs flex-shrink-0">{item.total}</span>
+                      </button>
+
+                      {/* Keyword breakdown tooltip */}
+                      <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-gray-900 text-white text-xs rounded-lg p-3 whitespace-nowrap z-50">
+                        <div className="font-semibold mb-1">Keywords:</div>
+                        <div>{keywordList}</div>
                       </div>
-                      <div className="flex-1 min-w-0 text-left">
-                        <p className="font-medium text-gray-900">
-                          {item.brand} <span className="text-gray-500 font-normal">— {item.keyword}</span>
-                        </p>
-                      </div>
-                      <span className="text-gray-600 bg-white px-2 py-1 rounded text-xs flex-shrink-0">{item.count}</span>
-                    </button>
+                    </div>
                   );
                   })}
                 </div>

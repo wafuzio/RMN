@@ -1812,6 +1812,7 @@ def api_brand_details():
     Query params:
     - brand (required): brand name
     - retailers (optional): comma-separated list of retailers or "all" (default: "all")
+    - keywords (optional): comma-separated list of keywords to filter monthly_activity by
 
     Returns:
     - brand: brand name
@@ -1820,9 +1821,11 @@ def api_brand_details():
     - last_seen: ISO timestamp of most recent ad
     - top_keywords: array of {keyword, count} sorted by count descending
     - top_competitors: array of {brand, keyword, count} representing competitors appearing on same keywords
+    - monthly_activity: array of {month, count} with optional keyword filtering
     """
     brand_name = (request.args.get("brand") or "").strip()
     retailers_param = (request.args.get("retailers") or "all").strip().lower()
+    keywords_param = (request.args.get("keywords") or "").strip().lower()
 
     if not brand_name:
         return jsonify({"error": "brand parameter required"}), 400
@@ -1876,11 +1879,13 @@ def api_brand_details():
                                         ads.extend(result.get("ads", []))
 
                                 # Find matching ads for this brand
+                                file_keyword = (data.get("keyword") or data.get("search_term") or "").strip().lower()
                                 for ad_index, ad in enumerate(ads):
                                     ad_brand = (ad.get("brand") or ad.get("advertiser") or "").strip()
                                     if ad_brand.lower() == brand_name.lower():
                                         timestamp = to_iso_z(ad.get("timestamp"), data.get("run_id"))
-                                        keyword = (ad.get("term") or ad.get("keyword") or "").strip()
+                                        # Use file-level keyword, not ad-level
+                                        keyword = file_keyword
 
                                         brand_ads.append({
                                             "retailer": retailer,
@@ -1910,11 +1915,13 @@ def api_brand_details():
                                             for result in data.get("results", []):
                                                 ads.extend(result.get("ads", []))
 
+                                        file_keyword = (data.get("keyword") or data.get("search_term") or "").strip().lower()
                                         for ad_index, ad in enumerate(ads):
                                             ad_brand = (ad.get("brand") or ad.get("advertiser") or "").strip()
                                             if ad_brand.lower() == brand_name.lower():
                                                 timestamp = to_iso_z(ad.get("timestamp"), data.get("run_id"))
-                                                keyword = (ad.get("term") or ad.get("keyword") or "").strip()
+                                                # Use file-level keyword, not ad-level
+                                                keyword = file_keyword
 
                                                 brand_ads.append({
                                                     "retailer": retailer,
@@ -1954,6 +1961,10 @@ def api_brand_details():
             {"keyword": kw, "count": count}
             for kw, count in sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)[:10]
         ]
+
+        # Filter brand_ads to only top keywords for consistency (case-insensitive)
+        top_keywords_set = set(kw["keyword"].lower() for kw in top_keywords)
+        brand_ads_filtered = [ad for ad in brand_ads if ad["keyword"].lower() in top_keywords_set]
 
         # Find keywords and competitors
         # The keyword is stored at the JSON file level (data.get("keyword")),
@@ -2092,10 +2103,22 @@ def api_brand_details():
             except Exception as e:
                 print(f"[brand-details] Error finding competitors for {retailer}: {e}")
 
-        # Sort competitors and get top 10
+        # Aggregate competitors by brand (sum across keywords) and maintain keyword breakdown
+        competitors_by_brand = {}
+        for (comp_brand, keyword), count in competitor_map.items():
+            if comp_brand not in competitors_by_brand:
+                competitors_by_brand[comp_brand] = {"total": 0, "keywords": {}}
+            competitors_by_brand[comp_brand]["total"] += count
+            competitors_by_brand[comp_brand]["keywords"][keyword] = count
+
+        # Sort by total count and get top 10
         top_competitors = [
-            {"brand": brand, "keyword": keyword, "count": count}
-            for (brand, keyword), count in sorted(competitor_map.items(), key=lambda x: x[1], reverse=True)[:10]
+            {
+                "brand": brand,
+                "total": data["total"],
+                "keywords": data["keywords"]
+            }
+            for brand, data in sorted(competitors_by_brand.items(), key=lambda x: x[1]["total"], reverse=True)[:10]
         ]
 
         # Calculate monthly activity for the last 12 months
@@ -2114,8 +2137,19 @@ def api_brand_details():
             month_key = month_date.strftime("%Y-%m")
             monthly_activity[month_key] = 0
 
-        # Count ads per month
-        for item in brand_ads:
+        # Parse keywords filter if provided (for competitors fetching the brand's data)
+        filter_keywords = set()
+        if keywords_param:
+            filter_keywords = set(kw.strip().lower() for kw in keywords_param.split(",") if kw.strip())
+
+        # Count ads per month - use filtered brand ads (only top keywords for consistency)
+        ads_for_monthly = brand_ads_filtered
+        if filter_keywords:
+            # If keywords param provided (competitor request), filter further
+            ads_for_monthly = [ad for ad in brand_ads_filtered if ad["keyword"].lower() in filter_keywords]
+
+        for item in ads_for_monthly:
+
             timestamp = item["timestamp"]
             if timestamp:
                 try:
