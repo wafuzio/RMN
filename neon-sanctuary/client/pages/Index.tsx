@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useRetailers, useClients, useAds } from "@/hooks/useRetailAds";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RetailerSelector } from "@/components/dashboard/RetailerSelector";
@@ -79,6 +80,7 @@ function useDnD<T>(items: T[], setItems: (v:T[])=>void) {
 }
 
 export default function Index() {
+  const navigate = useNavigate();
   const [retailers, setRetailers] = useState<("kroger"|"amazon"|"instacart"|"walmart")[]>(["kroger"]);
   const { data: retailersData } = useRetailers();
   const enabledRetailers = useMemo(() => new Set(retailersData?.retailers || []), [retailersData]);
@@ -584,6 +586,7 @@ export default function Index() {
             <h1 className="text-white text-2xl font-extrabold">Retail Ad Monitoring</h1>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => navigate("/brands")} className="px-3 py-2 rounded-md bg-white/10 text-white border border-white/30 hover:bg-white/20 focus-visible:ring-2" aria-label="View brand gallery">Brand Gallery</button>
             <button onClick={()=>{ setCompareMode(v=>{ const next = !v; if (next) { setLeftFilters({ ...filters }); setRightFilters({ ...filters }); } return next; }); }} className="px-3 py-2 rounded-md bg-white/10 text-white border border-white/30 hover:bg-white/20 focus-visible:ring-2" aria-pressed={compareMode} aria-label="Toggle compare mode">Compare Mode</button>
             <button onClick={downloadCSV} className="px-3 py-2 rounded-md bg-white text-[#111827] hover:bg-gray-50 focus-visible:ring-2" aria-label="Download CSV">Download CSV</button>
             <button onClick={()=>{

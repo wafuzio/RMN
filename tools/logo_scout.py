@@ -239,6 +239,8 @@ def check_existing_logo(db, brand):
 def extract_walmart_sba_logo(brand, brand_key):
     """
     Search Walmart for the brand and extract logo from SBA if present.
+    Strategy 1: Look for brand name in SBA container and extract 150x90 logo image
+    Strategy 2: Fall back to existing logic (look for matching alt text)
     Returns (logo_path, source_info) or (None, None) if not found.
     """
     try:
@@ -247,26 +249,107 @@ def extract_walmart_sba_logo(brand, brand_key):
         # Check if Walmart profile is configured
         walmart_profile = os.environ.get("WALMART_PROFILE_DIR")
         if not walmart_profile or not os.path.exists(walmart_profile):
+            print(f"  ⚠️  Walmart profile not configured")
             return None, None
         
+        print(f"  🌐 Opening browser (visible)...")
         with sync_playwright() as p:
             browser = p.chromium.launch_persistent_context(
                 walmart_profile,
-                headless=True,
+                headless=False,  # VISIBLE so you can see what's happening
                 args=['--disable-blink-features=AutomationControlled']
             )
             page = browser.new_page()
             
             # Search for the brand
             search_url = f"https://www.walmart.com/search?q={brand.replace(' ', '+')}"
-            page.goto(search_url, wait_until="networkidle", timeout=30000)
-            page.wait_for_timeout(2000)
+            print(f"  🔍 Searching Walmart for: {brand}")
+            print(f"     URL: {search_url}")
+            page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
+            page.wait_for_timeout(2000)  # Quick wait for dynamic content
             
-            # Look for SBA container with brand logo
+            page_title = page.title()
+            print(f"  📄 Page loaded: {page_title}")
+            
+            # Quick check - if we hit bot detection, bail immediately
+            if "robot" in page_title.lower() or "blocked" in page_title.lower():
+                print(f"  🤖 Bot detection page - skipping SBA extraction")
+                browser.close()
+                return None, None
+            
+            # STRATEGY 1: Look for brand name in SBA container
+            print(f"  🎯 Strategy 1: Looking for SBA container with brand name...")
             sba_selectors = [
-                '[data-testid^="list-view"] img[alt]:not([alt=""])',  # SBA images
-                '[data-automation-id="product-title-link"] img[alt]:not([alt=""])',  # Product images
-                'img[src*="advertising.walmart.com"]',  # Walmart ad images
+                '[class*="sba-container"]',
+                '[data-testid^="list-view"]',
+                '[class*="sponsored"]',
+                'div[class*="mb1"]'
+            ]
+            
+            sba_container = None
+            for selector in sba_selectors:
+                container = page.locator(selector).first
+                count = container.count()
+                if count > 0:
+                    sba_container = container
+                    print(f"     ✓ Found container: {selector} (count: {count})")
+                    break
+                else:
+                    print(f"     ✗ Not found: {selector}")
+            
+            if sba_container:
+                # Look for any spans with text content (avoid hashed class names)
+                text_spans = sba_container.locator('span').all()
+                print(f"     Found {len(text_spans)} text spans to check")
+                
+                for i, span in enumerate(text_spans):
+                    try:
+                        text_content = span.inner_text().strip()
+                        norm_text = text_content.lower().replace(' ', '').replace('-', '')
+                        norm_brand = brand.lower().replace(' ', '').replace('-', '')
+                        
+                        if norm_brand in norm_text:
+                            print(f"     ✓ Match found in span {i}: '{text_content}'")
+                            parent = span.locator('xpath=ancestor::*[contains(@class, "sba") or contains(@data-testid, "list-view")]').first
+                            if parent.count() > 0:
+                                logo_imgs = parent.locator('img[width="150"][height="90"], img[srcset*="odnWidth=150"]').all()
+                                print(f"       Found {len(logo_imgs)} logo images (150x90)")
+                                
+                                for j, img in enumerate(logo_imgs):
+                                    logo_src = img.get_attribute('src')
+                                    logo_alt = img.get_attribute('alt') or ""
+                                    
+                                    if logo_src:
+                                        print(f"       📥 Downloading logo {j}: {logo_src[:80]}...")
+                                        response = requests.get(logo_src, headers=HEADERS, timeout=10)
+                                        if response.status_code == 200:
+                                            raw = response.content
+                                            ctype = response.headers.get('content-type', 'image/png')
+                                            ext = normalize_ext_from_ctype(ctype)
+                                            logo_path = safe_write_logo(brand_key, raw, ext)
+                                            print(f"       ✅ Saved: {logo_path.name}")
+                                            
+                                            browser.close()
+                                            return logo_path, {
+                                                "source": "walmart_sba_container",
+                                                "logo_url": logo_src,
+                                                "alt_text": logo_alt,
+                                                "matched_text": text_content
+                                            }
+                    except Exception as e:
+                        print(f"       ⚠️  Error on span {i}: {e}")
+                        continue
+                
+                print(f"     ✗ No matching brand text found in spans")
+            else:
+                print(f"     ✗ No SBA container found")
+            
+            # STRATEGY 2: Fallback - look for matching alt text
+            print(f"  🎯 Strategy 2: Looking for images with matching alt text...")
+            sba_selectors = [
+                '[data-testid^="list-view"] img[alt]:not([alt=""])',
+                '[data-automation-id="product-title-link"] img[alt]:not([alt=""])',
+                'img[src*="advertising.walmart.com"]',
             ]
             
             for selector in sba_selectors:
@@ -276,28 +359,31 @@ def extract_walmart_sba_logo(brand, brand_key):
                         logo_src = logo_img.get_attribute('src')
                         logo_alt = logo_img.get_attribute('alt') or ""
                         
-                        # Validate alt text matches brand
                         norm_alt = logo_alt.lower().replace(' ', '').replace('-', '')
                         norm_brand = brand.lower().replace(' ', '').replace('-', '')
                         
                         if norm_brand in norm_alt or norm_alt in norm_brand:
-                            # Download the logo
+                            print(f"     ✓ Match found: alt='{logo_alt}'")
+                            print(f"     📥 Downloading: {logo_src[:80]}...")
                             response = requests.get(logo_src, headers=HEADERS, timeout=10)
                             if response.status_code == 200:
                                 raw = response.content
                                 ctype = response.headers.get('content-type', 'image/png')
                                 ext = normalize_ext_from_ctype(ctype)
                                 logo_path = safe_write_logo(brand_key, raw, ext)
+                                print(f"     ✅ Saved: {logo_path.name}")
                                 
                                 browser.close()
                                 return logo_path, {
-                                    "source": "walmart_sba",
+                                    "source": "walmart_sba_alt_text",
                                     "logo_url": logo_src,
                                     "alt_text": logo_alt
                                 }
-                except Exception:
+                except Exception as e:
+                    print(f"     ⚠️  Error with selector {selector}: {e}")
                     continue
             
+            print(f"  ❌ No logo found via SBA extraction")
             browser.close()
             return None, None
             
@@ -359,71 +445,51 @@ def fetch_logo_for_brand(db, brand, retailer="instacart"):
             add_logo_to_database(db, brand, logo_path, source_info, retailer)
             return logo_path, source_info
 
-    # 3) Walmart SBA logo extraction (fast path - search page)
-    # Check if we've already failed to find this brand on Walmart
-    failed_searches = db.get("failed_searches", {})
-    walmart_sba_failed = failed_searches.get(brand_key, {}).get("walmart_sba", False)
+    # 3) Walmart harvester (checks SBA first, then brand store)
+    # Check Walmart harvester
+    walmart_failed = db.get("failed_searches", {}).get(brand_key, {}).get("walmart", False)
     
-    if not walmart_sba_failed:
+    if walmart_failed:
+        return None, {"source": "not-found"}
+    
+    if not walmart_failed:
         try:
-            logo_path, source_info = extract_walmart_sba_logo(brand, brand_key)
-            if logo_path:
-                add_logo_to_database(db, brand, logo_path, source_info, retailer)
-                return logo_path, source_info
+            from walmart_logo_harvester import harvest_walmart_brand_logo
+            
+            # Check if Walmart profile is configured
+            walmart_profile = os.environ.get("WALMART_PROFILE_DIR")
+            if not walmart_profile or not os.path.exists(walmart_profile):
+                return None, {"source": "not-found"}
+            
+            result = harvest_walmart_brand_logo(
+                brand_keyword=brand,
+                profile_dir=walmart_profile,
+                headless=False,  # VISIBLE
+                logos_dir=str(LOGOS_DIR),
+                db_path=str(LOGOS_DB),
+            )
+            
+            if result.get("ok"):
+                logo_file = result.get("logo_file")
+                if logo_file:
+                    logo_path = LOGOS_DIR / logo_file
+                    if logo_path.exists():
+                        return logo_path, {
+                            "source": "walmart_brand_store",
+                            "logo_url": result.get("logo_url"),
+                        }
             else:
-                # Mark SBA search as failed
+                # Mark Walmart as failed for this brand
                 if "failed_searches" not in db:
                     db["failed_searches"] = {}
                 if brand_key not in db["failed_searches"]:
                     db["failed_searches"][brand_key] = {}
-                db["failed_searches"][brand_key]["walmart_sba"] = True
+                db["failed_searches"][brand_key]["walmart"] = True
                 db["failed_searches"][brand_key]["last_attempt"] = now_iso_z()
         except Exception as e:
-            # Mark SBA search as failed
-            if "failed_searches" not in db:
-                db["failed_searches"] = {}
-            if brand_key not in db["failed_searches"]:
-                db["failed_searches"][brand_key] = {}
-            db["failed_searches"][brand_key]["walmart_sba"] = True
-            db["failed_searches"][brand_key]["last_attempt"] = now_iso_z()
-            db["failed_searches"][brand_key]["error"] = str(e)
-    
-    # 4) Walmart brand store fallback (slow path - click product, find store)
-    walmart_store_failed = failed_searches.get(brand_key, {}).get("walmart_store", False)
-    
-    if not walmart_store_failed:
-        try:
-            from tools.walmart_logo_harvester import harvest_walmart_brand_logo
-            
-            # Check if Walmart profile is configured
-            walmart_profile = os.environ.get("WALMART_PROFILE_DIR")
-            if walmart_profile and os.path.exists(walmart_profile):
-                result = harvest_walmart_brand_logo(
-                    brand_keyword=brand,
-                    profile_dir=walmart_profile,
-                    headless=True,
-                    logos_dir=str(LOGOS_DIR),
-                    db_path=str(LOGOS_DB),
-                )
-                
-                if result.get("ok"):
-                    logo_file = result.get("logo_file")
-                    if logo_file:
-                        logo_path = LOGOS_DIR / logo_file
-                        if logo_path.exists():
-                            return logo_path, {
-                                "source": "walmart_brand_store",
-                                "logo_url": result.get("logo_url"),
-                            }
-                else:
-                    # Mark Walmart as failed for this brand
-                    if "failed_searches" not in db:
-                        db["failed_searches"] = {}
-                    if brand_key not in db["failed_searches"]:
-                        db["failed_searches"][brand_key] = {}
-                    db["failed_searches"][brand_key]["walmart"] = True
-                    db["failed_searches"][brand_key]["last_attempt"] = now_iso_z()
-        except Exception as e:
+            print(f"     ❌ EXCEPTION in Walmart harvester: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             # Mark Walmart as failed for this brand
             if "failed_searches" not in db:
                 db["failed_searches"] = {}
@@ -438,37 +504,65 @@ def fetch_logo_for_brand(db, brand, retailer="instacart"):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--api", required=True, help="API base, e.g., http://localhost:5006")
-    parser.add_argument("--retailer", required=True)
-    parser.add_argument("--client", required=True)
+    parser.add_argument("--lexicon", action="store_true", help="Scan brand lexicon instead of API")
+    parser.add_argument("--api", help="API base, e.g., http://localhost:5006 (required if not using --lexicon)")
+    parser.add_argument("--retailer", help="Retailer (required if not using --lexicon)")
+    parser.add_argument("--client", help="Client (required if not using --lexicon)")
     parser.add_argument("--limit", type=int, default=200)
+    parser.add_argument("--retry-failed", action="store_true", help="Retry brands that previously failed (test new extraction logic)")
     args = parser.parse_args()
 
     ensure_dirs()
     db = load_database()
 
-    # 1) Gather brands from cards (paginate until limit)
-    brands = set()
-    page = 1
-    while len(brands) < args.limit:
-        data = fetch_cards(args.api, args.retailer, args.client, page=page, page_size=100)
-        cards = data.get("cards", [])
-        if not cards:
-            break
-        for b in unique_brands_from_cards(cards):
-            brands.add(b)
-            if len(brands) >= args.limit:
+    # 1) Gather brands from lexicon or API
+    if args.lexicon:
+        # Load brands from config/brands.json
+        lexicon_path = Path("config/brands.json")
+        if not lexicon_path.exists():
+            print(f"❌ Lexicon not found: {lexicon_path}")
+            return
+        
+        with open(lexicon_path, 'r') as f:
+            lexicon_brands = json.load(f)
+        
+        brands = set()
+        for brand_entry in lexicon_brands:
+            brand_name = brand_entry.get('name')
+            if brand_name:
+                brands.add(brand_name)
+        
+        brands = sorted(brands)
+        print(f"📖 Loaded {len(brands)} brands from lexicon")
+    else:
+        # Require API parameters if not using lexicon
+        if not args.api or not args.retailer or not args.client:
+            parser.error("--api, --retailer, and --client are required when not using --lexicon")
+        
+        # Gather brands from cards (paginate until limit)
+        brands = set()
+        page = 1
+        while len(brands) < args.limit:
+            data = fetch_cards(args.api, args.retailer, args.client, page=page, page_size=100)
+            cards = data.get("cards", [])
+            if not cards:
                 break
-        if not data.get("has_more"):
-            break
-        page += 1
+            for b in unique_brands_from_cards(cards):
+                brands.add(b)
+                if len(brands) >= args.limit:
+                    break
+            if not data.get("has_more"):
+                break
+            page += 1
 
-    brands = sorted(brands)
-    print(f"Found {len(brands)} candidate brand(s): {brands}")
+        brands = sorted(brands)
+        print(f"Found {len(brands)} candidate brand(s) from API")
 
     # 2) Fetch logos
     fetched_count = 0
     skipped_count = 0
+    failed_count = 0
+    retry_failed = args.retry_failed if hasattr(args, 'retry_failed') else False
     
     for brand in brands:
         brand_key = normalize_brand_key(brand)
@@ -478,9 +572,23 @@ def main():
             print(f"✓ {brand}: already in database")
             skipped_count += 1
             continue
+        
+        # Check if previously failed (skip to avoid retrying unless --retry-failed)
+        if not retry_failed and brand_key in db.get("failed_searches", {}):
+            failed_info = db["failed_searches"][brand_key]
+            last_attempt = failed_info.get("last_attempt", "unknown")
+            print(f"⊘ {brand}: previously failed (last attempt: {last_attempt})")
+            failed_count += 1
+            continue
+        
+        # If retrying failed, clear the failed entry for this brand
+        if retry_failed and brand_key in db.get("failed_searches", {}):
+            print(f"🔄 {brand}: retrying previously failed search...")
+            del db["failed_searches"][brand_key]
 
         print(f"→ fetching logo for {brand} ...")
-        path, note = fetch_logo_for_brand(db, brand, args.retailer)
+        retailer = args.retailer if not args.lexicon else "general"
+        path, note = fetch_logo_for_brand(db, brand, retailer)
         
         if note.get("source") == "existing-database":
             print(f"  ✓ already exists [{note.get('file')}]")
@@ -497,7 +605,9 @@ def main():
     print(f"✅ Database updated: {LOGOS_DB}")
     print(f"   Fetched: {fetched_count} new logos")
     print(f"   Skipped: {skipped_count} existing logos")
+    print(f"   Previously failed: {failed_count} brands")
     print(f"   Total brands in database: {len(db['brands'])}")
+    print(f"   Total failed searches tracked: {len(db.get('failed_searches', {}))}")
 
 
 if __name__ == "__main__":

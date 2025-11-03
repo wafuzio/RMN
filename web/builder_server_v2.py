@@ -221,7 +221,12 @@ def type_label_for(ad_type: str | None) -> str:
     return (ad_type or "").replace("_", " ").replace("-", " ").strip()
 
 
-# Blocked brands - ad types that should never be used as brand names
+# Blocked brands - ad types and house ads that should never be counted as real brand ads
+# IMPORTANT: "kroger" here refers to KROGER HOUSE ADS (retailer marketing materials)
+# These are identified by exact message text matching and should be excluded from:
+# - Ad counts and analysis
+# - Brand performance metrics
+# - Frontend display (filtered out by API)
 BLOCKED_BRANDS = {
     "display ad",
     "shoppable display ad",
@@ -237,7 +242,9 @@ BLOCKED_BRANDS = {
     "sba",
     "sbv",
     "top banner",
-    "kroger",  # Filter out Kroger house ads
+    "kroger",  # Kroger house ads (retailer marketing, not brand ads)
+    "walmart",  # Walmart house ads (retailer marketing, not brand ads)
+    "instacart",  # Instacart house ads (retailer marketing, not brand ads)
     "tile takeover",
     "featured brand",
     "native ad",
@@ -1408,6 +1415,8 @@ def api_ads_cards():
                 advertisers = [canonicalize(adv) or adv for adv in (advertisers or []) if adv]
 
                 # Filter out blocked brands (ad types that shouldn't be brand names)
+                # CRITICAL: This removes "Kroger" house ads (retailer marketing materials)
+                # These are NOT real brand ads and should be excluded from counts/analysis
                 advertisers = [adv for adv in advertisers if not is_blocked_brand(adv)]
 
                 # Campaign slogan detection - words that indicate this is NOT a brand name
@@ -1650,6 +1659,491 @@ def api_ads_cards():
             "advertiser": advertiser_filter or None
         }
     })
+
+@app.route("/api/brands", methods=["GET"])
+def api_brands():
+    """
+    Get brands list with counts and percentages
+
+    Query params:
+    - retailers (optional): comma-separated list of retailer slugs or "all" (default: "all")
+    - client (optional): client name or "all" for all clients (default: "all")
+    """
+    retailers_param = (request.args.get("retailers") or "all").strip().lower()
+    client = (request.args.get("client") or "").strip() or "all"
+
+    # Parse retailers
+    if retailers_param == "all":
+        retailers_to_query = []
+        if os.path.isdir(OUTPUT_ROOT):
+            for item in os.listdir(OUTPUT_ROOT):
+                item_path = os.path.join(OUTPUT_ROOT, item)
+                if os.path.isdir(item_path):
+                    retailers_to_query.append(item)
+    else:
+        retailers_to_query = [r.strip() for r in retailers_param.split(",")]
+
+    try:
+        # Collect all cards from all retailers and clients to aggregate brands
+        all_cards = []
+
+        for retailer in retailers_to_query:
+            # Support client=all to query across all clients
+            if client.lower() == "all":
+                clients_to_query = []
+                retailer_root = os.path.join(OUTPUT_ROOT, retailer)
+                if os.path.isdir(retailer_root):
+                    for item in os.listdir(retailer_root):
+                        item_path = os.path.join(retailer_root, item)
+                        if os.path.isdir(item_path):
+                            clients_to_query.append(item)
+            else:
+                clients_to_query = [client]
+
+            for client_name in clients_to_query:
+                rdir = runs_dir(retailer, client_name)
+
+                if not os.path.isdir(rdir):
+                    continue
+
+                # Get all run files
+                for item in os.listdir(rdir):
+                    item_path = os.path.join(rdir, item)
+                    if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                        filename_base = item.replace("run_results_", "").replace(".json", "")
+                        if filename_base.isdigit() and len(filename_base) == 14:
+                            try:
+                                with open(item_path, "r", encoding="utf-8") as f:
+                                    data = json.load(f)
+
+                                # Extract ads from various JSON structures
+                                ads = []
+                                if "ads" in data:
+                                    ads = data["ads"]
+                                elif "results" in data:
+                                    for result in data.get("results", []):
+                                        ads.extend(result.get("ads", []))
+
+                                # Process each ad into a card
+                                for ad_index, ad in enumerate(ads):
+                                    brand = (ad.get("brand") or ad.get("advertiser") or "Unknown").strip()
+                                    timestamp = to_iso_z(ad.get("timestamp"), data.get("run_id"))
+
+                                    all_cards.append({
+                                        "brand": brand,
+                                        "timestamp": timestamp,
+                                        "run_file": item,
+                                        "ad_index": ad_index,
+                                        "client": client_name,
+                                        "retailer": retailer
+                                    })
+                            except Exception as e:
+                                print(f"[brands] Error processing file {item_path}: {e}")
+                                continue
+                    elif os.path.isdir(item_path):
+                        # Check subdirectories (Walmart structure)
+                        for subitem in os.listdir(item_path):
+                            if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                                filename_base = subitem.replace("run_results_", "").replace(".json", "")
+                                if filename_base.isdigit() and len(filename_base) == 14:
+                                    subitem_path = os.path.join(item_path, subitem)
+                                    try:
+                                        with open(subitem_path, "r", encoding="utf-8") as f:
+                                            data = json.load(f)
+
+                                        ads = []
+                                        if "ads" in data:
+                                            ads = data["ads"]
+                                        elif "results" in data:
+                                            for result in data.get("results", []):
+                                                ads.extend(result.get("ads", []))
+
+                                        for ad_index, ad in enumerate(ads):
+                                            brand = (ad.get("brand") or ad.get("advertiser") or "Unknown").strip()
+                                            timestamp = to_iso_z(ad.get("timestamp"), data.get("run_id"))
+
+                                            all_cards.append({
+                                                "brand": brand,
+                                                "timestamp": timestamp,
+                                                "run_file": subitem,
+                                                "ad_index": ad_index,
+                                                "client": client_name,
+                                                "retailer": retailer
+                                            })
+                                    except Exception as e:
+                                        print(f"[brands] Error processing file {subitem_path}: {e}")
+                                        continue
+
+        # Deduplicate cards
+        seen = set()
+        deduped_cards = []
+        for card in all_cards:
+            key = (card.get("retailer"), card.get("run_file"), card.get("ad_index"))
+            if key not in seen:
+                seen.add(key)
+                deduped_cards.append(card)
+
+        # Calculate brand aggregations
+        brand_counts = {}
+        for card in deduped_cards:
+            brand = card.get("brand") or "Unknown"
+            brand_counts[brand] = brand_counts.get(brand, 0) + 1
+
+        # Sort brands alphabetically (by brand name)
+        brands_list = [
+            {"brand": brand, "count": count, "percentage": round((count / len(deduped_cards)) * 100, 1) if deduped_cards else 0}
+            for brand, count in sorted(brand_counts.items(), key=lambda x: x[0].lower())
+        ]
+
+        return jsonify({
+            "retailers": retailers_param,
+            "client": client,
+            "brands": brands_list
+        })
+    except Exception as e:
+        print(f"[brands] Error fetching brands: {str(e)}")
+        return jsonify({"error": f"Failed to fetch brands: {str(e)}"}), 500
+
+@app.route("/api/brand-details", methods=["GET"])
+def api_brand_details():
+    """
+    Get detailed information for a specific brand
+
+    Query params:
+    - brand (required): brand name
+    - retailers (optional): comma-separated list of retailers or "all" (default: "all")
+
+    Returns:
+    - brand: brand name
+    - total_ads: total number of ads for this brand
+    - retailer_ads: object with retailer names as keys and ad counts as values
+    - last_seen: ISO timestamp of most recent ad
+    - top_keywords: array of {keyword, count} sorted by count descending
+    - top_competitors: array of {brand, keyword, count} representing competitors appearing on same keywords
+    """
+    brand_name = (request.args.get("brand") or "").strip()
+    retailers_param = (request.args.get("retailers") or "all").strip().lower()
+
+    if not brand_name:
+        return jsonify({"error": "brand parameter required"}), 400
+
+    # Parse retailers
+    if retailers_param == "all":
+        retailers_to_query = []
+        if os.path.isdir(OUTPUT_ROOT):
+            for item in os.listdir(OUTPUT_ROOT):
+                item_path = os.path.join(OUTPUT_ROOT, item)
+                if os.path.isdir(item_path):
+                    retailers_to_query.append(item)
+    else:
+        retailers_to_query = [r.strip() for r in retailers_param.split(",")]
+
+    try:
+        # Collect all ads for this brand across retailers
+        brand_ads = []
+
+        for retailer in retailers_to_query:
+            retailer_root = os.path.join(OUTPUT_ROOT, retailer)
+            if not os.path.isdir(retailer_root):
+                continue
+
+            # Iterate through all clients
+            for client_item in os.listdir(retailer_root):
+                client_path = os.path.join(retailer_root, client_item)
+                if not os.path.isdir(client_path):
+                    continue
+
+                rdir = runs_dir(retailer, client_item)
+                if not os.path.isdir(rdir):
+                    continue
+
+                # Get all run files
+                for item in os.listdir(rdir):
+                    item_path = os.path.join(rdir, item)
+                    if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                        filename_base = item.replace("run_results_", "").replace(".json", "")
+                        if filename_base.isdigit() and len(filename_base) == 14:
+                            try:
+                                with open(item_path, "r", encoding="utf-8") as f:
+                                    data = json.load(f)
+
+                                # Extract ads
+                                ads = []
+                                if "ads" in data:
+                                    ads = data["ads"]
+                                elif "results" in data:
+                                    for result in data.get("results", []):
+                                        ads.extend(result.get("ads", []))
+
+                                # Find matching ads for this brand
+                                for ad_index, ad in enumerate(ads):
+                                    ad_brand = (ad.get("brand") or ad.get("advertiser") or "").strip()
+                                    if ad_brand.lower() == brand_name.lower():
+                                        timestamp = to_iso_z(ad.get("timestamp"), data.get("run_id"))
+                                        keyword = (ad.get("term") or ad.get("keyword") or "").strip()
+
+                                        brand_ads.append({
+                                            "retailer": retailer,
+                                            "client": client_item,
+                                            "timestamp": timestamp,
+                                            "keyword": keyword,
+                                            "ad": ad
+                                        })
+                            except Exception as e:
+                                print(f"[brand-details] Error processing {item_path}: {e}")
+                                continue
+                    elif os.path.isdir(item_path):
+                        # Walmart nested structure
+                        for subitem in os.listdir(item_path):
+                            if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                                filename_base = subitem.replace("run_results_", "").replace(".json", "")
+                                if filename_base.isdigit() and len(filename_base) == 14:
+                                    subitem_path = os.path.join(item_path, subitem)
+                                    try:
+                                        with open(subitem_path, "r", encoding="utf-8") as f:
+                                            data = json.load(f)
+
+                                        ads = []
+                                        if "ads" in data:
+                                            ads = data["ads"]
+                                        elif "results" in data:
+                                            for result in data.get("results", []):
+                                                ads.extend(result.get("ads", []))
+
+                                        for ad_index, ad in enumerate(ads):
+                                            ad_brand = (ad.get("brand") or ad.get("advertiser") or "").strip()
+                                            if ad_brand.lower() == brand_name.lower():
+                                                timestamp = to_iso_z(ad.get("timestamp"), data.get("run_id"))
+                                                keyword = (ad.get("term") or ad.get("keyword") or "").strip()
+
+                                                brand_ads.append({
+                                                    "retailer": retailer,
+                                                    "client": client_item,
+                                                    "timestamp": timestamp,
+                                                    "keyword": keyword,
+                                                    "ad": ad
+                                                })
+                                    except Exception as e:
+                                        print(f"[brand-details] Error processing {subitem_path}: {e}")
+                                        continue
+
+        # Calculate statistics
+        total_ads = len(brand_ads)
+
+        # Count ads by retailer
+        retailer_counts = {}
+        for item in brand_ads:
+            retailer = item["retailer"]
+            retailer_counts[retailer] = retailer_counts.get(retailer, 0) + 1
+
+        # Find last seen timestamp
+        last_seen = None
+        if brand_ads:
+            timestamps = [item["timestamp"] for item in brand_ads if item["timestamp"]]
+            if timestamps:
+                last_seen = max(timestamps)
+
+        # Count keyword frequencies
+        keyword_counts = {}
+        for item in brand_ads:
+            keyword = item["keyword"]
+            if keyword:
+                keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
+
+        top_keywords = [
+            {"keyword": kw, "count": count}
+            for kw, count in sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        ]
+
+        # Find keywords and competitors
+        # The keyword is stored at the JSON file level (data.get("keyword")),
+        # not in individual ads
+        keyword_counts = {}
+        competitor_map = {}
+
+        # Maps from (retailer, client) -> set of keywords where this brand appears
+        brand_keywords = {}
+
+        # First pass: collect all keywords where this brand appears
+        for retailer in retailers_to_query:
+            try:
+                clients_to_query = []
+                retailer_root = os.path.join(OUTPUT_ROOT, retailer)
+                if os.path.isdir(retailer_root):
+                    for item in os.listdir(retailer_root):
+                        item_path = os.path.join(retailer_root, item)
+                        if os.path.isdir(item_path):
+                            clients_to_query.append(item)
+
+                for client_name in clients_to_query:
+                    rdir = runs_dir(retailer, client_name)
+                    if not os.path.isdir(rdir):
+                        continue
+
+                    for item in os.listdir(rdir):
+                        item_path = os.path.join(rdir, item)
+
+                        def process_json_file(fpath):
+                            try:
+                                with open(fpath, "r", encoding="utf-8") as f:
+                                    data = json.load(f)
+
+                                # Get keyword from file level (not from ads)
+                                keyword = (data.get("keyword") or data.get("search_term") or "").strip().lower()
+                                if not keyword:
+                                    return
+
+                                # Extract ads
+                                ads = []
+                                if "ads" in data:
+                                    ads = data["ads"]
+                                elif "results" in data:
+                                    for result in data.get("results", []):
+                                        ads.extend(result.get("ads", []))
+
+                                # Check if our brand appears in this keyword
+                                for ad in ads:
+                                    ad_brand = (ad.get("brand") or ad.get("advertiser") or "").strip()
+                                    if ad_brand.lower() == brand_name.lower():
+                                        keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
+                            except Exception:
+                                pass
+
+                        if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                            filename_base = item.replace("run_results_", "").replace(".json", "")
+                            if filename_base.isdigit() and len(filename_base) == 14:
+                                process_json_file(item_path)
+                        elif os.path.isdir(item_path):
+                            # Walmart nested structure
+                            for subitem in os.listdir(item_path):
+                                if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                                    filename_base = subitem.replace("run_results_", "").replace(".json", "")
+                                    if filename_base.isdigit() and len(filename_base) == 14:
+                                        process_json_file(os.path.join(item_path, subitem))
+
+            except Exception as e:
+                print(f"[brand-details] Error querying retailer {retailer}: {e}")
+
+        # Build top keywords
+        top_keywords = [
+            {"keyword": kw, "count": count}
+            for kw, count in sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        ]
+
+        # Second pass: find competitors on those keywords
+        target_keywords = set(keyword_counts.keys())
+
+        for retailer in retailers_to_query:
+            try:
+                clients_to_query = []
+                retailer_root = os.path.join(OUTPUT_ROOT, retailer)
+                if os.path.isdir(retailer_root):
+                    for item in os.listdir(retailer_root):
+                        item_path = os.path.join(retailer_root, item)
+                        if os.path.isdir(item_path):
+                            clients_to_query.append(item)
+
+                for client_name in clients_to_query:
+                    rdir = runs_dir(retailer, client_name)
+                    if not os.path.isdir(rdir):
+                        continue
+
+                    for item in os.listdir(rdir):
+                        item_path = os.path.join(rdir, item)
+
+                        def process_competitor_file(fpath):
+                            try:
+                                with open(fpath, "r", encoding="utf-8") as f:
+                                    data = json.load(f)
+
+                                # Get keyword from file level
+                                keyword = (data.get("keyword") or data.get("search_term") or "").strip().lower()
+                                if keyword not in target_keywords:
+                                    return
+
+                                # Extract ads
+                                ads = []
+                                if "ads" in data:
+                                    ads = data["ads"]
+                                elif "results" in data:
+                                    for result in data.get("results", []):
+                                        ads.extend(result.get("ads", []))
+
+                                # Count other brands on this keyword
+                                for ad in ads:
+                                    ad_brand = (ad.get("brand") or ad.get("advertiser") or "").strip()
+                                    if ad_brand and ad_brand.lower() != brand_name.lower():
+                                        key = (ad_brand, keyword)
+                                        competitor_map[key] = competitor_map.get(key, 0) + 1
+                            except Exception:
+                                pass
+
+                        if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                            filename_base = item.replace("run_results_", "").replace(".json", "")
+                            if filename_base.isdigit() and len(filename_base) == 14:
+                                process_competitor_file(item_path)
+                        elif os.path.isdir(item_path):
+                            for subitem in os.listdir(item_path):
+                                if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                                    filename_base = subitem.replace("run_results_", "").replace(".json", "")
+                                    if filename_base.isdigit() and len(filename_base) == 14:
+                                        process_competitor_file(os.path.join(item_path, subitem))
+
+            except Exception as e:
+                print(f"[brand-details] Error finding competitors for {retailer}: {e}")
+
+        # Sort competitors and get top 10
+        top_competitors = [
+            {"brand": brand, "keyword": keyword, "count": count}
+            for (brand, keyword), count in sorted(competitor_map.items(), key=lambda x: x[1], reverse=True)[:10]
+        ]
+
+        # Calculate monthly activity for the last 12 months
+        monthly_activity = {}
+        now = datetime.now(timezone.utc)
+
+        # Initialize all months in the last 12 months with 0 count
+        for i in range(12):
+            month_date = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+            # Go back i months
+            for _ in range(i):
+                if month_date.month == 1:
+                    month_date = month_date.replace(year=month_date.year - 1, month=12)
+                else:
+                    month_date = month_date.replace(month=month_date.month - 1)
+            month_key = month_date.strftime("%Y-%m")
+            monthly_activity[month_key] = 0
+
+        # Count ads per month
+        for item in brand_ads:
+            timestamp = item["timestamp"]
+            if timestamp:
+                try:
+                    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    month_key = dt.strftime("%Y-%m")
+                    if month_key in monthly_activity:
+                        monthly_activity[month_key] += 1
+                except Exception:
+                    pass
+
+        # Convert to sorted list
+        monthly_activity_list = [
+            {"month": month, "count": count}
+            for month, count in sorted(monthly_activity.items())
+        ]
+
+        return jsonify({
+            "brand": brand_name,
+            "total_ads": total_ads,
+            "retailer_ads": retailer_counts,
+            "last_seen": last_seen,
+            "top_keywords": top_keywords,
+            "top_competitors": top_competitors,
+            "monthly_activity": monthly_activity_list
+        })
+    except Exception as e:
+        print(f"[brand-details] Error: {str(e)}")
+        return jsonify({"error": f"Failed to fetch brand details: {str(e)}"}), 500
 
 @app.route("/api/ads/batch", methods=["GET"])
 def api_ads_batch():

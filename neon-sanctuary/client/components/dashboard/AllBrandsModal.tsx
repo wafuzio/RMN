@@ -1,8 +1,8 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, GripVertical, ChevronDown } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { cn } from "@/lib/utils";
 
@@ -36,53 +36,14 @@ export function AllBrandsModal({
 }: AllBrandsModalProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [modalSize, setModalSize] = useState({ width: 800, height: 600 });
-  const [isResizing, setIsResizing] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const resizeStartRef = useRef({ x: 0, y: 0, width: 0, height: 0 });
-
-  // Handle resize dragging
-  useEffect(() => {
-    if (!isResizing) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - resizeStartRef.current.x;
-      const deltaY = e.clientY - resizeStartRef.current.y;
-
-      setModalSize({
-        width: Math.max(500, resizeStartRef.current.width + deltaX),
-        height: Math.max(400, resizeStartRef.current.height + deltaY),
-      });
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing]);
-
-  const handleResizeStart = (e: React.MouseEvent) => {
-    setIsResizing(true);
-    resizeStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      width: modalSize.width,
-      height: modalSize.height,
-    };
-  };
 
   const filteredBrands = useMemo(() => {
     if (!searchTerm) return brands;
     const term = searchTerm.toLowerCase();
     return brands.filter(b => b.brand.toLowerCase().includes(term));
   }, [brands, searchTerm]);
+
+  const totalAds = filteredBrands.reduce((sum, b) => sum + b.count, 0);
 
   const exportAsCSV = () => {
     const headers = [
@@ -166,27 +127,14 @@ export function AllBrandsModal({
     URL.revokeObjectURL(url);
   };
 
-  const totalAds = filteredBrands.reduce((sum, b) => sum + b.count, 0);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        ref={contentRef}
-        style={{
-          width: `${modalSize.width}px`,
-          height: `${modalSize.height}px`,
-          maxWidth: '90vw',
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '24px',
-        }}
-      >
-        <DialogHeader className="flex-shrink-0">
+      <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
           <DialogTitle>All Brands</DialogTitle>
         </DialogHeader>
 
-        <div className="flex items-center gap-2 my-4 flex-shrink-0">
+        <div className="flex items-center gap-2 mb-4">
           <Search className="w-4 h-4 text-gray-500" />
           <Input
             placeholder="Search brands..."
@@ -196,47 +144,41 @@ export function AllBrandsModal({
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 mb-4">
-          <div className="space-y-2">
-            {filteredBrands.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No brands match your search
-              </div>
-            ) : (
-              filteredBrands.map((brand, idx) => (
-                <button
-                  key={brand.brand}
-                  onClick={() => onRetailerClick?.(brand.brand)}
-                  className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-colors text-left"
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="font-semibold text-gray-600 w-8">
-                      #{idx + 1}
-                    </div>
-                    <div className="h-8 w-8 flex-shrink-0 flex items-center justify-center bg-gray-100 rounded">
-                      <BrandLogo brand={brand.brand} className="h-6 w-6" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900">
-                        {brand.brand}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {brand.count} ads
-                      </div>
-                    </div>
+        <div className="space-y-2">
+          {filteredBrands.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No brands match your search
+            </div>
+          ) : (
+            filteredBrands.map((brand, idx) => (
+              <button
+                key={brand.brand}
+                onClick={() => onRetailerClick?.(brand.brand)}
+                className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-colors text-left"
+              >
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="font-semibold bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent w-8">
+                    #{idx + 1}
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="font-extrabold text-lg bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent">
-                      {brand.percentage}%
-                    </div>
+                  <div className="flex-shrink-0">
+                    <BrandLogo brand={brand.brand} className="h-8 w-auto" />
                   </div>
-                </button>
-              ))
-            )}
-          </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900">{brand.brand}</div>
+                    <div className="text-xs text-gray-500">{brand.count} ads</div>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="font-extrabold text-lg bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent">
+                    {brand.percentage}%
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
         </div>
 
-        <div className="border-t pt-3 flex-shrink-0 space-y-3">
+        <div className="border-t pt-4 mt-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex gap-4 text-sm">
               <div>
@@ -308,17 +250,6 @@ export function AllBrandsModal({
               JSON
             </Button>
           </div>
-        </div>
-
-        <div
-          onMouseDown={handleResizeStart}
-          className={cn(
-            "absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize flex items-center justify-center hover:bg-gray-200 transition-colors",
-            isResizing && "bg-gray-300"
-          )}
-          title="Drag to resize"
-        >
-          <GripVertical className="w-4 h-4 text-gray-600" />
         </div>
       </DialogContent>
     </Dialog>

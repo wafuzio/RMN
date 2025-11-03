@@ -158,7 +158,9 @@ class BrandReviewTool:
         ttk.Button(button_frame, text="← Previous", command=self.previous_ad).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Skip", command=self.next_ad).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Save All Similar & Next →", command=self.save_correction, style="Accent.TButton").pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Mark as Kroger House Ad", command=self.mark_as_kroger).pack(side=tk.LEFT, padx=5)
+        # Dynamic house ad button - will show "Mark as Kroger House Ad" or "Mark as Walmart House Ad"
+        self.house_ad_button = ttk.Button(button_frame, text="Mark as House Ad", command=self.mark_as_house_ad)
+        self.house_ad_button.pack(side=tk.LEFT, padx=5)
         
         # Style
         style = ttk.Style()
@@ -279,6 +281,35 @@ class BrandReviewTool:
         
         return False
     
+    def match_message_to_lexicon(self, message):
+        """Check if message text matches a known brand's message synonym.
+        
+        This is primarily used to identify KROGER HOUSE ADS (retailer marketing materials)
+        by their exact, repeating message text. These are NOT real brand ads and should be
+        auto-skipped from the review tool.
+        
+        Note: This is different from brand name extraction (canonicalize function).
+        Message matching is for identifying house ads to exclude, not for extracting brands.
+        
+        Returns the brand name if matched, None otherwise.
+        """
+        if not message:
+            return None
+        
+        message_clean = message.strip()
+        
+        # Check all brands in lexicon for message synonyms
+        for lex_brand in self.lexicon_brands:
+            for synonym in lex_brand.get('synonyms', []):
+                # Check for MSG: prefix (indicates message-based synonym)
+                if synonym.startswith('MSG:'):
+                    synonym_text = synonym[4:].strip()  # Remove "MSG:" prefix
+                    # Exact match (case-insensitive) - these messages repeat verbatim
+                    if message_clean.lower() == synonym_text.lower():
+                        return lex_brand['name']
+        
+        return None
+    
     def load_unknown_brands(self):
         """Load all ads with unknown or uncertain brands"""
         print("Scanning for unknown brands...")
@@ -333,6 +364,14 @@ class BrandReviewTool:
                         # Skip "Main" ad types (full-page screengrabs, intentionally brandless)
                         if ad.get('type') == 'main':
                             continue
+                        
+                        # Check if message text matches a known brand synonym (e.g., Kroger house ads)
+                        message = ad.get('message', '')
+                        if message:
+                            matched_brand = self.match_message_to_lexicon(message)
+                            if matched_brand:
+                                print(f"✓ Auto-skipping ad with known message: '{message[:60]}...' -> {matched_brand}")
+                                continue
                         
                         advertisers = ad.get('advertisers', [])
                         
@@ -837,6 +876,17 @@ class BrandReviewTool:
         # Populate brand entry fields with existing brands
         self.set_brand_entries(advertisers)
         
+        # Update house ad button text based on retailer
+        json_file = ad_data['json_file']
+        if '/walmart/' in json_file:
+            self.house_ad_button.config(text="Mark as Walmart House Ad")
+        elif '/kroger/' in json_file:
+            self.house_ad_button.config(text="Mark as Kroger House Ad")
+        elif '/instacart/' in json_file:
+            self.house_ad_button.config(text="Mark as Instacart House Ad")
+        else:
+            self.house_ad_button.config(text="Mark as House Ad")
+        
         # Focus first entry
         self.brand_entries[0].focus()
     
@@ -1066,8 +1116,17 @@ class BrandReviewTool:
             if not isinstance(ad, dict):
                 raise Exception(f"ad[{i}] is not a dict: {type(ad)}")
             
-            # Match by type and position, or by exact match
-            if (ad.get('type') == target_type and ad.get('position') == target_position) or ad == target_ad:
+            # Match by multiple criteria to ensure we get the right ad
+            # For Walmart ads, type+position might not be unique, so also check image_url, href, etc.
+            type_match = ad.get('type') == target_type
+            position_match = ad.get('position') == target_position
+            
+            # Additional matching criteria
+            image_url_match = ad.get('image_url') == target_ad.get('image_url') if target_ad.get('image_url') else True
+            href_match = ad.get('href') == target_ad.get('href') if target_ad.get('href') else True
+            
+            # Match if type+position match AND (image_url matches OR href matches), or exact match
+            if ((type_match and position_match and (image_url_match or href_match)) or ad == target_ad):
                 ad['advertisers'] = corrected_brands
                 # Also update 'brand' field to match first advertiser
                 ad['brand'] = corrected_brands[0] if corrected_brands else None
@@ -1094,11 +1153,17 @@ class BrandReviewTool:
                 break
         
         if not updated:
+            print(f"[ERROR] Could not find ad in JSON")
+            print(f"  Looking for: type={target_type}, position={target_position}")
+            print(f"  image_url={target_ad.get('image_url')}, href={target_ad.get('href')}")
+            print(f"  Total ads in JSON: {len(ads_to_check)}")
             raise Exception(f"Could not find ad in JSON (type={target_type}, position={target_position})")
         
         # Save updated JSON
+        print(f"[DEBUG] Saving updated JSON: {json_file}")
         with open(json_file, 'w') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        print(f"[DEBUG] JSON saved successfully")
     
     def rename_image_file(self, ad_data, old_brand, new_brand):
         """Rename the image file to match corrected brand, regardless of previous slug"""
@@ -1269,6 +1334,11 @@ class BrandReviewTool:
         for i, ad in enumerate(self.unknown_ads):
             ad_obj = ad['ad']
             
+            # Always include the current ad
+            if i == self.current_index:
+                similar_ads.append((i, ad))
+                continue
+            
             # Match by message, header, or URL
             matches = False
             if current_message and (ad_obj.get('message') or '').strip() == current_message:
@@ -1368,15 +1438,28 @@ class BrandReviewTool:
             messagebox.showinfo("Complete", "All unknown brands have been reviewed!")
             self.root.quit()
     
-    def mark_as_kroger(self):
-        """Mark the current ad as a Kroger house ad"""
+    def mark_as_house_ad(self):
+        """Mark the current ad as a retailer house ad (Kroger or Walmart)"""
+        # Get retailer from current ad's JSON file path
+        ad_data = self.unknown_ads[self.current_index]
+        json_file = ad_data['json_file']
+        
+        # Determine retailer from path
+        retailer = "Kroger"  # Default
+        if '/walmart/' in json_file:
+            retailer = "Walmart"
+        elif '/kroger/' in json_file:
+            retailer = "Kroger"
+        elif '/instacart/' in json_file:
+            retailer = "Instacart"
+        
         # Clear all co-brand fields
         while len(self.brand_entries) > 1:
             self.remove_cobrand_field(1)
         
-        # Set first field to Kroger
+        # Set first field to retailer name
         self.brand_entries[0].delete(0, tk.END)
-        self.brand_entries[0].insert(0, "Kroger")
+        self.brand_entries[0].insert(0, retailer)
         self.save_correction()
     
     def to_slug(self, text):
@@ -1384,22 +1467,24 @@ class BrandReviewTool:
         return text.lower().replace(' ', '_').replace("'", '').replace('&', 'and')
     
     def next_ad(self):
-        """Move to next ad, skipping any Kroger house ads"""
+        """Move to next ad, skipping any retailer house ads"""
         self.current_index += 1
-        # Skip any Kroger ads
+        # Skip any house ads (Kroger, Walmart, Instacart)
+        house_ad_brands = {'kroger', 'walmart', 'instacart'}
         while self.current_index < len(self.unknown_ads):
-            if self.unknown_ads[self.current_index]['current_brand'].lower() != 'kroger':
+            if self.unknown_ads[self.current_index]['current_brand'].lower() not in house_ad_brands:
                 break
             self.current_index += 1
         self.show_current_ad()
     
     def previous_ad(self):
-        """Move to previous ad, skipping any Kroger house ads"""
+        """Move to previous ad, skipping any retailer house ads"""
         if self.current_index > 0:
             self.current_index -= 1
-            # Skip any Kroger ads
+            # Skip any house ads (Kroger, Walmart, Instacart)
+            house_ad_brands = {'kroger', 'walmart', 'instacart'}
             while self.current_index > 0:
-                if self.unknown_ads[self.current_index]['current_brand'].lower() != 'kroger':
+                if self.unknown_ads[self.current_index]['current_brand'].lower() not in house_ad_brands:
                     break
                 self.current_index -= 1
             self.show_current_ad()

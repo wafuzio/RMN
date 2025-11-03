@@ -57,6 +57,10 @@ type GetAdsOpts = {
 export const api = {
   getRetailers: () => http<RetailersResponse>(`/api/retailers`),
   getClients: (retailer: string) => http<ClientsResponse>(`/api/clients?retailer=${encodeURIComponent(retailer)}`),
+  getBrands: (retailers: string[]) => {
+    const retailerParam = retailers.length > 0 ? retailers.join(',') : 'all';
+    return http<{ brands: Array<{ brand: string; count: number; percentage: number }> }>(`/api/brands?retailers=${encodeURIComponent(retailerParam)}`);
+  },
   getAds: (params: GetAdsOpts) => {
     const { retailer, client, term, advertiser, page = 1, pageSize = 24, start, end, types, search, sort } = params;
 

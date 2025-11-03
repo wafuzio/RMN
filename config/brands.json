@@ -248,7 +248,9 @@
   },
   {
     "name": "Cottonelle",
-    "synonyms": []
+    "synonyms": [
+      "MSG:Spend $25, Save $5"
+    ]
   },
   {
     "name": "Crest",
@@ -458,6 +460,10 @@
     ]
   },
   {
+    "name": "Haagen Dazs",
+    "synonyms": []
+  },
+  {
     "name": "Haagen-Dazs",
     "synonyms": []
   },
@@ -531,7 +537,6 @@
   {
     "name": "Häagen-Dazs",
     "synonyms": [
-      "Haagen Dazs",
       "HagenDazs",
       "Häagen Dazs"
     ]
@@ -618,7 +623,15 @@
   },
   {
     "name": "Kleenex",
-    "synonyms": []
+    "synonyms": [
+      "MSG:Spend $25, Save $5"
+    ]
+  },
+  {
+    "name": "Knorr",
+    "synonyms": [
+      "MSG:Share The Love. Share The Flavor. Shop Now"
+    ]
   },
   {
     "name": "Kodiak",
@@ -659,7 +672,9 @@
       "MSG:Enjoy a game winning recipe for a easy, creamy buffalo chicken dip.",
       "MSG:Bakery Fresh Bite Sized Treats. Shop Now.",
       "MSG:Delicious looking glazed ham on a holiday platter. Shown on a red background with a string of lights.",
-      "MSG:Use your food/OTC card to save on wellness essentials. Shop Now."
+      "MSG:Use your food/OTC card to save on wellness essentials. Shop Now.",
+      "MSG:Save $1 on Snacks",
+      "MSG:Elevate Your Thanksgiving Private Selection Brand"
     ]
   },
   {
@@ -976,6 +991,12 @@
     ]
   },
   {
+    "name": "Pace",
+    "synonyms": [
+      "MSG:PaceSalsa"
+    ]
+  },
+  {
     "name": "Panera Bread",
     "synonyms": []
   },
@@ -1104,7 +1125,9 @@
   },
   {
     "name": "Scott",
-    "synonyms": []
+    "synonyms": [
+      "MSG:Spend $25, Save $5"
+    ]
   },
   {
     "name": "Siete Foods",
@@ -1235,7 +1258,9 @@
   },
   {
     "name": "Viva",
-    "synonyms": []
+    "synonyms": [
+      "MSG:Spend $25, Save $5"
+    ]
   },
   {
     "name": "Voltaren Arthritis Pain",

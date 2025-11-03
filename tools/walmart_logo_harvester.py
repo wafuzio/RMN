@@ -243,6 +243,7 @@ def harvest_walmart_brand_logo(
     
     # Canonicalize brand
     brand_canonical = canonicalize_brand(brand_keyword) if SCRAPER_IMPORTS_OK else brand_keyword
+    brand_slug = brand_canonical.lower().replace(' ', '_').replace('-', '_').replace("'", "")
     retailer = "walmart"
     
     print(f"→ Harvesting logo for: {brand_keyword}")
@@ -320,7 +321,130 @@ def harvest_walmart_brand_logo(
                     "reason": "no_search_results"
                 }
             
-            # Find first product link in results - try multiple selectors
+            # FIRST: Check for SBA ad with brand logo (fast path)
+            print(f"  Checking for SBA ad with brand logo...")
+            try:
+                # Look for SBA container
+                sba_selectors = [
+                    '[data-testid="sba-container"]',
+                    '[class*="sba-container"]',
+                ]
+                
+                sba_container = None
+                for selector in sba_selectors:
+                    container = page.locator(selector).first
+                    if container.count() > 0:
+                        sba_container = container
+                        print(f"    SBA container found with selector: {selector}")
+                        break
+                
+                if sba_container:
+                    # Look for brand name in any span
+                    text_spans = sba_container.locator('span').all()
+                    print(f"    Checking {len(text_spans)} text spans for brand match...")
+                    
+                    found_match = False
+                    for span in text_spans:
+                        try:
+                            text_content = span.inner_text().strip()
+                            if not text_content:
+                                continue
+                            norm_text = text_content.lower().replace(' ', '').replace('-', '')
+                            norm_brand = brand_keyword.lower().replace(' ', '').replace('-', '')
+                            
+                            # Debug: show first few text spans
+                            if len(text_content) > 5:
+                                print(f"      Checking span: '{text_content[:50]}' (looking for '{brand_keyword}')")
+                            
+                            if norm_brand in norm_text:
+                                found_match = True
+                                print(f"    Found brand match in SBA: '{text_content}'")
+                                # Get ALL images and filter for logo (odnWidth=150)
+                                try:
+                                    all_imgs = sba_container.locator('img').all()
+                                    print(f"    Total images in SBA: {len(all_imgs)}")
+                                    
+                                    logo_imgs = []
+                                    for i, img in enumerate(all_imgs):
+                                        src = img.get_attribute('src') or ''
+                                        srcset = img.get_attribute('srcset') or ''
+                                        alt = img.get_attribute('alt') or ''
+                                        width = img.get_attribute('width') or ''
+                                        height = img.get_attribute('height') or ''
+                                        
+                                        # Check if it's a logo: ONLY 150x90 dimensions (not 150x150 products)
+                                        is_logo = (width == '150' and height == '90')
+                                        print(f"      Image {i}: width={width}, height={height}, alt={alt[:30]}, is_logo={is_logo}")
+                                        
+                                        if is_logo:
+                                            logo_imgs.append(img)
+                                    
+                                    print(f"    Logo images found: {len(logo_imgs)}")
+                                except Exception as e:
+                                    print(f"    ERROR getting images: {type(e).__name__}: {e}")
+                                    raise
+                                
+                                if len(logo_imgs) > 0:
+                                    
+                                    for img in logo_imgs:
+                                        logo_src = img.get_attribute('src')
+                                        if logo_src:
+                                            print(f"    Downloading SBA logo: {logo_src[:60]}...")
+                                            try:
+                                                response = requests.get(logo_src, headers=HEADERS, timeout=10)
+                                                print(f"    Response status: {response.status_code}")
+                                            except Exception as e:
+                                                print(f"    Download failed: {e}")
+                                                continue
+                                            if response.status_code == 200:
+                                                # Save the logo
+                                                ext = ".png"
+                                                if "image/svg" in response.headers.get('content-type', ''):
+                                                    ext = ".svg"
+                                                elif "image/jpeg" in response.headers.get('content-type', ''):
+                                                    ext = ".jpg"
+                                                
+                                                logo_filename = f"{brand_slug}{ext}"
+                                                logo_path = os.path.join(logos_dir, logo_filename)
+                                                with open(logo_path, 'wb') as f:
+                                                    f.write(response.content)
+                                                
+                                                print(f"    ✅ Saved SBA logo: {logo_filename}")
+                                                
+                                                # Update database
+                                                _update_brand_logo_db(
+                                                    db_path=db_path,
+                                                    brand=brand_canonical,
+                                                    logo_url=logo_src,
+                                                    logo_file=logo_filename,
+                                                    retailer=retailer,
+                                                    metadata={"source": "walmart_sba", "matched_text": text_content}
+                                                )
+                                                
+                                                # SUCCESS - return immediately
+                                                return {
+                                                    "ok": True,
+                                                    "brand": brand_canonical,
+                                                    "logo_file": logo_filename,
+                                                    "logo_url": logo_src,
+                                                    "source": "walmart_sba"
+                                                }
+                        except Exception as e:
+                            print(f"    ⚠️  Error processing span: {type(e).__name__}: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            continue
+                    
+                    if not found_match:
+                        print(f"    ✗ No brand match found in {len(text_spans)} spans")
+                else:
+                    print(f"    ✗ No SBA container found")
+                
+                print(f"    → Continuing to brand store...")
+            except Exception as e:
+                print(f"    SBA check failed: {e}, continuing to brand store...")
+            
+            # FALLBACK: Find first product link and go to brand store
             print(f"  Finding first product...")
             product_link = None
             
