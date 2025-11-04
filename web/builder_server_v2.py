@@ -1830,6 +1830,11 @@ def api_brand_details():
     if not brand_name:
         return jsonify({"error": "brand parameter required"}), 400
 
+    # Parse keywords filter early if provided (for competitors fetching the brand's data)
+    filter_keywords = set()
+    if keywords_param:
+        filter_keywords = set(kw.strip().lower() for kw in keywords_param.split(",") if kw.strip())
+
     # Parse retailers
     if retailers_param == "all":
         retailers_to_query = []
@@ -1880,6 +1885,11 @@ def api_brand_details():
 
                                 # Find matching ads for this brand
                                 file_keyword = (data.get("keyword") or data.get("search_term") or "").strip().lower()
+
+                                # Skip this file if keywords_param was provided and this file's keyword is not in the filter
+                                if filter_keywords and file_keyword not in filter_keywords:
+                                    continue
+
                                 for ad_index, ad in enumerate(ads):
                                     ad_brand = (ad.get("brand") or ad.get("advertiser") or "").strip()
                                     if ad_brand.lower() == brand_name.lower():
@@ -1916,6 +1926,11 @@ def api_brand_details():
                                                 ads.extend(result.get("ads", []))
 
                                         file_keyword = (data.get("keyword") or data.get("search_term") or "").strip().lower()
+
+                                        # Skip this file if keywords_param was provided and this file's keyword is not in the filter
+                                        if filter_keywords and file_keyword not in filter_keywords:
+                                            continue
+
                                         for ad_index, ad in enumerate(ads):
                                             ad_brand = (ad.get("brand") or ad.get("advertiser") or "").strip()
                                             if ad_brand.lower() == brand_name.lower():
@@ -1962,9 +1977,9 @@ def api_brand_details():
             for kw, count in sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)[:10]
         ]
 
-        # Filter brand_ads to only top keywords for consistency (case-insensitive)
-        top_keywords_set = set(kw["keyword"].lower() for kw in top_keywords)
-        brand_ads_filtered = [ad for ad in brand_ads if ad["keyword"].lower() in top_keywords_set]
+        # brand_ads_filtered is already filtered by keywords_param if provided (filtered during collection)
+        # or contains all keywords for the main brand request
+        brand_ads_filtered = brand_ads
 
         # Find keywords and competitors
         # The keyword is stored at the JSON file level (data.get("keyword")),
@@ -2137,16 +2152,8 @@ def api_brand_details():
             month_key = month_date.strftime("%Y-%m")
             monthly_activity[month_key] = 0
 
-        # Parse keywords filter if provided (for competitors fetching the brand's data)
-        filter_keywords = set()
-        if keywords_param:
-            filter_keywords = set(kw.strip().lower() for kw in keywords_param.split(",") if kw.strip())
-
-        # Count ads per month - use filtered brand ads (only top keywords for consistency)
+        # Count ads per month - use filtered brand ads (already filtered by keywords if keywords_param provided)
         ads_for_monthly = brand_ads_filtered
-        if filter_keywords:
-            # If keywords param provided (competitor request), filter further
-            ads_for_monthly = [ad for ad in brand_ads_filtered if ad["keyword"].lower() in filter_keywords]
 
         for item in ads_for_monthly:
 

@@ -58,15 +58,12 @@
     ]
   },
   {
-    "name": "Ben",
-    "synonyms": []
-  },
-  {
     "name": "Ben & Jerry's",
     "synonyms": [
       "Jerry",
       "B&J",
-      "Ben and Jerrys"
+      "Ben and Jerrys",
+      "Ben"
     ]
   },
   {
@@ -82,19 +79,14 @@
   {
     "name": "Big K",
     "synonyms": [
-      "Big"
+      "Big-K"
     ]
   },
   {
     "name": "Birds Eye",
     "synonyms": [
-      "MSMAlwaysOn0625"
-    ]
-  },
-  {
-    "name": "Birdseye",
-    "synonyms": [
-      "MSMAlwaysOn0625"
+      "MSMAlwaysOn0625",
+      "BirdsEye"
     ]
   },
   {
@@ -145,10 +137,6 @@
     ]
   },
   {
-    "name": "Boost Oxygen  with Red Cross",
-    "synonyms": []
-  },
-  {
     "name": "Boulder Canyon",
     "synonyms": []
   },
@@ -162,23 +150,19 @@
   },
   {
     "name": "Butterfinger Ice Cream Bar",
-    "synonyms": []
-  },
-  {
-    "name": "Butterfinger Ice Cream Bars",
-    "synonyms": []
+    "synonyms": [
+      "Butterfinger Ice Cream Bars",
+      "Butterfinger Ice Cream"
+    ]
   },
   {
     "name": "Campbell's",
     "synonyms": [
       "Campbell",
       "Campbells",
-      "Campbell Soup"
+      "Campbell Soup",
+      "Campbell's Chunky"
     ]
-  },
-  {
-    "name": "Campbells Chunky",
-    "synonyms": []
   },
   {
     "name": "Carbe Diem Penne",
@@ -235,16 +219,11 @@
     "synonyms": []
   },
   {
-    "name": "Core",
-    "synonyms": []
-  },
-  {
     "name": "Core Power",
-    "synonyms": []
-  },
-  {
-    "name": "Core Power  with Fairlife Cow",
-    "synonyms": []
+    "synonyms": [
+      "Core Power with Fairlife Cow",
+      "Core"
+    ]
   },
   {
     "name": "Cottonelle",
@@ -262,7 +241,9 @@
   },
   {
     "name": "Dairy Farmers of America",
-    "synonyms": []
+    "synonyms": [
+      "DFA"
+    ]
   },
   {
     "name": "Danone",
@@ -271,12 +252,9 @@
   {
     "name": "Dave's Killer Bread",
     "synonyms": [
-      "DavesKillerBreadFamily"
+      "DavesKillerBreadFamily",
+      "Daves Killer Bread"
     ]
-  },
-  {
-    "name": "Daves Killer Bread",
-    "synonyms": []
   },
   {
     "name": "Del Monte",
@@ -308,8 +286,11 @@
     ]
   },
   {
-    "name": "Dreyers Grand Ice Cream",
-    "synonyms": []
+    "name": "Dreyers",
+    "synonyms": [
+      "Dreyers Grand Ice Cream",
+      "Dreyer's"
+    ]
   },
   {
     "name": "Duncan Hines",
@@ -340,27 +321,18 @@
   {
     "name": "EOS",
     "synonyms": [
-      "MSG:New Créme de Pistachio"
+      "MSG:New Créme de Pistachio",
+      "eos"
     ]
   },
   {
     "name": "Fairlife",
-    "synonyms": []
-  },
-  {
-    "name": "Fairlife Reduced Fat",
-    "synonyms": []
+    "synonyms": [
+      "Fairlife Reduced Fat"
+    ]
   },
   {
     "name": "Frank's Red Hot",
-    "synonyms": []
-  },
-  {
-    "name": "Free",
-    "synonyms": []
-  },
-  {
-    "name": "Fresh",
     "synonyms": []
   },
   {
@@ -383,7 +355,8 @@
   {
     "name": "Frollies",
     "synonyms": [
-      "Frollie"
+      "Frollie",
+      "Frollie's"
     ]
   },
   {
@@ -456,16 +429,16 @@
     "name": "göt2b",
     "synonyms": [
       "MSG:Treat Yourself This Halloween. Shop göt2b. Shop Now.",
-      "MSG:Strong Hold 4 the Holidays. Shop göt2b. Shop Now."
+      "MSG:Strong Hold 4 the Holidays. Shop göt2b. Shop Now.",
+      "got2b"
     ]
   },
   {
-    "name": "Haagen Dazs",
-    "synonyms": []
-  },
-  {
-    "name": "Haagen-Dazs",
-    "synonyms": []
+    "name": "Häagen-Dazs",
+    "synonyms": [
+      "Haagen-Dazs",
+      "Haagen Dazs"
+    ]
   },
   {
     "name": "Haleon",
@@ -491,7 +464,9 @@
   },
   {
     "name": "Hellmann's",
-    "synonyms": []
+    "synonyms": [
+      "Hellmanns"
+    ]
   },
   {
     "name": "Hello",
@@ -506,11 +481,9 @@
   },
   {
     "name": "Hershey",
-    "synonyms": []
-  },
-  {
-    "name": "Hershey's",
-    "synonyms": []
+    "synonyms": [
+      "Hershey's"
+    ]
   },
   {
     "name": "Hillshire Farm",
@@ -519,27 +492,12 @@
     ]
   },
   {
-    "name": "Hillshire Farm Hot",
-    "synonyms": []
-  },
-  {
     "name": "Honey Maid",
     "synonyms": []
   },
   {
     "name": "Horizon Organic",
     "synonyms": []
-  },
-  {
-    "name": "Hot Brand Page",
-    "synonyms": []
-  },
-  {
-    "name": "Häagen-Dazs",
-    "synonyms": [
-      "HagenDazs",
-      "Häagen Dazs"
-    ]
   },
   {
     "name": "Icy Hot",
@@ -579,13 +537,8 @@
     "name": "Jennie-O",
     "synonyms": [
       "Jennie O",
-      "JennieO",
-      "Hormel"
+      "JennieO"
     ]
-  },
-  {
-    "name": "Jerrys",
-    "synonyms": []
   },
   {
     "name": "Jet-Puffed",
@@ -606,12 +559,9 @@
     "synonyms": [
       "Kellogg",
       "Kelloggs",
-      "Kellogg Company"
+      "Kellogg Company",
+      "Kellogg's Cereal"
     ]
-  },
-  {
-    "name": "Kellogg's Cereal",
-    "synonyms": []
   },
   {
     "name": "Kenvue",
@@ -640,26 +590,22 @@
     ]
   },
   {
-    "name": "Kool-Aid Jammers",
-    "synonyms": []
+    "name": "Kool-Aid",
+    "synonyms": [
+      "KoolAidJammers",
+      "Kool-Aid Jammers",
+      "Kool-Aid Jammers"
+    ]
   },
   {
     "name": "Kraft",
     "synonyms": [
-      "Kraft Foods"
-    ]
-  },
-  {
-    "name": "Kraft Heinz",
-    "synonyms": [
-      "Kraft-Heinz",
-      "KraftHeinz"
-    ]
-  },
-  {
-    "name": "Kraft Singles",
-    "synonyms": [
-      "SandwichScaleTOA"
+      "Kraft Foods",
+      "KraftHeinz",
+      "Kraft Heinz",
+      "Kraft Singles",
+      "Kraft-Heinz"
+
     ]
   },
   {
@@ -674,19 +620,8 @@
       "MSG:Delicious looking glazed ham on a holiday platter. Shown on a red background with a string of lights.",
       "MSG:Use your food/OTC card to save on wellness essentials. Shop Now.",
       "MSG:Save $1 on Snacks",
-      "MSG:Elevate Your Thanksgiving Private Selection Brand"
-    ]
-  },
-  {
-    "name": "Kroger Brand",
-    "synonyms": [
-      "TOAOB0925KBBreakfastQ3"
-    ]
-  },
-  {
-    "name": "Kroger Cereal",
-    "synonyms": [
-      "TOAOB0825KBColdCerealDPQ3"
+      "MSG:Elevate Your Thanksgiving Private Selection Brand",
+      "Kroger Brand"
     ]
   },
   {
@@ -764,7 +699,8 @@
     "name": "Marie Callender's",
     "synonyms": [
       "SSMAlwaysOn0625",
-      "SSMAlwaysOnadgroup6"
+      "SSMAlwaysOnadgroup6",
+      "Marie Callenders"
     ]
   },
   {
@@ -782,8 +718,10 @@
     ]
   },
   {
-    "name": "Mayfield Dairy Farms",
-    "synonyms": []
+    "name": "Mayfield",
+    "synonyms": [
+      "Mayfield Dairy Farms"
+    ]
   },
   {
     "name": "Method",
@@ -804,7 +742,8 @@
   {
     "name": "Milk-Bone",
     "synonyms": [
-      "TOA0925"
+      "TOA0925",
+      "Milk Bone"
     ]
   },
   {
@@ -867,12 +806,9 @@
   {
     "name": "Nature's Truth",
     "synonyms": [
-      "MSG:NT15521\nNT Elderberry Complex 50 Gummies. Shop Now."
+      "MSG:NT15521\nNT Elderberry Complex 50 Gummies. Shop Now.",
+      "Nature's Truth"
     ]
-  },
-  {
-    "name": "Natures Truth",
-    "synonyms": []
   },
   {
     "name": "Nestle",
@@ -883,7 +819,9 @@
   },
   {
     "name": "Nestle Toll House",
-    "synonyms": []
+    "synonyms": [
+      "Toll House"
+    ]
   },
   {
     "name": "Neutrogena",
@@ -901,12 +839,9 @@
     "name": "NuTrail",
     "synonyms": [
       "Nu Trail",
-      "Nu-Trail"
+      "Nu-Trail",
+      "NuTrail Granola"
     ]
-  },
-  {
-    "name": "NuTrail Granola",
-    "synonyms": []
   },
   {
     "name": "O'Keeffe's",
@@ -925,12 +860,9 @@
     "name": "Olipop",
     "synonyms": [
       "Oli Pop",
-      "Oli-Pop"
+      "Oli-Pop",
+      "Olipop Prebiotic"
     ]
-  },
-  {
-    "name": "OLIPOP Prebiotic",
-    "synonyms": []
   },
   {
     "name": "Opti-Free",
@@ -941,19 +873,11 @@
   },
   {
     "name": "Orgain",
-    "synonyms": []
-  },
-  {
-    "name": "Orgain Organic",
-    "synonyms": []
-  },
-  {
-    "name": "Orgain: Clean Nutrition",
-    "synonyms": []
-  },
-  {
-    "name": "Organic",
-    "synonyms": []
+    "synonyms": [
+      "Orgain Organic",
+      "Orgain Clean Nutrition",
+      "Orgain: Clean Nutrition"
+    ]
   },
   {
     "name": "Ortega",
@@ -998,7 +922,9 @@
   },
   {
     "name": "Panera Bread",
-    "synonyms": []
+    "synonyms": [
+      "Panera"
+    ]
   },
   {
     "name": "Pecans",
@@ -1011,7 +937,8 @@
   {
     "name": "Peet's Coffee",
     "synonyms": [
-      "PeetsFallCampaign2025TOA"
+      "PeetsFallCampaign2025TOA",
+      "Peets"
     ]
   },
   {
@@ -1047,10 +974,6 @@
     "synonyms": []
   },
   {
-    "name": "Premier Protein",
-    "synonyms": []
-  },
-  {
     "name": "Pringles",
     "synonyms": [
       "PringlesSuperStack"
@@ -1068,7 +991,8 @@
   {
     "name": "Pup-Peroni",
     "synonyms": [
-      "PupperoniSept25TOA"
+      "PupperoniSept25TOA",
+      "Pupperoni"
     ]
   },
   {
@@ -1077,11 +1001,9 @@
   },
   {
     "name": "Qunol",
-    "synonyms": []
-  },
-  {
-    "name": "Qunol Black",
-    "synonyms": []
+    "synonyms": [
+      "Qunol Black"
+    ]
   },
   {
     "name": "Red Baron",
@@ -1091,23 +1013,16 @@
   },
   {
     "name": "Refresh",
-    "synonyms": []
-  },
-  {
-    "name": "Refresh Lubricant Eye Drops",
-    "synonyms": []
+    "synonyms": [
+      "Refresh Lubricant Eye Drops"
+    ]
   },
   {
     "name": "Ripple Foods",
-    "synonyms": []
-  },
-  {
-    "name": "Ripple Kids",
-    "synonyms": []
-  },
-  {
-    "name": "Ripple Milk",
-    "synonyms": []
+    "synonyms": [
+      "Ripple Kids",
+      "Ripple Milk"
+    ]
   },
   {
     "name": "Rohto",
@@ -1125,13 +1040,13 @@
   },
   {
     "name": "Scott",
-    "synonyms": [
-      "MSG:Spend $25, Save $5"
-    ]
+    "synonyms": []
   },
   {
     "name": "Siete Foods",
-    "synonyms": []
+    "synonyms": [
+      "Siete"
+    ]
   },
   {
     "name": "Siggi's",
@@ -1153,7 +1068,9 @@
   },
   {
     "name": "Sour Patch Kids",
-    "synonyms": []
+    "synonyms": [
+      "spk"
+    ]
   },
   {
     "name": "Starbucks",
@@ -1161,7 +1078,9 @@
   },
   {
     "name": "Stonyfield Organic",
-    "synonyms": []
+    "synonyms": [
+      "Stonyfield"
+    ]
   },
   {
     "name": "Success Rice",
@@ -1215,18 +1134,11 @@
     ]
   },
   {
-    "name": "Trolli",
-    "synonyms": [
-      "trolli_gummi_pop"
-    ]
-  },
-  {
-    "name": "Trolli Frozen",
-    "synonyms": []
-  },
-  {
     "name": "Trolli Gummi Pop",
-    "synonyms": []
+    "synonyms": [
+      "trolli_gummi_pop",
+      "Trolli Frozen"
+    ]
   },
   {
     "name": "Tru Fru",
@@ -1258,9 +1170,7 @@
   },
   {
     "name": "Viva",
-    "synonyms": [
-      "MSG:Spend $25, Save $5"
-    ]
+    "synonyms": []
   },
   {
     "name": "Voltaren Arthritis Pain",
