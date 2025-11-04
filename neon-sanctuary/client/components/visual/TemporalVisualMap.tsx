@@ -163,10 +163,11 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
     return { minDate: min, maxDate: max };
   }, [dates]);
 
-  const [state, setState] = useState({ scale: 1, offsetX: 0 }); // scale on x-axis
+  const [state, setState] = useState({ scale: 0.5, offsetX: 0 }); // Default to bars (just below 60px threshold), will center on first render
+  const [hasCentered, setHasCentered] = useState(false);
   const stateRef = useRef(state); // Keep ref in sync for event handlers
   const drawRef = useRef<() => Promise<void>>(() => Promise.resolve()); // Keep latest draw function
-  const varsRef = useRef<{ pxPerMs: number; minDate: Date; onRangeChange?: (from: Date, to: Date) => void }>({ pxPerMs: 0, minDate: new Date(), onRangeChange }); // Keep changing values in ref
+  const varsRef = useRef<{ pxPerMs: number; minDate: Date; onRangeChange?: (from: Date, to: Date) => void; bins: Array<{ start: Date; end: Date; ads: Ad[] }>; g: Granularity; width: number; height: number }>({ pxPerMs: 0, minDate: new Date(), onRangeChange, bins: [], g: "day", width: 800, height: 300 }); // Keep changing values in ref
 
   useEffect(() => {
     stateRef.current = state;
@@ -178,11 +179,6 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
   const msTotal = Math.max(1, +maxDate - +minDate);
   const basePxPerMs = width / msTotal;
   const pxPerMs = basePxPerMs * state.scale;
-
-  // Update varsRef after pxPerMs is calculated
-  useEffect(() => {
-    varsRef.current = { pxPerMs, minDate, onRangeChange };
-  }, [pxPerMs, minDate, onRangeChange]);
   const pxPerDay = pxPerMs * 86400e3;
   const g: Granularity = pickGranularity(pxPerDay);
 
@@ -198,6 +194,24 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
     const entries = Array.from(map.entries()).sort((a,b)=>a[0]-b[0]);
     return entries.map(([k, vals]) => ({ start: new Date(k), end: addGranularity(new Date(k), g), ads: vals }));
   }, [ads, g]);
+
+  // Update varsRef after pxPerMs is calculated
+  useEffect(() => {
+    varsRef.current = { pxPerMs, minDate, onRangeChange, bins, g, width, height };
+  }, [pxPerMs, minDate, onRangeChange, bins, g, width, height]);
+
+  // Center the populated data on initial load
+  useEffect(() => {
+    if (!hasCentered && bins.length > 0 && width > 0) {
+      const dataCenterMs = (+minDate + +maxDate) / 2;
+      const msTotal = Math.max(1, +maxDate - +minDate);
+      const basePxPerMs = width / msTotal;
+      const targetPxPerMs = basePxPerMs * state.scale;
+      const centerOffsetX = width / 2 - (dataCenterMs - (+minDate)) * targetPxPerMs;
+      setState(s => ({ ...s, offsetX: centerOffsetX }));
+      setHasCentered(true);
+    }
+  }, [bins.length, minDate, maxDate, width, state.scale, hasCentered]);
 
   useEffect(() => {
     // light prefetch for smoother zoom: first 2 images per bin
@@ -379,15 +393,47 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
         const toMs = (x2 - stateRef.current.offsetX) / px + (+md);
         orc?.(new Date(fromMs), new Date(toMs));
       } else if (mode === 'pan') {
-        // Check if this was a click (very small drag) on an ad
+        // Check if this was a click (very small drag) on an ad or bar
         const dragDist = Math.abs(e.clientX - startX);
         if (dragDist < 5) { // Less than 5px drag = click
           // Check if click was on an ad image
+          let clickedAd = false;
           for (const [, pos] of adPositionsRef.current) {
             if (clickX >= pos.x && clickX <= pos.x + pos.w &&
                 clickY >= pos.y && clickY <= pos.y + pos.h) {
               onAdClick?.(pos.ad);
+              clickedAd = true;
               break;
+            }
+          }
+
+          // If not on an ad image, check if click was on a bar and zoom to it
+          if (!clickedAd) {
+            const { pxPerMs: px, minDate: md, bins: currentBins } = varsRef.current;
+            const clickTimeMs = (clickX - stateRef.current.offsetX) / px + (+md);
+            const clickTime = new Date(clickTimeMs);
+
+            // Find the bin containing this click time
+            for (const bin of currentBins) {
+              if (clickTime >= bin.start && clickTime < bin.end) {
+                // Zoom to this bin's time range
+                const barStartMs = +bin.start;
+                const barEndMs = +bin.end;
+                const barDurationMs = barEndMs - barStartMs;
+                const totalRangeMs = +maxDate - +minDate;
+
+                // Calculate scale to fit bin in 80% of visible width
+                const targetPxPerMs = (width * 0.8) / barDurationMs;
+                const basePxPerMs = width / Math.max(1, totalRangeMs);
+                const newScale = Math.min(64, Math.max(0.25, targetPxPerMs / basePxPerMs));
+
+                // Center the bar in the view
+                const barCenterMs = (barStartMs + barEndMs) / 2;
+                const newOffsetX = width / 2 - (barCenterMs - (+md)) * targetPxPerMs;
+
+                setState({ scale: newScale, offsetX: newOffsetX });
+                break;
+              }
             }
           }
         }

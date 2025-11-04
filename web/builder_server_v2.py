@@ -199,16 +199,36 @@ def get_brand_lexicon() -> dict:
 def canonicalize_brand(raw: str | None) -> str | None:
     """
     Map raw brand to canonical name via brands.json (names + synonyms).
+    Uses case-insensitive, punctuation-insensitive matching.
     Falls back to titlecase raw if not found.
     """
+    from utils.brand_utils import normalize_brand_for_matching
+    
     raw = (raw or "").strip()
     if not raw:
         return None
-    L = get_brand_lexicon()
-    token = re.sub(r'[^a-z0-9]+', '', raw.lower())
-    cname = L["by_token"].get(token)
-    if cname:
-        return cname
+    
+    # Load brands.json directly for case-insensitive matching
+    try:
+        brands_arr = json.loads(BRAND_LEXICON_PATH.read_text())
+    except Exception:
+        return raw
+    
+    normalized = normalize_brand_for_matching(raw)
+    
+    # Check all canonical names and synonyms
+    for entry in brands_arr:
+        canonical_name = entry.get("name", "").strip()
+        if not canonical_name:
+            continue
+            
+        if normalize_brand_for_matching(canonical_name) == normalized:
+            return canonical_name
+            
+        for synonym in entry.get("synonyms", []):
+            if normalize_brand_for_matching(synonym) == normalized:
+                return canonical_name
+    
     # fallback: return cleaned raw (retain user-friendly casing if it looks like a real word)
     return raw
 

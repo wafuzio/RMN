@@ -266,17 +266,19 @@ class BrandReviewTool:
     
     def is_brand_in_lexicon(self, brand):
         """Check if a brand exists in the lexicon (uses cached data)"""
+        from utils.brand_utils import normalize_brand_for_matching
+        
         if not brand:
             return False
         
-        brand_lower = brand.lower()
+        normalized = normalize_brand_for_matching(brand)
         
-        # Check if brand name matches (case-insensitive)
+        # Check if brand name matches (case-insensitive, punctuation-insensitive)
         for lex_brand in self.lexicon_brands:
-            if lex_brand['name'].lower() == brand_lower:
+            if normalize_brand_for_matching(lex_brand['name']) == normalized:
                 return True
             # Also check synonyms
-            if any(syn.lower() == brand_lower for syn in lex_brand.get('synonyms', [])):
+            if any(normalize_brand_for_matching(syn) == normalized for syn in lex_brand.get('synonyms', [])):
                 return True
         
         return False
@@ -379,6 +381,8 @@ class BrandReviewTool:
                         is_unknown_in_json = (
                             not advertisers or
                             advertisers == ['unknown'] or
+                            advertisers == ['Unknown'] or
+                            any(adv and adv.lower() == 'unknown' for adv in advertisers) or
                             any(self.is_uncertain_brand(adv) for adv in advertisers)
                         )
                         
@@ -501,7 +505,7 @@ class BrandReviewTool:
     
     def is_uncertain_brand(self, brand):
         """Check if a brand name looks uncertain or like a campaign code"""
-        if not brand or brand == 'unknown':
+        if not brand or (brand and brand.lower() == 'unknown'):
             return True
         
         # Check if brand is in lexicon - if so, it's valid

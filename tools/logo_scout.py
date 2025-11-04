@@ -450,7 +450,8 @@ def fetch_logo_for_brand(db, brand, retailer="instacart"):
     walmart_failed = db.get("failed_searches", {}).get(brand_key, {}).get("walmart", False)
     
     if walmart_failed:
-        return None, {"source": "not-found"}
+        print(f"  ⊘ Skipping Walmart (previously failed)")
+        return None, {"source": "walmart-previously-failed"}
     
     if not walmart_failed:
         try:

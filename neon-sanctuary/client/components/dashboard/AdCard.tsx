@@ -34,17 +34,15 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType }: {
   }, [src, relUrl, hasVideo]);
 
   const heightClass = (isTOA || isSBA) ? "h-[120px]" : "h-[200px]";
-  const isShoppableDisplay = adType && (adType.toLowerCase().includes("shoppable") || adType.toLowerCase().includes("display_ads") || adType.toLowerCase().includes("sba"));
-  const objectPosition = isShoppableDisplay ? "left" : "center";
 
   if (hasVideo) {
     return (
-      <div id="video-frame" className={cn("video-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-center justify-center relative", heightClass)}>
+      <div id="video-frame" className={cn("video-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-start justify-start relative", heightClass)}>
         <video
           key={`${src}-${mediaKey}`}
           src={src}
           className="h-full w-full object-cover"
-          style={{ display: error ? 'none' : 'block', objectPosition }}
+          style={{ display: error ? 'none' : 'block', objectPosition: 'top left' }}
           crossOrigin="anonymous"
           controls
           preload="metadata"
@@ -74,13 +72,13 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType }: {
   }
 
   return (
-    <div id="image-frame" className={cn("image-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-center justify-start relative", heightClass)}>
+    <div id="image-frame" className={cn("image-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-start justify-start relative", heightClass)}>
       <img
         key={`${src}-${mediaKey}`}
         src={src}
         alt={alt || 'ad'}
         className="h-full w-full object-cover"
-        style={{ display: error ? 'none' : 'block', objectPosition }}
+        style={{ display: error ? 'none' : 'block', objectPosition: 'top left' }}
         crossOrigin="anonymous"
         referrerPolicy="no-referrer"
         decoding="async"
@@ -93,7 +91,7 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType }: {
         }}
         onError={(e) => {
           const img = e.currentTarget;
-          
+
           // First attempt: try placeholder (only if not already a placeholder)
           if (!img.src.includes('/api/image/placeholder')) {
             console.warn('[AdMedia] Image load failed, trying placeholder:', src);

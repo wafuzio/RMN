@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { BrandLogo } from "./BrandLogo";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { AdCard, Ad } from "./AdCard";
+import { toLocalImageUrl } from "@/utils/imageUrl";
+import { formatLocal } from "@/lib/date";
 
 interface BrandDetail {
   brand: string;
@@ -26,12 +29,15 @@ interface BrandDetailModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type ViewState = { type: 'detail' } | { type: 'retailer-ads'; retailer: string } | { type: 'keyword-ads'; keyword: string };
+type ViewState = { type: 'detail' } | { type: 'retailer-ads'; retailer: string } | { type: 'keyword-ads'; keyword: string } | { type: 'ad-fullsize'; ad: Ad };
 
 export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetailModalProps) {
   const [viewState, setViewState] = useState<ViewState>({ type: 'detail' });
+  const [previousViewState, setPreviousViewState] = useState<ViewState>({ type: 'detail' });
   const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
   const [competitorColorMap, setCompetitorColorMap] = useState<Map<string, string>>(new Map());
+  const [imageZoom, setImageZoom] = useState(100);
+  const [showZoomedImage, setShowZoomedImage] = useState(false);
 
   const { data: brandDetail, isLoading, error } = useQuery({
     queryKey: ["brand-detail", brand, retailers],
@@ -113,7 +119,23 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
     enabled: viewState.type !== 'detail' && !!brandDetail,
   });
 
-  const handleGoBack = () => setViewState({ type: 'detail' });
+  const handleGoBack = () => setViewState(previousViewState);
+  const handleOpenAdFullsize = (ad: Ad) => {
+    setPreviousViewState(viewState);
+    setViewState({ type: 'ad-fullsize', ad });
+    setImageZoom(100);
+    setShowZoomedImage(false);
+  };
+  const handleCloseAdFullsize = () => {
+    setViewState(previousViewState);
+    setImageZoom(100);
+    setShowZoomedImage(false);
+  };
+  const handleImageZoom = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const zoomAmount = e.deltaY > 0 ? -10 : 10;
+    setImageZoom(prev => Math.max(100, Math.min(500, prev + zoomAmount)));
+  };
 
   const toggleCompetitor = (competitorBrand: string) => {
     setSelectedCompetitors(prev => {
@@ -178,35 +200,83 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
   };
 
   return (
+    <>
     <Dialog open={true} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-4">
-            {viewState.type !== 'detail' && (
-              <button
-                onClick={handleGoBack}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="Go back"
-              >
-                <ArrowLeft className="w-5 h-5 text-gray-700" />
-              </button>
-            )}
-            <div className="h-16 w-16 flex-shrink-0">
-              <BrandLogo brand={brand} className="h-14 w-14" />
+      <DialogContent className={viewState.type === 'ad-fullsize' ? "sm:max-w-6xl max-h-[95vh] overflow-y-auto" : "sm:max-w-4xl max-h-[90vh] overflow-y-auto"}>
+        {viewState.type !== 'ad-fullsize' && (
+          <DialogHeader>
+            <div className="flex items-center gap-4">
+              {viewState.type !== 'detail' && (
+                <button
+                  onClick={handleGoBack}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Go back"
+                >
+                  <ArrowLeft className="w-5 h-5 text-gray-700" />
+                </button>
+              )}
+              <div className="h-16 w-16 flex-shrink-0">
+                <BrandLogo brand={brand} className="h-14 w-14" />
+              </div>
+              <div>
+                <DialogTitle className="text-2xl">{brand}</DialogTitle>
+                {viewState.type === 'retailer-ads' && (
+                  <p className="text-sm text-gray-600 mt-1">{viewState.retailer} — All Ads</p>
+                )}
+                {viewState.type === 'keyword-ads' && (
+                  <p className="text-sm text-gray-600 mt-1">"{viewState.keyword}" — All Ads</p>
+                )}
+              </div>
             </div>
-            <div>
-              <DialogTitle className="text-2xl">{brand}</DialogTitle>
-              {viewState.type === 'retailer-ads' && (
-                <p className="text-sm text-gray-600 mt-1">{viewState.retailer} — All Ads</p>
-              )}
-              {viewState.type === 'keyword-ads' && (
-                <p className="text-sm text-gray-600 mt-1">"{viewState.keyword}" — All Ads</p>
-              )}
+          </DialogHeader>
+        )}
+
+        {viewState.type === 'ad-fullsize' && viewState.ad ? (
+          <div className="space-y-4">
+            <button
+              onClick={handleCloseAdFullsize}
+              className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-lg transition-colors mb-4"
+              aria-label="Go back to ads"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-700" />
+              <span className="text-sm font-medium text-gray-700">Back to Ads</span>
+            </button>
+            <div className="grid md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-lg">
+              <div className="flex items-center justify-center rounded-lg overflow-hidden bg-white cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => { setShowZoomedImage(true); setImageZoom(100); }}>
+                <img
+                  src={toLocalImageUrl(viewState.ad.image_url)}
+                  alt={`${viewState.ad.brand} full`}
+                  className="w-full h-full object-contain max-h-[600px]"
+                  crossOrigin="anonymous"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div className="space-y-3 flex flex-col justify-center">
+                <h3 className="text-3xl font-bold">{viewState.ad.brand}</h3>
+                <div className="text-sm text-gray-600">{viewState.ad.retailer} • {viewState.ad.ad_type}</div>
+                <div className="text-sm"><span className="font-semibold">Keyword:</span> {viewState.ad.keyword}</div>
+                <div className="text-sm"><span className="font-semibold">Client:</span> {viewState.ad.client}</div>
+                <div className="text-sm"><span className="font-semibold">Date:</span> {formatLocal(viewState.ad.timestamp)}</div>
+                <div className="pt-4 flex gap-2">
+                  <Button onClick={async () => {
+                    try {
+                      const response = await fetch(toLocalImageUrl(viewState.ad.image_url));
+                      const blob = await response.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${viewState.ad.brand}-${viewState.ad.ad_type}.png`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } catch (error) {
+                      console.error('Failed to download image:', error);
+                    }
+                  }}>Download</Button>
+                </div>
+              </div>
             </div>
           </div>
-        </DialogHeader>
-
-        {viewState.type !== 'detail' && adsLoading ? (
+        ) : viewState.type !== 'detail' && adsLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
           </div>
@@ -214,11 +284,11 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
           <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {filteredAds.map((ad, idx) => (
-                <div key={idx}>
+                <div key={idx} className="cursor-pointer" onClick={() => handleOpenAdFullsize(ad)}>
                   <AdCard
                     ad={ad}
                     onRemove={() => {}}
-                    onOpen={() => {}}
+                    onOpen={() => handleOpenAdFullsize(ad)}
                   />
                 </div>
               ))}
@@ -380,5 +450,33 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
         ) : null}
       </DialogContent>
     </Dialog>
+
+    {showZoomedImage && viewState.type === 'ad-fullsize' && viewState.ad && (
+      <div
+        className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center overflow-auto cursor-zoom-out"
+        onClick={() => setShowZoomedImage(false)}
+        onWheel={handleImageZoom}
+      >
+        <div className="absolute top-4 right-4 text-white text-sm font-medium bg-black/50 px-3 py-2 rounded pointer-events-none">
+          {imageZoom}% • Scroll to zoom • Click to close
+        </div>
+        <img
+          src={toLocalImageUrl(viewState.ad.image_url)}
+          alt={`${viewState.ad.brand} zoomed`}
+          className="m-auto"
+          style={{
+            width: `${imageZoom}%`,
+            height: 'auto',
+            maxHeight: '100vh',
+            maxWidth: '100vw',
+            objectFit: 'contain',
+          }}
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+    )}
+    </>
   );
 }

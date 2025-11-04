@@ -132,10 +132,10 @@ export default function Brands() {
                 <button
                   key={brand.brand}
                   onClick={() => setSelectedBrand(brand.brand)}
-                  className="group bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 p-6 flex flex-col items-center justify-center gap-4 cursor-pointer hover:scale-105"
+                  className="group bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:scale-105"
                 >
-                  <div className="flex items-center justify-center h-24 w-24 flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
-                    <BrandLogo brand={brand.brand} className="h-20 w-20" />
+                  <div className="flex items-center justify-center h-36 w-36 flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
+                    <BrandLogo brand={brand.brand} className="h-30 w-30" />
                   </div>
                   <div className="text-center space-y-1">
                     <p className="font-bold text-gray-900 text-sm line-clamp-2 group-hover:text-blue-600 transition-colors">
