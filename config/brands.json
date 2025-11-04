@@ -21,6 +21,17 @@
     "name": "Annie's",
     "synonyms": []
   },
+    {
+    "name": "Biore",
+    "synonyms": [
+      "Biore Clean",
+      "Biore Cleanse",
+      "Biore Cleanse & Tone",
+      "Biore Cleanse & Tone",
+      "Biore Deep Cleansing",
+      "Biore Deep Cleaning"
+    ]
+  },
   {
     "name": "Applegate Natural",
     "synonyms": []
@@ -149,6 +160,12 @@
     "synonyms": []
   },
   {
+    "name": "Butterfinger",
+    "synonyms": [
+      "butterfinger"
+    ]
+  },
+  {
     "name": "Butterfinger Ice Cream Bar",
     "synonyms": [
       "Butterfinger Ice Cream Bars",
@@ -180,6 +197,12 @@
     "name": "Cheez-It",
     "synonyms": [
       "MSCCollegeFootballWave2101525"
+    ]
+  },
+  {
+    "name": "Cheerios",
+    "synonyms": [
+      "cheerios"
     ]
   },
   {
@@ -565,6 +588,10 @@
   },
   {
     "name": "Kenvue",
+    "synonyms": []
+  },
+  {
+    "name": "Keto Pint",
     "synonyms": []
   },
   {

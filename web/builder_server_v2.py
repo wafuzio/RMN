@@ -1630,7 +1630,9 @@ def api_ads_cards():
     # Calculate brand aggregations from ALL cards (before pagination)
     brand_counts = {}
     for card in all_cards:
-        brand = card.get("brand") or card.get("brand_canonical") or "Unknown"
+        raw_brand = card.get("brand") or card.get("brand_canonical") or "Unknown"
+        # Canonicalize brand name to merge case variations
+        brand = canonicalize_brand(raw_brand) or raw_brand
         brand_counts[brand] = brand_counts.get(brand, 0) + 1
     
     # Sort brands by count (descending)
@@ -1786,7 +1788,9 @@ def api_brands():
         # Calculate brand aggregations
         brand_counts = {}
         for card in deduped_cards:
-            brand = card.get("brand") or "Unknown"
+            raw_brand = card.get("brand") or "Unknown"
+            # Canonicalize brand name to merge case variations
+            brand = canonicalize_brand(raw_brand) or raw_brand
             brand_counts[brand] = brand_counts.get(brand, 0) + 1
 
         # Sort brands alphabetically (by brand name)
