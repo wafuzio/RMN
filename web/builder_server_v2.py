@@ -1209,6 +1209,16 @@ def api_ads_cards():
     else:
         clients_to_query = [client]
     
+    # Parse date range for early filtering (PERFORMANCE OPTIMIZATION)
+    # Filter run files by date BEFORE loading/processing them
+    start_dt, end_dt = None, None
+    if start_date or end_date:
+        try:
+            start_dt, end_dt = utc_range_for("custom", start_date, end_date)
+            print(f"[{retailer}/{client}] 📅 Early date filter: {start_dt.isoformat()} to {end_dt.isoformat()}")
+        except Exception as e:
+            print(f"[{retailer}/{client}] ⚠️  Date parse error: {e}")
+    
     # Collect files from all clients
     files = []
     for client_name in clients_to_query:
@@ -1227,6 +1237,17 @@ def api_ads_cards():
                 filename_base = item.replace("run_results_", "").replace(".json", "")
                 # Canonical format is exactly 14 digits (YYYYMMDDHHMMSS)
                 if filename_base.isdigit() and len(filename_base) == 14:
+                    # PERFORMANCE: Filter by date before adding to files list
+                    if start_dt or end_dt:
+                        try:
+                            # Parse timestamp from filename: YYYYMMDDHHMMSS
+                            file_dt = datetime.strptime(filename_base, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+                            if start_dt and file_dt < start_dt:
+                                continue  # Skip files before start date
+                            if end_dt and file_dt > end_dt:
+                                continue  # Skip files after end date
+                        except Exception:
+                            pass  # Include file if date parsing fails
                     files.append((item, item_path, client_name))
             elif os.path.isdir(item_path):
                 # Check subdirectories (Walmart structure)
@@ -1235,10 +1256,22 @@ def api_ads_cards():
                         # Same canonical check for nested files
                         filename_base = subitem.replace("run_results_", "").replace(".json", "")
                         if filename_base.isdigit() and len(filename_base) == 14:
+                            # PERFORMANCE: Filter by date before adding to files list
+                            if start_dt or end_dt:
+                                try:
+                                    file_dt = datetime.strptime(filename_base, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+                                    if start_dt and file_dt < start_dt:
+                                        continue
+                                    if end_dt and file_dt > end_dt:
+                                        continue
+                                except Exception:
+                                    pass
                             files.append((subitem, os.path.join(item_path, subitem), client_name))
     
     # Sort by filename (most recent first)
     files = sorted(files, key=lambda x: x[0], reverse=True)
+    
+    print(f"[{retailer}/{client}] 📁 Found {len(files)} run files after date filtering")
     
     # Return empty if no files found
     if not files:
