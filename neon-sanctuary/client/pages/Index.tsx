@@ -416,11 +416,6 @@ export default function Index() {
         const id = buildAdId(c, i);
         if (!uniq.has(id)) {
           const ad = { ...c, id } as Ad;
-          // Debug: log first ad to verify image_url is present
-          if (i === 0) {
-            console.log('First ad object:', ad);
-            console.log('Has image_url?', !!ad.image_url);
-          }
           uniq.set(id, ad);
         }
         // else duplicate from another page/query; ignore it
@@ -428,16 +423,6 @@ export default function Index() {
 
       const result = Array.from(uniq.values());
 
-      // Dev-only sanity check for duplicate IDs
-      if (import.meta.env.DEV) {
-        const seen = new Set<string>();
-        for (const a of result) {
-          if (seen.has(a.id)) {
-            console.warn('Duplicate id detected:', a.id, a);
-          }
-          seen.add(a.id);
-        }
-      }
 
       return result;
     } catch (error) {
@@ -473,7 +458,6 @@ export default function Index() {
   // Clear ads when date filters change
   useEffect(() => {
     setAds([]);
-    console.log('🔄 Date filters changed:', { start: filters.start, end: filters.end });
   }, [filters.start, filters.end]);
 
   const dnd = useDnD(ads, setAds);

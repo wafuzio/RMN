@@ -58,20 +58,30 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
 
       const retailerParam = retailers.join(',');
       const keywordsParam = brandDetail.top_keywords.map(k => k.keyword).join(',');
-      const details: Record<string, BrandDetail> = {};
 
-      for (const competitorBrand of selectedCompetitors) {
+      // Fetch all competitor details in parallel
+      const competitorPromises = Array.from(selectedCompetitors).map(async (competitorBrand) => {
         try {
           const response = await fetch(
             `/api/brand-details?brand=${encodeURIComponent(competitorBrand)}&retailers=${encodeURIComponent(retailerParam)}&keywords=${encodeURIComponent(keywordsParam)}`
           );
           if (response.ok) {
-            details[competitorBrand] = await response.json();
+            const data = await response.json();
+            return { brand: competitorBrand, data };
           }
         } catch (err) {
           console.error(`Failed to fetch competitor details for ${competitorBrand}:`, err);
         }
-      }
+        return null;
+      });
+
+      const results = await Promise.all(competitorPromises);
+      const details: Record<string, BrandDetail> = {};
+      results.forEach(result => {
+        if (result) {
+          details[result.brand] = result.data;
+        }
+      });
 
       return details;
     },
@@ -85,12 +95,12 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
 
       const allAds: Ad[] = [];
 
-      // Query each retailer (we know which ones have ads from retailer_ads)
+      // Query each retailer in parallel (much faster than sequential)
       if (brandDetail?.retailer_ads) {
-        for (const retailer of Object.keys(brandDetail.retailer_ads)) {
+        const retailerPromises = Object.keys(brandDetail.retailer_ads).map(async (retailer) => {
           // Skip retailers we don't want for retailer view
           if (viewState.type === 'retailer-ads' && viewState.retailer !== retailer) {
-            continue;
+            return [];
           }
 
           try {
@@ -106,12 +116,16 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
             const response = await fetch(`/api/ads/cards?${params.toString()}`);
             if (response.ok) {
               const data = await response.json();
-              allAds.push(...(data.cards || []));
+              return data.cards || [];
             }
           } catch (err) {
             console.error(`Failed to fetch ads for ${retailer}:`, err);
           }
-        }
+          return [];
+        });
+
+        const results = await Promise.all(retailerPromises);
+        results.forEach(cards => allAds.push(...cards));
       }
 
       return allAds;

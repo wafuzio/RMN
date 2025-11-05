@@ -71,8 +71,6 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
         w: (544 + padding * 2) / img.naturalWidth,  // Exact width: 544px
         h: (301 + padding * 2) / img.naturalHeight,  // Exact height: 301px
       };
-      console.log('Recalculating dynamicBox:', newBox, 'for image:', img.naturalWidth, 'x', img.naturalHeight);
-      
       // Small delay to ensure video element has time to render with new dimensions
       setTimeout(() => {
         setDynamicBox(newBox);
@@ -106,27 +104,9 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
     if (popupPxRaw && popupImgRef.current) {
       const img = popupImgRef.current;
       const imgRect = img.getBoundingClientRect();
-      console.log('Popup overlay calculated:', popupPxRaw);
-      console.log('Image dimensions:', {
-        width: imgRect.width,
-        height: imgRect.height,
-        naturalWidth: img.naturalWidth,
-        naturalHeight: img.naturalHeight
-      });
-      console.log('Ad has video_url?', !!ad?.video_url, ad?.video_url);
-      
-      // Calculate what the overlay SHOULD be for this specific image
       const expectedY = 18 / img.naturalHeight;
       const expectedW = 544 / img.naturalWidth;
       const expectedH = 301 / img.naturalHeight;
-      console.log('Expected normalized coords for this image:', {
-        y: expectedY.toFixed(4),
-        w: expectedW.toFixed(4),
-        h: expectedH.toFixed(4),
-        currentY: box.y.toFixed(4),
-        currentW: box.w.toFixed(4),
-        currentH: box.h.toFixed(4)
-      });
     }
   }, [popupPxRaw, ad, box]);
 
@@ -157,18 +137,6 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
     const scaleX = imgRect.width / metadata.image_width;
     const scaleY = imgRect.height / metadata.image_height;
 
-    console.log('[AdModal] Using metadata-based overlay:', {
-      metadataX: metadata.x,
-      metadataY: metadata.y,
-      metadataWidth: metadata.width,
-      metadataHeight: metadata.height,
-      scaleX,
-      scaleY,
-      offsetX,
-      offsetY,
-      imgWidth: imgRect.width,
-      imgHeight: imgRect.height,
-    });
 
     return {
       left: offsetX + (metadata.x * scaleX),
@@ -185,7 +153,6 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
   // Recalculate metadata-based overlays when image loads or modal state changes
   useEffect(() => {
     if (ad?.video_overlay) {
-      console.log('[AdModal] Recalculating metadata overlay for ad:', ad.id);
       const popupOverlay = getOverlayFromMetadata(ad.video_overlay, popupImgRef.current, popupFrameRef.current);
       const fullscreenOverlay = getOverlayFromMetadata(ad.video_overlay, fullscreenImgRef.current, fullscreenFrameRef.current);
       setMetadataPopupPx(popupOverlay);
@@ -201,11 +168,6 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
     ? metadataFullscreenPx
     : fullscreenPxRaw;
 
-  if (ad?.video_overlay) {
-    console.log('[AdModal] Video overlay metadata available for ad:', ad.id);
-  } else if (ad?.video_url) {
-    console.log('[AdModal] No metadata - using dynamic calculation for ad:', ad.id);
-  }
 
   const popupPx = clampBox(popupPxRaw_final, popupFrameRef.current);
   const fullscreenPx = clampBox(fullscreenPxRaw_final, fullscreenFrameRef.current);

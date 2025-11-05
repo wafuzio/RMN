@@ -30,7 +30,6 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType }: {
     setLoaded(false);
     setError(false);
     setMediaKey(prev => prev + 1);
-    console.debug('[AdMedia] Loading ' + (hasVideo ? 'video' : 'image') + ':', { original: relUrl, resolved: src });
   }, [src, relUrl, hasVideo]);
 
   const heightClass = (isTOA || isSBA) ? "h-[120px]" : "h-[200px]";
@@ -47,7 +46,6 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType }: {
           controls
           preload="metadata"
           onLoadedMetadata={() => {
-            console.debug('[AdMedia] Video loaded:', src);
             setLoaded(true);
             setError(false);
           }}
@@ -85,7 +83,6 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType }: {
         loading="lazy"
         draggable={false}
         onLoad={() => {
-          console.debug('[AdMedia] Image loaded:', src);
           setLoaded(true);
           setError(false);
         }}
