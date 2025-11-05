@@ -21,16 +21,9 @@
     "name": "Annie's",
     "synonyms": []
   },
-    {
-    "name": "Biore",
-    "synonyms": [
-      "Biore Clean",
-      "Biore Cleanse",
-      "Biore Cleanse & Tone",
-      "Biore Cleanse & Tone",
-      "Biore Deep Cleansing",
-      "Biore Deep Cleaning"
-    ]
+  {
+    "name": "Applegate",
+    "synonyms": []
   },
   {
     "name": "Applegate Natural",
@@ -65,7 +58,8 @@
   {
     "name": "Barilla",
     "synonyms": [
-      "Barilla Pasta"
+      "Barilla Pasta",
+      "Barilla Protein"
     ]
   },
   {
@@ -91,6 +85,17 @@
     "name": "Big K",
     "synonyms": [
       "Big-K"
+    ]
+  },
+  {
+    "name": "Biore",
+    "synonyms": [
+      "Biore Clean",
+      "Biore Cleanse",
+      "Biore Cleanse & Tone",
+      "Biore Cleanse & Tone",
+      "Biore Deep Cleansing",
+      "Biore Deep Cleaning"
     ]
   },
   {
@@ -142,6 +147,10 @@
     ]
   },
   {
+    "name": "BOOST Advanced",
+    "synonyms": []
+  },
+  {
     "name": "Boost Oxygen",
     "synonyms": [
       "Boost Oxygen with Red Cross"
@@ -161,9 +170,7 @@
   },
   {
     "name": "Butterfinger",
-    "synonyms": [
-      "butterfinger"
-    ]
+    "synonyms": []
   },
   {
     "name": "Butterfinger Ice Cream Bar",
@@ -194,15 +201,13 @@
     "synonyms": []
   },
   {
+    "name": "Cheerios",
+    "synonyms": []
+  },
+  {
     "name": "Cheez-It",
     "synonyms": [
       "MSCCollegeFootballWave2101525"
-    ]
-  },
-  {
-    "name": "Cheerios",
-    "synonyms": [
-      "cheerios"
     ]
   },
   {
@@ -276,7 +281,8 @@
     "name": "Dave's Killer Bread",
     "synonyms": [
       "DavesKillerBreadFamily",
-      "Daves Killer Bread"
+      "Daves Killer Bread",
+      "MSG:Dave's Killer Bread"
     ]
   },
   {
@@ -317,7 +323,9 @@
   },
   {
     "name": "Duncan Hines",
-    "synonyms": []
+    "synonyms": [
+      "Duncan"
+    ]
   },
   {
     "name": "Eat Happy",
@@ -344,8 +352,7 @@
   {
     "name": "EOS",
     "synonyms": [
-      "MSG:New Créme de Pistachio",
-      "eos"
+      "MSG:New Créme de Pistachio"
     ]
   },
   {
@@ -379,7 +386,8 @@
     "name": "Frollies",
     "synonyms": [
       "Frollie",
-      "Frollie's"
+      "Frollie's",
+      "Frollies Strawberry"
     ]
   },
   {
@@ -457,13 +465,6 @@
     ]
   },
   {
-    "name": "Häagen-Dazs",
-    "synonyms": [
-      "Haagen-Dazs",
-      "Haagen Dazs"
-    ]
-  },
-  {
     "name": "Haleon",
     "synonyms": []
   },
@@ -488,7 +489,8 @@
   {
     "name": "Hellmann's",
     "synonyms": [
-      "Hellmanns"
+      "Hellmanns",
+      "MSG:This dip scores. SAVE $2 on 11.5 oz Hellmann's® & Best Foods®"
     ]
   },
   {
@@ -521,6 +523,13 @@
   {
     "name": "Horizon Organic",
     "synonyms": []
+  },
+  {
+    "name": "Häagen-Dazs",
+    "synonyms": [
+      "Haagen-Dazs",
+      "Haagen Dazs"
+    ]
   },
   {
     "name": "Icy Hot",
@@ -632,7 +641,6 @@
       "Kraft Heinz",
       "Kraft Singles",
       "Kraft-Heinz"
-
     ]
   },
   {
@@ -648,7 +656,15 @@
       "MSG:Use your food/OTC card to save on wellness essentials. Shop Now.",
       "MSG:Save $1 on Snacks",
       "MSG:Elevate Your Thanksgiving Private Selection Brand",
-      "Kroger Brand"
+      "Kroger Brand",
+      "MSG:Meet Your Protein Goals with these NEW items!Shop NowShop All",
+      "MSG:Save with Digital Deals on YogurtStock up on all your favoritesShop All",
+      "MSG:Check Out These NEW Protein Shakes and Powders!Shop now!Shop All",
+      "Save with",
+      "MSG:Save with Digital Deals on Yogurt!Stock up on all your favoritesShop All",
+      "Beat The",
+      "MSG:Beat The Rush & Save! Stock Up On Holiday Dinner Essentials!!$0.99 Frozen Turkey Breasts 2 Day Sale – Saturday & Sunday Only!Shop All",
+      "MSG:Beat The Rush & Save! Stock Up On Holiday Dinner Essentials!!Turkey & Ham FavoritesShop All"
     ]
   },
   {
@@ -671,6 +687,12 @@
   {
     "name": "Lay's",
     "synonyms": []
+  },
+  {
+    "name": "Lenny & Larry's",
+    "synonyms": [
+      "Lenny"
+    ]
   },
   {
     "name": "LesserEvil",
@@ -727,7 +749,8 @@
     "synonyms": [
       "SSMAlwaysOn0625",
       "SSMAlwaysOnadgroup6",
-      "Marie Callenders"
+      "Marie Callenders",
+      "MSG:Marie Callender's, Healthy Choice and Banquet Mega.  Shop Now."
     ]
   },
   {
@@ -833,8 +856,7 @@
   {
     "name": "Nature's Truth",
     "synonyms": [
-      "MSG:NT15521\nNT Elderberry Complex 50 Gummies. Shop Now.",
-      "Nature's Truth"
+      "MSG:NT15521\nNT Elderberry Complex 50 Gummies. Shop Now."
     ]
   },
   {
@@ -932,7 +954,8 @@
       "P and G",
       "Procter & Gamble",
       "Procter and Gamble",
-      "Procter"
+      "Procter",
+      "MSG:P&G. Spend $15 SAVE $5. Mix & Match participating items to SAVE. Save Now."
     ]
   },
   {
@@ -965,7 +988,15 @@
     "name": "Peet's Coffee",
     "synonyms": [
       "PeetsFallCampaign2025TOA",
-      "Peets"
+      "Peets",
+      "MSG:Peet's Coffee Single Serve Pods",
+      "MSG:Peet's Coffee for Brews that Feel Like Fall"
+    ]
+  },
+  {
+    "name": "Pepperidge Farm",
+    "synonyms": [
+      "MSG:Campbell'sHoliday"
     ]
   },
   {
@@ -1123,7 +1154,9 @@
   },
   {
     "name": "Swanson",
-    "synonyms": []
+    "synonyms": [
+      "MSG:Campbell'sHoliday"
+    ]
   },
   {
     "name": "Sweet Nothings",
@@ -1208,13 +1241,11 @@
     "synonyms": []
   },
   {
-    "name": "Wilde Protein Chips",
-    "synonyms": [
-      "wilde protein chips"
-    ]
+    "name": "Wild Planet Not",
+    "synonyms": []
   },
   {
-    "name": "Wild Planet Not",
+    "name": "Wilde Protein Chips",
     "synonyms": []
   },
   {

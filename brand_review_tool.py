@@ -393,6 +393,19 @@ class BrandReviewTool:
                         # This catches cases where JSON has a brand but screenshot failed to match it
                         is_unknown_in_filename = False
                         
+                        # FIX #2: If we couldn't resolve an image, but the JSON points somewhere,
+                        # try to find the actual file in the same folder ignoring just the brand slug
+                        if not image_path:
+                            expected_path = self.expected_image_path_from_json(ad, json_file)
+                            if expected_path and not os.path.exists(expected_path):
+                                alt = self.find_existing_image_ignoring_brand(expected_path)
+                                if alt:
+                                    image_path = alt
+                                    # Force a filename mismatch flag — JSON brand (advertisers) vs file brand slug
+                                    is_unknown_in_filename = True
+                                    print(f"[WARN] JSON image path not found: {expected_path}")
+                                    print(f"[WARN] Found existing file with different brand slug: {alt}")
+                        
                         # CRITICAL FIX: If the path from JSON doesn't exist, we need to search for what actually exists
                         # This handles cases where JSON was updated with a brand name but the file was never renamed
                         if image_path and not os.path.exists(image_path):
@@ -405,6 +418,9 @@ class BrandReviewTool:
                             
                             ad_type = ad.get('type')
                             # Map ad types to subfolders
+                            # NOTE: This legacy recovery step only finds files with "__unknown__" in the name.
+                            # The newer find_existing_image_ignoring_brand() (Fix #2 above) is more comprehensive
+                            # as it finds files with ANY brand slug mismatch, not just "unknown".
                             type_to_folder = {
                                 'TOA': 'TOA',
                                 'Skyscraper': 'Skyscraper',
@@ -412,14 +428,18 @@ class BrandReviewTool:
                                 'sba': 'SBA',
                                 'sbv': 'SBV',
                                 'tile_takeover': 'Tile',
-                                'top_banner': 'Banner'
+                                'top_banner': 'Banner',
+                                # Instacart types
+                                'display_ad': 'DisplayAd',
+                                'shoppable_recipe_ad': 'ShoppableRecipe',
+                                'main': 'Main'
                             }
                             subfolder = type_to_folder.get(ad_type)
                             
                             if subfolder:
                                 search_dir = os.path.join(base_dir, subfolder)
                                 if os.path.exists(search_dir):
-                                    # Look for unknown files
+                                    # Look for unknown files (legacy fallback - only finds "__unknown__" in filename)
                                     for filename in os.listdir(search_dir):
                                         if '__unknown__' in filename:
                                             # Check if timestamp matches roughly (date + hour + minute, ignore seconds)
@@ -457,11 +477,22 @@ class BrandReviewTool:
                                     # Compare against advertiser slugs
                                     adv_slugs = [self.to_slug(a) for a in (advertisers or [])]
                                     if brand_slug_in_file not in adv_slugs:
-                                        # If filename brand slug looks like a campaign code per heuristics, flag it
-                                        looks_like_code = self.is_uncertain_brand(brand_slug_in_file.replace('_', ' '))
-                                        if looks_like_code:
-                                            is_unknown_in_filename = True
-                                            print(f"[WARN] Filename brand slug '{brand_slug_in_file}' doesn't match advertisers {adv_slugs}")
+                                        # FIX #1: Unconditional flag on brand slug mismatch
+                                        # Don't gate on is_uncertain_brand - any mismatch should be flagged
+                                        is_unknown_in_filename = True
+                                        print(f"[WARN] Filename brand slug '{brand_slug_in_file}' ≠ advertisers {adv_slugs}")
+                        
+                        # FIX #4: Flag broken JSON references - JSON has a path but no file exists after all reconciliation
+                        if not image_path:
+                            # Check if JSON has any image path field
+                            has_json_path = (ad.get('image_path') or 
+                                           ad.get('toa_image_path') or 
+                                           ad.get('skyscraper_image_path') or 
+                                           ad.get('carousel_image_path'))
+                            if has_json_path:
+                                print(f"[WARN] JSON has an image path but no matching file exists after reconciliation")
+                                print(f"[WARN]   Ad type: {ad.get('type')}, Advertisers: {advertisers}")
+                                is_unknown_in_filename = True
                         
                         # Flag as unknown if EITHER condition is true
                         if is_unknown_in_json or is_unknown_in_filename:
@@ -506,6 +537,75 @@ class BrandReviewTool:
             return True
         
         return False
+    
+    def expected_image_path_from_json(self, ad, json_file):
+        """Return the full path that the JSON points to, even if it doesn't exist."""
+        # Determine retailer and base_dir (same logic as find_ad_image)
+        try:
+            path_parts = Path(json_file).parts
+            output_idx = path_parts.index('output')
+            retailer = path_parts[output_idx + 1]
+        except Exception:
+            retailer = 'kroger'
+
+        runs_dir = os.path.dirname(json_file)
+        base_dir = os.path.dirname(runs_dir)
+        if retailer == 'walmart' and re.match(r'\d{14}$', os.path.basename(runs_dir)):
+            base_dir = os.path.dirname(base_dir)
+
+        # Map ad types to their JSON path fields, like in find_ad_image
+        if retailer == 'kroger':
+            type_to_path_field = {
+                'TOA': 'toa_image_path',
+                'Skyscraper': 'skyscraper_image_path',
+                'CuratedCarousel': 'carousel_image_path'
+            }
+        elif retailer == 'walmart':
+            type_to_path_field = {
+                'sba': 'image_path',
+                'sbv': 'image_path',
+                'tile_takeover': 'image_path',
+                'top_banner': 'image_path'
+            }
+        elif retailer == 'instacart':
+            type_to_path_field = {
+                'display_ad': 'image_path',
+                'shoppable_recipe_ad': 'image_path',
+                'main': 'image_path'
+            }
+        else:
+            type_to_path_field = {}
+
+        path_field = type_to_path_field.get(ad.get('type'), 'image_path')
+        rel = ad.get(path_field)
+        if not rel:
+            return None
+
+        # If JSON path is relative, join to base_dir; otherwise return as-is
+        if not os.path.isabs(rel):
+            return os.path.join(base_dir, rel)
+        return rel
+
+    def find_existing_image_ignoring_brand(self, expected_full_path):
+        """Given an expected filename, find a file in the same folder that matches
+        all parts except the brand slug segment (second segment)."""
+        if not expected_full_path:
+            return None
+
+        dname, bname = os.path.split(expected_full_path)
+        parts = bname.split('__')
+        # Expect retailer__brand__adtype__client__search__D...png
+        if len(parts) < 3:
+            return None
+
+        # Build a wildcard that ignores the brand slug segment
+        pattern = os.path.join(dname, f"{parts[0]}__*__{'__'.join(parts[2:])}")
+        candidates = glob.glob(pattern)
+        # If there are multiple, pick the most recent
+        if candidates:
+            candidates.sort(key=os.path.getmtime, reverse=True)
+            return candidates[0]
+        return None
     
     def is_uncertain_brand(self, brand):
         """Check if a brand name looks uncertain or like a campaign code"""
@@ -1471,8 +1571,18 @@ class BrandReviewTool:
         self.save_correction()
     
     def to_slug(self, text):
-        """Convert text to slug format"""
-        return text.lower().replace(' ', '_').replace("'", '').replace('&', 'and')
+        """Convert text to slug format with robust normalization"""
+        # Lowercase
+        s = text.lower()
+        # Replace '&' with 'and'
+        s = s.replace('&', 'and')
+        # Remove apostrophes
+        s = s.replace("'", '')
+        # Collapse any non-alphanumeric into underscores
+        s = re.sub(r'[^a-z0-9]+', '_', s)
+        # Collapse multiple underscores
+        s = re.sub(r'_+', '_', s).strip('_')
+        return s
     
     def next_ad(self):
         """Move to next ad, skipping any retailer house ads"""
