@@ -24,6 +24,15 @@ export interface ClientsResponse {
   count: number; 
 }
 
+export interface VideoOverlay {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  image_width: number;
+  image_height: number;
+}
+
 export interface AdCardItem {
   retailer: string;
   client: string;
@@ -33,6 +42,7 @@ export interface AdCardItem {
   message: string;
   image_url: string;
   video_url?: string;
+  video_overlay?: VideoOverlay;
   timestamp: string; // YYYY-MM-DD HH:MM:SS
   run_date?: string;
   run_file?: string; // JSON file path for this ad

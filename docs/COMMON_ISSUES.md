@@ -1752,3 +1752,73 @@ In a dual-backend architecture, use the backend that provides the most convenien
 - Brand logo database integration
 
 ---
+
+## Video URLs not returned when client=all
+
+**Status:** ✅ SOLVED
+
+**Symptoms:**
+- Videos display correctly in Builder.io preview
+- Videos don't appear in dashboard when filtering to "All" clients
+- Console shows `Ad has video_url? false undefined`
+- API returns `video_url: null` even though video files exist
+- Debug logs show searching in `/output/walmart/all/SBV` instead of actual client folder
+
+**Root Cause:**
+When querying with `client=all`, the backend correctly identifies each ad's actual client (e.g., `blue_bunny`, `halo_top`) from the file path and stores it as `file_client`. However, the path existence check and fallback search were using the query parameter `client` (which is `"all"`) instead of `file_client` when building file paths.
+
+**The Bug:**
+```python
+# Line 1317 - WRONG: Uses query param 'client' instead of actual client
+full_path = os.path.join(OUTPUT_ROOT, retailer, client, filename)
+
+# Line 1353 - WRONG: Fallback search looks in wrong directory
+search_dir = os.path.join(OUTPUT_ROOT, retailer, client, leaf)
+```
+
+This caused the backend to look for files in `/output/walmart/all/SBV/` (which doesn't exist) instead of `/output/walmart/blue_bunny/SBV/` (which does exist).
+
+**The Fix:**
+```python
+# Line 1317 - CORRECT: Use file_client (actual client from file path)
+full_path = os.path.join(OUTPUT_ROOT, retailer, file_client, filename)
+
+# Line 1353 - CORRECT: Search in actual client directory
+search_dir = os.path.join(OUTPUT_ROOT, retailer, file_client, leaf)
+```
+
+**Why It Matters:**
+- The `client` parameter is the user's filter selection (`"all"`, `"blue_bunny"`, etc.)
+- The `file_client` variable is the actual client folder where the ad's files are stored
+- When `client="all"`, the code iterates through all client folders and sets `file_client` correctly for each ad
+- File path operations must use `file_client`, not `client`
+
+**Affected Code:**
+- `web/builder_server_v2.py` lines 1317, 1323, 1350, 1353, 1354
+
+**Debug Evidence:**
+```
+[build_media_urls_for_ad] walmart/blue_bunny: Found path: SBV/walmart__breyers__sbv__blue_bunny__chocolate_ice_cream__D2025-10-14_T23-02.11_1.png
+⚠️  [walmart] Path in JSON doesn't exist: SBV/walmart__breyers__sbv__blue_bunny__chocolate_ice_cream__D2025-10-14_T23-02.11_1.png
+🔍 [walmart] Search dir: /Users/.../output/walmart/all/SBV, exists=False
+```
+
+After fix:
+```
+[build_media_urls_for_ad] walmart/blue_bunny: Found path: SBV/walmart__breyers__sbv__blue_bunny__chocolate_ice_cream__D2025-10-14_T23-02.11_1.png
+✓ File found at: /Users/.../output/walmart/blue_bunny/SBV/walmart__breyers__sbv__blue_bunny__chocolate_ice_cream__D2025-10-14_T23-02.11_1.png
+```
+
+**Key Insight:**
+In multi-client queries, always distinguish between:
+1. **Query parameter** (`client`) - User's filter selection
+2. **File context** (`file_client`) - Actual location of ad's files
+
+File operations must use `file_client` to access the correct directory structure.
+
+**See Also:**
+- Video overlay alignment in `AdModal.tsx`
+- Media URL building in `build_media_urls_for_ad()`
+- Client filtering in `/api/ads/cards` endpoint
+
+---

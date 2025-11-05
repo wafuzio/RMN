@@ -66,7 +66,14 @@ export const handleVideoProxy: RequestHandler = async (req, res) => {
     res.set("Content-Type", contentType);
     res.set("Cache-Control", "public, max-age=86400");
     res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET");
+    res.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.set("Accept-Ranges", "bytes");
+
+    // For videos, set Content-Length to support range requests
+    const contentLength = response.headers.get("content-length");
+    if (contentLength) {
+      res.set("Content-Length", contentLength);
+    }
 
     // Stream the video data
     const buffer = await response.arrayBuffer();

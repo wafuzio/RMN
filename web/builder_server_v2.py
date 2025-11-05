@@ -470,6 +470,12 @@ def build_media_urls_for_ad(retailer: str, client: str, ad: dict) -> dict:
                 rel = v
                 break
 
+    # Debug: log if we found a path
+    if rel:
+        print(f"[build_media_urls_for_ad] {retailer}/{client}: Found path: {rel}")
+    else:
+        print(f"[build_media_urls_for_ad] {retailer}/{client}: NO path found in ad")
+
     # If we have a declared path
     if rel:
         if is_video_filename(rel):
@@ -488,6 +494,16 @@ def build_media_urls_for_ad(retailer: str, client: str, ad: dict) -> dict:
             if f:
                 media["image_url"] = f"/api/image/{retailer}/{client}/{r}"
 
+                # Also search for companion video file with same base name
+                # For SBV ads: image is "kroger__brand__sbv__..._0.png" and video is "kroger__brand__sbv__..._0.mp4"
+                base_name = Path(r).stem  # Remove extension (e.g., "kroger__brand__sbv__..._0")
+                video_file = f"{base_name}.mp4"
+                video_f, video_r = find_image_file(retailer, client, video_file)
+                if video_f:
+                    media["video_url"] = f"/api/video/{retailer}/{client}/{video_r}"
+                else:
+                    print(f"[build_media_urls] Video file not found: {video_file} for image: {rel}")
+
     # Fallbacks: if image_url still missing and ad has CDN url, try fuzzy by filename
     if "image_url" not in media:
         cdn = ad.get("image_url")
@@ -497,6 +513,14 @@ def build_media_urls_for_ad(retailer: str, client: str, ad: dict) -> dict:
                 f, r = find_image_file(retailer, client, name)
                 if f:
                     media["image_url"] = f"/api/image/{retailer}/{client}/{r}"
+
+                    # Also search for companion video file with same base name
+                    if "video_url" not in media:
+                        base_name = Path(r).stem
+                        video_file = f"{base_name}.mp4"
+                        video_f, video_r = find_image_file(retailer, client, video_file)
+                        if video_f:
+                            media["video_url"] = f"/api/video/{retailer}/{client}/{video_r}"
 
     # Video fallback by CDN filename (optional convenience)
     if "video_url" not in media:
@@ -541,7 +565,7 @@ def build_image_url_for_ad(retailer: str, client: str, ad: dict) -> str | None:
 # Fail-Closed Image Resolution (Always Returns Image URL)
 # ============================================================================
 
-# Folder synonyms (plural ↔ singular etc.)
+# Folder synonyms (plural ��� singular etc.)
 FOLDER_SYNONYMS = {
     "Shoppable_Display_Ads": "Shoppable_Display_Ad",
     "Shoppable_Video_Ads": "Shoppable_Video_Ad",
@@ -867,7 +891,8 @@ def index():
             "GET /api/terms?retailer=<retailer>&client=<client>": "List search terms for a client",
             "GET /api/advertisers?retailer=<retailer>&client=<client>": "List all advertisers/brands for a client",
             "GET /api/ads/cards?retailer=<retailer>&client=<client>&term=<term>&advertiser=<brand>&page=1&page_size=24": "Get ad cards with filtering",
-            "GET /api/image/<retailer>/<client>/<filename>": "Serve ad image"
+            "GET /api/image/<retailer>/<client>/<filename>": "Serve ad image",
+            "GET /api/video/<retailer>/<client>/<filename>": "Serve ad video (mp4, webm, mov, m4v)"
         },
         "features": {
             "co_branded_ads": "Supports multiple advertisers per ad (e.g., Herdez + Jennie-O)",
@@ -1289,13 +1314,13 @@ def api_ads_cards():
                     
                     # CRITICAL: Check if this file actually exists on disk
                     # If not, we need to run fallback search (file might be named "unknown")
-                    full_path = os.path.join(OUTPUT_ROOT, retailer, client, filename)
+                    full_path = os.path.join(OUTPUT_ROOT, retailer, file_client, filename)
                     if os.path.exists(full_path):
                         has_local_path = True
                         break
                     else:
                         # Path in JSON but file doesn't exist - clear filename to trigger fallback
-                        print(f"⚠️  [{retailer}] Path in JSON doesn't exist: {filename}")
+                        print(f"⚠️  [{retailer}/{file_client}] Path in JSON doesn't exist: {filename}")
                         filename = ""
                         has_local_path = False
                 
@@ -1322,11 +1347,11 @@ def api_ads_cards():
                 if not has_local_path:
                     ad_type_hint = ad.get("type") or ad.get("ad_type") or ""
                     leaf = subdir_for(retailer, ad_type_hint)
-                    print(f"🔍 [{retailer}] Searching for image: ad_type={ad_type_hint}, leaf={leaf}")
+                    print(f"🔍 [{retailer}/{file_client}] Searching for image: ad_type={ad_type_hint}, leaf={leaf}")
                     if leaf:
                         # Look for files matching the taxonomy pattern in this ad type folder
-                        search_dir = os.path.join(OUTPUT_ROOT, retailer, client, leaf)
-                        print(f"🔍 [{retailer}] Search dir: {search_dir}, exists={os.path.isdir(search_dir)}")
+                        search_dir = os.path.join(OUTPUT_ROOT, retailer, file_client, leaf)
+                        print(f"🔍 [{retailer}/{file_client}] Search dir: {search_dir}, exists={os.path.isdir(search_dir)}")
                         if os.path.isdir(search_dir):
                             try:
                                 # Get keyword for matching
@@ -1506,34 +1531,46 @@ def api_ads_cards():
                     "featured": ad.get("featured", False),
                     "ad_index": idx  # Add index for unique identification
                 }
-                
+
                 # Add debug fields for unresolved images
                 if not has_img:
                     card["skip_reason"] = reason
                     # Optional: keep original path for audits (only when include_unresolved=1)
                     if include_unresolved and dbg_rel:
                         card["image_path"] = dbg_rel
-                
+
                 # Normalize brand via lexicon and attach logo
                 card["type_label"] = type_label_for(card.get("ad_type"))
-                
+
                 # 1) Canonicalize brand via lexicon
                 raw_brand = card.get("brand")
                 brand_canonical = canonicalize_brand(raw_brand)
-                
+
                 # 2) Drop false brands that equal ad types/placeholders
                 brand_canonical = normalize_brand(brand_canonical, card.get("ad_type"))
-                
+
                 # 3) Set brand fields
                 card["brand_canonical"] = brand_canonical
                 card["brand"] = brand_canonical  # keep brand = canonical for UI simplicity
-                
+
                 # 4) Attach logo URL if present in DB/files
                 card["brand_logo_url"] = brand_logo_url_for(brand_canonical, retailer)
+
+                # Build complete media URLs (image, video, poster)
+                # Create a temporary ad dict with the resolved filename for media URL building
+                ad_for_media = dict(ad)
+                if filename:
+                    ad_for_media["image_path"] = filename
+                media_urls = build_media_urls_for_ad(retailer, file_client, ad_for_media)
+                if media_urls.get("video_url"):
+                    card["video_url"] = media_urls["video_url"]
+                if media_urls.get("poster_url"):
+                    card["poster_url"] = media_urls["poster_url"]
                 
-                # Note: Video/poster support can be added later if needed
-                # For now, focus on ensuring every card has an image
-                
+                # Include video_overlay metadata if present
+                if ad.get("video_overlay"):
+                    card["video_overlay"] = ad["video_overlay"]
+
                 all_cards.append(card)
         except Exception as e:
             print(f"Error processing {fn}: {e}")
@@ -2431,7 +2468,15 @@ def api_video(retailer, client, req_relpath):
         abort(404, description=f"Video not found: {req_relpath}")
 
     ctype = "video/mp4" if str(fpath).lower().endswith(".mp4") else (mimetypes.guess_type(str(fpath))[0] or "application/octet-stream")
-    return send_file(str(fpath), mimetype=ctype, as_attachment=False, conditional=True)
+    resp = send_file(str(fpath), mimetype=ctype, as_attachment=False, conditional=True)
+
+    # Set CORS and caching headers for video streaming
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    resp.headers["Accept-Ranges"] = "bytes"
+
+    return resp
 
 @app.route("/api/image/placeholder")
 def api_image_placeholder():

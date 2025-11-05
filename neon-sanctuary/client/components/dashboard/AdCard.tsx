@@ -139,9 +139,18 @@ const TYPE_STYLES: Record<string, string> = {
 };
 
 
+export interface VideoOverlay {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  image_width: number;
+  image_height: number;
+}
+
 export interface Ad {
   id: string;
-  retailer: string; client: string; keyword: string; ad_type: string; brand: string; message: string; image_url: string; video_url?: string; poster_url?: string; timestamp: string;
+  retailer: string; client: string; keyword: string; ad_type: string; brand: string; message: string; image_url: string; video_url?: string; video_overlay?: VideoOverlay; poster_url?: string; timestamp: string;
 }
 
 export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOverIndex, currentIndex }: { ad: Ad; onRemove: (id: string)=>void; onOpen: (ad: Ad)=>void; draggableProps?: any; dragIndex?: number | null; dragOverIndex?: number | null; currentIndex?: number; }) {
@@ -189,7 +198,7 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
         ×
       </button>
       <button onClick={() => onOpen(ad)} className={cn("text-left select-none w-full block")} style={{ touchAction: 'none' }}>
-        <AdMedia imageUrl={ad.image_url} videoUrl={ad.video_url} posterUrl={ad.poster_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} />
+        <AdMedia imageUrl={ad.image_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} />
         <div id="content-frame" className={cn("card-text w-full p-4 flex flex-col")}>
           <div className="flex items-center justify-between mb-1 w-full">
             <div className="font-bold text-[1.2em] text-[#111827]">{ad.brand}</div>

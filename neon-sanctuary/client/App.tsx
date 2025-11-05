@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import { API_BASE } from "@/lib/api";
 import Index from "./pages/Index";
 import Brands from "./pages/Brands";
+import VideoOverlayTest from "./pages/VideoOverlayTest";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/brands" element={<Brands />} />
+          <Route path="/video-overlay-test" element={<VideoOverlayTest />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
