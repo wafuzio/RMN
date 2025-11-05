@@ -18,7 +18,7 @@ import os
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from flask import Flask, jsonify, request, send_from_directory, make_response, send_file, Response, abort
+from flask import Flask, jsonify, request, send_from_directory, make_response, send_file, Response, abort, g
 from pathlib import Path
 from urllib.parse import unquote, quote
 from functools import lru_cache
@@ -28,10 +28,27 @@ import mimetypes
 import requests
 import re
 from datetime import datetime, timezone
+from time import perf_counter
 from utils.path_taxonomy import allowed_subdirs, ADTYPE_TO_FOLDER
 from core.brands import canonicalize
 
 app = Flask(__name__)
+
+# Performance monitoring: Server-Timing header
+@app.before_request
+def _t0():
+    g._t0 = perf_counter()
+
+@app.after_request
+def _server_timing(resp):
+    try:
+        dur = (perf_counter() - g._t0) * 1000
+        existing = resp.headers.get('Server-Timing')
+        val = f"flaskTotal;dur={dur:.1f}"
+        resp.headers['Server-Timing'] = f"{existing}, {val}" if existing else val
+    except Exception:
+        pass
+    return resp
 
 # ============================================================================
 # Configuration

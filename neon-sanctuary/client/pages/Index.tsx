@@ -11,6 +11,7 @@ import { TopBrandModal } from "@/components/dashboard/TopBrandModal";
 import { AllBrandsModal } from "@/components/dashboard/AllBrandsModal";
 import { SkeletonGrid } from "@/components/dashboard/SkeletonGrid";
 import { TemporalVisualMap } from "@/components/visual/TemporalVisualMap";
+import { PerformanceCard } from "@/components/PerformanceCard";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -795,6 +796,9 @@ export default function Index() {
           }}
         />
       </div>
+
+      {/* Performance monitoring card (visible with ?devperf=1) */}
+      <PerformanceCard />
     </main>
   );
 }

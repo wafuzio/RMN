@@ -5,6 +5,7 @@ import type {
   AdCardItem, 
   AdsCardsResponse 
 } from "@shared/api";
+import { mark, readServerTiming } from './metrics';
 
 // Re-export for convenience
 export type { 
@@ -19,10 +20,19 @@ export type {
 const DEFAULT_API_BASE = "";  // Empty string = same origin (proxied by Vite)
 export const API_BASE = import.meta.env.VITE_API_BASE || DEFAULT_API_BASE;
 
-async function http<T>(path: string, init?: RequestInit): Promise<T> {
+async function timeFetch(input: RequestInfo, init?: RequestInit, label?: string): Promise<Response> {
+  const t0 = performance.now();
+  const res = await fetch(input, init);
+  const t1 = performance.now();
+  mark(`http:${label || input.toString()}`, t1 - t0, 'ms', { url: input.toString(), status: res.status });
+  readServerTiming(res.headers);
+  return res;
+}
+
+async function http<T>(path: string, init?: RequestInit, label?: string): Promise<T> {
   const url = `${API_BASE}${path}`;
   console.debug('[http] GET', url);  // Log the full URL for debugging
-  const res = await fetch(url, { 
+  const res = await timeFetch(url, { 
     ...init, 
     headers: { 
       ...(init?.headers||{}), 
@@ -32,7 +42,7 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
     },
     // Most reads do not need credentials, omit by default
     credentials: init?.credentials ?? 'omit',
-  });
+  }, label);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`${res.status} ${res.statusText} ${text}`);
@@ -55,11 +65,11 @@ type GetAdsOpts = {
 };
 
 export const api = {
-  getRetailers: () => http<RetailersResponse>(`/api/retailers`),
-  getClients: (retailer: string) => http<ClientsResponse>(`/api/clients?retailer=${encodeURIComponent(retailer)}`),
+  getRetailers: () => http<RetailersResponse>(`/api/retailers`, undefined, 'retailers'),
+  getClients: (retailer: string) => http<ClientsResponse>(`/api/clients?retailer=${encodeURIComponent(retailer)}`, undefined, 'clients'),
   getBrands: (retailers: string[]) => {
     const retailerParam = retailers.length > 0 ? retailers.join(',') : 'all';
-    return http<{ brands: Array<{ brand: string; count: number; percentage: number }> }>(`/api/brands?retailers=${encodeURIComponent(retailerParam)}`);
+    return http<{ brands: Array<{ brand: string; count: number; percentage: number }> }>(`/api/brands?retailers=${encodeURIComponent(retailerParam)}`, undefined, 'brands');
   },
   getAds: (params: GetAdsOpts) => {
     const { retailer, client, term, advertiser, page = 1, pageSize = 24, start, end, types, search, sort } = params;
@@ -87,7 +97,7 @@ export const api = {
     const url = `/api/ads/cards?${q.toString()}`;
     console.debug('📡 getAds request:', { start, end, sort, url });
 
-    return http<AdsCardsResponse>(url).then((response) => {
+    return http<AdsCardsResponse>(url, undefined, 'ads').then((response) => {
       console.debug('📡 getAds response received:', {
         count: response.cards.length,
         sampleImageUrl: response.cards[0]?.image_url,
