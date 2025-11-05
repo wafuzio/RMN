@@ -393,7 +393,8 @@ class BrandReviewTool:
                         # This catches cases where JSON has a brand but screenshot failed to match it
                         is_unknown_in_filename = False
                         
-                        # If image_path from JSON doesn't exist, search for unknown files
+                        # CRITICAL FIX: If the path from JSON doesn't exist, we need to search for what actually exists
+                        # This handles cases where JSON was updated with a brand name but the file was never renamed
                         if image_path and not os.path.exists(image_path):
                             # Try to find an unknown file with similar timestamp
                             # Handle nested timestamp dirs (Walmart: runs/TIMESTAMP/file.json)
@@ -464,6 +465,9 @@ class BrandReviewTool:
                         
                         # Flag as unknown if EITHER condition is true
                         if is_unknown_in_json or is_unknown_in_filename:
+                            print(f"[FLAGGED] Ad type={ad.get('type')}, advertisers={advertisers}")
+                            print(f"[FLAGGED]   is_unknown_in_json={is_unknown_in_json}, is_unknown_in_filename={is_unknown_in_filename}")
+                            print(f"[FLAGGED]   image_path={image_path}")
                             self.unknown_ads.append({
                                 'json_file': json_file,
                                 'ad': ad,
