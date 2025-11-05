@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRetailers, useClients, useAds } from "@/hooks/useRetailAds";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RetailerSelector } from "@/components/dashboard/RetailerSelector";
 import { Filters, FiltersState } from "@/components/dashboard/Filters";
@@ -17,6 +18,21 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import GaleLogo from "../../../web/assets/logos/GALE.svg";
+
+// Helper: Format date to YYYY-MM-DD for API
+function formatLocalDate(d?: Date) {
+  if (!d) return undefined;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Helper: Deduplicate and sort arrays for stable query keys
+function dedupSorted(arr?: string[]) {
+  if (!arr || arr.length === 0) return undefined;
+  return Array.from(new Set(arr)).sort();
+}
 
 // Stable ID builder for ads - prevents key collisions without index dependency
 type Cardish = {
@@ -165,142 +181,93 @@ export default function Index() {
   const client2 = paddedClients[1];
   const client3 = paddedClients[2];
 
-  // Fetch ads for each possible retailer with each selected client
-  // Helper to format date as YYYY-MM-DD in local timezone (not UTC)
-  const formatLocalDate = (d: Date | undefined) => {
-    if (!d) return undefined;
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
+  // PERFORMANCE FIX: Memoize and debounce filter parameters to prevent render loops
+  // This stabilizes the filter object identity so useAds doesn't re-run on every render
+  const normalizedFilters = useMemo(() => ({
+    term: filters.keywords?.length ? filters.keywords.join(",") : undefined,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    types: dedupSorted(filters.types),
+    search: filters.search?.trim() || undefined,
+    sort: sortBy,
+  }), [
+    filters.keywords?.join(","),  // Stable string representation
+    filters.start?.getTime(),     // Use epoch for date comparison
+    filters.end?.getTime(),
+    filters.types?.join(","),     // Stable string representation
+    filters.search,
+    sortBy,
+  ]);
+
+  // Debounce to prevent fetch storms while user is typing/changing filters
+  const debouncedFilters = useDebouncedValue(normalizedFilters, 350);
 
   const isKrogerSelected = retailers.includes("kroger");
   const krogerQuery1 = useAds({
     retailer: isKrogerSelected ? "kroger" : undefined,
     client: client1,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
   const krogerQuery2 = useAds({
     retailer: isKrogerSelected ? "kroger" : undefined,
     client: client2,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
   const krogerQuery3 = useAds({
     retailer: isKrogerSelected ? "kroger" : undefined,
     client: client3,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
 
   const isWalmartSelected = retailers.includes("walmart");
   const walmartQuery1 = useAds({
     retailer: isWalmartSelected ? "walmart" : undefined,
     client: client1,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
   const walmartQuery2 = useAds({
     retailer: isWalmartSelected ? "walmart" : undefined,
     client: client2,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
   const walmartQuery3 = useAds({
     retailer: isWalmartSelected ? "walmart" : undefined,
     client: client3,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
 
   const isInstacartSelected = retailers.includes("instacart");
   const instacartQuery1 = useAds({
     retailer: isInstacartSelected ? "instacart" : undefined,
     client: client1,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
   const instacartQuery2 = useAds({
     retailer: isInstacartSelected ? "instacart" : undefined,
     client: client2,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
   const instacartQuery3 = useAds({
     retailer: isInstacartSelected ? "instacart" : undefined,
     client: client3,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
 
   const isAmazonSelected = retailers.includes("amazon");
   const amazonQuery1 = useAds({
     retailer: isAmazonSelected ? "amazon" : undefined,
     client: client1,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
   const amazonQuery2 = useAds({
     retailer: isAmazonSelected ? "amazon" : undefined,
     client: client2,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
   const amazonQuery3 = useAds({
     retailer: isAmazonSelected ? "amazon" : undefined,
     client: client3,
-    term: (filters.keywords && filters.keywords.length) ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    types: filters.types,
-    search: filters.search,
-    sort: sortBy,
+    ...debouncedFilters,
   });
   
   // Collect all queries - flatten by retailer and client
@@ -336,60 +303,72 @@ export default function Index() {
   const rightPadded = [...rightClients];
   while (rightPadded.length < 3) rightPadded.push("");
 
+  // PERFORMANCE FIX: Memoize compare mode filters
+  const leftNormalizedFilters = useMemo(() => ({
+    term: lf.keywords?.length ? lf.keywords.join(",") : undefined,
+    start: formatLocalDate(lf.start),
+    end: formatLocalDate(lf.end),
+    types: dedupSorted(lf.types),
+    search: lf.search?.trim() || undefined,
+    sort: sortBy,
+  }), [
+    lf.keywords?.join(","),
+    lf.start?.getTime(),
+    lf.end?.getTime(),
+    lf.types?.join(","),
+    lf.search,
+    sortBy,
+  ]);
+
+  const rightNormalizedFilters = useMemo(() => ({
+    term: rf.keywords?.length ? rf.keywords.join(",") : undefined,
+    start: formatLocalDate(rf.start),
+    end: formatLocalDate(rf.end),
+    types: dedupSorted(rf.types),
+    search: rf.search?.trim() || undefined,
+    sort: sortBy,
+  }), [
+    rf.keywords?.join(","),
+    rf.start?.getTime(),
+    rf.end?.getTime(),
+    rf.types?.join(","),
+    rf.search,
+    sortBy,
+  ]);
+
+  const leftDebouncedFilters = useDebouncedValue(leftNormalizedFilters, 350);
+  const rightDebouncedFilters = useDebouncedValue(rightNormalizedFilters, 350);
+
   const leftAdsQuery1 = useAds({
     retailer: primaryRetailer,
     client: leftPadded[0],
-    start: formatLocalDate(lf.start),
-    end: formatLocalDate(lf.end),
-    types: lf.types,
-    search: lf.search,
-    sort: sortBy,
+    ...leftDebouncedFilters,
   });
   const leftAdsQuery2 = useAds({
     retailer: primaryRetailer,
     client: leftPadded[1],
-    start: formatLocalDate(lf.start),
-    end: formatLocalDate(lf.end),
-    types: lf.types,
-    search: lf.search,
-    sort: sortBy,
+    ...leftDebouncedFilters,
   });
   const leftAdsQuery3 = useAds({
     retailer: primaryRetailer,
     client: leftPadded[2],
-    start: formatLocalDate(lf.start),
-    end: formatLocalDate(lf.end),
-    types: lf.types,
-    search: lf.search,
-    sort: sortBy,
+    ...leftDebouncedFilters,
   });
 
   const rightAdsQuery1 = useAds({
     retailer: primaryRetailer,
     client: rightPadded[0],
-    start: formatLocalDate(rf.start),
-    end: formatLocalDate(rf.end),
-    types: rf.types,
-    search: rf.search,
-    sort: sortBy,
+    ...rightDebouncedFilters,
   });
   const rightAdsQuery2 = useAds({
     retailer: primaryRetailer,
     client: rightPadded[1],
-    start: formatLocalDate(rf.start),
-    end: formatLocalDate(rf.end),
-    types: rf.types,
-    search: rf.search,
-    sort: sortBy,
+    ...rightDebouncedFilters,
   });
   const rightAdsQuery3 = useAds({
     retailer: primaryRetailer,
     client: rightPadded[2],
-    start: formatLocalDate(rf.start),
-    end: formatLocalDate(rf.end),
-    types: rf.types,
-    search: rf.search,
-    sort: sortBy,
+    ...rightDebouncedFilters,
   });
 
   const flatAds: Ad[] = useMemo(() => {

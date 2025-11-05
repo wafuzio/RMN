@@ -5,7 +5,7 @@ import type {
   AdCardItem, 
   AdsCardsResponse 
 } from "@shared/api";
-import { mark, readServerTiming } from './metrics';
+import { mark, readServerTiming, count } from './metrics';
 
 // Re-export for convenience
 export type { 
@@ -20,34 +20,66 @@ export type {
 const DEFAULT_API_BASE = "";  // Empty string = same origin (proxied by Vite)
 export const API_BASE = import.meta.env.VITE_API_BASE || DEFAULT_API_BASE;
 
+// Request deduplication: track in-flight requests and abort duplicates
+const inflight = new Map<string, AbortController>();
+
+function inflightKey(url: string): string {
+  // Normalize URL by sorting query params to create stable cache key
+  try {
+    const u = new URL(url, location.origin);
+    const params = [...u.searchParams.entries()].sort((a,b) => a[0].localeCompare(b[0]));
+    u.search = new URLSearchParams(params).toString();
+    return u.toString();
+  } catch { 
+    return url; 
+  }
+}
+
 async function timeFetch(input: RequestInfo, init?: RequestInit, label?: string): Promise<Response> {
-  const t0 = performance.now();
-  const res = await fetch(input, init);
-  const t1 = performance.now();
-  mark(`http:${label || input.toString()}`, t1 - t0, 'ms', { url: input.toString(), status: res.status });
-  readServerTiming(res.headers);
-  return res;
+  const url = typeof input === 'string' ? input : (input as Request).url;
+  const key = inflightKey(url);
+  
+  // Abort any identical in-flight request (last write wins)
+  const prev = inflight.get(key);
+  if (prev) {
+    prev.abort();
+    count('dedupe_abort', 1);  // Track how many duplicates we're preventing
+  }
+
+  const ctrl = new AbortController();
+  inflight.set(key, ctrl);
+  
+  try {
+    const t0 = performance.now();
+    const res = await fetch(input, { ...init, signal: ctrl.signal });
+    const t1 = performance.now();
+    mark(`http:${label || url}`, t1 - t0, 'ms', { url, status: res.status });
+    readServerTiming(res.headers);
+    return res;
+  } catch (err: any) {
+    // Don't log aborted requests as errors (they're expected from deduplication)
+    if (err.name !== 'AbortError') {
+      console.error(`[timeFetch] Error for ${label}:`, err);
+    }
+    throw err;
+  } finally {
+    inflight.delete(key);
+  }
 }
 
 async function http<T>(path: string, init?: RequestInit, label?: string): Promise<T> {
   const url = `${API_BASE}${path}`;
-  console.debug('[http] GET', url);  // Log the full URL for debugging
   const res = await timeFetch(url, { 
     ...init, 
     headers: { 
-      ...(init?.headers||{}), 
-      "Accept": "application/json",
-      "ngrok-skip-browser-warning": "true",
-      "User-Agent": "Mozilla/5.0"
-    },
-    // Most reads do not need credentials, omit by default
-    credentials: init?.credentials ?? 'omit',
+      'Content-Type': 'application/json', 
+      ...init?.headers 
+    } 
   }, label);
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`${res.status} ${res.statusText} ${text}`);
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
   }
-  return res.json() as Promise<T>;
+  return res.json();
 }
 
 type GetAdsOpts = {
