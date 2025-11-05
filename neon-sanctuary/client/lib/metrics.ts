@@ -48,14 +48,30 @@ export function collectResourceSummary() {
   return { totalRequests: total, totalBytes, cacheHits: cached };
 }
 
+// Store LCP value from PerformanceObserver
+let cachedLCP: number | undefined;
+
+// Modern LCP observer (runs once on module load)
+if (typeof window !== 'undefined' && 'PerformanceObserver' in window) {
+  try {
+    const observer = new PerformanceObserver((list) => {
+      const entries = list.getEntries();
+      const lastEntry = entries[entries.length - 1] as any;
+      cachedLCP = lastEntry?.startTime;
+    });
+    observer.observe({ type: 'largest-contentful-paint', buffered: true });
+  } catch (e) {
+    // Silently fail if LCP is not supported
+  }
+}
+
 export function userTimingSnapshot() {
   const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-  const lcpEntry = (performance.getEntriesByType('largest-contentful-paint') as any[]).pop();
   return {
     ttfb: nav ? nav.responseStart - nav.requestStart : undefined,
     domContentLoaded: nav ? nav.domContentLoadedEventEnd - nav.startTime : undefined,
     loadEvent: nav ? nav.loadEventEnd - nav.startTime : undefined,
-    lcp: lcpEntry?.startTime,
+    lcp: cachedLCP,
   };
 }
 
