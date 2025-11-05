@@ -41,11 +41,13 @@ export function createServer() {
   // Performance monitoring: Server-Timing header
   app.use((req, res, next) => {
     const t0 = process.hrtime.bigint();
-    res.on('finish', () => {
+    const originalSend = res.send;
+    res.send = function(data) {
       const t1 = process.hrtime.bigint();
       const ms = Number(t1 - t0) / 1e6;
       res.setHeader('Server-Timing', `nodeTotal;dur=${ms.toFixed(1)}`);
-    });
+      return originalSend.call(this, data);
+    };
     next();
   });
 
