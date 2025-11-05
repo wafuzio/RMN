@@ -393,6 +393,18 @@ class BrandReviewTool:
                         # This catches cases where JSON has a brand but screenshot failed to match it
                         is_unknown_in_filename = False
                         
+                        # ADDITIONAL CHECK: If find_ad_image returned a path but it doesn't match the expected path from JSON,
+                        # treat it as if no image was found and run the fallback search
+                        if image_path:
+                            expected_path = self.expected_image_path_from_json(ad, json_file)
+                            if expected_path and os.path.basename(image_path) != os.path.basename(expected_path):
+                                # The found image has a different filename than what JSON specifies
+                                # This means find_ad_image found a different file (wrong timestamp or wrong brand)
+                                print(f"[WARN] find_ad_image returned different file than JSON specifies")
+                                print(f"[WARN]   Expected: {os.path.basename(expected_path)}")
+                                print(f"[WARN]   Found: {os.path.basename(image_path)}")
+                                image_path = None  # Treat as not found to trigger fallback search
+                        
                         # FIX #2: If we couldn't resolve an image, but the JSON points somewhere,
                         # try to find the actual file in the same folder ignoring just the brand slug
                         if not image_path:
