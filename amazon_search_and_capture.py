@@ -71,6 +71,7 @@ CAROUSEL_HEADINGS = [
     "Trending now",
     "Popular products in this category",
     "Customers who viewed this item also viewed",
+    "Customers mention"
 ]
 
 
@@ -191,6 +192,57 @@ def _std_filename(retailer: str, advertiser: str, ad_type: str, client: str, key
     return f"{r}__{adv}__{typ}__{cli}__{kw}__{d}_{tstr}_{index}{ext}"
 
 
+def _get_container_signature(container):
+    """Generate a unique signature for a container based on ID and metrics attributes."""
+    try:
+        # Priority: CardInstance ID > data-card-metrics-id > cel_widget_id > data-aid
+        container_id = _get_attr(container, 'id') or ''
+        if container_id.startswith('CardInstance'):
+            return f"card:{container_id}"
+        
+        metrics_id = _get_attr(container, 'data-card-metrics-id') or ''
+        if 'sb-themed-collection' in metrics_id:
+            return f"metrics:{metrics_id}"
+        
+        cel_widget = _get_attr(container, 'cel_widget_id') or ''
+        if cel_widget:
+            return f"cel:{cel_widget}"
+        
+        data_aid = _get_attr(container, 'data-aid') or ''
+        if data_aid:
+            return f"aid:{data_aid}"
+        
+        return None
+    except Exception:
+        return None
+
+
+def _check_bbox_overlap(new_bbox, existing_bboxes, overlap_threshold=0.3):
+    """Check if new bounding box overlaps significantly with any existing ones."""
+    try:
+        if not new_bbox or not existing_bboxes:
+            return False
+        
+        nx1, ny1, nx2, ny2 = new_bbox['x'], new_bbox['y'], new_bbox['x'] + new_bbox['width'], new_bbox['y'] + new_bbox['height']
+        new_area = new_bbox['width'] * new_bbox['height']
+        
+        for existing in existing_bboxes:
+            ex1, ey1, ex2, ey2 = existing['x'], existing['y'], existing['x'] + existing['width'], existing['y'] + existing['height']
+            
+            # Calculate intersection
+            ix1, iy1 = max(nx1, ex1), max(ny1, ey1)
+            ix2, iy2 = min(nx2, ex2), min(ny2, ey2)
+            
+            if ix1 < ix2 and iy1 < iy2:
+                intersection_area = (ix2 - ix1) * (iy2 - iy1)
+                overlap_ratio = intersection_area / new_area
+                if overlap_ratio > overlap_threshold:
+                    return True
+        return False
+    except Exception:
+        return False
+
+
 def search_and_capture(keyword: str, output_dir: str) -> bool:
     print("\n==================================================")
     print("AMAZON SEARCH AND CAPTURE")
@@ -198,7 +250,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
     print(f"Keyword: {keyword}")
     print(f"Output directory: {output_dir}")
 
-    profile_dir = os.environ.get("AMAZON_PROFILE_DIR") or os.path.expanduser("~/ChromeProfiles/amazon")
+    # Force Amazon to use its own profile, not walmart
+    amazon_profile = os.path.expanduser("~/ChromeProfiles/amazon")
+    profile_dir = os.environ.get("AMAZON_PROFILE_DIR") or amazon_profile
+    # Ensure we're not accidentally using walmart profile
+    if "walmart" in profile_dir.lower():
+        log(f"WARNING: Detected walmart profile path '{profile_dir}', forcing to Amazon profile")
+        profile_dir = amazon_profile
     try:
         os.makedirs(profile_dir, exist_ok=True)
     except Exception as e:
@@ -235,6 +293,9 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
     ads = []
     captured_modules = set()
     seen_anchors = set()
+    # Additional dedupe mechanisms for SB modules
+    captured_containers = set()  # Container signature dedupe (ID/metrics-based)
+    captured_bboxes = []  # Geometric overlap check (bounding boxes)
     success = False
 
     # Performance controls and time budget
@@ -297,11 +358,14 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     pass
 
                 # Start tracing only if enabled
+                tracing_enabled = False
                 try:
                     if os.environ.get("AMAZON_TRACE") == "1":
                         bctx.tracing.start(screenshots=True, snapshots=True, sources=False)
-                except Exception:
-                    pass
+                        tracing_enabled = True
+                        log("trace: started")
+                except Exception as e:
+                    log(f"trace: start error -> {e}")
 
                 url = _search_url(keyword)
                 log(f"navigate: {url}")
@@ -359,20 +423,22 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     log("main: prepare (hide sticky headers, scroll top)")
                     # Hide Amazon sticky headers/navs to avoid covering content (fast inline style injection)
                     try:
-                        page.evaluate(
-                            """
-                        (() => {
+                        log("main: injecting CSS to hide sticky headers")
+                        result = page.evaluate("""
+                        () => {
                           try {
-                            const css = `#navbar,#nav-belt,#nav-main,#nav-progressive-subnav,header,[data-testid="header"],[class*="sticky" i],[data-sticky],[style*="position: sticky"],.sg-col-20-of-24 .s-desktop-width-max .s-desktop-toolbar,.s-desktop-toolbar .s-desktop-toolbar,.s-main-slot .s-no-outline .a-section.s-include-content-margin.s-border-bottom{display:none!important;visibility:hidden!important;}`;
+                            const css = '#navbar,#nav-belt,#nav-main,#nav-progressive-subnav,header,[data-testid="header"],[class*="sticky" i],[data-sticky],[style*="position: sticky"],.sg-col-20-of-24 .s-desktop-width-max .s-desktop-toolbar,.s-desktop-toolbar .s-desktop-toolbar{display:none!important;visibility:hidden!important;}';
                             const st = document.createElement('style');
                             st.type = 'text/css';
                             st.textContent = css;
                             document.head.appendChild(st);
-                          } catch(e) {}
-                          return true;
-                        })()
-                        """
-                        )
+                            return 'success';
+                          } catch(e) {
+                            return 'error: ' + e.message;
+                          }
+                        }
+                        """)
+                        log(f"main: CSS injection result -> {result}")
                     except Exception as css_err:
                         log(f"main: style inject error -> {css_err}")
                     # Ensure we are at the very top for consistent full-page shot
@@ -384,110 +450,280 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             pass
                     except Exception:
                         pass
+                    # Left-rail hydration probe before main screenshot
+                    try:
+                        log("main: left-rail hydration probe")
+                        left_rail_ads = page.locator('div.s-left-ads-item img')
+                        if left_rail_ads.count() > 0:
+                            # Wait for first left-rail image to load
+                            try:
+                                left_rail_ads.first.wait_for(state="visible", timeout=2000)
+                                time.sleep(0.5)  # Brief settle time
+                            except Exception:
+                                pass
+                        log("main: hydration probe complete")
+                    except Exception as e:
+                        log(f"main: hydration probe error -> {e}")
+                    
+                    # Simple scroll to bottom to trigger lazy loading
+                    try:
+                        log("main: scroll to bottom to trigger lazy loading")
+                        
+                        # Start at top
+                        page.evaluate("window.scrollTo(0, 0)")
+                        time.sleep(0.5)
+                        
+                        # Scroll to bottom to trigger all lazy loading
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                        time.sleep(3.0)  # Wait for content to load
+                        log("main: bottom scroll complete")
+                        
+                        # Center on "Brands related to your search" element for screenshot
+                        try:
+                            log("main: centering on 'Brands related to your search' element")
+                            brands_element = page.locator('span[aria-label="Brands related to your search"], h2:has-text("Brands related to your search")').first
+                            if brands_element.count() > 0:
+                                # Scroll element to center of viewport
+                                brands_element.scroll_into_view_if_needed()
+                                time.sleep(0.5)
+                                
+                                # Center the element in viewport using JavaScript
+                                page.evaluate("""
+                                (element) => {
+                                    const rect = element.getBoundingClientRect();
+                                    const elementTop = rect.top + window.pageYOffset;
+                                    const elementCenter = elementTop - (window.innerHeight / 2) + (rect.height / 2);
+                                    window.scrollTo(0, Math.max(0, elementCenter));
+                                }
+                                """, brands_element.element_handle())
+                                
+                                time.sleep(2.0)  # Wait 2 seconds as requested
+                                log("main: centered on brands element and waited 2 seconds")
+                            else:
+                                # Fallback: return to top if brands element not found
+                                page.evaluate("window.scrollTo(0, 0)")
+                                time.sleep(1.5)
+                                log("main: brands element not found, returned to top")
+                        except Exception as e:
+                            log(f"main: center on brands error -> {e}, falling back to top")
+                            page.evaluate("window.scrollTo(0, 0)")
+                            time.sleep(1.5)
+                        
+                        log("main: gentle scroll complete")
+                    except Exception as e:
+                        log(f"main: progressive scroll error -> {e}")
+                    
+                    # Re-inject CSS to hide any new sticky elements that appeared during scroll
+                    try:
+                        log("main: re-injecting CSS before screenshot")
+                        page.evaluate("""
+                        () => {
+                          const css = '#navbar,#nav-belt,#nav-main,#nav-progressive-subnav,header,[data-testid="header"],[class*="sticky" i],[data-sticky],[style*="position: sticky"],.sg-col-20-of-24 .s-desktop-width-max .s-desktop-toolbar,.s-desktop-toolbar .s-desktop-toolbar{display:none!important;visibility:hidden!important;}';
+                          const st = document.createElement('style');
+                          st.type = 'text/css';
+                          st.textContent = css;
+                          document.head.appendChild(st);
+                        }
+                        """)
+                    except Exception as e:
+                        log(f"main: re-inject CSS error -> {e}")
+                    
                     log("main: screenshot")
                     main_name = _std_filename("amazon", "unknown", "Main", client, keyword, run_id, 0, ".png")
                     main_path = os.path.join(output_dir, "Main", main_name)
-                    page.screenshot(path=main_path, full_page=True)
+                    page.screenshot(path=main_path, full_page=True, timeout=10000)
                     log(f"main: saved -> {main_path} exists={os.path.exists(main_path)} size={os.path.getsize(main_path) if os.path.exists(main_path) else 0}")
                 except Exception as e:
                     log(f"main: fail -> {e}")
 
-                # 2) Sponsored Brand Video (SBV)
+                # 2) Sponsored Brand Video (SBV) - Comprehensive
                 try:
                     log("sbv: detect")
-                    # SBV has cel_widget_id containing "VIDEO_SINGLE_PRODUCT"
-                    sbv_root = page.locator('div[cel_widget_id*="VIDEO_SINGLE_PRODUCT"]').first
-                    if sbv_root.count() > 0 and sbv_root.is_visible():
-                        log(f"sbv: found VIDEO_SINGLE_PRODUCT widget")
-                        # Brand and message
-                        brand_txt, brand_canon, message = _extract_brand_and_message(sbv_root)
-                        adv_for_name = brand_canon or "unknown"
-                        fname = _std_filename("amazon", adv_for_name, "Sponsored_Brand_Video", client, keyword, run_id, 0, ".png")
-                        fpath = os.path.join(output_dir, "Sponsored_Brand_Video", fname)
+                    # Look for video containers using stable data attributes
+                    # Enhanced SBV detection with priority order and better deduplication
+                    sbv_selectors = [
+                        # Top SBV: specific boundary containers
+                        '*[data-cel-widget*="sb-video-product-collection-desktop-cards"]',  # Top SBV container
+                        '*[cel_widget_id*="sb-video-product-collection-desktop"]',  # Top SBV widget
+                        # Mid SBV: specific boundary containers  
+                        '*[data-component-type="sbv-video-single-product"]',  # Mid SBV: proper boundary
+                        # Bottom SBV: if exists, add specific selectors
+                        '.sbv-ad-content-container',  # Fallback: complete SBV ad container
+                    ]
+                    
+                    all_sbv_elements = []
+                    seen_elements = set()  # Track by element handle to avoid duplicates
+                    
+                    for selector in sbv_selectors:
                         try:
-                            # Hide sticky headers before SBV screenshot (same as main and other ad types)
+                            elements = page.locator(selector).all()
+                            log(f"sbv: selector '{selector}' found {len(elements)} elements")
+                            for el in elements:
+                                if el.is_visible() and el.locator('video').count() > 0:
+                                    # Use element's bounding box as unique identifier, but filter out full-page captures
+                                    try:
+                                        bbox = el.bounding_box()
+                                        if bbox:
+                                            # Skip elements that are too large (likely full-page captures)
+                                            if bbox['width'] > 1300 or bbox['height'] > 1000:
+                                                log(f"sbv: skipped full-page element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']}")
+                                                continue
+                                            
+                                            # Skip elements that are extremely far off-screen (likely invalid)
+                                            if bbox['y'] < -20000:
+                                                log(f"sbv: skipped extremely off-screen element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']}")
+                                                continue
+                                            
+                                            # Tighter deduplication: elements within 20px and similar size are considered same
+                                            bbox_key = (round(bbox['x'] / 20) * 20, round(bbox['y'] / 20) * 20, round(bbox['width'] / 20) * 20, round(bbox['height'] / 20) * 20)
+                                            if bbox_key in seen_elements:
+                                                log(f"sbv: skipped duplicate element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']}")
+                                                continue
+                                            seen_elements.add(bbox_key)
+                                            all_sbv_elements.append(el)
+                                            log(f"sbv: added unique element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']}")
+                                    except Exception:
+                                        # Fallback: just add if we can't get bounding box
+                                        all_sbv_elements.append(el)
+                        except Exception as e:
+                            log(f"sbv: selector error {selector} -> {e}")
+                    
+                    # Process all unique SBV elements found
+                    sbv_count = len(all_sbv_elements)
+                    log(f"sbv: found {sbv_count} total video elements")
+                    processed_count = 0
+                    for sbv_idx, sbv_widget in enumerate(all_sbv_elements):
+                        if processed_count >= 2:  # Limit to 2 SBVs
+                            break
+                        if time_left() < 10:
+                            break
+                        if sbv_widget.is_visible():
+                            log(f"sbv: processing widget {sbv_idx}")
                             try:
-                                page.evaluate(
-                                    """
-                                (() => {
-                                  try {
-                                    const css = `#navbar,#nav-belt,#nav-main,#nav-progressive-subnav,header,[data-testid="header"],[class*="sticky" i],[data-sticky],[style*="position: sticky"],.sg-col-20-of-24 .s-desktop-width-max .s-desktop-toolbar,.s-desktop-toolbar .s-desktop-toolbar,.s-main-slot .s-no-outline .a-section.s-include-content-margin.s-border-bottom{display:none!important;visibility:hidden!important;}`;
-                                    const st = document.createElement('style');
-                                    st.type = 'text/css';
-                                    st.textContent = css;
-                                    document.head.appendChild(st);
-                                  } catch(e) {}
-                                  return true;
-                                })()
-                                """
-                                )
-                            except Exception as css_err:
-                                log(f"sbv: style inject error -> {css_err}")
-                            # Scroll SBV into view and wait
-                            try:
-                                sbv_root.scroll_into_view_if_needed()
-                                time.sleep(0.2)
-                            except Exception:
-                                pass
-                            # Freeze animations (like other ad types)
-                            try:
-                                page.evaluate("""
-                                () => {
-                                    const style = document.createElement('style');
-                                    style.textContent = '* { transition: none !important; animation: none !important; }';
-                                    document.head.appendChild(style);
-                                }
-                            """)
-                            except Exception:
-                                pass
-                            # Flush layout
-                            try:
-                                page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
-                            except Exception:
-                                pass
-                            sbv_root.screenshot(path=fpath, timeout=5000)
-                            log(f"sbv: saved -> {fpath} exists={os.path.exists(fpath)}")
-                            video_rel = None
-                            try:
-                                sources = []
+                                # Find the proper SBV container - be conservative to avoid full page capture
+                                sbv_container = None
+                                
+                                # Try SBV containers using stable data attributes
+                                container_selectors = [
+                                    "xpath=ancestor::*[@data-component-type='sbv-video-single-product'][1]",  # Primary: stable SBV component type
+                                    "xpath=ancestor::div[contains(@cel_widget_id,'VIDEO_SINGLE_PRODUCT')][1]",  # Stable widget ID
+                                    "xpath=ancestor::div[@data-asin and @data-index][1]",  # Stable: ASIN + index attributes
+                                    "xpath=ancestor::div[@data-component-type][1]",  # Any stable component type
+                                    "xpath=ancestor::div[2]",  # Conservative fallback
+                                ]
+                                
+                                for selector in container_selectors:
+                                    candidate = sbv_widget.locator(selector)
+                                    if candidate.count() > 0:
+                                        sbv_container = candidate.first
+                                        break
+                                
+                                # Final fallback - use the video widget itself (better than full page)
+                                if not sbv_container:
+                                    sbv_container = sbv_widget
+                                
+                                # Extract enhanced data from SBV internal structure
+                                brand_txt, brand_canon, message = _extract_brand_and_message(sbv_container)
+                                
+                                # Extract additional info from SBV sections
+                                video_info = {}
+                                product_info = {}
                                 try:
-                                    sources += [s.get_attribute('src') for s in sbv_root.locator('video source').element_handles()]
-                                except Exception:
-                                    pass
+                                    # Get info from video container
+                                    video_container = sbv_container.locator('[class*="sbv-video-container"]')
+                                    if video_container.count() > 0:
+                                        # Video duration, dimensions, etc. could be extracted here
+                                        video_info["has_video_container"] = True
+                                    
+                                    # Get info from product container  
+                                    product_container = sbv_container.locator('[class*="sbv-product-container"]')
+                                    if product_container.count() > 0:
+                                        product_info["has_product_container"] = True
+                                        
+                                        # Method 1: Extract from displayed product title h2 (most accurate)
+                                        try:
+                                            product_title = product_container.first.locator('h2[aria-label], h2 span')
+                                            if product_title.count() > 0:
+                                                # Try aria-label first (complete title)
+                                                title_text = product_title.first.get_attribute('aria-label') or ''
+                                                if not title_text:
+                                                    # Fallback to span text content
+                                                    title_text = product_title.first.inner_text().strip()
+                                                
+                                                if title_text and len(title_text) > 10:
+                                                    product_info["product_title"] = title_text
+                                                    product_info["product_description"] = title_text  # Keep for backward compatibility
+                                                    log(f"sbv: product from h2 title -> {title_text[:100]}...")
+                                        except Exception:
+                                            pass
+                                        
+                                        # Method 2: Extract product image URL
+                                        try:
+                                            product_img = product_container.first.locator('img.s-image[src]')
+                                            if product_img.count() > 0:
+                                                product_info["product_image_url"] = product_img.first.get_attribute('src') or ''
+                                        except Exception:
+                                            pass
+                                        
+                                        # Method 3: Fallback to image alt if h2 method fails
+                                        if not product_info.get("product_description"):
+                                            try:
+                                                product_img = product_container.first.locator('img.s-image[alt]:not([alt=""])')
+                                                if product_img.count() > 0:
+                                                    product_alt = product_img.first.get_attribute('alt') or ''
+                                                    if product_alt and len(product_alt) > 10:
+                                                        product_info["product_description"] = product_alt
+                                                        log(f"sbv: product from image alt -> {product_alt[:100]}...")
+                                            except Exception:
+                                                pass
+                                        
+                                        # Method 4: Final fallback to general text content
+                                        if not product_info.get("product_description"):
+                                            try:
+                                                product_text = product_container.first.inner_text().strip()
+                                                if product_text and len(product_text) > 10:
+                                                    product_info["product_description"] = product_text[:200]  # Limit length
+                                                    log(f"sbv: product from text -> {product_text[:100]}...")
+                                            except Exception:
+                                                pass
+                                    
+                                    log(f"sbv: enhanced extraction -> video_container: {video_info.get('has_video_container', False)}, product_container: {product_info.get('has_product_container', False)}")
+                                except Exception as e:
+                                    log(f"sbv: enhanced extraction error -> {e}")
+                                
+                                fname = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Video", client, keyword, run_id, sbv_idx, ".png")
+                                fpath = os.path.join(output_dir, "Sponsored_Brand_Video", fname)
+                                sbv_container.screenshot(path=fpath, timeout=4000)
+                                
+                                # Try to download MP4 video
+                                video_rel = None
                                 try:
-                                    v = sbv_root.locator('video').first
-                                    if v.count() > 0:
-                                        s = v.get_attribute('src')
-                                        if s:
-                                            sources.append(s)
-                                except Exception:
-                                    pass
-                                try:
-                                    dv = sbv_root.get_attribute('data-video-url')
-                                    if dv:
-                                        sources.append(dv)
-                                except Exception:
-                                    pass
-                                sources = [u for u in (sources or []) if u]
-                                mp4 = next((u for u in sources if '.mp4' in u.lower()), None)
-                                if mp4:
-                                    mp4_name = os.path.splitext(fname)[0] + ".mp4"
-                                    mp4_path = os.path.join(output_dir, "Sponsored_Brand_Video", mp4_name)
-                                    r = requests.get(mp4, timeout=10)
-                                    if r.ok:
-                                        with open(mp4_path, "wb") as vf:
-                                            vf.write(r.content)
-                                        video_rel = f"Sponsored_Brand_Video/{mp4_name}"
-                                        log(f"sbv: mp4 saved -> {mp4_path}")
-                            except Exception as e:
-                                log(f"sbv: mp4 error -> {e}")
-                            # IDs
-                            anchor = _module_anchor(sbv_root)
-                            if anchor in seen_anchors:
-                                log(f"sbv: duplicate anchor skipped -> {anchor}")
-                            else:
-                                seen_anchors.add(anchor)
-                                module_id, eid = _build_ids("Sponsored_Brand_Video", "Video_Single_Product", brand_canon, anchor, run_id, 0)
+                                    video_el = sbv_widget.locator('video').first
+                                    if video_el.count() > 0:
+                                        video_src = video_el.get_attribute('src')
+                                        if not video_src:
+                                            # Try source tags
+                                            source_el = video_el.locator('source').first
+                                            if source_el.count() > 0:
+                                                video_src = source_el.get_attribute('src')
+                                        if video_src and video_src.startswith('http'):
+                                            video_name = fname.replace('.png', '.mp4')
+                                            mp4_path = os.path.join(output_dir, "Sponsored_Brand_Video", video_name)
+                                            video_rel = f"Sponsored_Brand_Video/{video_name}"
+                                            try:
+                                                import requests
+                                                r = requests.get(video_src, timeout=30)
+                                                if r.ok:
+                                                    with open(mp4_path, 'wb') as f:
+                                                        f.write(r.content)
+                                                    log(f"sbv: mp4 saved -> {mp4_path}")
+                                            except Exception as e:
+                                                log(f"sbv: mp4 download error -> {e}")
+                                except Exception as e:
+                                    log(f"sbv: mp4 error -> {e}")
+                                
+                                # Add to ads array
+                                module_id, eid = _build_ids("Sponsored_Brand_Video", "Video_Single_Product", brand_canon, "sbv", run_id, sbv_idx)
                                 ads.append({
                                     "id": eid,
                                     "module_id": module_id,
@@ -499,23 +735,857 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                     "image_path": f"Sponsored_Brand_Video/{fname}",
                                     "video_path": video_rel,
                                     "message": message,
-                                    "metadata": {},
+                                    "product_title": product_info.get("product_title", ""),
+                                    "product_description": product_info.get("product_description", ""),
+                                    "product_image_url": product_info.get("product_image_url", ""),
+                                    "metadata": {
+                                        "has_video_container": video_info.get("has_video_container", False),
+                                        "has_product_container": product_info.get("has_product_container", False),
+                                        "has_product_image": bool(product_info.get("product_image_url")),
+                                        "has_product_title": bool(product_info.get("product_title")),
+                                        "sbv_structure_detected": True
+                                    },
                                 })
-                            log(f"sbv: ad added {fname} module_id={module_id}")
-                        except Exception as e:
-                            log(f"sbv: screenshot fail -> {e}")
-                    else:
-                        log("sbv: none")
+                                log(f"sbv: saved -> {fname}")
+                                processed_count += 1
+                            except Exception as e:
+                                log(f"sbv: screenshot fail -> {e}")
+                    if sbv_count == 0:
+                        log("sbv: none found")
                 except Exception as e:
                     log(f"sbv: detect error -> {e}")
 
-                # ... rest of function unchanged ...
-            finally:
-                # Save tracing
+                # 3) Essential ad detection sections
+                log("debug: continuing to sb-themed and sb-headline detection")
+                
+                # 3a) Sponsored Brand Detection (comprehensive)
                 try:
-                    trace_path = os.path.join(runs_dir, f"trace_{ts}.zip")
-                    bctx.tracing.stop(path=trace_path)
-                    log(f"trace: saved -> {trace_path} exists={os.path.exists(trace_path)} size={os.path.getsize(trace_path) if os.path.exists(trace_path) else 0}")
+                    log("sb-brands: detect")
+                    # Look for both traditional SB layouts and individual cards
+                    sb_selectors = [
+                        # Traditional mid-page SB layouts (full containers)
+                        'div[cel_widget_id*="sb-themed-collection-v2-desktop_loom-desktop-inline-slot"]',  # Mid-page SB containers
+                        'div[cel_widget_id*="sb-themed-collection"]:not([cel_widget_id*="inline-slot"])',  # Other SB containers
+                        # Individual SB headline cards
+                        'a[data-elementid="sb-headline"]',  # Real SB headlines only
+                        # Individual cards in themed collections (fallback)
+                        'div[cel_widget_id*="sb-themed-collection"] div[data-asin]',  # Individual ASIN cards
+                    ]
+                    
+                    all_sb_elements = []
+                    for selector in sb_selectors:
+                        if time_left() < 30:  # Need at least 30s for processing
+                            break
+                        try:
+                            elements = page.locator(selector).all()
+                            for el in elements:
+                                if el.is_visible():
+                                    all_sb_elements.append(el)
+                        except Exception as e:
+                            log(f"sb-brands: selector error {selector} -> {e}")
+                    
+                    log(f"sb-brands: found {len(all_sb_elements)} total sponsored brand elements")
+                    for i, el in enumerate(all_sb_elements):
+                        if time_left() < 10:
+                            break
+                        if not el.is_visible():
+                            continue
+                        try:
+                            # Container signature dedupe
+                            container_sig = _get_container_signature(el)
+                            if container_sig and container_sig in captured_containers:
+                                log(f"sb-themed: duplicate container skipped -> {container_sig}")
+                                continue
+                            
+                            # Geometric overlap check and size validation
+                            try:
+                                bbox = el.bounding_box()
+                                if bbox:
+                                    # Skip if too large (likely full page capture)
+                                    if bbox['width'] > 1200 or bbox['height'] > 800:
+                                        log(f"sb-themed: skipping large element (likely full page) -> {bbox}")
+                                        continue
+                                    if _check_bbox_overlap(bbox, captured_bboxes):
+                                        log(f"sb-themed: overlapping bbox skipped -> {bbox}")
+                                        continue
+                            except Exception as e:
+                                log(f"sb-themed: bbox check error -> {e}")
+                                bbox = None
+                            
+                            brand_txt, brand_canon, message = _extract_brand_and_message(el)
+                            
+                            # Enhanced extraction for sponsored brand ads using aria-label pattern
+                            brand_logo_url = ""
+                            brand_store_url = ""
+                            try:
+                                # Method 1: Extract from main sponsored ad link
+                                sb_link = el.locator('a[aria-label*="Sponsored ad from"]')
+                                if sb_link.count() > 0:
+                                    aria_label = sb_link.first.get_attribute('aria-label') or ''
+                                    # Parse: "Sponsored ad from [Brand]. "[Message]." Shop [Brand]."
+                                    if 'Sponsored ad from ' in aria_label:
+                                        # Extract brand name
+                                        brand_start = aria_label.find('Sponsored ad from ') + len('Sponsored ad from ')
+                                        brand_end = aria_label.find('.', brand_start)
+                                        if brand_end > brand_start:
+                                            extracted_brand = aria_label[brand_start:brand_end].strip()
+                                            if extracted_brand:
+                                                brand_txt = extracted_brand
+                                                brand_canon = extracted_brand.lower().replace(' ', '_').replace('.', '')
+                                        
+                                        # Extract message (between quotes)
+                                        quote_start = aria_label.find('"')
+                                        quote_end = aria_label.find('"', quote_start + 1) if quote_start != -1 else -1
+                                        if quote_start != -1 and quote_end != -1:
+                                            extracted_message = aria_label[quote_start + 1:quote_end].strip()
+                                            if extracted_message:
+                                                message = extracted_message
+                                
+                                # Method 2: Extract brand logo and store URL from brand logo link
+                                brand_logo_link = el.locator('a[aria-label]:has(img[alt]):not([aria-label*="Sponsored ad from"])')
+                                if brand_logo_link.count() > 0:
+                                    logo_link = brand_logo_link.first
+                                    # Get brand name from aria-label (cleaner than "Sponsored ad from" version)
+                                    logo_brand = logo_link.get_attribute('aria-label') or ''
+                                    if logo_brand and not brand_txt:  # Use if we don't have brand from method 1
+                                        brand_txt = logo_brand
+                                        brand_canon = logo_brand.lower().replace(' ', '_').replace('.', '')
+                                    
+                                    # Get brand store URL
+                                    brand_store_url = logo_link.get_attribute('href') or ''
+                                    
+                                    # Get brand logo image URL
+                                    logo_img = logo_link.locator('img[alt]')
+                                    if logo_img.count() > 0:
+                                        brand_logo_url = logo_img.first.get_attribute('src') or ''
+                                
+                                # Method 3: Extract headline message from sb-headline element
+                                headline_link = el.locator('a[data-elementid="sb-headline"]')
+                                if headline_link.count() > 0:
+                                    headline_message = headline_link.first.get_attribute('aria-label') or ''
+                                    if headline_message and not message:  # Use if we don't have message from method 1
+                                        message = headline_message
+                                    
+                                    # Also get store URL from headline if not already captured
+                                    if not brand_store_url:
+                                        brand_store_url = headline_link.first.get_attribute('href') or ''
+                                
+                                log(f"sb-brands: enhanced extraction -> brand: {brand_txt}, message: {message}, logo: {bool(brand_logo_url)}, store: {bool(brand_store_url)}")
+                            except Exception as e:
+                                log(f"sb-brands: enhanced extraction error -> {e}")
+                            
+                            anchor = _module_anchor(el)
+                            if anchor in seen_anchors:
+                                log(f"sb-themed: duplicate anchor skipped -> {anchor}")
+                                continue
+                            seen_anchors.add(anchor)
+                            
+                            fname = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand", client, keyword, run_id, i, ".png")
+                            fpath = os.path.join(output_dir, "Sponsored_Brand", fname)
+                            
+                            # Wait for images to load before screenshot
+                            try:
+                                el.scroll_into_view_if_needed()
+                                time.sleep(0.2)
+                                # Wait for images to load
+                                el_handle = el.element_handle()
+                                page.evaluate("""
+                                  (el) => new Promise((resolve) => {
+                                    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+                                    (async () => {
+                                      let stable = 0; let last = 0;
+                                      for (let i=0; i<6 && stable<2; i++) {
+                                        const imgs = Array.from(el.querySelectorAll('img')).filter(img => img.complete && img.naturalWidth>10).length;
+                                        if (imgs === last) stable++; else stable = 0;
+                                        last = imgs; await sleep(300);
+                                      }
+                                      resolve(true);
+                                    })()
+                                  })
+                                """, el_handle)
+                            except Exception as e:
+                                log(f"sb-themed: image wait error -> {e}")
+                            
+                            el.screenshot(path=fpath, timeout=4000)
+                            
+                            # Record successful captures
+                            if container_sig:
+                                captured_containers.add(container_sig)
+                            if bbox:
+                                captured_bboxes.append(bbox)
+                            
+                            # Add to ads array
+                            module_id, eid = _build_ids("Sponsored_Brand", "Themed_Collection", brand_canon, anchor, run_id, i)
+                            ads.append({
+                                "id": eid,
+                                "module_id": module_id,
+                                "type": "Sponsored_Brand",
+                                "subtype": "Themed_Collection",
+                                "brand": brand_txt or "Unknown",
+                                "brand_canonical": brand_canon,
+                                "advertisers": [brand_canon] if brand_canon else [],
+                                "image_path": f"Sponsored_Brand/{fname}",
+                                "video_path": None,
+                                "message": message,
+                                "brand_logo_url": brand_logo_url,
+                                "brand_store_url": brand_store_url,
+                                "metadata": {
+                                    "has_brand_logo": bool(brand_logo_url),
+                                    "has_store_url": bool(brand_store_url)
+                                },
+                            })
+                            log(f"sb-themed: saved -> {fname}")
+                        except Exception as e:
+                            log(f"sb-themed: screenshot fail -> {e}")
+                
+                    # Special handling for "Brands related to your search" - split into individual cards
+                    try:
+                        log("sb-brands: looking for individual bottom brand cards")
+                        
+                        # Try multiple selectors for the brands carousel
+                        brands_carousel = None
+                        carousel_selectors = [
+                            'div.a-cardui[data-card-metrics-id*="multi-brand-creative-desktop"]:has(span[aria-label="Brands related to your search"])',
+                            'div[data-card-metrics-id*="multi-brand-creative-desktop"]',
+                            '*:has(span[aria-label="Brands related to your search"])',
+                            'div:has-text("Brands related to your search")',
+                        ]
+                        
+                        for selector in carousel_selectors:
+                            carousel_candidates = page.locator(selector)
+                            if carousel_candidates.count() > 0:
+                                brands_carousel = carousel_candidates.first
+                                log(f"sb-brands: found brands carousel with selector: {selector}")
+                                break
+                        
+                        if brands_carousel:
+                            # Try multiple methods to find complete brand card containers
+                            brand_cards = None
+                            card_selectors = [
+                                'div[data-index="0"], div[data-index="1"], div[data-index="2"]',  # Specific: brand card containers with data-index
+                                'div[data-index]',  # Primary: div elements with data-index (complete cards)
+                                '*[data-index]',  # Fallback: Any elements with data-index (complete cards)
+                                'ul li',  # Fallback: complete li containers
+                                'li',     # Fallback: Direct li elements - complete containers  
+                            ]
+                            
+                            for card_selector in card_selectors:
+                                cards = brands_carousel.locator(card_selector)
+                                card_count_found = cards.count()
+                                log(f"sb-brands: selector '{card_selector}' found {card_count_found} cards")
+                                if card_count_found > 0:
+                                    # Debug: Check what each card contains
+                                    for i in range(min(card_count_found, 3)):
+                                        try:
+                                            card = cards.nth(i)
+                                            img_count = card.locator('img').count()
+                                            link_count = card.locator('a').count()
+                                            log(f"sb-brands: card {i} has {img_count} images and {link_count} links")
+                                        except Exception:
+                                            pass
+                                    
+                                    brand_cards = cards
+                                    log(f"sb-brands: using selector: {card_selector}")
+                                    break
+                            
+                            if brand_cards:
+                                card_count = brand_cards.count()
+                            else:
+                                card_count = 0
+                                log("sb-brands: no brand cards found with any selector")
+                        else:
+                            card_count = 0
+                            log("sb-brands: no brands carousel found with any selector")
+                        
+                        # Process brand cards if found
+                        if brand_cards and card_count > 0:
+                            for card_idx in range(min(card_count, 3)):  # Limit to 3 cards
+                                if time_left() < 10:
+                                    break
+                                try:
+                                    brand_li = brand_cards.nth(card_idx)
+                                    if brand_li.is_visible():
+                                        # Debug: Check what we're actually capturing
+                                        try:
+                                            bbox = brand_li.bounding_box()
+                                            tag_name = brand_li.evaluate("el => el.tagName")
+                                            class_name = brand_li.get_attribute("class") or "no-class"
+                                            child_count = brand_li.locator("*").count()
+                                            log(f"sb-brands: card {card_idx} -> tag: {tag_name}, class: {class_name}, children: {child_count}, bbox: {bbox}")
+                                        except Exception as e:
+                                            log(f"sb-brands: debug error for card {card_idx} -> {e}")
+                                        # Get brand name and store URL from the brand store link (more reliable than image alt)
+                                        brand_name = 'unknown'
+                                        store_url = ''
+                                        
+                                        # Try to get brand from the store link aria-label or data-label
+                                        store_link = brand_li.locator('a[aria-label*="Shop"], a[data-label*="Shop"]')
+                                        if store_link.count() > 0:
+                                            aria_label = store_link.first.get_attribute('aria-label') or ''
+                                            data_label = store_link.first.get_attribute('data-label') or ''
+                                            store_url = store_link.first.get_attribute('href') or ''
+                                            
+                                            # Extract brand name from "Shop [Brand Name]" pattern
+                                            if aria_label.startswith('Shop '):
+                                                brand_name = aria_label[5:]  # Remove "Shop " prefix
+                                            elif data_label.startswith('Shop '):
+                                                brand_name = data_label[5:]  # Remove "Shop " prefix
+                                        
+                                        # Fallback to image alt if store link method fails
+                                        if brand_name == 'unknown':
+                                            brand_img = brand_li.locator('img[alt]:not([alt=""])')
+                                            if brand_img.count() > 0:
+                                                brand_name = brand_img.first.get_attribute('alt') or 'unknown'
+                                        
+                                        brand_canon = brand_name.lower().replace(' ', '_').replace('.', '')
+                                        
+                                        fname = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand", client, keyword, run_id, f"card_{card_idx}", ".png")
+                                        fpath = os.path.join(output_dir, "Sponsored_Brand", fname)
+                                        
+                                        # Screenshot the entire li element (the individual card)
+                                        try:
+                                            brand_li.scroll_into_view_if_needed()
+                                            time.sleep(0.3)
+                                            log(f"sb-brands: attempting screenshot for card {card_idx} -> {fpath}")
+                                            # Ensure directory exists
+                                            os.makedirs(os.path.dirname(fpath), exist_ok=True)
+                                            # Use explicit parameter names to avoid any confusion
+                                            brand_li.screenshot(path=str(fpath), timeout=4000)
+                                            log(f"sb-brands: individual card saved -> {fname}")
+                                        except Exception as screenshot_error:
+                                            log(f"sb-brands: individual card error -> {screenshot_error}")
+                                            continue  # Skip this card and move to next
+                                        
+                                        # Look for slogan/message text within this li - focus on structure, not hashed classes
+                                        message = ""
+                                        try:
+                                            # Target the stable structure: span.a-truncate-full (Amazon's stable class) within any link
+                                            slogan_el = brand_li.locator('a span.a-truncate-full, span.a-truncate-full')
+                                            if slogan_el.count() > 0:
+                                                message = slogan_el.first.inner_text()
+                                            # Fallback: look for any span with sentence-like text (contains periods)
+                                            elif brand_li.locator('span:has-text(".")').count() > 0:
+                                                message = brand_li.locator('span:has-text(".")').first.inner_text()
+                                        except Exception:
+                                            pass
+                                        
+                                        # Add to ads array
+                                        module_id, eid = _build_ids("Sponsored_Brand", "Brand_Card", brand_canon, f"bottom_card_{card_idx}", run_id, card_idx)
+                                        ads.append({
+                                            "id": eid,
+                                            "module_id": module_id,
+                                            "type": "Sponsored_Brand",
+                                            "subtype": "Brand_Card",
+                                            "brand": brand_name,
+                                            "brand_canonical": brand_canon,
+                                            "advertisers": [brand_canon] if brand_canon else [],
+                                            "image_path": f"Sponsored_Brand/{fname}",
+                                            "video_path": None,
+                                            "message": message,
+                                            "position": f"bottom_card_{card_idx}",
+                                            "store_url": store_url,
+                                            "metadata": {
+                                                "extraction_method": "store_link" if store_url else "image_alt"
+                                            },
+                                        })
+                                        log(f"sb-brands: individual card saved -> {fname}")
+                                except Exception as e:
+                                    log(f"sb-brands: individual card error -> {e}")
+                    except Exception as e:
+                        log(f"sb-brands: individual cards error -> {e}")
+                        
+                except Exception as e:
+                    log(f"sb-brands: detect error -> {e}")
+
+                # 3b) Sponsored Display Ads (with proper hydration wait)
+                try:
+                    log("display: detect")
+                    # Look for display ads by stable structure, avoiding hashed classes
+                    display_selectors = [
+                        'div[data-cel-widget*="MAIN-ADVERTISING"]',  # Stable widget pattern
+                        'div[data-cel-widget*="advertising"]:not([data-asin]):not([cel_widget_id*="sb-"]):not([cel_widget_id*="VIDEO_SINGLE_PRODUCT"])',
+                        'iframe[id*="ad"]',  # Stable iframe pattern
+                        'div[id*="desktop-ad-"]',  # Stable ID pattern
+                        'div:has([id*="ad-feedback-text"]):not([data-card-metrics-id*="sb-"])',  # Structure: ad feedback, not SB
+                        'div[data-asin]:has([id*="ad-feedback"]):has(iframe)',  # Structure: ASIN + ad feedback + iframe (display ads)
+                    ]
+                    
+                    all_display_ads = []
+                    for selector in display_selectors:
+                        try:
+                            display_elements = page.locator(selector).all()
+                            log(f"display: selector '{selector}' found {len(display_elements)} elements")
+                            for ad in display_elements:
+                                if ad.is_visible():
+                                    all_display_ads.append(ad)
+                        except Exception as e:
+                            log(f"display: selector error {selector} -> {e}")
+                    
+                    display_count = len(all_display_ads)
+                    log(f"display: found {display_count} total display ads")
+                    
+                    display_idx = 0
+                    for i, ad in enumerate(all_display_ads[:3]):  # Limit to 3 for performance
+                        if time_left() < 10:
+                            break
+                        if not ad.is_visible():
+                            continue
+                        
+                        try:
+                            # Debug: Check why ads are being skipped
+                            skip_reason = None
+                            
+                            # Skip if it's inside other ad types or is a sponsored product
+                            if ad.locator('xpath=ancestor::div[contains(@cel_widget_id,"sb-themed-collection") or contains(@data-card-metrics-id,"sb-themed-collection")]').count() > 0:
+                                skip_reason = "inside SB collection"
+                            elif ad.locator('xpath=ancestor::div[contains(@cel_widget_id,"VIDEO_SINGLE_PRODUCT")]').count() > 0:
+                                skip_reason = "inside SBV"
+                            elif ad.locator('xpath=ancestor::a[@data-elementid="sb-headline"]').count() > 0:
+                                skip_reason = "inside SB headline"
+                            elif ad.get_attribute('data-asin'):
+                                skip_reason = f"has data-asin: {ad.get_attribute('data-asin')}"
+                            else:
+                                # Skip if it's too large (likely main screenshot capture)
+                                try:
+                                    bbox = ad.bounding_box()
+                                    if bbox and (bbox['width'] > 1200 or bbox['height'] > 800):
+                                        skip_reason = f"too large: {bbox['width']}x{bbox['height']}"
+                                except Exception:
+                                    pass
+                            
+                            if skip_reason:
+                                log(f"display: skipping ad {i} -> {skip_reason}")
+                                continue
+                            
+                            brand_txt, brand_canon, message = _extract_brand_and_message(ad)
+                            
+                            # Extract product description from display ads (multiple possible structures)
+                            product_description = ""
+                            try:
+                                # Method 1: Standard product description div
+                                product_desc_el = ad.locator('div[data-testid="product-description"]')
+                                if product_desc_el.count() > 0:
+                                    product_description = product_desc_el.first.inner_text().strip()
+                                    log(f"display: found product description (testid) -> {product_description[:100]}...")
+                                
+                                # Method 2: Left rail ads with adLink-label span
+                                elif ad.locator('span[id="adLink-label"]').count() > 0:
+                                    adlink_el = ad.locator('span[id="adLink-label"]')
+                                    full_text = adlink_el.first.inner_text().strip()
+                                    # Extract product info (skip "Sponsored Ad." and "Product image." prefixes)
+                                    lines = [line.strip() for line in full_text.split('\n') if line.strip()]
+                                    # Find the product description (usually the longest line that's not price/action)
+                                    for line in lines:
+                                        if len(line) > 50 and not line.startswith(('Sponsored', 'Product', 'Shop', '$')) and not line.replace('.', '').isdigit():
+                                            product_description = line
+                                            break
+                                    log(f"display: found product description (adLink-label) -> {product_description[:100]}...")
+                                
+                                # Method 3: Fallback - look for any long descriptive text
+                                elif not product_description:
+                                    desc_candidates = ad.locator('span:has-text("|"), div:has-text("|")').all()
+                                    for candidate in desc_candidates:
+                                        text = candidate.inner_text().strip()
+                                        if len(text) > 50 and '|' in text:
+                                            product_description = text
+                                            log(f"display: found product description (fallback) -> {product_description[:100]}...")
+                                            break
+                                            
+                            except Exception as e:
+                                log(f"display: product description extraction error -> {e}")
+                            
+                            anchor = _module_anchor(ad)
+                            if anchor in seen_anchors:
+                                log(f"display: duplicate anchor skipped -> {anchor}")
+                                continue
+                            seen_anchors.add(anchor)
+                            
+                            fname = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Display", client, keyword, run_id, display_idx, ".png")
+                            fpath = os.path.join(output_dir, "Sponsored_Display", fname)
+                            
+                            # Extended hydration wait for display ads (they're often lazy-loaded)
+                            try:
+                                ad.scroll_into_view_if_needed()
+                                time.sleep(0.5)  # Initial wait
+                                
+                                # Wait for images and content to load with longer timeout
+                                ad_handle = ad.element_handle()
+                                page.evaluate("""
+                                  (el) => new Promise((resolve) => {
+                                    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+                                    (async () => {
+                                      let stable = 0; let last = 0;
+                                      // Longer wait for display ads (up to 3 seconds)
+                                      for (let i=0; i<10 && stable<3; i++) {
+                                        const imgs = Array.from(el.querySelectorAll('img')).filter(img => img.complete && img.naturalWidth>10).length;
+                                        const content = el.textContent.trim().length;
+                                        const current = imgs + Math.floor(content/100);
+                                        if (current === last) stable++; else stable = 0;
+                                        last = current; 
+                                        await sleep(300);
+                                      }
+                                      resolve(true);
+                                    })()
+                                  })
+                                """, ad_handle)
+                                
+                                # Additional wait for any remaining lazy content
+                                time.sleep(0.5)
+                                log(f"display: hydration wait complete for ad {display_idx}")
+                            except Exception as e:
+                                log(f"display: hydration wait error -> {e}")
+                            
+                            ad.screenshot(path=fpath, timeout=4000)
+                            
+                            # Add to ads array
+                            module_id, eid = _build_ids("Sponsored_Display", "Display_Ad", brand_canon, anchor, run_id, display_idx)
+                            ads.append({
+                                "id": eid,
+                                "module_id": module_id,
+                                "type": "Sponsored_Display",
+                                "subtype": "Display_Ad",
+                                "brand": brand_txt or "Unknown",
+                                "brand_canonical": brand_canon,
+                                "advertisers": [brand_canon] if brand_canon else [],
+                                "image_path": f"Sponsored_Display/{fname}",
+                                "video_path": None,
+                                "message": message,
+                                "product_description": product_description,
+                                "metadata": {
+                                    "has_product_description": bool(product_description)
+                                },
+                            })
+                            log(f"display: saved -> {fname}")
+                            display_idx += 1
+                        except Exception as e:
+                            log(f"display: screenshot fail -> {e}")
+                except Exception as e:
+                    log(f"display: detect error -> {e}")
+
+                # 4) Product Listings (Sponsored + Organic) - JSON data only, no screenshots
+                try:
+                    log("products: detect")
+                    product_listings = []
+                    
+                    # Find all product result containers
+                    product_containers = page.locator('div[data-component-type="s-search-result"]').all()
+                    log(f"products: found {len(product_containers)} total product containers")
+                    
+                    for container in product_containers:
+                        try:
+                            if not container.is_visible():
+                                continue
+                                
+                            # Extract basic product data
+                            asin = container.get_attribute('data-asin') or ''
+                            position_attr = container.get_attribute('data-csa-c-pos') or ''
+                            position = int(position_attr) if position_attr.isdigit() else 0
+                            
+                            if not asin:
+                                continue
+                            
+                            # Determine if sponsored using multiple reliable indicators
+                            is_sponsored = False
+                            
+                            # Method 1: Sponsored popover (most reliable for in-grid products)
+                            sponsored_popover = container.locator('[data-a-popover*="sp-info-popover"], [name*="sp-info-popover"]')
+                            if sponsored_popover.count() > 0:
+                                is_sponsored = True
+                            
+                            # Method 2: Sponsored label with specific classes
+                            elif container.locator('.puis-sponsored-label-text, .puis-label-popover').count() > 0:
+                                is_sponsored = True
+                            
+                            # Method 3: SSPA (Sponsored Product Ads) URLs
+                            elif container.locator('[href*="/sspa/click"]').count() > 0:
+                                is_sponsored = True
+                            
+                            # Method 4: Impression logger for sponsored products
+                            elif container.locator('[data-component-type="s-impression-logger"]').count() > 0:
+                                is_sponsored = True
+                            
+                            # Method 5: Generic sponsored text (fallback)
+                            elif container.locator('span:has-text("Sponsored")').count() > 0:
+                                is_sponsored = True
+                            
+                            # Extract product title
+                            product_title = ""
+                            title_selectors = [
+                                'h2[aria-label]',
+                                'h2 span',
+                                'a[aria-label] span'
+                            ]
+                            for selector in title_selectors:
+                                title_el = container.locator(selector)
+                                if title_el.count() > 0:
+                                    title_text = title_el.first.get_attribute('aria-label') or title_el.first.inner_text()
+                                    if title_text and len(title_text) > 10:
+                                        # Clean sponsored prefix from title
+                                        product_title = title_text.replace('Sponsored Ad - ', '').strip()
+                                        break
+                            
+                            # Extract rating
+                            rating = ""
+                            rating_el = container.locator('span[aria-hidden="true"].a-size-small.a-color-base')
+                            if rating_el.count() > 0:
+                                rating_text = rating_el.first.inner_text().strip()
+                                if rating_text and '.' in rating_text:
+                                    rating = rating_text
+                            
+                            # Extract review count
+                            review_count = ""
+                            review_selectors = [
+                                'a[aria-label*="ratings"] span',
+                                'span:has-text("K)")',
+                                'span:has-text("(")'
+                            ]
+                            for selector in review_selectors:
+                                review_el = container.locator(selector)
+                                if review_el.count() > 0:
+                                    review_text = review_el.first.inner_text().strip()
+                                    if '(' in review_text and ')' in review_text:
+                                        review_count = review_text
+                                        break
+                            
+                            # Extract badges using multiple stable data attributes
+                            badges = []
+                            
+                            # Method 1: Use stable data-csa-c-badge-text attribute
+                            badge_elements = container.locator('[data-csa-c-badge-text]').all()
+                            log(f"product: found {len(badge_elements)} badge elements with data-csa-c-badge-text for ASIN {asin}")
+                            for badge_el in badge_elements:
+                                badge_text = badge_el.get_attribute('data-csa-c-badge-text') or ''
+                                if badge_text and badge_text not in badges:
+                                    badges.append(badge_text)
+                                    log(f"product: added badge '{badge_text}' for ASIN {asin}")
+                            
+                            # Method 2: Amazon Badges (Allure, editorial badges, etc.)
+                            amazon_badge_elements = container.locator('[data-csa-c-content-id], [id*="BADGE"], span[aria-label*="Winner"], span[aria-label*="Choice"]').all()
+                            for badge_el in amazon_badge_elements:
+                                # Try content-id first (e.g., "ALLURE_BADGE")
+                                content_id = badge_el.get_attribute('data-csa-c-content-id') or ''
+                                if content_id and 'BADGE' in content_id:
+                                    # Convert content ID to readable format
+                                    badge_name = content_id.replace('_BADGE', '').replace('_', ' ').title()
+                                    if badge_name not in badges:
+                                        badges.append(badge_name)
+                                
+                                # Try aria-label for badge text (e.g., "Allure Winner")
+                                aria_label = badge_el.get_attribute('aria-label') or ''
+                                if aria_label and ('Winner' in aria_label or 'Choice' in aria_label):
+                                    if aria_label not in badges:
+                                        badges.append(aria_label)
+                            
+                            # Method 3: Rio badge components (Amazon's badge system)
+                            rio_badges = container.locator('.rio-badge-label, .rio-badge-component').all()
+                            for rio_el in rio_badges:
+                                rio_text = rio_el.inner_text().strip()
+                                # Remove info icon text and clean up
+                                if rio_text and len(rio_text) < 50:
+                                    rio_text = rio_text.split('\n')[0].strip()  # Take first line only
+                                    if rio_text and rio_text not in badges:
+                                        badges.append(rio_text)
+                            
+                            # Method 4: Only capture real badges, not product details
+                            real_badge_selectors = [
+                                'span:has-text("Amazon\'s Choice")',  # Amazon's Choice badge
+                                'span:has-text("Best Seller")',      # Best Seller badge
+                                'span:has-text("#1 Best Seller")',   # #1 Best Seller badge
+                                'span:has-text("Overall Pick")',     # Overall Pick badge
+                                'span:has-text("Climate Pledge Friendly")',  # Climate badge
+                                'span:has-text("Top Rated")',        # Top Rated badge
+                                '.a-badge-region span',              # Badge region spans
+                            ]
+                            
+                            # Only extract badges that are actual Amazon badges, not product details
+                            for selector in real_badge_selectors:
+                                try:
+                                    badge_elements = container.locator(selector).all()
+                                    for badge_el in badge_elements:
+                                        badge_text = badge_el.inner_text().strip()
+                                        
+                                        # Filter out product details (size, quantity, features)
+                                        if badge_text and len(badge_text) < 50 and badge_text not in badges:
+                                            # Skip product details patterns
+                                            skip_patterns = [
+                                                r'\d+(\.\d+)?\s*(fl\s*oz|ounce|count|piece|pack)',  # Size/quantity
+                                                r'pack\s+of\s+\d+',  # Pack of X
+                                                r'\d+\s*(fl\s*oz|ounce|count|piece)',  # Measurements
+                                                r'(anti-acne|acne prevention|fragrance free|hydrating|soothing)',  # Product features
+                                                r'(capsule|unscented|prescription required)',  # Product attributes
+                                            ]
+                                            
+                                            is_product_detail = False
+                                            for pattern in skip_patterns:
+                                                if re.search(pattern, badge_text.lower()):
+                                                    is_product_detail = True
+                                                    break
+                                            
+                                            if not is_product_detail:
+                                                badges.append(badge_text)
+                                                log(f"product: added real badge '{badge_text}' for ASIN {asin}")
+                                            else:
+                                                log(f"product: skipped product detail '{badge_text}' for ASIN {asin}")
+                                except Exception as e:
+                                    log(f"product: badge extraction error with selector {selector} -> {e}")
+                            
+                            log(f"product: final badge count for ASIN {asin}: {len(badges)} badges: {badges}")
+                            
+                            # Create product listing entry
+                            product_data = {
+                                "asin": asin,
+                                "position": position,
+                                "is_sponsored": is_sponsored,
+                                "product_title": product_title,
+                                "rating": rating,
+                                "review_count": review_count,
+                                "badges": badges,
+                                "listing_type": "sponsored_product" if is_sponsored else "organic_product"
+                            }
+                            
+                            product_listings.append(product_data)
+                            log(f"products: extracted -> ASIN: {asin}, Position: {position}, Sponsored: {is_sponsored}, Title: {product_title[:50]}...")
+                            
+                        except Exception as e:
+                            log(f"products: extraction error for container -> {e}")
+                    
+                    # Sort by position and add to ads array
+                    product_listings.sort(key=lambda x: x['position'])
+                    for product in product_listings:
+                        module_id, eid = _build_ids("Product_Listing", product['listing_type'], product['asin'], f"pos_{product['position']}", run_id, product['position'])
+                        ads.append({
+                            "id": eid,
+                            "module_id": module_id,
+                            "type": "Product_Listing",
+                            "subtype": product['listing_type'],
+                            "asin": product['asin'],
+                            "position": product['position'],
+                            "is_sponsored": product['is_sponsored'],
+                            "product_title": product['product_title'],
+                            "rating": product['rating'],
+                            "review_count": product['review_count'],
+                            "badges": product['badges'],
+                            "image_path": None,  # No screenshots for product listings
+                            "video_path": None,
+                            "metadata": {
+                                "badge_count": len(product['badges']),
+                                "has_rating": bool(product['rating']),
+                                "has_reviews": bool(product['review_count'])
+                            }
+                        })
+                    
+                    log(f"products: added {len(product_listings)} product listings to ads array")
+                    
+                except Exception as e:
+                    log(f"products: detect error -> {e}")
+
+                log("debug: essential ad detection complete")
+                
+                # Continue with remaining ad detection sections
+                # 4) Carousels - Dynamic detection using template pattern
+                try:
+                    log("car: detect")
+                    car_idx = 0
+                    
+                    # Find carousels using the actual HTML structure: s-searchgrid-carousel components
+                    carousel_containers = page.locator('span[data-component-type="s-searchgrid-carousel"]')
+                    carousel_count = carousel_containers.count()
+                    log(f"car: found {carousel_count} carousels using s-searchgrid-carousel selector")
+                    
+                    for carousel_idx in range(carousel_count):
+                        if time_left() < 20:
+                            log("car: budget low, break")
+                            break
+                        
+                        try:
+                            # Get the specific carousel container
+                            carousel_container = carousel_containers.nth(carousel_idx)
+                            
+                            # Extract the header text from aria-labelledby reference
+                            heading = "Unknown Carousel"
+                            try:
+                                # Look for aria-labelledby attribute to find the heading
+                                labelledby_element = carousel_container.locator('[aria-labelledby]').first
+                                if labelledby_element.count() > 0:
+                                    labelledby_id = labelledby_element.get_attribute('aria-labelledby')
+                                    if labelledby_id:
+                                        # Find the heading element by ID
+                                        heading_element = page.locator(f'#{labelledby_id}')
+                                        if heading_element.count() > 0:
+                                            heading = heading_element.inner_text().strip()
+                                            log(f"car: extracted header '{heading}' from carousel {carousel_idx} using aria-labelledby")
+                                        else:
+                                            log(f"car: heading element not found for ID '{labelledby_id}'")
+                                    else:
+                                        log(f"car: no aria-labelledby ID found for carousel {carousel_idx}")
+                                else:
+                                    log(f"car: no aria-labelledby attribute found for carousel {carousel_idx}")
+                            except Exception as e:
+                                log(f"car: header extraction error for carousel {carousel_idx} -> {e}")
+                            
+                            # Skip "Brands related to your search" as it's handled as individual sponsored brand cards
+                            if heading == "Brands related to your search":
+                                log(f"car: skipping '{heading}' - handled as individual brand cards")
+                                continue
+                            
+                            # Scroll into view
+                            carousel_container.scroll_into_view_if_needed()
+                            time.sleep(0.1)
+                            
+                            # Use the carousel container we already found (no need for complex fallback logic)
+                            container_el = carousel_container
+                            log(f"car: using s-searchgrid-carousel container for '{heading}'")
+                            
+                            # Take screenshot
+                            fname = _std_filename("amazon", "unknown", "Sponsored_Carousel", client, keyword, run_id, car_idx, ".png")
+                            fpath = os.path.join(output_dir, "Sponsored_Carousel", fname)
+                            container_el.screenshot(path=fpath, timeout=4000)
+                            
+                            # Add to ads array
+                            module_id, eid = _build_ids("Sponsored_Carousel", "Carousel", "unknown", f"carousel_{car_idx}", run_id, car_idx)
+                            ads.append({
+                                "id": eid,
+                                "module_id": module_id,
+                                "type": "Sponsored_Carousel",
+                                "subtype": "Carousel",
+                                "brand": "Unknown",
+                                "brand_canonical": "unknown",
+                                "advertisers": [],
+                                "header": heading,
+                                "image_path": f"Sponsored_Carousel/{fname}",
+                                "video_path": None,
+                                "message": heading,
+                                "metadata": {},
+                            })
+                            log(f"car: saved -> {fname}")
+                            car_idx += 1
+                                
+                        except Exception as e:
+                            log(f"car: carousel processing error for carousel {carousel_idx} -> {e}")
+                except Exception as e:
+                    log(f"car: detect error -> {e}")
+                
+                # Save HTML content
+                try:
+                    log("html: save")
+                    html_content = page.content()
+                    with open(html_path, "w", encoding="utf-8") as f:
+                        f.write(html_content)
+                    log(f"html: saved -> {html_path} exists={os.path.exists(html_path)} size={os.path.getsize(html_path) if os.path.exists(html_path) else 0}")
+                except Exception as e:
+                    log(f"html: save error -> {e}")
+
+                success = True
+                log("success: marked as True")
+            finally:
+                # Save tracing only if it was started
+                try:
+                    if tracing_enabled:
+                        trace_path = os.path.join(runs_dir, f"trace_{ts}.zip")
+                        bctx.tracing.stop(path=trace_path)
+                        log(f"trace: saved -> {trace_path} exists={os.path.exists(trace_path)} size={os.path.getsize(trace_path) if os.path.exists(trace_path) else 0}")
+                    else:
+                        log("trace: skipped (not enabled)")
                 except Exception as e:
                     log(f"trace: stop error -> {e}")
                 try:
@@ -569,11 +1639,14 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                 pass
 
             # Start tracing only if enabled
+            tracing_enabled = False
             try:
                 if os.environ.get("AMAZON_TRACE") == "1":
                     bctx.tracing.start(screenshots=True, snapshots=True, sources=False)
-            except Exception:
-                pass
+                    tracing_enabled = True
+                    log("trace: started")
+            except Exception as e:
+                log(f"trace: start error -> {e}")
 
             url = _search_url(keyword)
             log(f"navigate: {url}")
@@ -631,20 +1704,22 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                 log("main: prepare (hide sticky headers, scroll top)")
                 # Hide Amazon sticky headers/navs to avoid covering content (fast inline style injection)
                 try:
-                    page.evaluate(
-                        """
-                        (() => {
-                          try {
-                            const css = `#navbar,#nav-belt,#nav-main,#nav-progressive-subnav,header,[data-testid="header"],[class*="sticky" i],[data-sticky],[style*="position: sticky"],.sg-col-20-of-24 .s-desktop-width-max .s-desktop-toolbar,.s-desktop-toolbar .s-desktop-toolbar,.s-main-slot .s-no-outline .a-section.s-include-content-margin.s-border-bottom{display:none!important;visibility:hidden!important;}`;
-                            const st = document.createElement('style');
-                            st.type = 'text/css';
-                            st.textContent = css;
-                            document.head.appendChild(st);
-                          } catch(e) {}
-                          return true;
-                        })()
-                        """
-                    )
+                    log("main: injecting CSS to hide sticky headers")
+                    result = page.evaluate("""
+                    () => {
+                      try {
+                        const css = '#navbar,#nav-belt,#nav-main,#nav-progressive-subnav,header,[data-testid="header"],[class*="sticky" i],[data-sticky],[style*="position: sticky"],.sg-col-20-of-24 .s-desktop-width-max .s-desktop-toolbar,.s-desktop-toolbar .s-desktop-toolbar{display:none!important;visibility:hidden!important;}';
+                        const st = document.createElement('style');
+                        st.type = 'text/css';
+                        st.textContent = css;
+                        document.head.appendChild(st);
+                        return 'success';
+                      } catch(e) {
+                        return 'error: ' + e.message;
+                      }
+                    }
+                    """)
+                    log(f"main: CSS injection result -> {result}")
                 except Exception as css_err:
                     log(f"main: style inject error -> {css_err}")
                 # Ensure we are at the very top for consistent full-page shot
@@ -656,6 +1731,33 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         pass
                 except Exception:
                     pass
+                # Left-rail hydration probe before main screenshot
+                try:
+                    log("main: left-rail hydration probe")
+                    left_rail_ads = page.locator('div.s-left-ads-item img')
+                    if left_rail_ads.count() > 0:
+                        # Wait for first left-rail image to load
+                        try:
+                            left_rail_ads.first.wait_for(state="visible", timeout=2000)
+                            time.sleep(0.5)  # Brief settle time
+                        except Exception:
+                            pass
+                    log("main: hydration probe complete")
+                except Exception as e:
+                    log(f"main: hydration probe error -> {e}")
+                
+                # Wait for bottom content to fully hydrate before full-page screenshot
+                try:
+                    log("main: bottom hydration wait")
+                    # Scroll to bottom to trigger lazy loading, then back to top
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    time.sleep(1.0)  # Wait for bottom content to load
+                    page.evaluate("window.scrollTo(0, 0)")
+                    time.sleep(0.5)  # Brief settle time
+                    log("main: bottom hydration complete")
+                except Exception as e:
+                    log(f"main: bottom hydration error -> {e}")
+                
                 log("main: screenshot")
                 main_name = _std_filename("amazon", "unknown", "Main", client, keyword, run_id, 0, ".png")
                 main_path = os.path.join(output_dir, "Main", main_name)
@@ -664,138 +1766,35 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
             except Exception as e:
                 log(f"main: fail -> {e}")
 
-            # 2) Sponsored Brand Video (SBV)
-            try:
-                log("sbv: detect")
-                # SBV has cel_widget_id containing "VIDEO_SINGLE_PRODUCT"
-                sbv_root = page.locator('div[cel_widget_id*="VIDEO_SINGLE_PRODUCT"]').first
-                if sbv_root.count() > 0 and sbv_root.is_visible():
-                    log(f"sbv: found VIDEO_SINGLE_PRODUCT widget")
-                    # Brand and message
-                    brand_txt, brand_canon, message = _extract_brand_and_message(sbv_root)
-                    adv_for_name = brand_canon or "unknown"
-                    fname = _std_filename("amazon", adv_for_name, "Sponsored_Brand_Video", client, keyword, run_id, 0, ".png")
-                    fpath = os.path.join(output_dir, "Sponsored_Brand_Video", fname)
-                    try:
-                        # Hide sticky headers before SBV screenshot (same as main and other ad types)
-                        try:
-                            page.evaluate(
-                                """
-                                (() => {
-                                  try {
-                                    const css = `#navbar,#nav-belt,#nav-main,#nav-progressive-subnav,header,[data-testid="header"],[class*="sticky" i],[data-sticky],[style*="position: sticky"],.sg-col-20-of-24 .s-desktop-width-max .s-desktop-toolbar,.s-desktop-toolbar .s-desktop-toolbar,.s-main-slot .s-no-outline .a-section.s-include-content-margin.s-border-bottom{display:none!important;visibility:hidden!important;}`;
-                                    const st = document.createElement('style');
-                                    st.type = 'text/css';
-                                    st.textContent = css;
-                                    document.head.appendChild(st);
-                                  } catch(e) {}
-                                  return true;
-                                })()
-                                """
-                            )
-                        except Exception as css_err:
-                            log(f"sbv: style inject error -> {css_err}")
-                        # Scroll SBV into view and wait
-                        try:
-                            sbv_root.scroll_into_view_if_needed()
-                            time.sleep(0.2)
-                        except Exception:
-                            pass
-                        # Freeze animations (like other ad types)
-                        try:
-                            page.evaluate("""
-                                () => {
-                                    const style = document.createElement('style');
-                                    style.textContent = '* { transition: none !important; animation: none !important; }';
-                                    document.head.appendChild(style);
-                                }
-                            """)
-                        except Exception:
-                            pass
-                        # Flush layout
-                        try:
-                            page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
-                        except Exception:
-                            pass
-                        sbv_root.screenshot(path=fpath, timeout=5000)
-                        log(f"sbv: saved -> {fpath} exists={os.path.exists(fpath)}")
-                        video_rel = None
-                        try:
-                            sources = []
-                            try:
-                                sources += [s.get_attribute('src') for s in sbv_root.locator('video source').element_handles()]
-                            except Exception:
-                                pass
-                            try:
-                                v = sbv_root.locator('video').first
-                                if v.count() > 0:
-                                    s = v.get_attribute('src')
-                                    if s:
-                                        sources.append(s)
-                            except Exception:
-                                pass
-                            try:
-                                dv = sbv_root.get_attribute('data-video-url')
-                                if dv:
-                                    sources.append(dv)
-                            except Exception:
-                                pass
-                            sources = [u for u in (sources or []) if u]
-                            mp4 = next((u for u in sources if '.mp4' in u.lower()), None)
-                            if mp4:
-                                mp4_name = os.path.splitext(fname)[0] + ".mp4"
-                                mp4_path = os.path.join(output_dir, "Sponsored_Brand_Video", mp4_name)
-                                r = requests.get(mp4, timeout=10)
-                                if r.ok:
-                                    with open(mp4_path, "wb") as vf:
-                                        vf.write(r.content)
-                                    video_rel = f"Sponsored_Brand_Video/{mp4_name}"
-                                    log(f"sbv: mp4 saved -> {mp4_path}")
-                        except Exception as e:
-                            log(f"sbv: mp4 error -> {e}")
-                        # IDs
-                        anchor = _module_anchor(sbv_root)
-                        if anchor in seen_anchors:
-                            log(f"sbv: duplicate anchor skipped -> {anchor}")
-                        else:
-                            seen_anchors.add(anchor)
-                            module_id, eid = _build_ids("Sponsored_Brand_Video", "Video_Single_Product", brand_canon, anchor, run_id, 0)
-                            ads.append({
-                                "id": eid,
-                                "module_id": module_id,
-                                "type": "Sponsored_Brand_Video",
-                                "subtype": "Video_Single_Product",
-                                "brand": brand_txt or "Unknown",
-                                "brand_canonical": brand_canon,
-                                "advertisers": [brand_canon] if brand_canon else [],
-                                "image_path": f"Sponsored_Brand_Video/{fname}",
-                                "video_path": video_rel,
-                                "message": message,
-                                "metadata": {},
-                            })
-                        log(f"sbv: ad added {fname} module_id={module_id}")
-                    except Exception as e:
-                        log(f"sbv: screenshot fail -> {e}")
-                else:
-                    log("sbv: none")
-            except Exception as e:
-                log(f"sbv: detect error -> {e}")
+            # 2) Sponsored Brand Video (SBV) - REMOVED DUPLICATE SECTION
+            # Note: SBV detection is already handled comprehensively in the first section above
 
             # 3) Carousels ("Brands related to your search")
             try:
                 log("car: detect")
                 car_idx = 0
                 for heading in CAROUSEL_HEADINGS:
-                    # Amazon uses span[role=heading] for these carousels, not h2
-                    h = page.locator(f"span[role=heading]:has-text(\"{heading}\")").first
+                    # Method 1: Try stable ID pattern first (most reliable)
+                    h = page.locator(f"h2[id*='loom-desktop-inline-slot']:has-text('{heading}')").first
                     if h.count() == 0 or not h.is_visible():
-                        # Fallback: try h2 variants
-                        h = page.locator(f"h2:has-text(\"{heading}\")").first
+                        # Method 2: Amazon uses span[role=heading] for these carousels
+                        h = page.locator(f"span[role=heading]:has-text(\"{heading}\")").first
                         if h.count() == 0 or not h.is_visible():
-                            h = page.locator(f"h2 span:has-text(\"{heading}\")").first
+                            # Method 3: Try more flexible text matching (case insensitive)
+                            h = page.locator(f"h2:text-is(\"{heading}\")").first
                             if h.count() == 0 or not h.is_visible():
-                                log(f"car: heading not found -> {heading}")
-                                continue
+                                h = page.locator(f"h2 span:text-is(\"{heading}\")").first
+                                if h.count() == 0 or not h.is_visible():
+                                    # Method 4: Try partial text matching
+                                    h = page.locator(f"h2:has-text(\"{heading}\")").first
+                                    if h.count() == 0 or not h.is_visible():
+                                        h = page.locator(f"h2 span:has-text(\"{heading}\")").first
+                                        if h.count() == 0 or not h.is_visible():
+                                            # Method 5: Try aria-label matching
+                                            h = page.locator(f"[aria-label*=\"{heading}\"]").first
+                                            if h.count() == 0 or not h.is_visible():
+                                                log(f"car: heading not found with all methods -> {heading}")
+                                                continue
                     # Budget check
                     if time_left() < 20:
                         log("car: budget low, break")
@@ -803,34 +1802,43 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     log(f"car: found heading -> {heading}")
                     container_el = None
                     try:
-                        # Scroll heading into view first (Instacart pattern)
+                        # Scroll heading into view first
                         try:
                             h.scroll_into_view_if_needed()
                             time.sleep(0.1)
                         except Exception:
                             pass
                         
-                        heading_el = h.element_handle()
-                        handle = page.evaluate_handle(
-                            """(el) => {
-                                let n = el;
-                                const enough = (node) => {
-                                    try {
-                                        const imgs = node.querySelectorAll('img.s-image').length;
-                                        const cards = node.querySelectorAll('div[data-component-type=\"s-search-result\"]').length;
-                                        return imgs >= 8 || cards >= 8;
-                                    } catch(e) { return false; }
-                                };
-                                while (n && n.parentElement) {
-                                    if (enough(n)) return n;
-                                    n = n.parentElement;
-                                }
-                                return el;
-                            }""",
-                            heading_el,
-                        )
-                        container_el = handle.as_element()
-                    except Exception:
+                        # Method 1: Try to find the complete carousel container (includes header + items)
+                        carousel_container = h.locator('xpath=ancestor::span[@data-component-type="s-searchgrid-carousel"][1]')
+                        if carousel_container.count() > 0:
+                            container_el = carousel_container.first
+                            log(f"car: using complete carousel container for {heading}")
+                        else:
+                            # Method 2: Fallback to original logic for finding container with enough content
+                            heading_el = h.element_handle()
+                            handle = page.evaluate_handle(
+                                """(el) => {
+                                    let n = el;
+                                    const enough = (node) => {
+                                        try {
+                                            const imgs = node.querySelectorAll('img.s-image').length;
+                                            const cards = node.querySelectorAll('div[data-component-type=\"s-search-result\"]').length;
+                                            return imgs >= 8 || cards >= 8;
+                                        } catch(e) { return false; }
+                                    };
+                                    while (n && n.parentElement) {
+                                        if (enough(n)) return n;
+                                        n = n.parentElement;
+                                    }
+                                    return el;
+                                }""",
+                                heading_el,
+                            )
+                            container_el = handle.as_element()
+                            log(f"car: using fallback container detection for {heading}")
+                    except Exception as e:
+                        log(f"car: container detection error -> {e}")
                         container_el = None
 
                     # Products inside carousel
@@ -903,12 +1911,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                                 with open(central_full, 'wb') as fimg:
                                                     fimg.write(r.content)
                                                 image_path = str(central_full.relative_to(project_root))
-                                                try:
-                                                    client_full = os.path.join(output_dir, "ASIN_Images", file_name)
-                                                    if not os.path.exists(client_full):
-                                                        shutil.copyfile(central_full, client_full)
-                                                except Exception:
-                                                    pass
+                                                # Central ASIN DB only - no client copying
                                         except Exception:
                                             pass
                             except Exception:
@@ -931,7 +1934,12 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         log(f"car: products parse error -> {e}")
 
                     # Brand and message (if any) with classification & dedupe
-                    root_loc = root_el if container_el else h.locator("xpath=ancestor::div[1]")
+                    # Ensure root_el and container_el are available (fix carousel bug)
+                    try:
+                        root_loc = root_el if container_el else h.locator("xpath=ancestor::div[1]")
+                    except NameError:
+                        # Fallback if root_el/container_el not defined due to products section error
+                        root_loc = h.locator("xpath=ancestor::div[1]")
                     brand_txt, brand_canon, message = _extract_brand_and_message(root_loc)
                     anchor = _module_anchor(root_loc)
                     if anchor in seen_anchors:
@@ -1018,7 +2026,11 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
             # 3b) Sponsored Brand Themed Collections (direct detection)
             try:
                 log("sb-themed: detect")
-                themed = page.locator('div[cel_widget_id^="sb-themed-collection-"]')
+                # v1 (cel_widget_id) and v2 (data-card-metrics-id) themed collections
+                themed = page.locator(
+                    'div[cel_widget_id^="sb-themed-collection-"], '
+                    'div[data-card-metrics-id*="sb-themed-collection"]'
+                )
                 tcount = themed.count()
                 for i in range(tcount):
                     if time_left() < 15:
@@ -1028,7 +2040,9 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     if not el.is_visible():
                         continue
                     brand_txt, brand_canon, message = _extract_brand_and_message(el)
-                    subtype = "Top" if "top-slot" in (_get_attr(el, 'cel_widget_id') or '') else "Inline"
+                    raw_cel = _get_attr(el, 'cel_widget_id') or ''
+                    raw_metrics = _get_attr(el, 'data-card-metrics-id') or ''
+                    subtype = "Top" if ("top-slot" in raw_cel or "top" in raw_metrics) else "Inline"
                     adv_for_name = brand_canon or "unknown"
                     fname = _std_filename("amazon", adv_for_name, "Sponsored_Brand", client, keyword, run_id, i, ".png")
                     fpath = os.path.join(output_dir, "Sponsored_Brand", fname)
@@ -1070,12 +2084,35 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
                         except Exception:
                             pass
+                        
+                        # Container signature dedupe
+                        container_sig = _get_container_signature(el)
+                        if container_sig and container_sig in captured_containers:
+                            log(f"sb-themed: duplicate container skipped -> {container_sig}")
+                            continue
+                        
+                        # Geometric overlap check
+                        try:
+                            bbox = el.bounding_box()
+                            if bbox and _check_bbox_overlap(bbox, captured_bboxes):
+                                log(f"sb-themed: overlapping bbox skipped -> {bbox}")
+                                continue
+                        except Exception as e:
+                            log(f"sb-themed: bbox check error -> {e}")
+                            bbox = None
+                        
                         el.screenshot(path=fpath, timeout=4000)
                         anchor = _module_anchor(el)
                         if anchor in seen_anchors:
                             log(f"sb-themed: duplicate anchor skipped -> {anchor}")
                             continue
                         seen_anchors.add(anchor)
+                        
+                        # Record successful captures
+                        if container_sig:
+                            captured_containers.add(container_sig)
+                        if bbox:
+                            captured_bboxes.append(bbox)
                         module_id, eid = _build_ids("Sponsored_Brand", f"Themed_Collection_{subtype}", brand_canon, anchor, run_id, i)
                         if module_id in captured_modules:
                             log(f"sb-themed: duplicate module skipped -> {module_id}")
@@ -1117,22 +2154,9 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                             ext = os.path.splitext(urlparse(src).path)[1] or ".jpg"
                                         except Exception:
                                             ext = ".jpg"
-                                        file_name = (asin or f"tc_{i}_{j}") + ext
-                                        central_full = central_asin_dir / file_name
-                                        try:
-                                            r = requests.get(src, timeout=10)
-                                            if r.ok:
-                                                with open(central_full, 'wb') as fimg:
-                                                    fimg.write(r.content)
-                                                image_path = str(central_full.relative_to(project_root))
-                                                try:
-                                                    client_full = os.path.join(output_dir, "ASIN_Images", file_name)
-                                                    if not os.path.exists(client_full):
-                                                        shutil.copyfile(central_full, client_full)
-                                                except Exception:
-                                                    pass
-                                        except Exception:
-                                            pass
+                                        # Skip image download for sb-themed performance (60-90s savings)
+                                        # Only store the URL for reference
+                                        image_path = None
                             except Exception:
                                 pass
                             try:
@@ -1171,6 +2195,110 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         log(f"sb-themed: screenshot fail -> {e}")
             except Exception as e:
                 log(f"sb-themed: detect error -> {e}")
+
+            # 3b2) Sponsored Brand Headlines (v2 inline modules)
+            try:
+                # Quick visibility debug for v2
+                try:
+                    v2_count = page.locator('div[data-card-metrics-id*="sb-themed-collection"] a[data-elementid="sb-headline"]').count()
+                    log(f"sb-headline(v2 themed) count = {v2_count}")
+                except Exception:
+                    pass
+                
+                log("sb-headline: detect")
+                headlines = page.locator('a[data-elementid="sb-headline"]')
+                hcount = headlines.count()
+                log(f"sb-headline: found {hcount} headlines")
+                
+                for i in range(hcount):
+                    link = headlines.nth(i)
+                    if not link.is_visible():
+                        continue
+                    
+                    # Prefer the v2 wrapper (CardInstance…), then v2 metrics, then legacy sponsored, then nearest div
+                    container = link.locator("xpath=ancestor::div[starts-with(@id,'CardInstance')][1]")
+                    if container.count() == 0:
+                        container = link.locator("xpath=ancestor::div[contains(@data-card-metrics-id,'sb-themed-collection')][1]")
+                    if container.count() == 0:
+                        container = link.locator("xpath=ancestor::div[contains(@cel_widget_id,'sponsored') or contains(@data-cel-widget,'sponsored')][1]")
+                    if container.count() == 0:
+                        container = link.locator("xpath=ancestor::div[1]")
+                    
+                    if container.count() == 0:
+                        log(f"sb-headline: no container found for headline {i}")
+                        continue
+                    
+                    brand_txt, brand_canon, message = _extract_brand_and_message(container)
+                    
+                    # Container signature dedupe (check first - most reliable)
+                    container_sig = _get_container_signature(container)
+                    if container_sig and container_sig in captured_containers:
+                        log(f"sb-headline: duplicate container skipped -> {container_sig}")
+                        continue
+                    
+                    # Geometric overlap check
+                    try:
+                        bbox = container.bounding_box()
+                        if bbox and _check_bbox_overlap(bbox, captured_bboxes):
+                            log(f"sb-headline: overlapping bbox skipped -> {bbox}")
+                            continue
+                    except Exception as e:
+                        log(f"sb-headline: bbox check error -> {e}")
+                        bbox = None
+                    
+                    anchor = _module_anchor(container)
+                    if anchor in seen_anchors:
+                        log(f"sb-headline: duplicate anchor skipped -> {anchor}")
+                        continue
+                    seen_anchors.add(anchor)
+                    
+                    adv_for_name = brand_canon or "unknown"
+                    fname = _std_filename("amazon", adv_for_name, "Sponsored_Brand", client, keyword, run_id, i, ".png")
+                    fpath = os.path.join(output_dir, "Sponsored_Brand", fname)
+                    
+                    try:
+                        # Scroll into view and freeze animations
+                        try:
+                            container.scroll_into_view_if_needed()
+                            time.sleep(0.2)
+                        except Exception:
+                            pass
+                        try:
+                            page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+                        except Exception:
+                            pass
+                        
+                        container.screenshot(path=fpath, timeout=4000)
+                        
+                        # Record successful captures
+                        if container_sig:
+                            captured_containers.add(container_sig)
+                        if bbox:
+                            captured_bboxes.append(bbox)
+                        module_id, eid = _build_ids("Sponsored_Brand", "Headline", brand_canon, anchor, run_id, i)
+                        if module_id in captured_modules:
+                            log(f"sb-headline: duplicate module skipped -> {module_id}")
+                            continue
+                        captured_modules.add(module_id)
+                        
+                        ads.append({
+                            "id": eid,
+                            "module_id": module_id,
+                            "type": "Sponsored_Brand",
+                            "subtype": "Headline",
+                            "brand": brand_txt or "Unknown",
+                            "brand_canonical": brand_canon,
+                            "advertisers": [brand_canon] if brand_canon else [],
+                            "image_path": f"Sponsored_Brand/{fname}",
+                            "video_path": None,
+                            "message": message,
+                            "metadata": {},
+                        })
+                        log(f"sb-headline: saved -> {fpath} module_id={module_id}")
+                    except Exception as e:
+                        log(f"sb-headline: screenshot fail -> {e}")
+            except Exception as e:
+                log(f"sb-headline: detect error -> {e}")
 
             # 3c) Sponsored Display (Left rail / Bottom)
             # Left rail: .s-left-ads-item contains the outer wrapper, but the ad is .AdHolder inside it
@@ -1274,28 +2402,20 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                 for i in range(all_adholders.count()):
                     ad = all_adholders.nth(i)
                     # Skip if inside left rail
-                    try:
-                        parent_left = ad.locator('xpath=ancestor::div[contains(@class, "s-left-ads-item")]')
-                        if parent_left.count() > 0:
-                            continue
-                    except Exception:
-                        pass
-                    # Skip if inside Sponsored Brand themed collection (has cel_widget_id with sb-themed)
-                    try:
-                        parent_sb = ad.locator('xpath=ancestor::div[contains(@cel_widget_id, "sb-themed-collection")]')
-                        if parent_sb.count() > 0:
-                            log(f"display: bottom skipped - inside SB themed collection")
-                            continue
-                    except Exception:
-                        pass
+                    if ad.locator('xpath=ancestor::div[contains(@class,"s-left-ads-item")]').count() > 0:
+                        continue
+                    # Skip if inside sb-headline
+                    if ad.locator('xpath=ancestor::a[@data-elementid="sb-headline"]').count() > 0:
+                        continue
+                    # Skip if inside Sponsored Brand themed collection (v1 + v2)
+                    if ad.locator('xpath=ancestor::div[contains(@cel_widget_id,"sb-themed-collection") or contains(@data-card-metrics-id,"sb-themed-collection")]').count() > 0:
+                        continue
+                    # Skip if inside SBV
+                    if ad.locator('xpath=ancestor::div[contains(@cel_widget_id,"VIDEO_SINGLE_PRODUCT") or contains(@data-cel-widget,"VIDEO_SINGLE_PRODUCT")]').count() > 0:
+                        continue
                     # Skip if it's actually an in-grid search result (has data-component-type="s-search-result")
-                    try:
-                        parent_search = ad.locator('xpath=ancestor::div[@data-component-type="s-search-result"]')
-                        if parent_search.count() > 0:
-                            log(f"display: bottom skipped - in-grid search result")
-                            continue
-                    except Exception:
-                        pass
+                    if ad.locator('xpath=ancestor::div[@data-component-type="s-search-result"]').count() > 0:
+                        continue
                     bottom_ads.append(ad)
                     if len(bottom_ads) >= MAX_BOTTOM_DISPLAY:
                         break
@@ -1472,13 +2592,8 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                     # Set path regardless of whether we just downloaded
                                     if central_full.exists():
                                         img_path_rel = str(central_full.relative_to(project_root))
-                                        try:
-                                            client_full = os.path.join(output_dir, "ASIN_Images", file_name)
-                                            if not os.path.exists(client_full):
-                                                shutil.copyfile(central_full, client_full)
-                                            client_mirror_rel = f"ASIN_Images/{file_name}"
-                                        except Exception:
-                                            pass
+                                        # Central ASIN DB only - no client copying
+                                        client_mirror_rel = None
                                         log(f"sp: asin image -> {central_full} (cached={central_full.exists()})")
                                     else:
                                         log(f"sp: asin download failed for {asin}")
@@ -1604,11 +2719,14 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
             except Exception as e2:
                 log(f"html: save error (exception path) -> {e2}")
         finally:
-            # Save tracing
+            # Save tracing only if it was started
             try:
-                trace_path = os.path.join(runs_dir, f"trace_{ts}.zip")
-                bctx.tracing.stop(path=trace_path)
-                log(f"trace: saved -> {trace_path} exists={os.path.exists(trace_path)} size={os.path.getsize(trace_path) if os.path.exists(trace_path) else 0}")
+                if tracing_enabled:
+                    trace_path = os.path.join(runs_dir, f"trace_{ts}.zip")
+                    bctx.tracing.stop(path=trace_path)
+                    log(f"trace: saved -> {trace_path} exists={os.path.exists(trace_path)} size={os.path.getsize(trace_path) if os.path.exists(trace_path) else 0}")
+                else:
+                    log("trace: skipped (not enabled)")
             except Exception as e:
                 log(f"trace: stop error -> {e}")
             try:

@@ -430,11 +430,11 @@ class KeywordInputApp:
         paths_frame.columnconfigure(1, weight=1)
 
         ttk.Label(paths_frame, text="Profile dir:", style='TLabel').grid(row=0, column=0, sticky="w", pady=(0,5))
-        self.profile_dir_var = tk.StringVar(value=os.path.expanduser("~/ChromeProfiles/walmart"))
+        self.profile_dir_var = tk.StringVar(value="<auto: retailer-specific>")
         ttk.Entry(paths_frame, textvariable=self.profile_dir_var, width=50).grid(row=1, column=0, sticky="ew", padx=(0,10))
 
         ttk.Label(paths_frame, text="Output root:", style='TLabel').grid(row=0, column=1, sticky="w", pady=(0,5))
-        self.output_root_var = tk.StringVar(value=os.path.expanduser("~/Documents/Amazon_Scrape/output/walmart"))
+        self.output_root_var = tk.StringVar(value="<auto: retailer-specific>")
         ttk.Entry(paths_frame, textvariable=self.output_root_var, width=50).grid(row=1, column=1, sticky="ew")
 
         ttk.Checkbutton(debug_frame, text="Open run folder when done", variable=self.debug_vars['open_run_folder']).grid(row=2, column=0, columnspan=2, sticky="w", pady=(5,0))
@@ -955,8 +955,14 @@ class KeywordInputApp:
             ctx.debug = None
 
         # Profile dir (do NOT add /Default; PW/Chrome will manage Default inside)
-        ctx.profile_dir = os.path.expanduser(self.profile_dir_var.get().strip())
-        os.environ["WALMART_PROFILE_DIR"] = ctx.profile_dir  # optional: legacy paths still read env
+        # Only use debug profile override if it's not the default placeholder
+        debug_profile = self.profile_dir_var.get().strip()
+        if debug_profile and not debug_profile.startswith("<auto:"):
+            ctx.profile_dir = os.path.expanduser(debug_profile)
+            # Set environment variable for the specific retailer, not just walmart
+            env_var = f"{retailer_slug.upper()}_PROFILE_DIR"
+            os.environ[env_var] = ctx.profile_dir
+        # else: keep the profile_dir that was already set based on retailer-specific logic above
         
         output_dir = ctx.output_dir  # keep your existing variable name for reuse
         runs_dir = ctx.runs_dir

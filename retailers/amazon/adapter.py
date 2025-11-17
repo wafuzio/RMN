@@ -19,8 +19,13 @@ class AmazonAdapter(RetailerAdapter):
         # ctx is RunContext from your framework
         from playwright.sync_api import sync_playwright
         p = sync_playwright().start()
+        # Ensure Amazon uses its own profile, not walmart
+        amazon_profile = os.path.expanduser("~/ChromeProfiles/amazon")
+        profile_path = ctx.profile_dir or os.path.join(ctx.base_dir, "profiles", "amazon")
+        if "walmart" in profile_path.lower():
+            profile_path = amazon_profile
         browser_ctx = p.chromium.launch_persistent_context(
-            user_data_dir=ctx.profile_dir or os.path.join(ctx.base_dir, "profiles", "amazon"),
+            user_data_dir=profile_path,
             channel="chrome",
             headless=True,
             viewport={"width": 1400, "height": 900},
