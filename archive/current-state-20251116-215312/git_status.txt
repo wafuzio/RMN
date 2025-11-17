@@ -1,0 +1,88 @@
+On branch main
+Your branch is ahead of 'origin/main' by 2 commits.
+  (use "git push" to publish your local commits)
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	deleted:    --output-dir/ASIN_Images/B00L3EOVYI.jpg
+	deleted:    --output-dir/ASIN_Images/B00VO3NP3Q.jpg
+	deleted:    --output-dir/ASIN_Images/B00W1WLV1W.jpg
+	deleted:    --output-dir/ASIN_Images/B07BJD5S6W.jpg
+	deleted:    --output-dir/ASIN_Images/B07GCSQXT7.jpg
+	deleted:    --output-dir/ASIN_Images/B07HKPMDCG.jpg
+	deleted:    --output-dir/ASIN_Images/B08P268MJR.jpg
+	deleted:    --output-dir/ASIN_Images/B09WMBJDVX.jpg
+	deleted:    --output-dir/ASIN_Images/B0B7PJPLGH.jpg
+	deleted:    --output-dir/ASIN_Images/B0BLYFJ191.jpg
+	deleted:    --output-dir/ASIN_Images/B0CG2JV9LG.jpg
+	deleted:    --output-dir/ASIN_Images/B0CHFTG8NX.jpg
+	deleted:    --output-dir/ASIN_Images/B0CYVV9HH5.jpg
+	deleted:    --output-dir/ASIN_Images/B0DHJS9CK8.jpg
+	deleted:    --output-dir/ASIN_Images/B0DZ35JHQF.jpg
+	deleted:    --output-dir/ASIN_Images/B0F22BVT4N.jpg
+	deleted:    --output-dir/ASIN_Images/B0F7HNY3NX.jpg
+	deleted:    --output-dir/ASIN_Images/B0FF59F7DN.jpg
+	deleted:    --output-dir/ASIN_Images/B0G1LJT4TM.jpg
+	deleted:    --output-dir/Main/amazon__unknown__Main__--output-dir__proactiv__D2025-11-14_T11-58.00_0.png
+	deleted:    --output-dir/Main/amazon__unknown__Main__--output-dir__proactiv__D2025-11-14_T15-58.00_0.png
+	deleted:    --output-dir/Main/amazon__unknown__Main__--output-dir__sour_cream__D2025-11-13_T11-59.00_0.png
+	deleted:    --output-dir/Main/amazon__unknown__Main__--output-dir__sour_cream__D2025-11-14_T08-58.00_0.png
+	deleted:    --output-dir/Sponsored_Brand/amazon__proactiv__Sponsored_Brand__--output-dir__proactiv__D2025-11-14_T11-58.00_0.png
+	deleted:    --output-dir/Sponsored_Brand/amazon__proactiv__Sponsored_Brand__--output-dir__proactiv__D2025-11-14_T15-58.00_0.png
+	deleted:    --output-dir/Sponsored_Carousel/amazon__unknown__Sponsored_Carousel__--output-dir__proactiv__D2025-11-14_T15-58.00_0.png
+	deleted:    --output-dir/Sponsored_Display/amazon__proactiv__Sponsored_Display__--output-dir__proactiv__D2025-11-14_T11-58.00_0.png
+	deleted:    --output-dir/Sponsored_Display/amazon__proactiv__Sponsored_Display__--output-dir__proactiv__D2025-11-14_T15-58.00_0.png
+	deleted:    --output-dir/Sponsored_Display/amazon__unknown__Sponsored_Display__--output-dir__proactiv__D2025-11-14_T11-58.00_0.png
+	deleted:    --output-dir/Sponsored_Display/amazon__unknown__Sponsored_Display__--output-dir__proactiv__D2025-11-14_T11-58.00_1.png
+	deleted:    --output-dir/Sponsored_Display/amazon__unknown__Sponsored_Display__--output-dir__proactiv__D2025-11-14_T15-58.00_0.png
+	deleted:    --output-dir/Sponsored_Display/amazon__unknown__Sponsored_Display__--output-dir__proactiv__D2025-11-14_T15-58.00_1.png
+	deleted:    --output-dir/Sponsored_Display/amazon__unknown__Sponsored_Display__--output-dir__sour_cream__D2025-11-14_T08-58.00_0.png
+	deleted:    --output-dir/Sponsored_Display/amazon__unknown__Sponsored_Display__--output-dir__sour_cream__D2025-11-14_T08-58.00_1.png
+	deleted:    --output-dir/runs/run_results_amazon_--output-dir_20251113_085800.json
+	deleted:    --output-dir/runs/run_results_amazon_--output-dir_20251113_115900.json
+	deleted:    --output-dir/runs/search_results_amazon_--output-dir_20251113_085800.html
+	deleted:    --output-dir/runs/search_results_amazon_--output-dir_20251113_115900.html
+	deleted:    --output-dir/runs/trace_20251113_085800.zip
+	deleted:    --output-dir/runs/trace_20251113_115800.zip
+	deleted:    --output-dir/runs/trace_20251113_115900.zip
+	modified:   amazon_search_and_capture.py
+	modified:   config/brands.json
+	modified:   instacart_search_and_capture.py
+	modified:   keyword_input.py
+	modified:   kroger_search_and_capture.py
+	modified:   output/client_history.json
+	modified:   retailers/amazon/adapter.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	--output-dir/Main/amazon__unknown__Main__--output-dir__proactiv__D2025-11-16_T15-58.00_0.png
+	--output-dir/Main/amazon__unknown__Main__--output-dir__proactiv__D2025-11-16_T15-59.00_0.png
+	--output-dir/Main/amazon__unknown__Main__--output-dir__proactiv__D2025-11-16_T16-01.00_0.png
+	--output-dir/Sponsored_Brand_Video/
+	amazon_search_and_capture broken but better selectors.py
+	amazon_search_and_capture old working.py
+	archive/
+	assets/amazon/ASIN_Images/B00005IBX9.jpg
+	assets/amazon/ASIN_Images/B00MVWGQX0.jpg
+	assets/amazon/ASIN_Images/B01018G7BG.jpg
+	assets/amazon/ASIN_Images/B01GJOMWVA.jpg
+	assets/amazon/ASIN_Images/B01N6T5QNO.jpg
+	assets/amazon/ASIN_Images/B07RB7XYMW.jpg
+	assets/amazon/ASIN_Images/B0896NP59N.jpg
+	assets/amazon/ASIN_Images/B08R3NCG2J.jpg
+	assets/amazon/ASIN_Images/B095HZYNFM.jpg
+	assets/amazon/ASIN_Images/B0BG2V5PKV.jpg
+	assets/amazon/ASIN_Images/B0BHXK8NTX.jpg
+	assets/amazon/ASIN_Images/B0C2JK9Y8V.jpg
+	assets/amazon/ASIN_Images/B0D3HNBS4W.jpg
+	assets/amazon/ASIN_Images/B0DDPCF1YQ.jpg
+	assets/amazon/ASIN_Images/B0DJFBF3SH.jpg
+	assets/amazon/ASIN_Images/B0DPR511FX.jpg
+	assets/amazon/ASIN_Images/B0DW6QWLC2.jpg
+	assets/amazon/ASIN_Images/B0F1TNZH2G.jpg
+	assets/amazon/ASIN_Images/B0F2SJ8MSX.jpg
+	assets/amazon/ASIN_Images/B0F5W8PWTP.jpg
+	assets/amazon/ASIN_Images/B0FJDXM5XY.jpg
+
+no changes added to commit (use "git add" and/or "git commit -a")

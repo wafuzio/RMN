@@ -1,0 +1,20 @@
+194e796 Fix major structural issue: move main variables from progressive_scroll to search_and_capture scope
+a404b9a Debug: Add error reporting and urllib import fix
+c3eafa6 Merge refactor/one-query-per-retailer into main
+ea923b8 Major Amazon Brand Extraction Upgrade + Complete Search Results Capture
+55744df Align Walmart SBV overlay scaling with metadata
+d2ad721 Fix metadata extraction and image save location for Walmart/Instacart
+3d863bc Fix Walmart SBV metadata extraction and backfill historical data
+592e820 Fix brand_review_tool: add retailer filtering and image_url matching
+56d92ed Fix: Reduce initial zoom level to prevent ngrok rate limiting
+5538fb5 Fix: Update available keywords when client selection changes
+6d19528 Fix: Enable keyword filtering by passing available keywords to Filters component
+f7db730 Add Visual Timeline lazy loading and fix zoom transition ghosting
+5a2d0f2 Fix Visual Timeline: add lazy loading for zoomed view and prevent image ghosting on zoom out
+dbd0862 Docs: Update run manifest migration guide with multi-client filtering
+531668c Fix: Support multi-client filtering in manifest and brand index
+76d6442 Fix: Remove duplicate /api/ads/count endpoint and orphaned code
+e3b343a Implement run manifest system for fast file-level pagination
+4459f70 COMPLETE: Refactor to one query per retailer
+1fd8e09 WIP: Refactor to one query per retailer (incomplete)
+cbf7acb Phase 1: Frontend performance optimizations
