@@ -152,7 +152,11 @@ class AmazonAdapter(RetailerAdapter):
                         counts["car"] += 1  # Keep car count for backward compatibility
                         break
             
-            # 4) Featured Brand - "Featured from Amazon brands" products
+            # 4) Sponsored Brand Cards - Individual bottom brand cards
+            sbc_dir = os.path.join(ctx.output_dir, "Sponsored_Brand_Cards")
+            os.makedirs(sbc_dir, exist_ok=True)
+            
+            # 5) Featured Brand - "Featured from Amazon brands" products
             fb_dir = os.path.join(ctx.output_dir, "Featured_Brand")
             os.makedirs(fb_dir, exist_ok=True)
             fb_candidates = [

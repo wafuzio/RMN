@@ -574,12 +574,12 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                                 log(f"sbv: skipped extremely off-screen element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']}")
                                                 continue
                                             
-                                            # Tighter deduplication: elements within 20px and similar size are considered same
-                                            bbox_key = (round(bbox['x'] / 20) * 20, round(bbox['y'] / 20) * 20, round(bbox['width'] / 20) * 20, round(bbox['height'] / 20) * 20)
-                                            if bbox_key in seen_elements:
-                                                log(f"sbv: skipped duplicate element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']}")
+                                            # Tighter deduplication: elements at same position (within 50px) are considered duplicates regardless of size differences
+                                            position_key = (round(bbox['x'] / 50) * 50, round(bbox['y'] / 50) * 50)
+                                            if position_key in seen_elements:
+                                                log(f"sbv: skipped duplicate element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']} (same position as existing)")
                                                 continue
-                                            seen_elements.add(bbox_key)
+                                            seen_elements.add(position_key)
                                             all_sbv_elements.append(el)
                                             log(f"sbv: added unique element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']}")
                                     except Exception:
@@ -593,7 +593,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     log(f"sbv: found {sbv_count} total video elements")
                     processed_count = 0
                     for sbv_idx, sbv_widget in enumerate(all_sbv_elements):
-                        if processed_count >= 2:  # Limit to 2 SBVs
+                        if processed_count >= 5:  # Limit to 5 SBVs (increased from 2)
                             break
                         if time_left() < 10:
                             break
@@ -693,7 +693,10 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 
                                 fname = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Video", client, keyword, run_id, sbv_idx, ".png")
                                 fpath = os.path.join(output_dir, "Sponsored_Brand_Video", fname)
-                                sbv_container.screenshot(path=fpath, timeout=4000)
+                                
+                                # Ensure directory exists and path is string
+                                os.makedirs(os.path.dirname(fpath), exist_ok=True)
+                                sbv_container.screenshot(path=str(fpath), timeout=4000)
                                 
                                 # Try to download MP4 video
                                 video_rel = None
@@ -763,11 +766,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     log("sb-brands: detect")
                     # Look for both traditional SB layouts and individual cards
                     sb_selectors = [
-                        # Traditional mid-page SB layouts (full containers)
-                        'div[cel_widget_id*="sb-themed-collection-v2-desktop_loom-desktop-inline-slot"]',  # Mid-page SB containers
-                        'div[cel_widget_id*="sb-themed-collection"]:not([cel_widget_id*="inline-slot"])',  # Other SB containers
-                        # Individual SB headline cards
-                        'a[data-elementid="sb-headline"]',  # Real SB headlines only
+                        # Traditional mid-page SB layouts (full containers) - both cel_widget_id and data-card-metrics-id
+                        'div[cel_widget_id*="sb-themed-collection-v2-desktop_loom-desktop-inline-slot"]',  # Mid-page SB containers (v1)
+                        'div[data-card-metrics-id*="sb-themed-collection-v2-desktop_loom-desktop-inline-slot"]',  # Mid-page SB containers (v2)
+                        'div[cel_widget_id*="sb-themed-collection"]:not([cel_widget_id*="inline-slot"])',  # Other SB containers (v1)
+                        'div[data-card-metrics-id*="sb-themed-collection"]:not([data-card-metrics-id*="inline-slot"])',  # Other SB containers (v2)
+                        # SB Headlines - find parent container for full capture
+                        'a[data-elementid="sb-headline"]',  # SB headlines (will find parent container)
                         # Individual cards in themed collections (fallback)
                         'div[cel_widget_id*="sb-themed-collection"] div[data-asin]',  # Individual ASIN cards
                     ]
@@ -780,7 +785,19 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             elements = page.locator(selector).all()
                             for el in elements:
                                 if el.is_visible():
-                                    all_sb_elements.append(el)
+                                    # If this is a headline element, find its parent container
+                                    if selector == 'a[data-elementid="sb-headline"]':
+                                        # Find the parent container that includes the full SB
+                                        parent_container = el.locator('xpath=ancestor::div[contains(@data-card-metrics-id,"sb-themed-collection")][1]')
+                                        if parent_container.count() > 0:
+                                            all_sb_elements.append(parent_container.first)
+                                            log(f"sb-brands: found headline, using parent container")
+                                        else:
+                                            # Skip headlines without sb-themed-collection parent (bottom cards handled separately)
+                                            log(f"sb-brands: skipping headline without sb-themed-collection parent")
+                                            continue
+                                    else:
+                                        all_sb_elements.append(el)
                         except Exception as e:
                             log(f"sb-brands: selector error {selector} -> {e}")
                     
@@ -1039,8 +1056,8 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                         
                                         brand_canon = brand_name.lower().replace(' ', '_').replace('.', '')
                                         
-                                        fname = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand", client, keyword, run_id, f"card_{card_idx}", ".png")
-                                        fpath = os.path.join(output_dir, "Sponsored_Brand", fname)
+                                        fname = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Card", client, keyword, run_id, f"card_{card_idx}", ".png")
+                                        fpath = os.path.join(output_dir, "Sponsored_Brand_Cards", fname)
                                         
                                         # Screenshot the entire li element (the individual card)
                                         try:
@@ -1070,16 +1087,16 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                             pass
                                         
                                         # Add to ads array
-                                        module_id, eid = _build_ids("Sponsored_Brand", "Brand_Card", brand_canon, f"bottom_card_{card_idx}", run_id, card_idx)
+                                        module_id, eid = _build_ids("Sponsored_Brand_Card", "Brand_Card", brand_canon, f"bottom_card_{card_idx}", run_id, card_idx)
                                         ads.append({
                                             "id": eid,
                                             "module_id": module_id,
-                                            "type": "Sponsored_Brand",
+                                            "type": "Sponsored_Brand_Card",
                                             "subtype": "Brand_Card",
                                             "brand": brand_name,
                                             "brand_canonical": brand_canon,
                                             "advertisers": [brand_canon] if brand_canon else [],
-                                            "image_path": f"Sponsored_Brand/{fname}",
+                                            "image_path": f"Sponsored_Brand_Cards/{fname}",
                                             "video_path": None,
                                             "message": message,
                                             "position": f"bottom_card_{card_idx}",
@@ -1532,9 +1549,41 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             carousel_container.scroll_into_view_if_needed()
                             time.sleep(0.1)
                             
-                            # Use the carousel container we already found (no need for complex fallback logic)
-                            container_el = carousel_container
-                            log(f"car: using s-searchgrid-carousel container for '{heading}'")
+                            # Find parent container that includes both header and carousel
+                            try:
+                                # Look for a parent that contains both the heading and the carousel
+                                if heading != "Unknown Carousel":
+                                    # Find the heading element first
+                                    labelledby_element = carousel_container.locator('[aria-labelledby]').first
+                                    if labelledby_element.count() > 0:
+                                        labelledby_id = labelledby_element.get_attribute('aria-labelledby')
+                                        if labelledby_id:
+                                            heading_element = page.locator(f'#{labelledby_id}')
+                                            if heading_element.count() > 0:
+                                                # Find common parent of heading and carousel
+                                                common_parent = heading_element.locator('xpath=ancestor::div[descendant::span[@data-component-type="s-searchgrid-carousel"]][1]')
+                                                if common_parent.count() > 0:
+                                                    container_el = common_parent.first
+                                                    log(f"car: using common parent container (includes header) for '{heading}'")
+                                                else:
+                                                    # Fallback: use carousel container only
+                                                    container_el = carousel_container
+                                                    log(f"car: fallback to carousel-only container for '{heading}'")
+                                            else:
+                                                container_el = carousel_container
+                                                log(f"car: heading element not found, using carousel-only for '{heading}'")
+                                        else:
+                                            container_el = carousel_container
+                                            log(f"car: no labelledby ID, using carousel-only for '{heading}'")
+                                    else:
+                                        container_el = carousel_container
+                                        log(f"car: no labelledby element, using carousel-only for '{heading}'")
+                                else:
+                                    container_el = carousel_container
+                                    log(f"car: unknown heading, using carousel-only container")
+                            except Exception as e:
+                                log(f"car: parent container detection error -> {e}, using carousel-only")
+                                container_el = carousel_container
                             
                             # Take screenshot
                             fname = _std_filename("amazon", "unknown", "Sponsored_Carousel", client, keyword, run_id, car_idx, ".png")
@@ -1768,40 +1817,15 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
 
             # 2) Sponsored Brand Video (SBV) - REMOVED DUPLICATE SECTION
             # Note: SBV detection is already handled comprehensively in the first section above
+            # Note: Carousel detection is already handled in section 4 above
 
-            # 3) Carousels ("Brands related to your search")
+            # Legacy carousel and sb-themed code removed - handled by new dynamic system above
+
+            # Broken legacy carousel and sb-themed code removed 
+            # Clean sb-themed detection is handled later in the file
+
+            # 3b2) Sponsored Brand Headlines (v2 inline modules)
             try:
-                log("car: detect")
-                car_idx = 0
-                for heading in CAROUSEL_HEADINGS:
-                    # Method 1: Try stable ID pattern first (most reliable)
-                    h = page.locator(f"h2[id*='loom-desktop-inline-slot']:has-text('{heading}')").first
-                    if h.count() == 0 or not h.is_visible():
-                        # Method 2: Amazon uses span[role=heading] for these carousels
-                        h = page.locator(f"span[role=heading]:has-text(\"{heading}\")").first
-                        if h.count() == 0 or not h.is_visible():
-                            # Method 3: Try more flexible text matching (case insensitive)
-                            h = page.locator(f"h2:text-is(\"{heading}\")").first
-                            if h.count() == 0 or not h.is_visible():
-                                h = page.locator(f"h2 span:text-is(\"{heading}\")").first
-                                if h.count() == 0 or not h.is_visible():
-                                    # Method 4: Try partial text matching
-                                    h = page.locator(f"h2:has-text(\"{heading}\")").first
-                                    if h.count() == 0 or not h.is_visible():
-                                        h = page.locator(f"h2 span:has-text(\"{heading}\")").first
-                                        if h.count() == 0 or not h.is_visible():
-                                            # Method 5: Try aria-label matching
-                                            h = page.locator(f"[aria-label*=\"{heading}\"]").first
-                                            if h.count() == 0 or not h.is_visible():
-                                                log(f"car: heading not found with all methods -> {heading}")
-                                                continue
-                    # Budget check
-                    if time_left() < 20:
-                        log("car: budget low, break")
-                        break
-                    log(f"car: found heading -> {heading}")
-                    container_el = None
-                    try:
                         # Scroll heading into view first
                         try:
                             h.scroll_into_view_if_needed()
@@ -1810,68 +1834,71 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             pass
                         
                         # Method 1: Try to find the complete carousel container (includes header + items)
-                        carousel_container = h.locator('xpath=ancestor::span[@data-component-type="s-searchgrid-carousel"][1]')
-                        if carousel_container.count() > 0:
-                            container_el = carousel_container.first
-                            log(f"car: using complete carousel container for {heading}")
-                        else:
-                            # Method 2: Fallback to original logic for finding container with enough content
-                            heading_el = h.element_handle()
-                            handle = page.evaluate_handle(
-                                """(el) => {
-                                    let n = el;
-                                    const enough = (node) => {
-                                        try {
-                                            const imgs = node.querySelectorAll('img.s-image').length;
-                                            const cards = node.querySelectorAll('div[data-component-type=\"s-search-result\"]').length;
-                                            return imgs >= 8 || cards >= 8;
-                                        } catch(e) { return false; }
-                                    };
-                                    while (n && n.parentElement) {
-                                        if (enough(n)) return n;
-                                        n = n.parentElement;
-                                    }
-                                    return el;
-                                }""",
-                                heading_el,
-                            )
-                            container_el = handle.as_element()
-                            log(f"car: using fallback container detection for {heading}")
-                    except Exception as e:
-                        log(f"car: container detection error -> {e}")
-                        container_el = None
+                        try:
+                            carousel_container = h.locator('xpath=ancestor::span[@data-component-type="s-searchgrid-carousel"][1]')
+                            if carousel_container.count() > 0:
+                                container_el = carousel_container.first
+                                log(f"car: using complete carousel container for {heading}")
+                            else:
+                                # Method 2: Fallback to original logic for finding container with enough content
+                                heading_el = h.element_handle()
+                                handle = page.evaluate_handle(
+                                    """(el) => {
+                                        let n = el;
+                                        const enough = (node) => {
+                                            try {
+                                                const imgs = node.querySelectorAll('img.s-image').length;
+                                                const cards = node.querySelectorAll('div[data-component-type=\"s-search-result\"]').length;
+                                                return imgs >= 8 || cards >= 8;
+                                            } catch(e) { return false; }
+                                        };
+                                        while (n && n.parentElement) {
+                                            if (enough(n)) return n;
+                                            n = n.parentElement;
+                                        }
+                                        return el;
+                                    }""",
+                                    heading_el,
+                                )
+                                container_el = handle.as_element()
+                                log(f"car: using fallback container detection for {heading}")
+                        except Exception as e:
+                            log(f"car: container detection error -> {e}")
+                            container_el = None
+            except Exception as e:
+                log(f"sb-headlines: section error -> {e}")
 
-                    # Products inside carousel
-                    products = []
-                    try:
-                        # Define root element for product extraction
-                        root_el = container_el if container_el else h.locator("xpath=ancestor::div[1]")
-                        try:
-                            root_el.scroll_into_view_if_needed()
-                            time.sleep(0.2)
-                        except Exception:
-                            pass
-                        try:
-                            el_handle = root_el.element_handle()
-                            page.evaluate("""
-                              (el) => new Promise((resolve) => {
-                                const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-                                (async () => {
-                                  let stable = 0; let last = 0;
-                                  for (let i=0; i<6 && stable<2; i++) {
-                                    const imgs = Array.from(el.querySelectorAll('img')).filter(i => i.complete && i.naturalWidth > 10).length;
-                                    if (imgs === last) stable++; else stable = 0;
-                                    last = imgs; await sleep(300);
-                                  }
-                                  resolve(true);
-                                })()
-                              })
-                            """, el_handle)
-                        except Exception:
-                            pass
-                        cards = root_el.locator('div[data-asin]')
-                        cnt = min(cards.count(), 24)
-                        for i in range(cnt):
+            # Products inside carousel
+            products = []
+            try:
+                # Define root element for product extraction
+                root_el = container_el if container_el else h.locator("xpath=ancestor::div[1]")
+                try:
+                    root_el.scroll_into_view_if_needed()
+                    time.sleep(0.2)
+                except Exception:
+                    pass
+                try:
+                    el_handle = root_el.element_handle()
+                    page.evaluate("""
+                      (el) => new Promise((resolve) => {
+                        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+                        (async () => {
+                          let stable = 0; let last = 0;
+                          for (let i=0; i<6 && stable<2; i++) {
+                            const imgs = Array.from(el.querySelectorAll('img')).filter(i => i.complete && i.naturalWidth > 10).length;
+                            if (imgs === last) stable++; else stable = 0;
+                            last = imgs; await sleep(300);
+                          }
+                          resolve(true);
+                        })()
+                      })
+                    """, el_handle)
+                except Exception:
+                    pass
+                cards = root_el.locator('div[data-asin]')
+                cnt = min(cards.count(), 24)
+                for i in range(cnt):
                             c = cards.nth(i)
                             asin = _get_attr(c, 'data-asin') or None
                             title = None
@@ -1930,98 +1957,11 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                     "central_image_path": image_path,
                                     "price": price_text,
                                 })
-                    except Exception as e:
-                        log(f"car: products parse error -> {e}")
-
-                    # Brand and message (if any) with classification & dedupe
-                    # Ensure root_el and container_el are available (fix carousel bug)
-                    try:
-                        root_loc = root_el if container_el else h.locator("xpath=ancestor::div[1]")
-                    except NameError:
-                        # Fallback if root_el/container_el not defined due to products section error
-                        root_loc = h.locator("xpath=ancestor::div[1]")
-                    brand_txt, brand_canon, message = _extract_brand_and_message(root_loc)
-                    anchor = _module_anchor(root_loc)
-                    if anchor in seen_anchors:
-                        log(f"car: duplicate anchor skipped -> {anchor}")
-                        continue
-                    seen_anchors.add(anchor)
-                    is_sb = bool(re.match(r'^(sb|sponsoredb|sponsoredbrands)', (anchor or '').lower()))
-                    adv_for_name = brand_canon or "unknown"
-                    ad_type = "Sponsored_Brand" if is_sb else "Sponsored_Carousel"
-                    folder = "Sponsored_Brand" if is_sb else "Sponsored_Carousel"
-                    fname = _std_filename("amazon", adv_for_name, ad_type, client, keyword, run_id, car_idx, ".png")
-                    fpath = os.path.join(output_dir, folder, fname)
-                    try:
-                        try:
-                            root_loc.scroll_into_view_if_needed()
-                            time.sleep(0.2)
-                        except Exception:
-                            pass
-                        try:
-                            el_handle = root_loc.element_handle()
-                            page.evaluate("""
-                              (el) => new Promise((resolve) => {
-                                const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-                                (async () => {
-                                  let stable = 0; let last = 0;
-                                  for (let i=0; i<6 && stable<2; i++) {
-                                    const imgs = Array.from(el.querySelectorAll('img')).filter(img => img.complete && img.naturalWidth>10).length;
-                                    if (imgs === last) stable++; else stable = 0;
-                                    last = imgs; await sleep(300);
-                                  }
-                                  resolve(true);
-                                })
-                              })
-                            """, el_handle)
-                        except Exception:
-                            pass
-                        try:
-                            page.evaluate("""
-                                () => {
-                                    const style = document.createElement('style');
-                                    style.textContent = '* { transition: none !important; animation: none !important; }';
-                                    document.head.appendChild(style);
-                                }
-                            """)
-                        except Exception:
-                            pass
-                        try:
-                            page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
-                        except Exception:
-                            pass
-                        root_loc.screenshot(path=fpath, timeout=4000)
-                        module_id, eid = _build_ids(ad_type, heading, brand_canon, anchor, run_id, car_idx)
-                        if module_id in captured_modules:
-                            log(f"car: duplicate module skipped -> {module_id}")
-                        else:
-                            captured_modules.add(module_id)
-                            ads.append({
-                                "id": eid,
-                                "module_id": module_id,
-                                "type": ad_type,
-                                "subtype": heading,
-                                "brand": brand_txt or "Unknown",
-                                "brand_canonical": brand_canon,
-                                "advertisers": [brand_canon] if brand_canon else [],
-                                "header": heading,
-                                "products": products,
-                                "capture_entire_carousel": True,
-                                "position": car_idx + 1,
-                                "image_path": f"{folder}/{fname}",
-                                "video_path": None,
-                                "message": message,
-                                "metadata": {"subtype": heading, "count": len(products)},
-                            })
-                        log(f"car: saved -> {fpath} exists={os.path.exists(fpath)} module_id={module_id}")
-                        car_idx += 1
-                        if car_idx >= MAX_CAR:
-                            log("car: reached MAX_CAR, stop")
-                            break
-                    except Exception as e:
-                        log(f"car: screenshot fail -> {e}")
             except Exception as e:
-                log(f"car: detect error -> {e}")
+                log(f"car: products parse error -> {e}")
+
+            # End of broken legacy carousel code - removed
+            # Clean carousel detection is handled earlier in the file
 
             # 3b) Sponsored Brand Themed Collections (direct detection)
             try:
@@ -2054,7 +1994,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             pass
                         try:
                             el_handle = el.element_handle()
-                            page.evaluate(el_handle, """
+                            page.evaluate("""
                               (el) => new Promise((resolve) => {
                                 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
                                 (async () => {
@@ -2067,7 +2007,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                   resolve(true);
                                 })
                               })
-                            """)
+                            """, el_handle)
                         except Exception:
                             pass
                         try:
@@ -2094,12 +2034,23 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         # Geometric overlap check
                         try:
                             bbox = el.bounding_box()
+                            log(f"sb-themed: element bbox -> {bbox}")
                             if bbox and _check_bbox_overlap(bbox, captured_bboxes):
                                 log(f"sb-themed: overlapping bbox skipped -> {bbox}")
                                 continue
                         except Exception as e:
                             log(f"sb-themed: bbox check error -> {e}")
                             bbox = None
+                        
+                        # Debug: Check element details before screenshot
+                        try:
+                            tag_name = el.evaluate("el => el.tagName")
+                            class_name = el.get_attribute("class") or "no-class"
+                            data_metrics = el.get_attribute("data-card-metrics-id") or "no-metrics"
+                            child_count = el.locator("*").count()
+                            log(f"sb-themed: screenshotting -> tag: {tag_name}, class: {class_name[:50]}..., metrics: {data_metrics[:50]}..., children: {child_count}, bbox: {bbox}")
+                        except Exception as e:
+                            log(f"sb-themed: debug error -> {e}")
                         
                         el.screenshot(path=fpath, timeout=4000)
                         anchor = _module_anchor(el)
