@@ -1056,21 +1056,38 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                         
                                         brand_canon = brand_name.lower().replace(' ', '_').replace('.', '')
                                         
-                                        fname = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Card", client, keyword, run_id, f"card_{card_idx}", ".png")
-                                        fpath = os.path.join(output_dir, "Sponsored_Brand_Cards", fname)
-                                        
-                                        # Screenshot the entire li element (the individual card)
+                                        # Take two screenshots: normal state and hover state
                                         try:
                                             brand_li.scroll_into_view_if_needed()
                                             time.sleep(0.3)
-                                            log(f"sb-brands: attempting screenshot for card {card_idx} -> {fpath}")
-                                            # Ensure directory exists
-                                            os.makedirs(os.path.dirname(fpath), exist_ok=True)
-                                            # Use explicit parameter names to avoid any confusion
-                                            brand_li.screenshot(path=str(fpath), timeout=4000)
-                                            log(f"sb-brands: individual card saved -> {fname}")
+                                            
+                                            # 1) Screenshot normal state (no hover)
+                                            fname_normal = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Card", client, keyword, run_id, f"card_{card_idx}_normal", ".png")
+                                            fpath_normal = os.path.join(output_dir, "Sponsored_Brand_Cards", fname_normal)
+                                            os.makedirs(os.path.dirname(fpath_normal), exist_ok=True)
+                                            
+                                            brand_li.screenshot(path=str(fpath_normal), timeout=4000)
+                                            log(f"sb-brands: normal state saved -> {fname_normal}")
+                                            
+                                            # 2) Screenshot hover state
+                                            try:
+                                                logo_img = brand_li.locator('img').first
+                                                if logo_img.count() > 0:
+                                                    logo_img.hover()
+                                                    time.sleep(0.5)  # Wait for hover animations/transitions
+                                                    
+                                                    fname_hover = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Card", client, keyword, run_id, f"card_{card_idx}_hover", ".png")
+                                                    fpath_hover = os.path.join(output_dir, "Sponsored_Brand_Cards", fname_hover)
+                                                    
+                                                    brand_li.screenshot(path=str(fpath_hover), timeout=4000)
+                                                    log(f"sb-brands: hover state saved -> {fname_hover}")
+                                                else:
+                                                    log(f"sb-brands: no logo found for hover on card {card_idx}")
+                                            except Exception as hover_error:
+                                                log(f"sb-brands: hover screenshot failed for card {card_idx} -> {hover_error}")
+                                            
                                         except Exception as screenshot_error:
-                                            log(f"sb-brands: individual card error -> {screenshot_error}")
+                                            log(f"sb-brands: card screenshots error for card {card_idx} -> {screenshot_error}")
                                             continue  # Skip this card and move to next
                                         
                                         # Look for slogan/message text within this li - focus on structure, not hashed classes
@@ -1096,7 +1113,8 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                             "brand": brand_name,
                                             "brand_canonical": brand_canon,
                                             "advertisers": [brand_canon] if brand_canon else [],
-                                            "image_path": f"Sponsored_Brand_Cards/{fname}",
+                                            "image_path": f"Sponsored_Brand_Cards/{fname_normal}",
+                                            "image_path_hover": f"Sponsored_Brand_Cards/{fname_hover}" if 'fname_hover' in locals() else None,
                                             "video_path": None,
                                             "message": message,
                                             "position": f"bottom_card_{card_idx}",
@@ -1105,7 +1123,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                                 "extraction_method": "store_link" if store_url else "image_alt"
                                             },
                                         })
-                                        log(f"sb-brands: individual card saved -> {fname}")
+                                        log(f"sb-brands: individual card saved -> normal: {fname_normal}, hover: {fname_hover if 'fname_hover' in locals() else 'failed'}")
                                 except Exception as e:
                                     log(f"sb-brands: individual card error -> {e}")
                     except Exception as e:
