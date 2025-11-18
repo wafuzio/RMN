@@ -55,11 +55,17 @@ export interface BrandAggregation {
   percentage: number;
 }
 
-export interface AdsCardsResponse { 
-  cards: AdCardItem[]; 
-  has_more: boolean; 
-  total_cards: number; 
+export interface AdsCardsResponse {
+  cards: AdCardItem[];
+  has_more: boolean;
+  total_cards: number;
   brands?: BrandAggregation[];
   page?: number;
   page_size?: number;
+}
+
+export interface AdsCountResponse {
+  total: number;
+  retailer: string;
+  client: string;
 }

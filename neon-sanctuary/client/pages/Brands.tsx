@@ -1,14 +1,17 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, Suspense, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useBrands } from "@/hooks/useBrands";
 import { BrandLogo } from "@/components/dashboard/BrandLogo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BrandDetailModal } from "@/components/dashboard/BrandDetailModal";
 import GaleLogo from "../../../web/assets/logos/GALE.svg";
+
+// Lazy load modal for code splitting
+const BrandDetailModal = React.lazy(() => import("@/components/dashboard/BrandDetailModal").then(m => ({ default: m.BrandDetailModal })));
 
 export default function Brands() {
   const navigate = useNavigate();
@@ -17,27 +20,54 @@ export default function Brands() {
     [...allRetailers]
   );
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const { data: brandsData, isLoading } = useQuery({
-    queryKey: ["brands", selectedRetailers],
-    queryFn: () => api.getBrands(selectedRetailers),
-    staleTime: 1000 * 60 * 10,
-  });
+  // Use dedicated brands hook with built-in caching and deduplication
+  const { data: brandsData, isLoading } = useBrands(selectedRetailers);
 
   const filteredBrands = useMemo(() => {
     if (!brandsData?.brands) return [];
 
-    // First filter by search term
+    // Filter by debounced search term
     let filtered = brandsData.brands;
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+    if (debouncedSearch) {
+      const term = debouncedSearch.toLowerCase();
       filtered = filtered.filter(b => b.brand.toLowerCase().includes(term));
     }
 
     // Sort alphabetically by brand name
     return [...filtered].sort((a, b) => a.brand.toLowerCase().localeCompare(b.brand.toLowerCase()));
-  }, [brandsData?.brands, searchTerm]);
+  }, [brandsData?.brands, debouncedSearch]);
+
+  // Preload first 8 brand logos for better LCP (only once when data loads)
+  useEffect(() => {
+    if (!filteredBrands.length || !brandsData) return;
+
+    const preloadLogos = filteredBrands.slice(0, 8);
+    const preloadedBrands = new Set<string>();
+    
+    preloadLogos.forEach((brand) => {
+      if (preloadedBrands.has(brand.brand)) return;
+      preloadedBrands.add(brand.brand);
+      
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = `/api/logo/brand/${encodeURIComponent(brand.brand)}?w=240`;
+      link.type = 'image/webp';
+      link.fetchPriority = 'high';
+      link.dataset.brandPreload = brand.brand;
+      document.head.appendChild(link);
+    });
+
+    // Cleanup function to remove preload hints when component unmounts
+    return () => {
+      const preloadLinks = document.querySelectorAll('link[data-brand-preload]');
+      preloadLinks.forEach(link => link.remove());
+    };
+  }, [brandsData]); // Only run when initial data loads, not on every filter change
 
   const toggleRetailer = (retailer: typeof allRetailers[number]) => {
     setSelectedRetailers((prev) => {
@@ -128,14 +158,19 @@ export default function Brands() {
             </div>
 
             <div className="grid grid-cols-4 gap-6">
-              {filteredBrands.map((brand) => (
+              {filteredBrands.map((brand, i) => (
                 <button
                   key={brand.brand}
                   onClick={() => setSelectedBrand(brand.brand)}
                   className="group bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 p-3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:scale-105"
                 >
                   <div className="flex items-center justify-center h-36 w-36 flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
-                    <BrandLogo brand={brand.brand} className="h-30 w-30" />
+                    <BrandLogo 
+                      brand={brand.brand} 
+                      size={120} 
+                      eager={i < 8} 
+                      className="h-[120px] w-[120px]" 
+                    />
                   </div>
                   <div className="text-center space-y-1">
                     <p className="font-bold text-gray-900 text-sm line-clamp-2 group-hover:text-blue-600 transition-colors">
@@ -150,11 +185,13 @@ export default function Brands() {
         )}
 
         {selectedBrand && (
-          <BrandDetailModal
-            brand={selectedBrand}
-            retailers={selectedRetailers}
-            onOpenChange={(open) => !open && setSelectedBrand(null)}
-          />
+          <Suspense fallback={null}>
+            <BrandDetailModal
+              brand={selectedBrand}
+              retailers={selectedRetailers}
+              onOpenChange={(open) => !open && setSelectedBrand(null)}
+            />
+          </Suspense>
         )}
       </div>
     </main>

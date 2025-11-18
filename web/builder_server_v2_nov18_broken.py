@@ -27,188 +27,12 @@ import glob
 import mimetypes
 import requests
 import re
-from datetime import datetime, timezone, timedelta
-from time import perf_counter, time
+from datetime import datetime, timezone
+from time import perf_counter
 from utils.path_taxonomy import allowed_subdirs, ADTYPE_TO_FOLDER
 from core.brands import canonicalize
-import hashlib
-from web.manifest_store import runs as mf_runs, daily_totals as mf_daily
-
-
-def _canon_brand_key(s: str | None) -> str | None:
-    """Normalize incoming advertiser param to match brand_index keys."""
-    if not s:
-        return None
-    # Try core.brands.canonicalize if available
-    try:
-        v = canonicalize(s)
-        if v:
-            return v.lower()
-    except Exception:
-        pass
-    # Fallback: basic lowercase normalization
-    return s.strip().lower()
-
-
-def _parse_clients(req) -> set[str] | None:
-    """
-    Parse client filter from request into normalized set.
-    
-    Supports:
-    - client=all → None (no filter)
-    - client=blue_bunny → {"blue_bunny"}
-    - client=blue_bunny,halo_top → {"blue_bunny", "halo_top"}
-    - client=blue_bunny&client=halo_top → {"blue_bunny", "halo_top"}
-    
-    Returns:
-        Set of client slugs, or None for "no filter"
-    """
-    # Gather raw values (handle both comma-separated and repeated params)
-    raw_list = req.args.getlist("client")
-    raw_single = req.args.get("client")
-    
-    items: list[str] = []
-    if raw_single:
-        items.append(raw_single)
-    if raw_list:
-        items.extend(raw_list)
-    
-    if not items:
-        return None
-    
-    # Flatten comma-separated entries
-    tokens: list[str] = []
-    for it in items:
-        tokens.extend([t.strip() for t in it.split(",") if t.strip()])
-    
-    if not tokens:
-        return None
-    
-    # If any token is "all" → no client filter
-    if any(t.lower() == "all" for t in tokens):
-        return None
-    
-    # Return normalized set
-    normalized = {t for t in tokens}
-    return normalized or None
-
-
-def _norm_clients_for_cache(clients: set[str] | None) -> str:
-    """Normalize client set for cache key."""
-    if not clients:
-        return "all"
-    return ",".join(sorted(clients))
-
-
-def count_from_brand_index(retailer: str|None, clients: set[str]|None, term: str|None, start: str|None, end: str|None, advertiser_in: str) -> int:
-    """Count ads using brand index without loading cards."""
-    advertiser = _canon_brand_key(advertiser_in)
-    if not advertiser:
-        return 0
-    
-    index = load_brand_index()
-    if not index:
-        return 0
-    
-    entries = index.get(advertiser, [])
-    total = 0
-    
-    for entry in entries:
-        # Filter by retailer
-        if retailer and entry.get("retailer") != retailer:
-            continue
-        
-        # Filter by client set
-        if clients and entry.get("client") not in clients:
-            continue
-        
-        # Filter by date
-        ts = entry.get("timestamp", "")
-        day = ts[:10] if ts else ""
-        if start and day < start:
-            continue
-        if end and day > end:
-            continue
-        
-        # If term specified, verify keyword matches
-        if term:
-            json_path = entry.get("json_path")
-            if json_path:
-                fp = OUTPUT_ROOT / json_path
-                try:
-                    with open(fp, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    if data.get("keyword") != term:
-                        continue
-                except Exception:
-                    continue
-        
-        # Count ad indices
-        total += len(entry.get("ad_indices", []))
-    
-    return total
-
-
-def _entries_for_brand_sorted(retailer, clients, start, end, advertiser_in):
-    """Get sorted list of (json_path, ad_idx, retailer, client, timestamp) for a brand."""
-    advertiser = _canon_brand_key(advertiser_in)
-    if not advertiser:
-        return []
-    
-    index = load_brand_index()
-    if not index:
-        return []
-    
-    entries = index.get(advertiser, [])
-    
-    # Expand to individual ad references
-    filtered = []
-    for e in entries:
-        if retailer and e["retailer"] != retailer:
-            continue
-        if clients and e["client"] not in clients:
-            continue
-        if start and e.get("timestamp") and e["timestamp"][:10] < start:
-            continue
-        if end and e.get("timestamp") and e["timestamp"][:10] > end:
-            continue
-        
-        # Expand each ad index
-        for i in e["ad_indices"]:
-            filtered.append((e["json_path"], i, e["retailer"], e["client"], e.get("timestamp") or ""))
-
-    # Sort by timestamp desc
-    filtered.sort(key=lambda x: x[4], reverse=True)
-    return filtered
 
 app = Flask(__name__)
-
-# ============================================================================
-# In-Memory Cache (10 min TTL)
-# ============================================================================
-_cache = {}
-_cache_ttl = 600  # seconds (10 minutes)
-
-def _cache_key(params: dict) -> str:
-    """Generate cache key from normalized filter params"""
-    # Sort keys for consistent hashing
-    normalized = {k: v for k, v in sorted(params.items()) if v is not None}
-    key_str = json.dumps(normalized, sort_keys=True)
-    return hashlib.md5(key_str.encode()).hexdigest()
-
-def _get_cached(key: str):
-    """Get cached result if not expired"""
-    if key in _cache:
-        result, timestamp = _cache[key]
-        if time() - timestamp < _cache_ttl:
-            return result
-        else:
-            del _cache[key]
-    return None
-
-def _set_cache(key: str, value):
-    """Store result in cache with current timestamp"""
-    _cache[key] = (value, time())
 
 # Performance monitoring: Server-Timing header
 @app.before_request
@@ -235,64 +59,6 @@ OUTPUT_ROOT = Path(os.path.join(SCRAPER_HOME, "output"))
 ASSETS_ROOT = os.path.join(SCRAPER_HOME, "web", "assets")
 ALLOWED_ORIGINS = set((os.environ.get("ALLOWED_ORIGINS") or "").split(",")) - {""}
 API_KEY = os.environ.get("API_KEY")  # For future POST endpoints
-BRAND_INDEX_FILE = OUTPUT_ROOT / "brand_index.json"
-
-# ============================================================================
-# Brand Index (for fast brand lookups)
-# ============================================================================
-_brand_index = None
-_brand_index_loaded_at = None
-_brand_index_ttl = 3600  # Reload index every hour
-
-def load_brand_index():
-    """Load brand index from disk (with caching)"""
-    global _brand_index, _brand_index_loaded_at
-    
-    # Check if we need to reload
-    now = time()
-    if _brand_index is not None and _brand_index_loaded_at is not None:
-        if (now - _brand_index_loaded_at) < _brand_index_ttl:
-            return _brand_index
-    
-    # Load from disk
-    if not BRAND_INDEX_FILE.exists():
-        print(f"⚠️  Brand index not found: {BRAND_INDEX_FILE}")
-        print(f"   Run: python3 tools/build_brand_index.py")
-        return None
-    
-    try:
-        with open(BRAND_INDEX_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        _brand_index = data.get('index', {})
-        _brand_index_loaded_at = now
-        
-        stats = data.get('stats', {})
-        print(f"✅ Brand index loaded: {stats.get('total_brands', 0):,} brands, {stats.get('ads_indexed', 0):,} ads")
-        
-        return _brand_index
-    except Exception as e:
-        print(f"❌ Error loading brand index: {e}")
-        return None
-
-def lookup_brand_files(brand: str) -> list:
-    """
-    Look up files containing ads for a specific brand.
-    Returns list of dicts with: retailer, client, json_path, ad_indices
-    """
-    index = load_brand_index()
-    if not index:
-        return []
-    
-    # Canonicalize brand name for lookup
-    canonical_brand = canonicalize(brand)
-    if not canonical_brand:
-        # Fallback to simple lowercase if canonicalize returns None
-        canonical_brand = brand.strip().lower()
-    else:
-        canonical_brand = canonical_brand.lower()
-    
-    return index.get(canonical_brand, [])
 
 # Brand assets/config
 BRAND_LOGOS_DIR = Path(os.getenv("BRAND_LOGOS_DIR", os.path.join(SCRAPER_HOME, "output/brand_logos")))
@@ -354,13 +120,11 @@ def parse_utc(iso_z: str) -> datetime:
     return datetime.fromisoformat(iso_z.replace("Z", "+00:00"))
 
 
-def utc_range_for(filter_name: str, start: str | None, end: str | None, tz_offset_minutes: int | None = None) -> tuple[datetime, datetime]:
+def utc_range_for(filter_name: str, start: str | None, end: str | None) -> tuple[datetime, datetime]:
     """
     Get UTC datetime range for filtering.
     filter_name: 'lifetime', 'mtd', 'ytd', or 'custom'
-    start/end: YYYY-MM-DD strings for custom range (interpreted as local dates)
-    tz_offset_minutes: JavaScript getTimezoneOffset() value (e.g., -360 for UTC-6)
-                       Used to convert local dates to UTC. If not provided, assumes start/end are UTC.
+    start/end: YYYY-MM-DD strings for custom range
     """
     now = datetime.now(timezone.utc)
 
@@ -376,27 +140,16 @@ def utc_range_for(filter_name: str, start: str | None, end: str | None, tz_offse
         return start_dt, now
 
     # Custom yyyy-mm-dd range
-    def parse_date_utc(d: str, tz_offset: int | None = None) -> datetime:
-        # Parse the date string as a local date
-        local_dt = datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-
-        # If timezone offset is provided, adjust to UTC
-        # JavaScript's getTimezoneOffset returns minutes AHEAD of UTC as negative
-        # E.g., -360 means UTC-6 (6 hours behind UTC)
-        # So we need to ADD the offset to convert from local to UTC
-        if tz_offset is not None:
-            # tz_offset is minutes ahead of UTC (negative for west of UTC)
-            # To convert local time to UTC, we ADD the offset
-            # E.g., if local is 00:00 and offset is -360 (-6 hours),
-            # then UTC is 00:00 + 6 hours = 06:00
-            local_dt = local_dt + timedelta(minutes=tz_offset)
-
-        return local_dt
+    def parse_date_utc(d: str) -> datetime:
+        return datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
     if start or end:
         # Handle cases where only start or only end is provided
-        start_dt = parse_date_utc(start, tz_offset_minutes) if start else parse_date_utc(end, tz_offset_minutes)
-        end_dt = parse_date_utc(end, tz_offset_minutes) if end else parse_date_utc(start, tz_offset_minutes)
+        start_dt = parse_date_utc(start) if start else parse_date_utc(end)
+        # If only start is provided, use it as the end date too (same day)
+        # If only end is provided, use it as the start date too (same day)
+        # If both are provided, use both with inclusive end-of-day
+        end_dt = parse_date_utc(end) if end else parse_date_utc(start)
 
         # Ensure start <= end
         if start_dt > end_dt:
@@ -463,10 +216,10 @@ def get_brand_lexicon() -> dict:
 def canonicalize_brand(raw: str | None) -> str | None:
     """
     Map raw brand to canonical name via brands.json (names + synonyms).
-    Uses aggressive normalization (strips product descriptors) for lexicon matching.
-    Falls back to original raw brand if not found in lexicon.
+    Uses case-insensitive, punctuation-insensitive matching.
+    Falls back to titlecase raw if not found.
     """
-    from utils.brand_utils import normalize_brand_for_lexicon_matching
+    from utils.brand_utils import normalize_brand_for_matching
     
     raw = (raw or "").strip()
     if not raw:
@@ -478,9 +231,7 @@ def canonicalize_brand(raw: str | None) -> str | None:
     except Exception:
         return raw
     
-    # Use aggressive normalization for lexicon matching
-    # This strips product descriptors like "- Grain", "Snax Crazy", "Grand Ice Cream"
-    normalized = normalize_brand_for_lexicon_matching(raw)
+    normalized = normalize_brand_for_matching(raw)
     
     # Check all canonical names and synonyms
     for entry in brands_arr:
@@ -488,14 +239,14 @@ def canonicalize_brand(raw: str | None) -> str | None:
         if not canonical_name:
             continue
             
-        if normalize_brand_for_lexicon_matching(canonical_name) == normalized:
+        if normalize_brand_for_matching(canonical_name) == normalized:
             return canonical_name
             
         for synonym in entry.get("synonyms", []):
-            if normalize_brand_for_lexicon_matching(synonym) == normalized:
+            if normalize_brand_for_matching(synonym) == normalized:
                 return canonical_name
     
-    # fallback: return original raw brand (preserves "Seven Sundays- Grain" if not in lexicon)
+    # fallback: return cleaned raw (retain user-friendly casing if it looks like a real word)
     return raw
 
 
@@ -760,15 +511,17 @@ def build_media_urls_for_ad(retailer: str, client: str, ad: dict) -> dict:
             if f:
                 media["image_url"] = f"/api/image/{retailer}/{client}/{r}"
 
-                # Also search for companion video file with same base name
+                # Only search for companion video file if ad type contains "video"
                 # For SBV ads: image is "kroger__brand__sbv__..._0.png" and video is "kroger__brand__sbv__..._0.mp4"
-                base_name = Path(r).stem  # Remove extension (e.g., "kroger__brand__sbv__..._0")
-                video_file = f"{base_name}.mp4"
-                video_f, video_r = find_image_file(retailer, client, video_file)
-                if video_f:
-                    media["video_url"] = f"/api/video/{retailer}/{client}/{video_r}"
-                else:
-                    print(f"[build_media_urls] Video file not found: {video_file} for image: {rel}")
+                ad_type = (ad.get("type") or ad.get("ad_type") or "").lower()
+                if "video" in ad_type:
+                    base_name = Path(r).stem  # Remove extension (e.g., "kroger__brand__sbv__..._0")
+                    video_file = f"{base_name}.mp4"
+                    video_f, video_r = find_image_file(retailer, client, video_file)
+                    if video_f:
+                        media["video_url"] = f"/api/video/{retailer}/{client}/{video_r}"
+                    else:
+                        print(f"[build_media_urls] Video file not found: {video_file} for image: {rel}")
 
     # Fallbacks: if image_url still missing and ad has CDN url, try fuzzy by filename
     if "image_url" not in media:
@@ -780,13 +533,15 @@ def build_media_urls_for_ad(retailer: str, client: str, ad: dict) -> dict:
                 if f:
                     media["image_url"] = f"/api/image/{retailer}/{client}/{r}"
 
-                    # Also search for companion video file with same base name
+                    # Only search for companion video file if ad type contains "video"
                     if "video_url" not in media:
-                        base_name = Path(r).stem
-                        video_file = f"{base_name}.mp4"
-                        video_f, video_r = find_image_file(retailer, client, video_file)
-                        if video_f:
-                            media["video_url"] = f"/api/video/{retailer}/{client}/{video_r}"
+                        ad_type = (ad.get("type") or ad.get("ad_type") or "").lower()
+                        if "video" in ad_type:
+                            base_name = Path(r).stem
+                            video_file = f"{base_name}.mp4"
+                            video_f, video_r = find_image_file(retailer, client, video_file)
+                            if video_f:
+                                media["video_url"] = f"/api/video/{retailer}/{client}/{video_r}"
 
     # Video fallback by CDN filename (optional convenience)
     if "video_url" not in media:
@@ -1396,63 +1151,6 @@ def api_advertisers():
         "count": len(advertisers)
     })
 
-
-@app.route("/api/ads/count", methods=["GET"])
-def api_ads_count():
-    """
-    Fast count endpoint using brand index or run manifest.
-    Does NOT load cards - only metadata.
-    
-    Query params:
-    - retailer (required): Retailer name
-    - client (optional): Client name or "all"
-    - term (optional): Keyword filter
-    - advertiser (optional): Brand/advertiser filter
-    - start (optional): Start date YYYY-MM-DD (inclusive)
-    - end (optional): End date YYYY-MM-DD (inclusive)
-    
-    Returns: {"total": number, "retailer": str, "client": str, "filters": {...}}
-    """
-    retailer = request.args.get("retailer") or None
-    clients = _parse_clients(request)
-    term = request.args.get("term") or None
-    start = request.args.get("start") or None
-    end = request.args.get("end") or None
-    advertiser_in = request.args.get("advertiser") or None
-
-    # Brand-filtered → use brand index
-    if advertiser_in:
-        total = count_from_brand_index(retailer, clients, term, start, end, advertiser_in)
-        return jsonify({
-            "total": total,
-            "retailer": retailer,
-            "client": _norm_clients_for_cache(clients),
-            "filters": {"term": term, "advertiser": advertiser_in, "start": start, "end": end}
-        })
-
-    # General → use run manifest (no card loading)
-    total = 0
-    for r in mf_runs():
-        if retailer and r["retailer"] != retailer:
-            continue
-        if clients and r["client"] not in clients:
-            continue
-        if term and r.get("keyword") != term:
-            continue
-        if start and r["day"] < start:
-            continue
-        if end and r["day"] > end:
-            continue
-        total += int(r["ad_count"] or 0)
-
-    return jsonify({
-        "total": total,
-        "retailer": retailer,
-        "client": _norm_clients_for_cache(clients),
-        "filters": {"term": term, "start": start, "end": end}
-    })
-
-
 @app.route("/api/ads/cards", methods=["GET"])
 def api_ads_cards():
     """
@@ -1475,25 +1173,15 @@ def api_ads_cards():
     Note: Sorting is applied to ALL matching cards before pagination, ensuring consistent ordering across pages.
     By default, cards without resolvable images are excluded. Set include_unresolved=1 to include them
     with has_image=False and skip_reason="unresolved_image" for debugging purposes.
-    
-    PERFORMANCE: Results are cached for 60s. Early-slice stops scanning after finding enough matches.
     """
     retailer = (request.args.get("retailer") or "").strip().lower()
-    clients = _parse_clients(request)
+    client = (request.args.get("client") or "").strip()
     term = (request.args.get("term") or "").strip().lower()
-    advertiser_raw = (request.args.get("advertiser") or "").strip()
-    advertiser_filter = _canon_brand_key(advertiser_raw) if advertiser_raw else None
+    advertiser_filter = (request.args.get("advertiser") or "").strip().lower()
     brands_filter = (request.args.get("brands") or "").strip()  # comma-separated list
     types_filter = (request.args.get("types") or "").strip()    # comma-separated list
-    start_date = (request.args.get("start") or "").strip()  # YYYY-MM-DD format (in user's local time)
-    end_date = (request.args.get("end") or "").strip()      # YYYY-MM-DD format (in user's local time)
-    tz_offset_minutes = None  # User's timezone offset (JavaScript getTimezoneOffset)
-    try:
-        tz_val = request.args.get("tz_offset_minutes")
-        if tz_val:
-            tz_offset_minutes = int(tz_val)
-    except ValueError:
-        pass
+    start_date = (request.args.get("start") or "").strip()  # YYYY-MM-DD format
+    end_date = (request.args.get("end") or "").strip()      # YYYY-MM-DD format
     sort_order = (request.args.get("sort") or "").strip().lower()  # "latest", "oldest", or "name"
     include_unresolved = request.args.get("include_unresolved") in ("1", "true", "yes")  # Debug mode
 
@@ -1507,270 +1195,13 @@ def api_ads_cards():
     except Exception:
         page_size = 24
     
-    # Check cache first (60s TTL)
-    cache_params = {
-        "retailer": retailer,
-        "client": _norm_clients_for_cache(clients),
-        "term": term,
-        "advertiser": advertiser_filter,
-        "brands": brands_filter,
-        "types": types_filter,
-        "start": start_date,
-        "end": end_date,
-        "tz_offset_minutes": tz_offset_minutes,
-        "sort": sort_order,
-        "page": page,
-        "page_size": page_size,
-        "include_unresolved": include_unresolved
-    }
-    cache_key = _cache_key(cache_params)
-    cached_result = _get_cached(cache_key)
-    
-    if cached_result is not None:
-        # Cache hit - add Server-Timing header
-        response = jsonify(cached_result)
-        response.headers["Server-Timing"] = "cache;desc=hit"
-        client_str = _norm_clients_for_cache(clients)
-        print(f"[{retailer}/{client_str}] ⚡ Cache HIT for page {page}")
-        return response
-    
     if not retailer:
         return jsonify({"error": "retailer parameter required"}), 400
     
-    # BRAND INDEX FAST PATH: Paginate at file level, don't load all cards
-    if advertiser_filter:
-        items = _entries_for_brand_sorted(retailer, clients, start_date, end_date, advertiser_raw)
-        
-        # Filter by term if specified (requires opening files)
-        if term:
-            filtered_items = []
-            checked_files = set()
-            for json_path, ad_idx, file_retailer, file_client, ts in items:
-                if json_path not in checked_files:
-                    checked_files.add(json_path)
-                    fp = OUTPUT_ROOT / json_path
-                    try:
-                        with open(fp, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                        if data.get("keyword") != term:
-                            continue
-                    except Exception:
-                        continue
-                filtered_items.append((json_path, ad_idx, file_retailer, file_client, ts))
-            items = filtered_items
-        
-        total = len(items)
-        
-        # Paginate
-        start_idx = max(0, (page - 1) * page_size)
-        slice_items = items[start_idx:start_idx + page_size]
-        
-        # Load only the cards for this page
-        from collections import defaultdict
-        by_file = defaultdict(list)
-        for json_path, ad_index, file_retailer, file_client, ts in slice_items:
-            by_file[json_path].append((ad_index, file_retailer, file_client, ts))
-        
-        cards = []
-        for rel, ad_infos in by_file.items():
-            fp = OUTPUT_ROOT / rel
-            try:
-                with open(fp, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                ads = data.get("ads", [])
-                for ad_index, file_retailer, file_client, ts in ad_infos:
-                    if 0 <= ad_index < len(ads):
-                        ad = ads[ad_index]
-                        
-                        # Build card (simplified, no complex brand extraction)
-                        brand = ad.get("brand") or "Unknown"
-                        advertisers = ad.get("advertisers") or []
-                        message = ad.get("title") or ad.get("message") or ad.get("description") or ""
-                        
-                        # Build image URL
-                        img_path = ad.get("image_path") or ad.get("screenshot") or ""
-                        image_url = f"/api/image/{file_retailer}/{file_client}/{img_path}" if img_path else None
-                        
-                        cards.append({
-                            "retailer": file_retailer,
-                            "client": file_client,
-                            "keyword": data.get("keyword"),
-                            "ad_type": ad.get("type") or ad.get("ad_type") or "Main",
-                            "brand": brand,
-                            "advertisers": advertisers,
-                            "message": message,
-                            "image_url": image_url,
-                            "video_url": ad.get("video_url"),
-                            "run_file": os.path.basename(rel),
-                            "timestamp": (data.get("timestamp") or "").replace("T", " ").replace("Z", ""),
-                            "featured": False,
-                            "ad_index": ad_index
-                        })
-            except Exception as e:
-                print(f"Error loading {rel}: {e}")
-                continue
-        
-        # Build response
-        result = {
-            "retailer": retailer,
-            "client": _norm_clients_for_cache(clients),
-            "cards": cards,
-            "page": page,
-            "page_size": page_size,
-            "has_more": (start_idx + len(cards)) < total,
-            "total_cards": total,
-            "brands": [],  # Not computed for brand-filtered queries
-            "filters": {
-                "term": term or None,
-                "advertiser": advertiser_raw or None,
-                "start": start_date,
-                "end": end_date
-            }
-        }
-        
-        _set_cache(cache_key, result)
-        client_str = _norm_clients_for_cache(clients)
-        print(f"[{retailer}/{client_str}] 🚀 Brand index fast path: {len(cards)} cards from {total} total (page {page})")
-        return jsonify(result)
+    if not client:
+        return jsonify({"error": "client parameter required"}), 400
     
-    # GENERAL PATH: Manifest-based file-level pagination
-    rows = []
-    for r in mf_runs():
-        if retailer and r["retailer"] != retailer:
-            continue
-        if clients and r["client"] not in clients:
-            continue
-        if term and r.get("keyword") != term:
-            continue
-        if start_date and r["day"] < start_date:
-            continue
-        if end_date and r["day"] > end_date:
-            continue
-        rows.append(r)
-
-    # Already sorted newest-first by builder
-    total = sum(int(r["ad_count"] or 0) for r in rows)
-    offset = (page - 1) * page_size
-
-    if total == 0 or offset >= total:
-        result = {
-            "retailer": retailer,
-            "client": _norm_clients_for_cache(clients),
-            "cards": [],
-            "page": page,
-            "page_size": page_size,
-            "has_more": False,
-            "total_cards": 0,
-            "brands": [],
-            "filters": {"term": term, "start": start_date, "end": end_date}
-        }
-        _set_cache(cache_key, result)
-        return jsonify(result)
-
-    # Find which runs contain the requested page slice
-    cards = []
-    brands_set = set()
-    acc = 0
-    need = page_size
-    start_needed = offset
-
-    for r in rows:
-        run_count = int(r["ad_count"] or 0)
-        
-        # Skip runs before our offset
-        if start_needed >= run_count:
-            start_needed -= run_count
-            acc += run_count
-            continue
-        
-        # This run contains part of the requested slice
-        fp = OUTPUT_ROOT / r["json_path"]
-        try:
-            with open(fp, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except Exception:
-            acc += run_count
-            continue
-
-        all_ads = data.get("ads") or []
-        begin = start_needed
-        take = min(need, max(0, len(all_ads) - begin))
-        
-        for j in range(begin, begin + take):
-            if j >= len(all_ads):
-                break
-            ad = all_ads[j]
-            file_client = r["client"]
-            file_retailer = r["retailer"]
-            
-            # Extract advertisers array (preferred) or fallback to brand field
-            advertisers = ad.get("advertisers") or []
-            if not advertisers:
-                ad_brand = ad.get("brand") or ad.get("advertiser")
-                if ad_brand:
-                    advertisers = [ad_brand]
-            
-            # Build brand display string from advertisers
-            brand = ' + '.join(advertisers) if advertisers else "Unknown"
-            
-            # Track unique brands
-            for adv in advertisers:
-                if adv and adv != "Unknown":
-                    brands_set.add(adv)
-            
-            message = ad.get("title") or ad.get("message") or ad.get("description") or ""
-            
-            # Build image URL
-            img_path = ad.get("image_path") or ad.get("screenshot") or ""
-            image_url = f"/api/image/{file_retailer}/{file_client}/{img_path}" if img_path else None
-            
-            # Normalize timestamp to ISO Z
-            raw_ts = data.get("timestamp") or ""
-            iso_ts = raw_ts if raw_ts.endswith("Z") else raw_ts.replace(" ", "T") + "Z" if raw_ts else ""
-            
-            cards.append({
-                "retailer": file_retailer,
-                "client": file_client,
-                "keyword": data.get("keyword"),
-                "ad_type": ad.get("type") or ad.get("ad_type") or "Main",
-                "brand": brand,
-                "advertisers": advertisers,
-                "message": message,
-                "image_url": image_url,
-                "video_url": ad.get("video_url"),
-                "run_file": os.path.basename(r["json_path"]),
-                "timestamp": iso_ts,
-                "featured": False,
-                "ad_index": j
-            })
-
-        need -= take
-        acc += run_count
-        start_needed = 0
-        
-        if need <= 0:
-            break
-
-    has_more = (offset + len(cards)) < total
-
-    result = {
-        "retailer": retailer,
-        "client": _norm_clients_for_cache(clients),
-        "cards": cards,
-        "page": page,
-        "page_size": page_size,
-        "has_more": has_more,
-        "total_cards": total,
-        "brands": sorted(list(brands_set)),
-        "filters": {"term": term, "start": start_date, "end": end_date}
-    }
-
-    _set_cache(cache_key, result)
-    client_str = _norm_clients_for_cache(clients)
-    print(f"[{retailer}/{client_str}] 📊 Manifest pagination: {len(cards)} cards from {total} total (page {page})")
-    return jsonify(result)
-    
-    # Support client=all or comma-separated list of clients
+    # Support client=all to query across all clients
     if client.lower() == "all":
         clients_to_query = []
         retailer_root = os.path.join(OUTPUT_ROOT, retailer)
@@ -1779,9 +1210,6 @@ def api_ads_cards():
                 item_path = os.path.join(retailer_root, item)
                 if os.path.isdir(item_path):
                     clients_to_query.append(item)
-    elif "," in client:
-        # Parse comma-separated list of clients
-        clients_to_query = [c.strip() for c in client.split(",") if c.strip()]
     else:
         clients_to_query = [client]
     
@@ -1790,122 +1218,74 @@ def api_ads_cards():
     start_dt, end_dt = None, None
     if start_date or end_date:
         try:
-            start_dt, end_dt = utc_range_for("custom", start_date, end_date, tz_offset_minutes)
-            print(f"[{retailer}/{client}] 📅 Early date filter: {start_dt.isoformat()} to {end_dt.isoformat()} (tz_offset: {tz_offset_minutes} min)")
+            start_dt, end_dt = utc_range_for("custom", start_date, end_date)
+            print(f"[{retailer}/{client}] 📅 Early date filter: {start_dt.isoformat()} to {end_dt.isoformat()}")
         except Exception as e:
             print(f"[{retailer}/{client}] ⚠️  Date parse error: {e}")
     
-    # BRAND INDEX OPTIMIZATION: If advertiser filter is specified, use brand index for instant lookup
+    # Collect files from all clients
     files = []
-    use_brand_index = False
-    if advertiser_filter:
-        brand_files = lookup_brand_files(advertiser_filter)
-        if brand_files:
-            use_brand_index = True
-            print(f"[{retailer}/{client}] 🚀 Brand index: Found {len(brand_files)} files for '{advertiser_filter}'")
-            
-            # Filter by retailer and client
-            for entry in brand_files:
-                if entry['retailer'] != retailer:
-                    continue
-                if client.lower() != "all" and entry['client'] not in clients_to_query:
-                    continue
+    for client_name in clients_to_query:
+        rdir = runs_dir(retailer, client_name)
+        
+        if not os.path.isdir(rdir):
+            continue
+        
+        # Get all run files (newest first) - handle both flat and nested structures
+        # Prefer canonical files (run_results_YYYYMMDDHHMMSS.json) over legacy files
+        for item in os.listdir(rdir):
+            item_path = os.path.join(rdir, item)
+            if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                # Support both canonical format (run_results_YYYYMMDDHHMMSS.json) 
+                # and legacy format (run_results_{retailer}_{client}_{timestamp}.json)
+                filename_base = item.replace("run_results_", "").replace(".json", "")
                 
-                # Apply date filter if specified
-                if start_dt or end_dt:
-                    try:
-                        entry_ts = entry.get('timestamp')
-                        if entry_ts:
-                            entry_dt = datetime.fromisoformat(entry_ts.replace('Z', '+00:00'))
-                            if start_dt and entry_dt < start_dt:
-                                continue
-                            if end_dt and entry_dt > end_dt:
-                                continue
-                    except Exception:
-                        pass  # Include if date parsing fails
+                # Extract timestamp from either format
+                timestamp_str = None
+                if filename_base.isdigit() and len(filename_base) == 14:
+                    # Canonical format: run_results_20251118095746.json
+                    timestamp_str = filename_base
+                elif "_" in filename_base:
+                    # Legacy format: run_results_amazon_taxonomy_test_2_20251118_095746.json
+                    # Extract the last part that looks like a timestamp
+                    parts = filename_base.split("_")
+                    if len(parts) >= 2:
+                        # Try to find timestamp in last two parts (date_time)
+                        potential_timestamp = parts[-2] + parts[-1]  # 20251118095746
+                        if potential_timestamp.isdigit() and len(potential_timestamp) == 14:
+                            timestamp_str = potential_timestamp
                 
-                # Add to files list with ad indices for targeted loading
-                json_path = OUTPUT_ROOT / entry['json_path']
-                if json_path.exists():
-                    files.append((json_path.name, str(json_path), entry['client'], entry.get('ad_indices', [])))
-            
-            print(f"[{retailer}/{client}] 🚀 Brand index: {len(files)} files after filtering")
-    
-    # Fallback: Collect files from all clients (original logic)
-    if not use_brand_index:
-        for client_name in clients_to_query:
-            rdir = runs_dir(retailer, client_name)
-            
-            if not os.path.isdir(rdir):
-                continue
-            
-            # Get all run files (newest first) - handle both canonical and legacy formats
-            for item in os.listdir(rdir):
-                item_path = os.path.join(rdir, item)
-                if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
-                    filename_base = item.replace("run_results_", "").replace(".json", "")
-                    
-                    # Try canonical format first (run_results_YYYYMMDDHHMMSS.json)
-                    if filename_base.isdigit() and len(filename_base) == 14:
-                        # PERFORMANCE: Filter by date before adding to files list
-                        if start_dt or end_dt:
-                            try:
-                                # Parse timestamp from filename: YYYYMMDDHHMMSS
-                                file_dt = datetime.strptime(filename_base, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
-                                if start_dt and file_dt < start_dt:
-                                    continue  # Skip files before start date
-                                if end_dt and file_dt > end_dt:
-                                    continue  # Skip files after end date
-                            except Exception:
-                                pass  # Include file if date parsing fails
-                        files.append((item, item_path, client_name))
-                    
-                    # Also support legacy format (run_results_{keyword}_YYYY-MM-DD_HH-MM-SS.json)
-                    elif "_" in filename_base:
-                        # Try to extract date from legacy format
-                        parts = filename_base.split("_")
-                        if len(parts) >= 3:
-                            # Look for date pattern YYYY-MM-DD
-                            for i, part in enumerate(parts):
-                                if len(part) == 10 and part.count("-") == 2:
-                                    try:
-                                        # Found date, check if next part is time
-                                        date_str = part
-                                        time_str = parts[i+1] if i+1 < len(parts) else "00-00-00"
-                                        # Parse: 2025-10-24_16-19-00
-                                        datetime_str = f"{date_str} {time_str.replace('-', ':')}"
-                                        file_dt = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-                                        
-                                        # Apply date filter
-                                        if start_dt and file_dt < start_dt:
-                                            break  # Skip this file
-                                        if end_dt and file_dt > end_dt:
-                                            break  # Skip this file
-                                        
-                                        files.append((item, item_path, client_name))
-                                        break
-                                    except Exception:
-                                        # If date parsing fails, include the file anyway
-                                        files.append((item, item_path, client_name))
-                                        break
-                elif os.path.isdir(item_path):
-                    # Check subdirectories (Walmart structure)
-                    for subitem in os.listdir(item_path):
-                        if subitem.startswith("run_results_") and subitem.endswith(".json"):
-                            # Same canonical check for nested files
-                            filename_base = subitem.replace("run_results_", "").replace(".json", "")
-                            if filename_base.isdigit() and len(filename_base) == 14:
-                                # PERFORMANCE: Filter by date before adding to files list
-                                if start_dt or end_dt:
-                                    try:
-                                        file_dt = datetime.strptime(filename_base, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
-                                        if start_dt and file_dt < start_dt:
-                                            continue
-                                        if end_dt and file_dt > end_dt:
-                                            continue
-                                    except Exception:
-                                        pass
-                                files.append((subitem, os.path.join(item_path, subitem), client_name))
+                if timestamp_str:
+                    # PERFORMANCE: Filter by date before adding to files list
+                    if start_dt or end_dt:
+                        try:
+                            # Parse timestamp from extracted timestamp string: YYYYMMDDHHMMSS
+                            file_dt = datetime.strptime(timestamp_str, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+                            if start_dt and file_dt < start_dt:
+                                continue  # Skip files before start date
+                            if end_dt and file_dt > end_dt:
+                                continue  # Skip files after end date
+                        except Exception:
+                            pass  # Include file if date parsing fails
+                    files.append((item, item_path, client_name))
+            elif os.path.isdir(item_path):
+                # Check subdirectories (Walmart structure)
+                for subitem in os.listdir(item_path):
+                    if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                        # Same canonical check for nested files
+                        filename_base = subitem.replace("run_results_", "").replace(".json", "")
+                        if filename_base.isdigit() and len(filename_base) == 14:
+                            # PERFORMANCE: Filter by date before adding to files list
+                            if start_dt or end_dt:
+                                try:
+                                    file_dt = datetime.strptime(filename_base, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+                                    if start_dt and file_dt < start_dt:
+                                        continue
+                                    if end_dt and file_dt > end_dt:
+                                        continue
+                                except Exception:
+                                    pass
+                            files.append((subitem, os.path.join(item_path, subitem), client_name))
     
     # Sort by filename (most recent first)
     files = sorted(files, key=lambda x: x[0], reverse=True)
@@ -1914,7 +1294,7 @@ def api_ads_cards():
     
     # Return empty if no files found
     if not files:
-        empty_result = {
+        return jsonify({
             "retailer": retailer,
             "client": client,
             "cards": [],
@@ -1922,30 +1302,11 @@ def api_ads_cards():
             "page_size": page_size,
             "has_more": False,
             "total_cards": 0
-        }
-        _set_cache(cache_key, empty_result)
-        return jsonify(empty_result)
-    
-    # PERFORMANCE OPTIMIZATION: Early-slice file scanning
-    # DISABLED: Early-slice breaks aggregate stats (total count, brand counts, SOV)
-    # TODO: Implement proper file-level pagination for non-brand queries
-    max_files_to_scan = None
+        })
     
     # Collect all cards
     all_cards = []
-    files_scanned = 0
-    for file_entry in files:
-        # Handle both 3-tuple (fallback) and 4-tuple (brand index) formats
-        if len(file_entry) == 4:
-            fn, fpath, file_client, ad_indices = file_entry
-        else:
-            fn, fpath, file_client = file_entry
-            ad_indices = None  # Load all ads
-        # Early-slice: stop if we've scanned enough files
-        if max_files_to_scan and files_scanned >= max_files_to_scan:
-            print(f"[{retailer}/{client}] ⚡ Early-slice: Stopped after {files_scanned} files")
-            break
-        files_scanned += 1
+    for fn, fpath, file_client in files:
         try:
             with open(fpath, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -2286,30 +1647,12 @@ def api_ads_cards():
     
     # Filter by advertiser if specified
     if advertiser_filter:
-        print(f"[{retailer}/{client}] 🔍 Filtering {len(all_cards)} cards by advertiser: '{advertiser_filter}'")
         filtered_cards = []
-        for idx, card in enumerate(all_cards):
-            matched = False
-            
-            # Check brand field
-            brand = (card.get("brand") or "").lower()
-            if advertiser_filter in brand or brand in advertiser_filter:
-                matched = True
-            
-            # Check advertisers array
-            if not matched:
-                advertisers = card.get("advertisers", [])
-                for adv in advertisers:
-                    adv_lower = adv.lower()
-                    # Match if filter contains advertiser OR advertiser contains filter
-                    if advertiser_filter in adv_lower or adv_lower in advertiser_filter:
-                        matched = True
-                        break
-            
-            if matched:
+        for card in all_cards:
+            # Check if any advertiser in the array matches the filter
+            advertisers = card.get("advertisers", [])
+            if any(advertiser_filter in adv.lower() for adv in advertisers):
                 filtered_cards.append(card)
-        
-        print(f"[{retailer}/{client}] ✅ After advertiser filter: {len(filtered_cards)} cards remain")
         all_cards = filtered_cards
 
     # Filter by brands if specified (comma-separated list)
@@ -2342,11 +1685,11 @@ def api_ads_cards():
     # Empty/missing parameters mean lifetime (all dates)
     if start_date or end_date:
         # Log the filtering operation for debugging
-        print(f"[{retailer}/{client}] 📅 Date filter requested: start={start_date}, end={end_date}, tz_offset={tz_offset_minutes}")
+        print(f"[{retailer}/{client}] 📅 Date filter requested: start={start_date}, end={end_date}")
 
         # Determine filter type and get UTC range
         filter_name = "custom"  # Default to custom range
-        start_dt, end_dt = utc_range_for(filter_name, start_date, end_date, tz_offset_minutes)
+        start_dt, end_dt = utc_range_for(filter_name, start_date, end_date)
 
         print(f"[{retailer}/{client}] 📅 UTC range: {start_dt.isoformat()} to {end_dt.isoformat()}")
         print(f"[{retailer}/{client}] 📅 Filtering {len(all_cards)} cards...")
@@ -2430,7 +1773,7 @@ def api_ads_cards():
     cards = all_cards[start:end]
     has_more = end < len(all_cards)
     
-    result = {
+    return jsonify({
         "retailer": retailer,
         "client": client,
         "cards": cards,
@@ -2443,18 +1786,7 @@ def api_ads_cards():
             "term": term or None,
             "advertiser": advertiser_filter or None
         }
-    }
-    
-    # Store in cache (60s TTL)
-    _set_cache(cache_key, result)
-    
-    # Add Server-Timing header for cache miss
-    response = jsonify(result)
-    response.headers["Server-Timing"] = "cache;desc=miss"
-    print(f"[{retailer}/{client}] 💾 Cache MISS for page {page} - stored for 60s")
-    
-    return response
-
+    })
 
 @app.route("/api/brands", methods=["GET"])
 def api_brands():
@@ -2464,34 +1796,9 @@ def api_brands():
     Query params:
     - retailers (optional): comma-separated list of retailer slugs or "all" (default: "all")
     - client (optional): client name or "all" for all clients (default: "all")
-    - advertiser (optional): filter by brand/advertiser name
-    - start (optional): start date (YYYY-MM-DD)
-    - end (optional): end date (YYYY-MM-DD)
-    - term (optional): keyword filter
     """
     retailers_param = (request.args.get("retailers") or "all").strip().lower()
-    clients = _parse_clients(request)
-    advertiser = (request.args.get("advertiser") or "").strip()
-    start_date = request.args.get("start")
-    end_date = request.args.get("end")
-    term = (request.args.get("term") or "").strip().lower()
-
-    # Check cache first
-    cache_params = {
-        "retailers": retailers_param,
-        "client": _norm_clients_for_cache(clients),
-        "advertiser": advertiser,
-        "start": start_date,
-        "end": end_date,
-        "term": term
-    }
-    cache_key = f"brands_{_cache_key(cache_params)}"
-    
-    if cache_key in _cache:
-        cached_data, cached_time = _cache[cache_key]
-        if time() - cached_time < _cache_ttl:
-            print(f"[brands] Cache hit for {cache_params}")
-            return jsonify(cached_data)
+    client = (request.args.get("client") or "").strip() or "all"
 
     # Parse retailers
     if retailers_param == "all":
@@ -2505,265 +1812,127 @@ def api_brands():
         retailers_to_query = [r.strip() for r in retailers_param.split(",")]
 
     try:
-        # Use brand index for advertiser-filtered queries
-        if advertiser:
-            brand_counts = {}
-            brand_case_map = {}
-            
-            for retailer in retailers_to_query:
-                # Get files from brand index
-                brand_files = lookup_brand_files(retailer, advertiser)
-                if not brand_files:
+        # Collect all cards from all retailers and clients to aggregate brands
+        all_cards = []
+
+        for retailer in retailers_to_query:
+            # Support client=all to query across all clients
+            if client.lower() == "all":
+                clients_to_query = []
+                retailer_root = os.path.join(OUTPUT_ROOT, retailer)
+                if os.path.isdir(retailer_root):
+                    for item in os.listdir(retailer_root):
+                        item_path = os.path.join(retailer_root, item)
+                        if os.path.isdir(item_path):
+                            clients_to_query.append(item)
+            else:
+                clients_to_query = [client]
+
+            for client_name in clients_to_query:
+                rdir = runs_dir(retailer, client_name)
+
+                if not os.path.isdir(rdir):
                     continue
-                
-                for fp, ad_indices in brand_files:
-                    try:
-                        with open(fp, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                        
-                        # Extract client from path
-                        path_parts = Path(fp).parts
-                        file_client = path_parts[path_parts.index(retailer) + 1] if retailer in path_parts else "unknown"
-                        
-                        # Filter by client set
-                        if clients and file_client not in clients:
-                            continue
-                        
-                        # Filter by date range
-                        run_ts = data.get("timestamp") or ""
-                        run_day = run_ts[:10] if len(run_ts) >= 10 else ""
-                        if start_date and run_day < start_date:
-                            continue
-                        if end_date and run_day > end_date:
-                            continue
-                        
-                        # Filter by term
-                        run_kw = (data.get("keyword") or "").lower()
-                        if term and run_kw != term:
-                            continue
-                        
-                        # Get ads
-                        ads = data.get("ads") or []
-                        
-                        # Process specific ad indices or all ads
-                        indices_to_check = ad_indices if ad_indices else range(len(ads))
-                        
-                        for idx in indices_to_check:
-                            if idx >= len(ads):
+
+                # Get all run files
+                for item in os.listdir(rdir):
+                    item_path = os.path.join(rdir, item)
+                    if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
+                        filename_base = item.replace("run_results_", "").replace(".json", "")
+                        if filename_base.isdigit() and len(filename_base) == 14:
+                            try:
+                                with open(item_path, "r", encoding="utf-8") as f:
+                                    data = json.load(f)
+
+                                # Extract ads from various JSON structures
+                                ads = []
+                                if "ads" in data:
+                                    ads = data["ads"]
+                                elif "results" in data:
+                                    for result in data.get("results", []):
+                                        ads.extend(result.get("ads", []))
+
+                                # Process each ad into a card
+                                for ad_index, ad in enumerate(ads):
+                                    brand = (ad.get("brand") or ad.get("advertiser") or "Unknown").strip()
+                                    timestamp = to_iso_z(ad.get("timestamp"), data.get("run_id"))
+
+                                    all_cards.append({
+                                        "brand": brand,
+                                        "timestamp": timestamp,
+                                        "run_file": item,
+                                        "ad_index": ad_index,
+                                        "client": client_name,
+                                        "retailer": retailer
+                                    })
+                            except Exception as e:
+                                print(f"[brands] Error processing file {item_path}: {e}")
                                 continue
-                            ad = ads[idx]
-                            
-                            # Extract advertisers
-                            advertisers = ad.get("advertisers") or []
-                            if not advertisers:
-                                ad_brand = ad.get("brand") or ad.get("advertiser")
-                                if ad_brand:
-                                    advertisers = [ad_brand]
-                            
-                            # Count each advertiser
-                            for adv in advertisers:
-                                if not adv or adv == "Unknown":
-                                    continue
-                                brand_normalized = adv.lower()
-                                if brand_normalized not in brand_counts:
-                                    brand_case_map[brand_normalized] = adv
-                                    brand_counts[brand_normalized] = 0
-                                brand_counts[brand_normalized] += 1
-                    
-                    except Exception as e:
-                        print(f"[brands] Error processing {fp}: {e}")
-                        continue
-            
-            # Build response
-            total = sum(brand_counts.values())
-            brands_list = []
-            for norm_brand, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True):
-                brands_list.append({
-                    "brand": brand_case_map[norm_brand],
-                    "count": count,
-                    "percentage": round((count / total) * 100, 1) if total > 0 else 0
-                })
-            
-            result = {"brands": brands_list}
-            _set_cache(cache_key, result)
-            print(f"[brands] Brand-filtered: {len(brands_list)} brands, {total} ads")
-            return jsonify(result)
-        
-        # Use manifest for general queries
-        # Filter runs by criteria
-        rows = []
-        for r in mf_runs():
-            # Filter by retailer
-            if r["retailer"] not in retailers_to_query:
-                continue
-            
-            # Filter by client set
-            if clients and r["client"] not in clients:
-                continue
-            
-            # Filter by date range
-            if start_date and r["day"] < start_date:
-                continue
-            if end_date and r["day"] > end_date:
-                continue
-            
-            # Filter by term
-            if term and r.get("keyword", "").lower() != term:
-                continue
-            
-            rows.append(r)
-        
-        # Collect brands from filtered runs
+                    elif os.path.isdir(item_path):
+                        # Check subdirectories (Walmart structure)
+                        for subitem in os.listdir(item_path):
+                            if subitem.startswith("run_results_") and subitem.endswith(".json"):
+                                filename_base = subitem.replace("run_results_", "").replace(".json", "")
+                                if filename_base.isdigit() and len(filename_base) == 14:
+                                    subitem_path = os.path.join(item_path, subitem)
+                                    try:
+                                        with open(subitem_path, "r", encoding="utf-8") as f:
+                                            data = json.load(f)
+
+                                        ads = []
+                                        if "ads" in data:
+                                            ads = data["ads"]
+                                        elif "results" in data:
+                                            for result in data.get("results", []):
+                                                ads.extend(result.get("ads", []))
+
+                                        for ad_index, ad in enumerate(ads):
+                                            brand = (ad.get("brand") or ad.get("advertiser") or "Unknown").strip()
+                                            timestamp = to_iso_z(ad.get("timestamp"), data.get("run_id"))
+
+                                            all_cards.append({
+                                                "brand": brand,
+                                                "timestamp": timestamp,
+                                                "run_file": subitem,
+                                                "ad_index": ad_index,
+                                                "client": client_name,
+                                                "retailer": retailer
+                                            })
+                                    except Exception as e:
+                                        print(f"[brands] Error processing file {subitem_path}: {e}")
+                                        continue
+
+        # Deduplicate cards
+        seen = set()
+        deduped_cards = []
+        for card in all_cards:
+            key = (card.get("retailer"), card.get("run_file"), card.get("ad_index"))
+            if key not in seen:
+                seen.add(key)
+                deduped_cards.append(card)
+
+        # Calculate brand aggregations
         brand_counts = {}
-        brand_case_map = {}
-        
-        for r in rows:
-            fp = OUTPUT_ROOT / r["json_path"]
-            try:
-                with open(fp, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-            except Exception as e:
-                print(f"[brands] Error loading {fp}: {e}")
-                continue
-            
-            # Get ads
-            ads = data.get("ads") or []
-            
-            for ad in ads:
-                # Extract advertisers
-                advertisers = ad.get("advertisers") or []
-                if not advertisers:
-                    ad_brand = ad.get("brand") or ad.get("advertiser")
-                    if ad_brand:
-                        advertisers = [ad_brand]
-                
-                # Count each advertiser
-                for adv in advertisers:
-                    if not adv or adv == "Unknown":
-                        continue
-                    brand_normalized = adv.lower()
-                    if brand_normalized not in brand_counts:
-                        brand_case_map[brand_normalized] = adv
-                        brand_counts[brand_normalized] = 0
-                    brand_counts[brand_normalized] += 1
-        
-        # Build response
-        total = sum(brand_counts.values())
-        brands_list = []
-        for norm_brand, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True):
-            brands_list.append({
-                "brand": brand_case_map[norm_brand],
-                "count": count,
-                "percentage": round((count / total) * 100, 1) if total > 0 else 0
-            })
-        
-        result = {"brands": brands_list}
-        _set_cache(cache_key, result)
-        print(f"[brands] Manifest-based: {len(brands_list)} brands, {total} ads, {len(rows)} runs")
-        return jsonify(result)
+        for card in deduped_cards:
+            raw_brand = card.get("brand") or "Unknown"
+            # Canonicalize brand name to merge case variations
+            brand = canonicalize_brand(raw_brand) or raw_brand
+            brand_counts[brand] = brand_counts.get(brand, 0) + 1
+
+        # Sort brands alphabetically (by brand name)
+        brands_list = [
+            {"brand": brand, "count": count, "percentage": round((count / len(deduped_cards)) * 100, 1) if deduped_cards else 0}
+            for brand, count in sorted(brand_counts.items(), key=lambda x: x[0].lower())
+        ]
+
+        return jsonify({
+            "retailers": retailers_param,
+            "client": client,
+            "brands": brands_list
+        })
     except Exception as e:
         print(f"[brands] Error fetching brands: {str(e)}")
         return jsonify({"error": f"Failed to fetch brands: {str(e)}"}), 500
-
-@app.route("/api/timeline", methods=["GET"])
-def api_timeline():
-    """
-    Get all timestamps for timeline visualization (lightweight, no card loading).
-    
-    Query params:
-    - retailer (required): retailer slug
-    - client (optional): client name or comma-separated list
-    - start (optional): start date (YYYY-MM-DD)
-    - end (optional): end date (YYYY-MM-DD)
-    - term (optional): keyword filter
-    - advertiser (optional): brand filter
-    
-    Returns:
-    - timestamps: array of ISO Z timestamps
-    """
-    retailer = request.args.get("retailer")
-    if not retailer:
-        return jsonify({"error": "retailer is required"}), 400
-    
-    clients = _parse_clients(request)
-    advertiser = (request.args.get("advertiser") or "").strip()
-    start_date = request.args.get("start")
-    end_date = request.args.get("end")
-    term = (request.args.get("term") or "").strip().lower()
-    
-    timestamps = []
-    
-    # Use brand index for advertiser-filtered queries
-    if advertiser:
-        brand_files = lookup_brand_files(retailer, advertiser)
-        if brand_files:
-            for fp, ad_indices in brand_files:
-                try:
-                    with open(fp, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    
-                    # Extract client from path
-                    path_parts = Path(fp).parts
-                    file_client = path_parts[path_parts.index(retailer) + 1] if retailer in path_parts else "unknown"
-                    
-                    # Filter by client set
-                    if clients and file_client not in clients:
-                        continue
-                    
-                    # Filter by date range
-                    run_ts = data.get("timestamp") or ""
-                    run_day = run_ts[:10] if len(run_ts) >= 10 else ""
-                    if start_date and run_day < start_date:
-                        continue
-                    if end_date and run_day > end_date:
-                        continue
-                    
-                    # Filter by term
-                    run_kw = (data.get("keyword") or "").lower()
-                    if term and run_kw != term:
-                        continue
-                    
-                    # Get ads
-                    ads = data.get("ads") or []
-                    indices_to_check = ad_indices if ad_indices else range(len(ads))
-                    
-                    for idx in indices_to_check:
-                        if idx >= len(ads):
-                            continue
-                        ad = ads[idx]
-                        # Use run timestamp for each ad
-                        timestamps.append(run_ts)
-                
-                except Exception as e:
-                    print(f"[timeline] Error processing {fp}: {e}")
-                    continue
-    else:
-        # Use manifest for general queries
-        for r in mf_runs():
-            if r["retailer"] != retailer:
-                continue
-            
-            # Filter by client set
-            if clients and r["client"] not in clients:
-                continue
-            
-            # Filter by date range
-            if start_date and r["day"] < start_date:
-                continue
-            if end_date and r["day"] > end_date:
-                continue
-            
-            # Filter by term
-            if term and r.get("keyword", "").lower() != term:
-                continue
-            
-            # Add one timestamp per ad in this run
-            ad_count = int(r.get("ad_count") or 0)
-            run_ts = r.get("timestamp") or ""
-            for _ in range(ad_count):
-                timestamps.append(run_ts)
-    
-    return jsonify({"timestamps": timestamps})
 
 @app.route("/api/brand-details", methods=["GET"])
 def api_brand_details():
@@ -3157,13 +2326,11 @@ def api_ads_batch():
     - clients (required): comma-separated list of clients  
     - page (optional): page number (default 1)
     - page_size (optional): items per page (default 100, max 200)
-    - start (optional): start date filter (YYYY-MM-DD)
-    - end (optional): end date filter (YYYY-MM-DD)
+    - start (optional): start date filter
+    - end (optional): end date filter
     - search (optional): search term filter
     - types (optional): comma-separated ad types
     - brands (optional): comma-separated brands
-    - sort (optional): latest|oldest|name
-    - keywords (optional): comma-separated keywords
     """
     retailers_param = (request.args.get("retailers") or "").strip()
     clients_param = (request.args.get("clients") or "").strip()
@@ -3184,108 +2351,32 @@ def api_ads_batch():
     except Exception:
         page_size = 100
     
-    # Get filter params for caching
-    start_date = request.args.get("start")
-    end_date = request.args.get("end")
-    search_term = request.args.get("search")
-    types_param = request.args.get("types")
-    brands_param = request.args.get("brands")
-    keywords_param = request.args.get("keywords")
-    sort_param = request.args.get("sort", "latest")
-    
-    # Check cache
-    cache_params = {
-        "endpoint": "batch",
-        "retailers": ",".join(sorted(retailers)),
-        "clients": ",".join(sorted(clients)),
-        "page": page,
-        "page_size": page_size,
-        "start": start_date,
-        "end": end_date,
-        "search": search_term,
-        "types": types_param,
-        "brands": brands_param,
-        "keywords": keywords_param,
-        "sort": sort_param
-    }
-    cache_key = _cache_key(cache_params)
-    cached = _get_cached(cache_key)
-    if cached is not None:
-        return jsonify(cached)
-    
-    # Parse date filters for time-window restriction
-    start_dt = None
-    end_dt = None
-    if start_date:
-        try:
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except Exception:
-            pass
-    if end_date:
-        try:
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
-        except Exception:
-            pass
-    
-    # Parse filter lists
-    types_filter = [t.strip() for t in (types_param or "").split(",") if t.strip()]
-    brands_filter = [b.strip().lower() for b in (brands_param or "").split(",") if b.strip()]
-    keywords_filter = [k.strip().lower() for k in (keywords_param or "").split(",") if k.strip()]
-    
-    # Collect cards with early termination
+    # Collect all cards from all retailer/client combinations
     all_cards = []
-    needed = page * page_size  # Only need enough for current page
-    
     for retailer in retailers:
         for client in clients:
+            # Reuse the cards endpoint logic
             rdir = runs_dir(retailer, client)
             if not os.path.isdir(rdir):
                 continue
             
-            # Get run files and filter by date window
+            # Get run files
             files = []
             for item in os.listdir(rdir):
                 item_path = os.path.join(rdir, item)
                 if os.path.isfile(item_path) and item.startswith("run_results_") and item.endswith(".json"):
                     filename_base = item.replace("run_results_", "").replace(".json", "")
                     if filename_base.isdigit() and len(filename_base) == 14:
-                        # Time-window restrict: check if run_id falls in date range
-                        if start_dt or end_dt:
-                            try:
-                                run_dt = datetime.strptime(filename_base, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
-                                if start_dt and run_dt < start_dt:
-                                    continue
-                                if end_dt and run_dt > end_dt:
-                                    continue
-                            except Exception:
-                                pass
                         files.append((item, item_path))
                 elif os.path.isdir(item_path):
                     for subitem in os.listdir(item_path):
                         if subitem.startswith("run_results_") and subitem.endswith(".json"):
                             filename_base = subitem.replace("run_results_", "").replace(".json", "")
                             if filename_base.isdigit() and len(filename_base) == 14:
-                                # Time-window restrict
-                                if start_dt or end_dt:
-                                    try:
-                                        run_dt = datetime.strptime(filename_base, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
-                                        if start_dt and run_dt < start_dt:
-                                            continue
-                                        if end_dt and run_dt > end_dt:
-                                            continue
-                                    except Exception:
-                                        pass
                                 files.append((subitem, os.path.join(item_path, subitem)))
             
-            # Sort files by timestamp (newest first for early termination)
-            files.sort(key=lambda x: x[0], reverse=True)
-            
-            # Process files with early termination
+            # Process each file
             for _, fpath in files:
-                # Early termination: stop if we have enough cards
-                if len(all_cards) >= needed:
-                    break
-                    
                 try:
                     with open(fpath, 'r', encoding='utf-8') as f:
                         data = json.load(f)
@@ -3296,26 +2387,8 @@ def api_ads_batch():
                         for result in data["results"]:
                             ads.extend(result.get("ads", []))
                     
-                    # Build cards with filtering
+                    # Build cards
                     for ad in ads:
-                        # Early termination check
-                        if len(all_cards) >= needed:
-                            break
-                        
-                        # Apply filters
-                        if types_filter and ad.get("type") not in types_filter:
-                            continue
-                        if brands_filter and ad.get("brand", "").lower() not in brands_filter:
-                            continue
-                        if keywords_filter:
-                            ad_text = f"{ad.get('title', '')} {ad.get('description', '')} {ad.get('brand', '')}".lower()
-                            if not any(kw in ad_text for kw in keywords_filter):
-                                continue
-                        if search_term:
-                            ad_text = f"{ad.get('title', '')} {ad.get('description', '')} {ad.get('brand', '')}".lower()
-                            if search_term.lower() not in ad_text:
-                                continue
-                        
                         image_url = build_image_url_for_ad(retailer, client, ad)
                         if image_url:  # Only include ads with resolvable images
                             all_cards.append({
@@ -3330,40 +2403,22 @@ def api_ads_batch():
                             })
                 except Exception:
                     continue
-            
-            # Early termination: stop scanning clients if we have enough
-            if len(all_cards) >= needed:
-                break
-        
-        # Early termination: stop scanning retailers if we have enough
-        if len(all_cards) >= needed:
-            break
     
-    # Sort by timestamp (newest first by default)
-    if sort_param == "oldest":
-        all_cards.sort(key=lambda x: x.get("timestamp", ""))
-    elif sort_param == "name":
-        all_cards.sort(key=lambda x: x.get("brand", "").lower())
-    else:  # latest (default)
-        all_cards.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    # Sort by timestamp (newest first)
+    all_cards.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     
     # Paginate
     start_idx = (page - 1) * page_size
     end_idx = start_idx + page_size
     page_cards = all_cards[start_idx:end_idx]
     
-    result = {
+    return jsonify({
         "cards": page_cards,
         "page": page,
         "page_size": page_size,
         "has_more": end_idx < len(all_cards),
         "total_cards": len(all_cards)
-    }
-    
-    # Cache the result
-    _set_cache(cache_key, result)
-    
-    return jsonify(result)
+    })
 
 @app.route("/api/ads/stats", methods=["GET"])
 def api_ads_stats():

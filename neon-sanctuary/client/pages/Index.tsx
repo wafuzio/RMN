@@ -1,22 +1,27 @@
 import { useMemo, useRef, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useRetailers, useClients, useAds } from "@/hooks/useRetailAds";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useRetailers, useClients, useAds, useAdCount } from "@/hooks/useRetailAds";
+import { useBrands } from "@/hooks/useBrands";
+import { useTimeline } from "@/hooks/useTimeline";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { AdVolumeTrendCard } from "@/components/dashboard/AdVolumeTrendCard";
 import { RetailerSelector } from "@/components/dashboard/RetailerSelector";
 import { Filters, FiltersState } from "@/components/dashboard/Filters";
 import { Timeline } from "@/components/dashboard/Timeline";
 import { Ad, AdCard } from "@/components/dashboard/AdCard";
+import { AdCardGroup } from "@/components/dashboard/AdCardGroup";
 import { AdModal } from "@/components/dashboard/AdModal";
 import { TopBrandModal } from "@/components/dashboard/TopBrandModal";
+import { BrandDetailModal } from "@/components/dashboard/BrandDetailModal";
 import { AllBrandsModal } from "@/components/dashboard/AllBrandsModal";
 import { SkeletonGrid } from "@/components/dashboard/SkeletonGrid";
 import { TemporalVisualMap } from "@/components/visual/TemporalVisualMap";
-import { PerformanceCard } from "@/components/PerformanceCard";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { aggregateAds, AdGroup, AdCardItem } from "@/lib/aggregateAds";
 import GaleLogo from "../../../web/assets/logos/GALE.svg";
 
 // Helper: Format date to YYYY-MM-DD for API
@@ -98,14 +103,66 @@ function useDnD<T>(items: T[], setItems: (v:T[])=>void) {
 
 export default function Index() {
   const navigate = useNavigate();
-  const [retailers, setRetailers] = useState<("kroger"|"amazon"|"instacart"|"walmart")[]>(["kroger"]);
+  const [searchParams] = useSearchParams();
+  
+  // Parse URL parameters for initial state
+  const urlRetailer = searchParams.get("retailer") as "kroger"|"amazon"|"instacart"|"walmart" | null;
+  const urlClient = searchParams.get("client");
+  const urlClients = searchParams.get("clients")?.split(",").filter(Boolean);
+  const urlTypes = searchParams.get("types")?.split(",").filter(Boolean);
+  const urlKeywords = searchParams.get("keywords")?.split(",").filter(Boolean);
+  const urlDays = searchParams.get("days");
+  const urlStart = searchParams.get("start");
+  const urlEnd = searchParams.get("end");
+  
+  const [retailers, setRetailers] = useState<("kroger"|"amazon"|"instacart"|"walmart")[]>(() => {
+    return urlRetailer ? [urlRetailer] : ["kroger"];
+  });
   const { data: retailersData } = useRetailers();
   const enabledRetailers = useMemo(() => new Set(retailersData?.retailers || []), [retailersData]);
 
   // Use first selected retailer for single-retailer operations (filters, clients)
   const primaryRetailer = retailers[0];
 
-  const [filters, setFilters] = useState<FiltersState>({ clients: [], types: [], search: "", keywords: [], datePreset: { type: "lifetime" } });
+  // Initialize with URL params or last 52 weeks date range
+  const [filters, setFilters] = useState<FiltersState>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Parse date range from URL
+    let start: Date | undefined;
+    let end: Date | undefined;
+    let datePreset: FiltersState["datePreset"] = { type: "last_52_weeks" };
+    
+    if (urlStart || urlEnd) {
+      start = urlStart ? new Date(urlStart) : undefined;
+      end = urlEnd ? new Date(urlEnd) : today;
+      datePreset = { type: "custom" };
+    } else if (urlDays) {
+      const days = parseInt(urlDays, 10);
+      if (!isNaN(days) && days > 0) {
+        start = new Date(today);
+        start.setDate(start.getDate() - (days - 1));
+        end = today;
+        datePreset = { type: "custom" };
+      }
+    } else {
+      start = new Date(today);
+      start.setDate(start.getDate() - (52 * 7 - 1)); // 364 days ago
+      end = today;
+    }
+    
+    return {
+      clients: urlClients || (urlClient ? [urlClient] : []),
+      types: urlTypes || [],
+      search: "",
+      keywords: urlKeywords || [],
+      start,
+      end,
+      datePreset,
+      groupIdentical: true
+    };
+  });
   const [leftFilters, setLeftFilters] = useState<FiltersState | null>(null);
   const [rightFilters, setRightFilters] = useState<FiltersState | null>(null);
   const [sortBy, setSortBy] = useState<"latest" | "oldest" | "name">("latest");
@@ -114,7 +171,7 @@ export default function Index() {
   // Restore last session state
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("retail-dashboard:last-state:v1");
+      const raw = localStorage.getItem("retail-dashboard:last-state:v2"); // Changed to v2 to invalidate old state
       if (!raw) return;
       const saved = JSON.parse(raw) as any;
       if (Array.isArray(saved.retailers) && saved.retailers.length) {
@@ -134,6 +191,7 @@ export default function Index() {
           start,
           end,
           datePreset: f.datePreset || { type: "lifetime" },
+          groupIdentical: f.groupIdentical ?? true,
         };
         setFilters(prev => ({ ...prev, ...parsed }));
       }
@@ -151,7 +209,7 @@ export default function Index() {
           end: filters.end ? filters.end.toISOString() : undefined,
         },
       };
-      localStorage.setItem("retail-dashboard:last-state:v1", JSON.stringify(toSave));
+      localStorage.setItem("retail-dashboard:last-state:v2", JSON.stringify(toSave));
     } catch {}
   }, [retailers, filters]);
 
@@ -168,25 +226,22 @@ export default function Index() {
   const allClientsAvailable = clientsResp?.clients || [];
   const isAllClientsSelected = selectedClients.length > 0 && selectedClients.length === allClientsAvailable.length;
 
-  // If all clients are selected, use "all"; otherwise use selected clients (up to 3)
-  const clientsToQuery = isAllClientsSelected
-    ? ["all"]
-    : (selectedClients.length > 0 ? selectedClients : [""]);
-
-  // Pad to ensure we always call hooks the same number of times
-  const paddedClients = [...clientsToQuery];
-  while (paddedClients.length < 3) paddedClients.push("");
-
-  const client1 = paddedClients[0];
-  const client2 = paddedClients[1];
-  const client3 = paddedClients[2];
+  // If all clients are selected, use "all"; otherwise send comma-separated list
+  const selectedClient = isAllClientsSelected
+    ? "all"
+    : selectedClients.length > 0
+    ? selectedClients.join(",")
+    : "";
 
   // PERFORMANCE FIX: Memoize and debounce filter parameters to prevent render loops
   // This stabilizes the filter object identity so useAds doesn't re-run on every render
+  // NOTE: Include tz_offset_minutes so backend can adjust date ranges correctly
+  // (JavaScript's getTimezoneOffset returns minutes ahead of UTC as negative value)
   const normalizedFilters = useMemo(() => ({
     term: filters.keywords?.length ? filters.keywords.join(",") : undefined,
     start: formatLocalDate(filters.start),
     end: formatLocalDate(filters.end),
+    tz_offset_minutes: new Date().getTimezoneOffset(), // e.g., -360 for UTC-6
     types: dedupSorted(filters.types),
     search: filters.search?.trim() || undefined,
     sort: sortBy,
@@ -203,87 +258,72 @@ export default function Index() {
   const debouncedFilters = useDebouncedValue(normalizedFilters, 350);
 
   const isKrogerSelected = retailers.includes("kroger");
-  const krogerQuery1 = useAds({
+  const krogerQuery = useAds({
     retailer: isKrogerSelected ? "kroger" : undefined,
-    client: client1,
-    ...debouncedFilters,
-  });
-  const krogerQuery2 = useAds({
-    retailer: isKrogerSelected ? "kroger" : undefined,
-    client: client2,
-    ...debouncedFilters,
-  });
-  const krogerQuery3 = useAds({
-    retailer: isKrogerSelected ? "kroger" : undefined,
-    client: client3,
+    client: selectedClient,
     ...debouncedFilters,
   });
 
   const isWalmartSelected = retailers.includes("walmart");
-  const walmartQuery1 = useAds({
+  const walmartQuery = useAds({
     retailer: isWalmartSelected ? "walmart" : undefined,
-    client: client1,
-    ...debouncedFilters,
-  });
-  const walmartQuery2 = useAds({
-    retailer: isWalmartSelected ? "walmart" : undefined,
-    client: client2,
-    ...debouncedFilters,
-  });
-  const walmartQuery3 = useAds({
-    retailer: isWalmartSelected ? "walmart" : undefined,
-    client: client3,
+    client: selectedClient,
     ...debouncedFilters,
   });
 
   const isInstacartSelected = retailers.includes("instacart");
-  const instacartQuery1 = useAds({
+  const instacartQuery = useAds({
     retailer: isInstacartSelected ? "instacart" : undefined,
-    client: client1,
-    ...debouncedFilters,
-  });
-  const instacartQuery2 = useAds({
-    retailer: isInstacartSelected ? "instacart" : undefined,
-    client: client2,
-    ...debouncedFilters,
-  });
-  const instacartQuery3 = useAds({
-    retailer: isInstacartSelected ? "instacart" : undefined,
-    client: client3,
+    client: selectedClient,
     ...debouncedFilters,
   });
 
   const isAmazonSelected = retailers.includes("amazon");
-  const amazonQuery1 = useAds({
+  const amazonQuery = useAds({
     retailer: isAmazonSelected ? "amazon" : undefined,
-    client: client1,
+    client: selectedClient,
     ...debouncedFilters,
   });
-  const amazonQuery2 = useAds({
-    retailer: isAmazonSelected ? "amazon" : undefined,
-    client: client2,
+
+  // Count queries for total cards (much faster than loading full cards)
+  const krogerCountQuery = useAdCount({
+    retailer: isKrogerSelected ? "kroger" : undefined,
+    client: selectedClient,
     ...debouncedFilters,
   });
-  const amazonQuery3 = useAds({
-    retailer: isAmazonSelected ? "amazon" : undefined,
-    client: client3,
+
+  const walmartCountQuery = useAdCount({
+    retailer: isWalmartSelected ? "walmart" : undefined,
+    client: selectedClient,
     ...debouncedFilters,
   });
-  
-  // Collect all queries - flatten by retailer and client
+
+  const instacartCountQuery = useAdCount({
+    retailer: isInstacartSelected ? "instacart" : undefined,
+    client: selectedClient,
+    ...debouncedFilters,
+  });
+
+  const amazonCountQuery = useAdCount({
+    retailer: isAmazonSelected ? "amazon" : undefined,
+    client: selectedClient,
+    ...debouncedFilters,
+  });
+
+  // Collect all queries - one per retailer now
   const allQueries = [
-    krogerQuery1, krogerQuery2, krogerQuery3,
-    walmartQuery1, walmartQuery2, walmartQuery3,
-    instacartQuery1, instacartQuery2, instacartQuery3,
-    amazonQuery1, amazonQuery2, amazonQuery3,
+    krogerQuery,
+    walmartQuery,
+    instacartQuery,
+    amazonQuery,
   ];
 
   // Build retailer-based query map (for backward compatibility)
   const queryMap = {
-    kroger: [krogerQuery1, krogerQuery2, krogerQuery3],
-    walmart: [walmartQuery1, walmartQuery2, walmartQuery3],
-    instacart: [instacartQuery1, instacartQuery2, instacartQuery3],
-    amazon: [amazonQuery1, amazonQuery2, amazonQuery3],
+    kroger: [krogerQuery],
+    walmart: [walmartQuery],
+    instacart: [instacartQuery],
+    amazon: [amazonQuery],
   };
   const retailerQueries = retailers.flatMap(r => queryMap[r]);
 
@@ -339,60 +379,43 @@ export default function Index() {
   const leftDebouncedFilters = useDebouncedValue(leftNormalizedFilters, 350);
   const rightDebouncedFilters = useDebouncedValue(rightNormalizedFilters, 350);
 
-  const leftAdsQuery1 = useAds({
+  // Compare mode: One query per side (use "all" or single client)
+  const leftSelectedClient = leftClients.length === 1 ? leftClients[0] : "all";
+  const rightSelectedClient = rightClients.length === 1 ? rightClients[0] : "all";
+
+  const leftAdsQuery = useAds({
     retailer: primaryRetailer,
-    client: leftPadded[0],
-    ...leftDebouncedFilters,
-  });
-  const leftAdsQuery2 = useAds({
-    retailer: primaryRetailer,
-    client: leftPadded[1],
-    ...leftDebouncedFilters,
-  });
-  const leftAdsQuery3 = useAds({
-    retailer: primaryRetailer,
-    client: leftPadded[2],
+    client: leftSelectedClient,
     ...leftDebouncedFilters,
   });
 
-  const rightAdsQuery1 = useAds({
+  const rightAdsQuery = useAds({
     retailer: primaryRetailer,
-    client: rightPadded[0],
-    ...rightDebouncedFilters,
-  });
-  const rightAdsQuery2 = useAds({
-    retailer: primaryRetailer,
-    client: rightPadded[1],
-    ...rightDebouncedFilters,
-  });
-  const rightAdsQuery3 = useAds({
-    retailer: primaryRetailer,
-    client: rightPadded[2],
+    client: rightSelectedClient,
     ...rightDebouncedFilters,
   });
 
   const flatAds: Ad[] = useMemo(() => {
-    // Merge cards from all selected retailers and clients with deduplication
+    // Merge cards from all selected retailers (one query per retailer now)
     try {
       const allCards = [
-        ...(krogerQuery1.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(krogerQuery2.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(krogerQuery3.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(walmartQuery1.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(walmartQuery2.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(walmartQuery3.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(instacartQuery1.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(instacartQuery2.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(instacartQuery3.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(amazonQuery1.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(amazonQuery2.data?.pages.flatMap(p => p.cards || []) || []),
-        ...(amazonQuery3.data?.pages.flatMap(p => p.cards || []) || []),
+        ...(isKrogerSelected ? (krogerQuery.data?.pages.flatMap(p => p.cards || []) || []) : []),
+        ...(isWalmartSelected ? (walmartQuery.data?.pages.flatMap(p => p.cards || []) || []) : []),
+        ...(isInstacartSelected ? (instacartQuery.data?.pages.flatMap(p => p.cards || []) || []) : []),
+        ...(isAmazonSelected ? (amazonQuery.data?.pages.flatMap(p => p.cards || []) || []) : []),
       ];
 
       // Dedupe using stable IDs (prevents duplicates from pagination/multiple queries)
+      // Also filter out ads without valid images
       const uniq = new Map<string, Ad>();
       for (let i = 0; i < allCards.length; i++) {
         const c = allCards[i] as any;
+        
+        // Skip ads without valid images (has_image: false or missing image_url)
+        if (c.has_image === false || !c.image_url || c.image_url.includes('placeholder')) {
+          continue;
+        }
+        
         const id = buildAdId(c, i);
         if (!uniq.has(id)) {
           const ad = { ...c, id } as Ad;
@@ -410,10 +433,10 @@ export default function Index() {
       return [];
     }
   }, [
-    krogerQuery1.data, krogerQuery2.data, krogerQuery3.data,
-    walmartQuery1.data, walmartQuery2.data, walmartQuery3.data,
-    instacartQuery1.data, instacartQuery2.data, instacartQuery3.data,
-    amazonQuery1.data, amazonQuery2.data, amazonQuery3.data,
+    krogerQuery.data,
+    walmartQuery.data,
+    instacartQuery.data,
+    amazonQuery.data,
     retailers
   ]);
 
@@ -427,6 +450,22 @@ export default function Index() {
     }
     return Array.from(typeSet).sort();
   }, [flatAds]);
+
+  // Derive available keywords from the fetched data, filtered by selected clients
+  const availableKeywords = useMemo(() => {
+    const keywordSet = new Set<string>();
+    const selectedClientSet = new Set(filters.clients || []);
+    
+    for (const ad of flatAds) {
+      // Only include keywords from ads matching the selected clients
+      if (selectedClientSet.size === 0 || selectedClientSet.has(ad.client)) {
+        if (ad.keyword?.trim()) {
+          keywordSet.add(ad.keyword.trim());
+        }
+      }
+    }
+    return Array.from(keywordSet).sort();
+  }, [flatAds, filters.clients]);
 
   const [ads, setAds] = useState<Ad[]>([]);
   // sync local ads list with fetched pages (enables reordering/dismiss)
@@ -442,51 +481,39 @@ export default function Index() {
 
   const dnd = useDnD(ads, setAds);
 
-  const timestamps = useMemo(() => flatAds.map(a => a.timestamp), [flatAds]);
+  // Fetch all timestamps for timeline visualization (not limited by pagination)
+  const { data: timelineData } = useTimeline({
+    retailer: primaryRetailer,
+    client: filters.clients?.join(','),
+    start: debouncedFilters.start,
+    end: debouncedFilters.end,
+    term: debouncedFilters.term
+  });
+  const timestamps = timelineData || [];
 
   const totalCards = useMemo(() => {
     return [
-      krogerQuery1, krogerQuery2, krogerQuery3,
-      walmartQuery1, walmartQuery2, walmartQuery3,
-      instacartQuery1, instacartQuery2, instacartQuery3,
-      amazonQuery1, amazonQuery2, amazonQuery3,
-    ].reduce((sum, query) => sum + (query.data?.pages?.[0]?.total_cards || 0), 0);
+      krogerCountQuery,
+      walmartCountQuery,
+      instacartCountQuery,
+      amazonCountQuery,
+    ].reduce((sum, query) => sum + (query.data?.total || 0), 0);
   }, [
-    krogerQuery1.data, krogerQuery2.data, krogerQuery3.data,
-    walmartQuery1.data, walmartQuery2.data, walmartQuery3.data,
-    instacartQuery1.data, instacartQuery2.data, instacartQuery3.data,
-    amazonQuery1.data, amazonQuery2.data, amazonQuery3.data,
+    krogerCountQuery.data,
+    walmartCountQuery.data,
+    instacartCountQuery.data,
+    amazonCountQuery.data,
   ]);
-  // Get brand aggregations from API response (first page has the full aggregation)
-  const apiBrands = useMemo(() => {
-    const allBrands = retailerQueries
-      .flatMap(q => q.data?.pages?.[0]?.brands || [])
-      .filter(b => b.brand !== "Unknown");
-    
-    // Merge brands across queries
-    const merged: Record<string, { count: number; percentage: number }> = {};
-    for (const b of allBrands) {
-      if (!merged[b.brand]) {
-        merged[b.brand] = { count: 0, percentage: 0 };
-      }
-      merged[b.brand].count += b.count;
-    }
-    
-    // Recalculate percentages
-    const totalCount = Object.values(merged).reduce((sum, b) => sum + b.count, 0);
-    return Object.entries(merged)
-      .map(([brand, data]) => ({
-        brand,
-        count: data.count,
-        percentage: totalCount > 0 ? Math.round((data.count / totalCount) * 100) : 0
-      }))
-      .sort((a, b) => b.count - a.count);
-  }, [
-    krogerQuery1.data, krogerQuery2.data, krogerQuery3.data,
-    walmartQuery1.data, walmartQuery2.data, walmartQuery3.data,
-    instacartQuery1.data, instacartQuery2.data, instacartQuery3.data,
-    amazonQuery1.data, amazonQuery2.data, amazonQuery3.data,
-  ]);
+  
+  // Get brand aggregations from dedicated brands endpoint with current filters
+  const brandsFilters = {
+    client: filters.clients?.join(','),
+    start: debouncedFilters.start,
+    end: debouncedFilters.end,
+    term: debouncedFilters.term
+  };
+  const { data: brandsData } = useBrands(retailers, brandsFilters);
+  const apiBrands = brandsData?.brands || [];
   
   const activeBrands = apiBrands.length;
   const sov = useMemo(() => {
@@ -497,18 +524,12 @@ export default function Index() {
 
   const topBrands = apiBrands;
 
-  const trend: "up"|"down"|null = useMemo(()=>{
-    if (timestamps.length < 2) return null;
-    const recent = timestamps.slice(-50).map(t=>new Date(t.replace(" ","T"))).sort((a,b)=>+a-+b);
-    const mid = Math.floor(recent.length/2);
-    const left = recent.slice(0, mid).length;
-    const right = recent.slice(mid).length;
-    return right >= left ? "up" : "down";
-  }, [timestamps]);
 
   const [modalAd, setModalAd] = useState<Ad|null>(null);
+  const [modalGroup, setModalGroup] = useState<AdGroup|null>(null);
   const [showTopBrandModal, setShowTopBrandModal] = useState(false);
   const [showAllBrandsModal, setShowAllBrandsModal] = useState(false);
+  const [selectedBrandForModal, setSelectedBrandForModal] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showVisualMap, setShowVisualMap] = useState(true);
@@ -516,6 +537,12 @@ export default function Index() {
   const [showRightVisualMap, setShowRightVisualMap] = useState(true);
 
   const dismiss = (id: string) => setAds(prev => prev.filter(a => a.id !== id));
+
+  const handleBrandClick = (brand: string) => {
+    setSelectedBrandForModal(brand);
+    setShowAllBrandsModal(false);
+    setShowTopBrandModal(false);
+  };
 
   const toggleSelect = (id: string) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const selectAll = () => setSelected(new Set(ads.map(a=>a.id)));
@@ -527,8 +554,32 @@ export default function Index() {
     return ads;
   }, [ads]);
 
+  // Aggregate ads if grouping is enabled
+  const adGroups = useMemo(() => {
+    if (!filters.groupIdentical) return null;
+    
+    // Convert Ad[] to AdCardItem[]
+    const items: AdCardItem[] = sortedAds.map(ad => ({
+      id: ad.id,
+      retailer: ad.retailer,
+      client: ad.client,
+      keyword: ad.keyword,
+      ad_type: ad.ad_type,
+      brand: ad.brand,
+      message: ad.message,
+      image_url: ad.image_url,
+      video_url: ad.video_url,
+      poster_url: ad.poster_url,
+      timestamp: ad.timestamp,
+    }));
+    
+    return aggregateAds(items);
+  }, [sortedAds, filters.groupIdentical]);
+
+  const displayItems = filters.groupIdentical ? adGroups : sortedAds;
+
   const applyFilters = () => adsQuery.refetch();
-  const resetFilters = () => setFilters({ clients: [], types: [], search: "", keywords: [], datePreset: { type: "lifetime" } });
+  const resetFilters = () => setFilters({ clients: [], types: [], search: "", keywords: [], datePreset: { type: "last_52_weeks" }, groupIdentical: true });
 
   const downloadCSV = () => {
     const rows = [
@@ -579,7 +630,7 @@ export default function Index() {
                 brandName={sov.brand}
                 onClick={() => setShowTopBrandModal(true)}
               />
-              <StatCard value={""} label="Ad Volume Trend" trend={trend} />
+              <AdVolumeTrendCard timestamps={timestamps} />
             </div>
 
             <RetailerSelector value={retailers} onChange={setRetailers} enabledRetailers={enabledRetailers} />
@@ -588,6 +639,7 @@ export default function Index() {
               retailer={primaryRetailer}
               clients={clientsResp?.clients || []}
               availableAdTypes={availableAdTypes}
+              availableKeywords={availableKeywords}
               value={filters}
               onChange={setFilters}
               onApply={applyFilters}
@@ -607,7 +659,15 @@ export default function Index() {
               </div>
               {showVisualMap && (
                 <div className="p-2">
-                  <TemporalVisualMap ads={ads} onRangeChange={(from,to)=> setFilters(v=>({ ...v, start: from, end: to }))} onAdClick={setModalAd} />
+                  <TemporalVisualMap 
+                    ads={ads} 
+                    allTimestamps={timestamps} 
+                    onRangeChange={(from,to)=> setFilters(v=>({ ...v, start: from, end: to }))} 
+                    onAdClick={setModalAd}
+                    retailer={primaryRetailer}
+                    client={filters.clients?.join(',')}
+                    term={debouncedFilters.term}
+                  />
                 </div>
               )}
             </div>
@@ -648,36 +708,96 @@ export default function Index() {
             ) : (
               <div className="grid gap-4" style={{ gridTemplateColumns: "1fr minmax(0, 300px)" }}>
                 <div className="space-y-4">
-                  {sortedAds.map((ad, idx) => {
-                    if (ad.ad_type === "Skyscraper") return null;
-                    return (
-                    <div
-                      key={ad.id}
-                      onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}
-                    >
-                      <div className="absolute z-10 m-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <input aria-label="Select ad" type="checkbox" className="h-4 w-4" checked={selected.has(ad.id)} onChange={()=>toggleSelect(ad.id)} />
-                      </div>
-                      <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} dragIndex={dnd.dragIndex} dragOverIndex={dnd.dragOverIndex} currentIndex={idx} />
-                    </div>
-                    );
-                  })}
+                  {filters.groupIdentical && adGroups ? (
+                    adGroups.map((group, idx) => {
+                      if (group.ad_type === "Skyscraper" || group.ad_type === "Tile_Takeover") return null;
+                      return (
+                        <div key={group.group_id}>
+                          <AdCardGroup 
+                            group={group} 
+                            onRemove={(id) => {
+                              // Remove all instances in the group
+                              setAds(prev => prev.filter(a => !group.instances.some(inst => inst.id === a.id)));
+                            }}
+                            onOpen={(g) => {
+                              // Open modal with first instance and store group info
+                              if (g.instances.length > 0) {
+                                const firstAd = ads.find(a => a.id === g.instances[0].id);
+                                if (firstAd) {
+                                  setModalAd(firstAd);
+                                  setModalGroup(g);
+                                }
+                              }
+                            }}
+                            draggableProps={dnd.makeProps(idx)}
+                            dragIndex={dnd.dragIndex}
+                            dragOverIndex={dnd.dragOverIndex}
+                            currentIndex={idx}
+                          />
+                        </div>
+                      );
+                    })
+                  ) : (
+                    sortedAds.map((ad, idx) => {
+                      if (ad.ad_type === "Skyscraper" || ad.ad_type === "Tile_Takeover") return null;
+                      return (
+                        <div
+                          key={ad.id}
+                          onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}
+                        >
+                          <div className="absolute z-10 m-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <input aria-label="Select ad" type="checkbox" className="h-4 w-4" checked={selected.has(ad.id)} onChange={()=>toggleSelect(ad.id)} />
+                          </div>
+                          <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} dragIndex={dnd.dragIndex} dragOverIndex={dnd.dragOverIndex} currentIndex={idx} />
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
                 <div className="space-y-4">
-                  {sortedAds.map((ad, idx) => {
-                    if (ad.ad_type !== "Skyscraper") return null;
-                    return (
-                    <div
-                      key={ad.id}
-                      onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}
-                    >
-                      <div className="absolute z-10 m-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <input aria-label="Select ad" type="checkbox" className="h-4 w-4" checked={selected.has(ad.id)} onChange={()=>toggleSelect(ad.id)} />
-                      </div>
-                      <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} dragIndex={dnd.dragIndex} dragOverIndex={dnd.dragOverIndex} currentIndex={idx} />
-                    </div>
-                    );
-                  })}
+                  {filters.groupIdentical && adGroups ? (
+                    adGroups.map((group, idx) => {
+                      if (group.ad_type !== "Skyscraper" && group.ad_type !== "Tile_Takeover") return null;
+                      return (
+                        <div key={group.group_id}>
+                          <AdCardGroup 
+                            group={group} 
+                            onRemove={(id) => {
+                              setAds(prev => prev.filter(a => !group.instances.some(inst => inst.id === a.id)));
+                            }}
+                            onOpen={(g) => {
+                              if (g.instances.length > 0) {
+                                const firstAd = ads.find(a => a.id === g.instances[0].id);
+                                if (firstAd) {
+                                  setModalAd(firstAd);
+                                  setModalGroup(g);
+                                }
+                              }
+                            }}
+                            draggableProps={dnd.makeProps(idx)}
+                            dragIndex={dnd.dragIndex}
+                            dragOverIndex={dnd.dragOverIndex}
+                            currentIndex={idx}
+                          />
+                        </div>
+                      );
+                    })
+                  ) : (
+                    sortedAds.map((ad, idx) => {
+                      if (ad.ad_type !== "Skyscraper" && ad.ad_type !== "Tile_Takeover") return null;
+                      return (
+                        <div
+                          key={ad.id}
+                          onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}
+                        >
+                          <div className="absolute z-10 m-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <input aria-label="Select ad" type="checkbox" className="h-4 w-4" checked={selected.has(ad.id)} onChange={()=>toggleSelect(ad.id)} />
+                          </div>
+                          <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} dragIndex={dnd.dragIndex} dragOverIndex={dnd.dragOverIndex} currentIndex={idx} />
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             )}
@@ -693,20 +813,11 @@ export default function Index() {
         {compareMode && (
           <section className="grid md:grid-cols-2 gap-4">
             {(() => {
-              // Merge left ads from all 3 queries
-              const leftAllCards = [
-                ...(leftAdsQuery1.data?.pages.flatMap(p=>p.cards) || []),
-                ...(leftAdsQuery2.data?.pages.flatMap(p=>p.cards) || []),
-                ...(leftAdsQuery3.data?.pages.flatMap(p=>p.cards) || []),
-              ];
+              // Get left and right ads from single queries
+              const leftAllCards = leftAdsQuery.data?.pages.flatMap(p=>p.cards) || [];
               const leftAds = leftAllCards.map((c,i)=>({ ...c, id: `L-${c.retailer}-${c.client}-${c.ad_type}-${c.brand}-${c.keyword}-${c.timestamp}-${i}`})) as Ad[];
 
-              // Merge right ads from all 3 queries
-              const rightAllCards = [
-                ...(rightAdsQuery1.data?.pages.flatMap(p=>p.cards) || []),
-                ...(rightAdsQuery2.data?.pages.flatMap(p=>p.cards) || []),
-                ...(rightAdsQuery3.data?.pages.flatMap(p=>p.cards) || []),
-              ];
+              const rightAllCards = rightAdsQuery.data?.pages.flatMap(p=>p.cards) || [];
               const rightAds = rightAllCards.map((c,i)=>({ ...c, id: `R-${c.retailer}-${c.client}-${c.ad_type}-${c.brand}-${c.keyword}-${c.timestamp}-${i}`})) as Ad[];
 
               const leftTs = leftAds.map(a=>a.timestamp);
@@ -715,7 +826,7 @@ export default function Index() {
                 <>
                   <div className="space-y-4">
                     <h2 className="text-white font-semibold">Left View</h2>
-                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} availableAdTypes={availableAdTypes} value={lf} onChange={(v)=>setLeftFilters(v)} onApply={()=>{leftAdsQuery1.refetch(); leftAdsQuery2.refetch(); leftAdsQuery3.refetch();}} onReset={()=>setLeftFilters({ clients: [], types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
+                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} availableAdTypes={availableAdTypes} availableKeywords={availableKeywords} value={lf} onChange={(v)=>setLeftFilters(v)} onApply={()=>{leftAdsQuery.refetch();}} onReset={()=>setLeftFilters({ clients: [], types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
                     <Timeline timestamps={leftTs} onRangeChange={(from,to)=> setLeftFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
                     <div className="card-surface">
                       <div className="flex items-center justify-between p-4 border-b border-gray-200 cursor-pointer" onClick={() => setShowLeftVisualMap(!showLeftVisualMap)}>
@@ -735,7 +846,7 @@ export default function Index() {
                   </div>
                   <div className="space-y-4">
                     <h2 className="text-white font-semibold">Right View</h2>
-                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} availableAdTypes={availableAdTypes} value={rf} onChange={(v)=>setRightFilters(v)} onApply={()=>{rightAdsQuery1.refetch(); rightAdsQuery2.refetch(); rightAdsQuery3.refetch();}} onReset={()=>setRightFilters({ clients: [], types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
+                    <Filters retailer={primaryRetailer} clients={clientsResp?.clients||[]} availableAdTypes={availableAdTypes} availableKeywords={availableKeywords} value={rf} onChange={(v)=>setRightFilters(v)} onApply={()=>{rightAdsQuery.refetch();}} onReset={()=>setRightFilters({ clients: [], types: [], search: '', keywords: [], datePreset: { type: 'lifetime' } })} />
                     <Timeline timestamps={rightTs} onRangeChange={(from,to)=> setRightFilters(prev=>({ ...prev, start: from, end: to, datePreset: { type: 'custom' } }))} />
                     <div className="card-surface">
                       <div className="flex items-center justify-between p-4 border-b border-gray-200 cursor-pointer" onClick={() => setShowRightVisualMap(!showRightVisualMap)}>
@@ -760,8 +871,22 @@ export default function Index() {
           </section>
         )}
 
-        <AdModal open={!!modalAd} ad={modalAd} onOpenChange={(v)=>!v && setModalAd(null)} onCompare={(ad)=>{ setModalAd(null); setCompareMode(true); }} />
-        <TopBrandModal open={showTopBrandModal} onOpenChange={setShowTopBrandModal} topBrands={topBrands} />
+        <AdModal open={!!modalAd} ad={modalAd} group={modalGroup} onOpenChange={(v)=>{ if (!v) { setModalAd(null); setModalGroup(null); }}} onCompare={(ad)=>{ setModalAd(null); setModalGroup(null); setCompareMode(true); }} />
+        <TopBrandModal
+          open={showTopBrandModal}
+          onOpenChange={setShowTopBrandModal}
+          topBrands={topBrands}
+          onRetailerClick={handleBrandClick}
+        />
+        {selectedBrandForModal && (
+          <BrandDetailModal
+            brand={selectedBrandForModal}
+            retailers={retailers}
+            onOpenChange={(open) => {
+              if (!open) setSelectedBrandForModal(null);
+            }}
+          />
+        )}
         <AllBrandsModal
           open={showAllBrandsModal}
           onOpenChange={setShowAllBrandsModal}
@@ -773,11 +898,9 @@ export default function Index() {
             adTypes: filters.types || [],
             keywords: filters.keywords || [],
           }}
+          onRetailerClick={handleBrandClick}
         />
       </div>
-
-      {/* Performance monitoring card (visible with ?devperf=1) */}
-      <PerformanceCard />
     </main>
   );
 }

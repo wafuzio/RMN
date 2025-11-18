@@ -8,8 +8,10 @@ import { handleRetailerLogo } from "./routes/retailer-logo";
 import { handleRetailers } from "./routes/retailers";
 import { handleClients } from "./routes/clients";
 import { handleAdsProxy } from "./routes/ads-proxy";
+import { handleAdsCount } from "./routes/ads-count";
 import { handleBrands } from "./routes/brands";
 import { handleBrandDetails } from "./routes/brand-details";
+import { handleTimeline } from "./routes/timeline";
 import { handleProxyImage } from "./routes/proxy-image";
 import { handlePlaceholderAd } from "./routes/placeholder";
 import { handleImageProxy } from "./routes/image";
@@ -83,8 +85,10 @@ export function createServer() {
   app.get("/api/retailers", handleRetailers);
   app.get("/api/clients", handleClients);
   app.get("/api/ads/cards", handleAdsProxy);
+  app.get("/api/ads/count", handleAdsCount);
   app.get("/api/brands", handleBrands);
   app.get("/api/brand-details", handleBrandDetails);
+  app.get("/api/timeline", handleTimeline);
 
   return app;
 }

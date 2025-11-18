@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, normalizeAdType } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toLocalImageUrl } from "@/utils/imageUrl";
 import { RetailerLogo } from "@/components/dashboard/RetailerLogo";
 import { formatLocal } from "@/lib/date";
 
 // Robust media loader component (handles both images and videos)
-function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType }: { imageUrl?: string; videoUrl?: string; posterUrl?: string; alt?: string; isTOA?: boolean; isSBA?: boolean; adType?: string }) {
+function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, priority }: { imageUrl?: string; videoUrl?: string; posterUrl?: string; alt?: string; isTOA?: boolean; isSBA?: boolean; adType?: string; priority?: boolean }) {
   // Prefer video if available, otherwise use image, then poster (for Skyscraper ads)
   const hasVideo = !!videoUrl;
   const relUrl = hasVideo ? videoUrl : (imageUrl || posterUrl || null);
@@ -16,11 +16,27 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType }: {
     return <div className="fallback-text text-gray-400 text-sm">No media</div>;
   }
 
-  const src = toLocalImageUrl(relUrl);
+  let src = toLocalImageUrl(relUrl);
   
   // If toLocalImageUrl returns null, show no media
   if (!src) {
     return <div className="fallback-text text-gray-400 text-sm">No media</div>;
+  }
+  
+  // Add thumbnail sizing for images (not videos) to reduce transfer size
+  if (!hasVideo && src) {
+    try {
+      // This handles both absolute and relative URLs
+      const u = new URL(src, window.location.origin);
+      // Only set if not already specified
+      if (!u.searchParams.has('w')) {
+        u.searchParams.set('w', '600');
+      }
+      src = u.toString();
+    } catch {
+      // Fallback for very odd paths where URL() might fail
+      src = src.includes('?') ? `${src}&w=600` : `${src}?w=600`;
+    }
   }
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
@@ -80,7 +96,8 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType }: {
         crossOrigin="anonymous"
         referrerPolicy="no-referrer"
         decoding="async"
-        loading="lazy"
+        loading={priority ? 'eager' : 'lazy'}
+        fetchpriority={priority ? 'high' : 'low'}
         draggable={false}
         onLoad={() => {
           setLoaded(true);
@@ -150,7 +167,7 @@ export interface Ad {
   retailer: string; client: string; keyword: string; ad_type: string; brand: string; message: string; image_url: string; video_url?: string; video_overlay?: VideoOverlay; poster_url?: string; timestamp: string;
 }
 
-export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOverIndex, currentIndex }: { ad: Ad; onRemove: (id: string)=>void; onOpen: (ad: Ad)=>void; draggableProps?: any; dragIndex?: number | null; dragOverIndex?: number | null; currentIndex?: number; }) {
+export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOverIndex, currentIndex, priority }: { ad: Ad; onRemove: (id: string)=>void; onOpen: (ad: Ad)=>void; draggableProps?: any; dragIndex?: number | null; dragOverIndex?: number | null; currentIndex?: number; priority?: boolean; }) {
   const [hidden, setHidden] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -195,21 +212,29 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
         ×
       </button>
       <button onClick={() => onOpen(ad)} className={cn("text-left select-none w-full block")} style={{ touchAction: 'none' }}>
-        <AdMedia imageUrl={ad.image_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} />
-        <div id="content-frame" className={cn("card-text w-full p-4 flex flex-col")}>
-          <div className="flex items-center justify-between mb-1 w-full">
-            <div className="font-bold text-[1.2em] text-[#111827]">{ad.brand}</div>
+        <AdMedia imageUrl={ad.image_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} priority={priority} />
+        <div id="content-frame" className={cn("adcard-content-box card-text w-full p-6 flex flex-col gap-3")}>
+          <div className="flex items-center justify-between w-full">
+            <div className="font-bold text-[1.3em] text-[#111827]">{ad.brand}</div>
             <div className="relative">
-              <Badge className={cn("pill", TYPE_STYLES[ad.ad_type] || "bg-gray-200 text-gray-800 border-none")}>{ad.ad_type.toLowerCase() === "sba" || ad.ad_type.toLowerCase() === "sbv" ? ad.ad_type.toUpperCase() : ad.ad_type.replace(/_/g," ")}</Badge>
+              <Badge className={cn("pill", TYPE_STYLES[ad.ad_type] || "bg-gray-200 text-gray-800 border-none")}>{normalizeAdType(ad.ad_type)}</Badge>
               <div className="absolute z-20 bg-white/90 px-1 py-1" style={{ left: '-41px', top: '50%', transform: 'translateY(-50%)' }}>
                 <span className="sr-only">{ad.retailer}</span>
                 <RetailerLogo retailer={ad.retailer} className="h-6 w-auto" />
               </div>
             </div>
           </div>
-          <div className="italic text-[#6b7280]">{ad.keyword}</div>
-          <div className="text-xs text-right text-[#6b7280] mt-2">
-            {formatLocal(ad.timestamp)}
+          <div className="italic text-[#6b7280] text-sm">{ad.keyword}</div>
+          <div className="text-xs text-right text-[#6b7280]">
+            {ad.timestamp.includes('BADGE_START') ? (
+              <span>
+                {ad.timestamp.split('BADGE_START')[0]}
+                <span className="inline-block rounded-full bg-gradient-to-br from-purple-600 to-blue-600 text-white text-xs font-bold px-2 py-0.5 mx-1 shadow-md border border-white/30">
+                  Seen ×{ad.timestamp.split('BADGE_START')[1].split('BADGE_END')[0]}
+                </span>
+                {ad.timestamp.split('BADGE_END')[1]}
+              </span>
+            ) : ad.timestamp.startsWith('Seen ') ? ad.timestamp : formatLocal(ad.timestamp)}
           </div>
         </div>
       </button>

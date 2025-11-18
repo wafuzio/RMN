@@ -529,7 +529,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         log(f"main: re-inject CSS error -> {e}")
                     
                     log("main: screenshot")
-                    main_name = _std_filename("amazon", "unknown", "Main", client, keyword, run_id, 0, ".png")
+                    main_name = _std_filename("amazon", "search_results", "Main", client, keyword, run_id, 0, ".png")
                     main_path = os.path.join(output_dir, "Main", main_name)
                     page.screenshot(path=main_path, full_page=True, timeout=10000)
                     log(f"main: saved -> {main_path} exists={os.path.exists(main_path)} size={os.path.getsize(main_path) if os.path.exists(main_path) else 0}")
@@ -733,9 +733,16 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                     "type": "Sponsored_Brand_Video",
                                     "subtype": "Video_Single_Product",
                                     "brand": brand_txt or "Unknown",
+                                    "brand_logo": None,
+                                    "title": product_info.get("product_title", "") or None,
+                                    "description": product_info.get("product_description", "") or None,
+                                    "cta": None,
+                                    "href": None,
+                                    "image_url": None,
+                                    "image_path": f"Sponsored_Brand_Video/{fname}",
+                                    "products": [],
                                     "brand_canonical": brand_canon,
                                     "advertisers": [brand_canon] if brand_canon else [],
-                                    "image_path": f"Sponsored_Brand_Video/{fname}",
                                     "video_path": video_rel,
                                     "message": message,
                                     "product_title": product_info.get("product_title", ""),
@@ -939,9 +946,16 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 "type": "Sponsored_Brand",
                                 "subtype": "Themed_Collection",
                                 "brand": brand_txt or "Unknown",
+                                "brand_logo": None,
+                                "title": message or None,
+                                "description": None,
+                                "cta": None,
+                                "href": None,
+                                "image_url": None,
+                                "image_path": f"Sponsored_Brand/{fname}",
+                                "products": [],
                                 "brand_canonical": brand_canon,
                                 "advertisers": [brand_canon] if brand_canon else [],
-                                "image_path": f"Sponsored_Brand/{fname}",
                                 "video_path": None,
                                 "message": message,
                                 "brand_logo_url": brand_logo_url,
@@ -1056,6 +1070,12 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                         
                                         brand_canon = brand_name.lower().replace(' ', '_').replace('.', '')
                                         
+                                        # Debug: Log brand extraction for troubleshooting
+                                        log(f"sb-brands: card {card_idx} brand extraction -> name: '{brand_name}', canon: '{brand_canon}'")
+                                        
+                                        # Reset hover filename for this card iteration
+                                        fname_hover = None
+                                        
                                         # Take two screenshots: normal state and hover state
                                         try:
                                             brand_li.scroll_into_view_if_needed()
@@ -1066,7 +1086,10 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                             fpath_normal = os.path.join(output_dir, "Sponsored_Brand_Cards", fname_normal)
                                             os.makedirs(os.path.dirname(fpath_normal), exist_ok=True)
                                             
-                                            brand_li.screenshot(path=str(fpath_normal), timeout=4000)
+                                            # Debug: Check path before screenshot
+                                            log(f"sb-brands: card {card_idx} screenshot path -> '{fpath_normal}' (type: {type(fpath_normal)})")
+                                            
+                                            brand_li.screenshot(path=fpath_normal, timeout=4000)
                                             log(f"sb-brands: normal state saved -> {fname_normal}")
                                             
                                             # 2) Screenshot hover state
@@ -1079,7 +1102,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                                     fname_hover = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Card", client, keyword, run_id, f"card_{card_idx}_hover", ".png")
                                                     fpath_hover = os.path.join(output_dir, "Sponsored_Brand_Cards", fname_hover)
                                                     
-                                                    brand_li.screenshot(path=str(fpath_hover), timeout=4000)
+                                                    brand_li.screenshot(path=fpath_hover, timeout=4000)
                                                     log(f"sb-brands: hover state saved -> {fname_hover}")
                                                 else:
                                                     log(f"sb-brands: no logo found for hover on card {card_idx}")
@@ -1111,10 +1134,17 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                             "type": "Sponsored_Brand_Card",
                                             "subtype": "Brand_Card",
                                             "brand": brand_name,
+                                            "brand_logo": None,
+                                            "title": brand_name or None,
+                                            "description": message or None,
+                                            "cta": None,
+                                            "href": store_url or None,
+                                            "image_url": None,
+                                            "image_path": f"Sponsored_Brand_Cards/{fname_normal}",
+                                            "products": [],
                                             "brand_canonical": brand_canon,
                                             "advertisers": [brand_canon] if brand_canon else [],
-                                            "image_path": f"Sponsored_Brand_Cards/{fname_normal}",
-                                            "image_path_hover": f"Sponsored_Brand_Cards/{fname_hover}" if 'fname_hover' in locals() else None,
+                                            "image_path_hover": f"Sponsored_Brand_Cards/{fname_hover}" if fname_hover else None,
                                             "video_path": None,
                                             "message": message,
                                             "position": f"bottom_card_{card_idx}",
@@ -1123,7 +1153,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                                 "extraction_method": "store_link" if store_url else "image_alt"
                                             },
                                         })
-                                        log(f"sb-brands: individual card saved -> normal: {fname_normal}, hover: {fname_hover if 'fname_hover' in locals() else 'failed'}")
+                                        log(f"sb-brands: individual card saved -> normal: {fname_normal}, hover: {fname_hover or 'failed'}")
                                 except Exception as e:
                                     log(f"sb-brands: individual card error -> {e}")
                     except Exception as e:
@@ -1280,9 +1310,16 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 "type": "Sponsored_Display",
                                 "subtype": "Display_Ad",
                                 "brand": brand_txt or "Unknown",
+                                "brand_logo": None,
+                                "title": message or None,
+                                "description": product_description or None,
+                                "cta": None,
+                                "href": None,
+                                "image_url": None,
+                                "image_path": f"Sponsored_Display/{fname}",
+                                "products": [],
                                 "brand_canonical": brand_canon,
                                 "advertisers": [brand_canon] if brand_canon else [],
-                                "image_path": f"Sponsored_Display/{fname}",
                                 "video_path": None,
                                 "message": message,
                                 "product_description": product_description,
@@ -1493,6 +1530,15 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             "module_id": module_id,
                             "type": "Product_Listing",
                             "subtype": product['listing_type'],
+                            "brand": None,
+                            "brand_logo": None,
+                            "title": product['product_title'] or None,
+                            "description": None,
+                            "cta": None,
+                            "href": None,
+                            "image_url": None,
+                            "image_path": None,  # No screenshots for product listings
+                            "products": [],
                             "asin": product['asin'],
                             "position": product['position'],
                             "is_sponsored": product['is_sponsored'],
@@ -1500,7 +1546,6 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             "rating": product['rating'],
                             "review_count": product['review_count'],
                             "badges": product['badges'],
-                            "image_path": None,  # No screenshots for product listings
                             "video_path": None,
                             "metadata": {
                                 "badge_count": len(product['badges']),
@@ -1616,10 +1661,17 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 "type": "Sponsored_Carousel",
                                 "subtype": "Carousel",
                                 "brand": "Unknown",
+                                "brand_logo": None,
+                                "title": heading or None,
+                                "description": None,
+                                "cta": None,
+                                "href": None,
+                                "image_url": None,
+                                "image_path": f"Sponsored_Carousel/{fname}",
+                                "products": [],
                                 "brand_canonical": "unknown",
                                 "advertisers": [],
                                 "header": heading,
-                                "image_path": f"Sponsored_Carousel/{fname}",
                                 "video_path": None,
                                 "message": heading,
                                 "metadata": {},

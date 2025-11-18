@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { Ad } from "@/components/dashboard/AdCard";
 import { api } from "@/lib/api";
 import { toLocalImageUrl } from "@/utils/imageUrl";
@@ -128,25 +128,44 @@ function loadImage(url: string) {
   });
 }
 
-export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }: { ads: Ad[]; height?: number; onRangeChange?: (from: Date, to: Date)=>void; onAdClick?: (ad: Ad)=>void; }) {
+interface TemporalVisualMapProps {
+  ads: Ad[];
+  allTimestamps?: string[];
+  height?: number;
+  onRangeChange?: (from: Date, to: Date) => void;
+  onAdClick?: (ad: Ad) => void;
+  // Filter params for lazy loading
+  retailer?: string;
+  client?: string;
+  term?: string;
+}
+
+export function TemporalVisualMap({ ads, allTimestamps, height=300, onRangeChange, onAdClick, retailer, client, term }: TemporalVisualMapProps) {
   const canvasRef = useRef<HTMLCanvasElement|null>(null);
   const wrapRef = useRef<HTMLDivElement|null>(null);
 
   // Track ad positions for click detection
   const adPositionsRef = useRef<Map<string, { x: number; y: number; w: number; h: number; ad: Ad }>>(new Map());
+  
+  // Cache for lazy-loaded ads by date range key
+  const [lazyLoadedAds, setLazyLoadedAds] = useState<Map<string, Ad[]>>(new Map());
+  const loadingRef = useRef<Set<string>>(new Set());
+  const drawIdRef = useRef(0); // Track current draw to cancel stale draws
 
-
+  // Use allTimestamps for date range if provided, otherwise fall back to ads
   const dates = useMemo(()=> {
-    const parsedDates = ads.map((a) => {
+    const timestampsToUse = allTimestamps || ads.map(a => a.timestamp);
+    const parsedDates = timestampsToUse.map((ts, idx) => {
       try {
-        return parseTs(a.timestamp, a);
+        // If using allTimestamps, we don't have the ad object, so pass a dummy
+        return parseTs(ts, allTimestamps ? { timestamp: ts } as Ad : ads[idx]);
       } catch (e) {
-        console.error('[TemporalVisualMap] Failed to parse timestamp:', a.timestamp, e);
+        console.error('[TemporalVisualMap] Failed to parse timestamp:', ts, e);
         return new Date(0);
       }
     }).sort((a,b)=>+a-+b);
     return parsedDates;
-  }, [ads]);
+  }, [ads, allTimestamps]);
 
   // Handle single time slot: expand range for better visualization
   const { minDate, maxDate } = useMemo(() => {
@@ -174,7 +193,7 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
   }, [state]);
 
   const size = useSize(wrapRef);
-  const width = size.width || 800;
+  const width = Math.max(400, size.width || 800); // Ensure minimum width for proper rendering
 
   const msTotal = Math.max(1, +maxDate - +minDate);
   const basePxPerMs = width / msTotal;
@@ -184,34 +203,112 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
 
   const bins = useMemo(() => {
     const map = new Map<number, Ad[]>();
-    for (const ad of ads) {
-      const t = parseTs(ad.timestamp, ad);
-      const key = +floorToGranularity(t, g);
-      const arr = map.get(key) || [];
-      arr.push(ad);
-      map.set(key, arr);
+    
+    // If we have allTimestamps, use them to create bins with counts
+    // Then populate with actual ads where available
+    if (allTimestamps) {
+      // First, create bins from all timestamps (for accurate counts)
+      const timestampBins = new Map<number, number>();
+      for (const ts of allTimestamps) {
+        try {
+          const t = parseTs(ts, { timestamp: ts } as Ad);
+          const key = +floorToGranularity(t, g);
+          timestampBins.set(key, (timestampBins.get(key) || 0) + 1);
+        } catch (e) {
+          // Skip invalid timestamps
+        }
+      }
+      
+      // Then add actual ads to their bins (for images) - includes both initial ads and lazy-loaded
+      const allAds = [...ads, ...Array.from(lazyLoadedAds.values()).flat()];
+      for (const ad of allAds) {
+        const t = parseTs(ad.timestamp, ad);
+        const key = +floorToGranularity(t, g);
+        const arr = map.get(key) || [];
+        arr.push(ad);
+        map.set(key, arr);
+      }
+      
+      // Create bins for all time periods (even those without loaded ads)
+      const entries = Array.from(timestampBins.entries()).sort((a,b)=>a[0]-b[0]);
+      return entries.map(([k, count]) => ({ 
+        start: new Date(k), 
+        end: addGranularity(new Date(k), g), 
+        ads: map.get(k) || [], // Use actual ads if available, empty array otherwise
+        count // Store the actual count from all timestamps
+      }));
+    } else {
+      // Fallback: use only loaded ads
+      for (const ad of ads) {
+        const t = parseTs(ad.timestamp, ad);
+        const key = +floorToGranularity(t, g);
+        const arr = map.get(key) || [];
+        arr.push(ad);
+        map.set(key, arr);
+      }
+      const entries = Array.from(map.entries()).sort((a,b)=>a[0]-b[0]);
+      return entries.map(([k, vals]) => ({ start: new Date(k), end: addGranularity(new Date(k), g), ads: vals, count: vals.length }));
     }
-    const entries = Array.from(map.entries()).sort((a,b)=>a[0]-b[0]);
-    return entries.map(([k, vals]) => ({ start: new Date(k), end: addGranularity(new Date(k), g), ads: vals }));
-  }, [ads, g]);
+  }, [ads, allTimestamps, g, lazyLoadedAds]);
+  
+  // Lazy load ads for visible bins when zoomed in
+  useEffect(() => {
+    if (!retailer || !client) return; // Need filter params to fetch
+    
+    const binPx = granularityMs(g) * pxPerMs;
+    const showImages = binPx > 60;
+    
+    if (showImages) {
+      // When zoomed in, fetch ads for visible bins that don't have loaded ads
+      const visibleBins = bins.filter(b => {
+        const x = ((+b.start - +minDate) * pxPerMs) + state.offsetX;
+        return x > -200 && x < width + 200; // Visible + buffer
+      });
+      
+      for (const bin of visibleBins) {
+        if (bin.ads.length === 0 && bin.count > 0) {
+          // This bin has ads but they're not loaded - fetch them
+          const rangeKey = `${+bin.start}-${+bin.end}`;
+          if (!loadingRef.current.has(rangeKey)) {
+            loadingRef.current.add(rangeKey);
+            
+            // Format dates for API
+            const startStr = bin.start.toISOString().split('T')[0];
+            const endStr = bin.end.toISOString().split('T')[0];
+            
+            // Fetch ads for this date range
+            fetch(`/api/ads/cards?retailer=${retailer}&client=${client}${term ? `&term=${term}` : ''}&start=${startStr}&end=${endStr}&page_size=100`)
+              .then(r => r.json())
+              .then(data => {
+                if (data.cards && data.cards.length > 0) {
+                  setLazyLoadedAds(prev => new Map(prev).set(rangeKey, data.cards));
+                }
+                loadingRef.current.delete(rangeKey);
+              })
+              .catch(err => {
+                console.error('[TemporalVisualMap] Failed to lazy load ads:', err);
+                loadingRef.current.delete(rangeKey);
+              });
+          }
+        }
+      }
+    }
+  }, [bins, minDate, pxPerMs, state.offsetX, width, g, retailer, client, term]);
 
   // Update varsRef after pxPerMs is calculated
   useEffect(() => {
     varsRef.current = { pxPerMs, minDate, onRangeChange, bins, g, width, height };
   }, [pxPerMs, minDate, onRangeChange, bins, g, width, height]);
 
-  // Center the populated data on initial load
+  // Initialize to show all data from left to right margin with bars visible
   useEffect(() => {
     if (!hasCentered && bins.length > 0 && width > 0) {
-      const dataCenterMs = (+minDate + +maxDate) / 2;
-      const msTotal = Math.max(1, +maxDate - +minDate);
-      const basePxPerMs = width / msTotal;
-      const targetPxPerMs = basePxPerMs * state.scale;
-      const centerOffsetX = width / 2 - (dataCenterMs - (+minDate)) * targetPxPerMs;
-      setState(s => ({ ...s, offsetX: centerOffsetX }));
+      // Start at a conservative zoom level to avoid triggering lazy loading on initial render
+      // Scale of 0.5 ensures bars are visible but not large enough to trigger image loading
+      setState({ scale: 0.5, offsetX: 0 });
       setHasCentered(true);
     }
-  }, [bins.length, minDate, maxDate, width, state.scale, hasCentered]);
+  }, [bins.length, minDate, maxDate, width, hasCentered]);
 
   useEffect(() => {
     // light prefetch for smoother zoom: first 2 images per bin
@@ -230,6 +327,10 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
   const draw = useCallback(async () => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext("2d"); if (!ctx) return;
+    
+    // Increment draw ID to invalidate any in-flight async operations
+    const currentDrawId = ++drawIdRef.current;
+    
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
@@ -281,7 +382,7 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
     for (const b of bins) {
       const x = Math.floor(((+b.start - +minDate) * pxPerMs) + state.offsetX);
       const w = Math.max(1, Math.floor((+b.end - +b.start) * pxPerMs));
-      const c = b.ads.length;
+      const c = (b as any).count || b.ads.length; // Use count if available (from allTimestamps), otherwise ads.length
 
       if (!showImages) {
         // density rectangle (draw even if off-screen)
@@ -293,35 +394,59 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
         ctx.fillRect(x, y, w-1, h);
       } else {
         // draw images mosaic within column
-        const colWidth = Math.max(56, w-2);
-        const thumbH = 80; const gap = 4; let y = 6; let row = 0; let col = 0;
-        for (let i=0;i<b.ads.length;i++) {
-          const ad = b.ads[i];
-          const url = (ad as any).image_url_full || ad.image_url; // fallback
-          try {
-            const full = toLocalImageUrl(url);
-            const img = await getImage(full);
-            const aspect = img.width / Math.max(1,img.height);
-            const thumbW = Math.min(colWidth, Math.round(thumbH * aspect));
-            const drawX = x + (col * (colWidth + gap));
-            // Still render even if off-screen; CSS will clip it
-            if (drawX < width + colWidth * 2 && drawX + thumbW > -colWidth * 2) {
-              ctx.save();
-              ctx.beginPath();
-              ctx.roundRect(drawX, y, thumbW, thumbH, 8);
-              ctx.clip();
-              ctx.drawImage(img, drawX, y, thumbW, thumbH);
-              ctx.restore();
+        if (b.ads.length > 0) {
+          // We have loaded ads for this period - show images
+          const colWidth = Math.max(56, w-2);
+          const thumbH = 80; const gap = 4; let y = 6; let row = 0; let col = 0;
+          for (let i=0;i<b.ads.length;i++) {
+            const ad = b.ads[i];
+            const url = (ad as any).image_url_full || ad.image_url; // fallback
+            try {
+              const full = toLocalImageUrl(url);
+              const img = await getImage(full);
+              
+              // Check if this draw is still current (not superseded by a new draw)
+              if (drawIdRef.current !== currentDrawId) {
+                return; // Abort - a new draw has started
+              }
+              
+              const aspect = img.width / Math.max(1,img.height);
+              const thumbW = Math.min(colWidth, Math.round(thumbH * aspect));
+              const drawX = x + (col * (colWidth + gap));
+              // Still render even if off-screen; CSS will clip it
+              if (drawX < width + colWidth * 2 && drawX + thumbW > -colWidth * 2) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(drawX, y, thumbW, thumbH, 8);
+                ctx.clip();
+                ctx.drawImage(img, drawX, y, thumbW, thumbH);
+                ctx.restore();
 
-              // Track ad position for click detection
-              adPositionsRef.current.set(`${ad.id}`, { x: drawX, y, w: thumbW, h: thumbH, ad });
+                // Track ad position for click detection
+                adPositionsRef.current.set(`${ad.id}`, { x: drawX, y, w: thumbW, h: thumbH, ad });
+              }
+              y += thumbH + gap; row++;
+              if (y + thumbH > height - 30) { y = 6; row = 0; col++; }
+            } catch {
+              // fallback block
+              ctx.fillStyle = "#e5e7eb"; ctx.fillRect(x, y, colWidth, thumbH); y += thumbH + gap;
             }
-            y += thumbH + gap; row++;
-            if (y + thumbH > height - 30) { y = 6; row = 0; col++; }
-          } catch {
-            // fallback block
-            ctx.fillStyle = "#e5e7eb"; ctx.fillRect(x, y, colWidth, thumbH); y += thumbH + gap;
           }
+        } else if (c > 0) {
+          // We know there are ads here (from count) but they're not loaded
+          // Show a placeholder message
+          const colWidth = Math.max(56, w-2);
+          ctx.fillStyle = "rgba(99, 102, 241, 0.1)";
+          ctx.fillRect(x, 6, colWidth, height - 36);
+          
+          ctx.fillStyle = "#6366f1";
+          ctx.font = "12px system-ui";
+          ctx.textAlign = "center";
+          ctx.fillText(`${c} ad${c > 1 ? 's' : ''}`, x + colWidth/2, height/2 - 10);
+          ctx.font = "10px system-ui";
+          ctx.fillStyle = "#9ca3af";
+          ctx.fillText("(not loaded)", x + colWidth/2, height/2 + 5);
+          ctx.textAlign = "left";
         }
       }
     }
@@ -513,7 +638,7 @@ export function TemporalVisualMap({ ads, height=300, onRangeChange, onAdClick }:
       <div className="flex items-center justify-between px-2 pb-2 text-sm text-[#6b7280]">
         <div>Visual Map • Semantic zoom ({g})</div>
         <div className="flex items-center gap-2">
-          <button className="px-2 py-1 rounded bg-white/80 border" onClick={()=> setState({ scale: 1, offsetX: 0 })}>Reset</button>
+          <button className="px-2 py-1 rounded bg-white/80 border" onClick={()=> { setState({ scale: 0.5, offsetX: 0 }); setHasCentered(false); }}>Reset</button>
         </div>
       </div>
       <div ref={wrapRef} className="relative" style={{ height, width: '100%', minWidth: '100%' }} onDoubleClick={onDoubleClick}>
@@ -538,7 +663,10 @@ function useSize<T extends HTMLElement>(ref: React.RefObject<T>) {
   useEffect(() => {
     const el = ref.current; if (!el) return;
     const ro = new ResizeObserver(entries => {
-      const cr = entries[0].contentRect; set({ width: Math.round(cr.width), height: Math.round(cr.height) });
+      const cr = entries[0].contentRect;
+      // Clamp width to viewport width to handle overflow containers
+      const clampedWidth = Math.min(Math.round(cr.width), window.innerWidth);
+      set({ width: clampedWidth, height: Math.round(cr.height) });
     });
     ro.observe(el);
     return () => ro.disconnect();

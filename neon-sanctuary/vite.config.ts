@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "0.0.0.0",
     port: 3000,
+    allowedHosts: [".loca.lt", ".trycloudflare.com"], // Allow tunnel hosts
     fs: {
       allow: ["./client", "./shared", "./", "../"],
       deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**"],

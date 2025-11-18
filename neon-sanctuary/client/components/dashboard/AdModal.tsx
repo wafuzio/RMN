@@ -3,52 +3,50 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { toLocalImageUrl } from "@/utils/imageUrl";
 import { formatLocal } from "@/lib/date";
+import { normalizeAdType } from "@/lib/utils";
 import { useOverlayBoxFromImage, type NormBox } from "@/components/media/useOverlayBoxFromImage";
 import { Ad } from "./AdCard";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { VideoOverlay } from "@shared/api";
 
 // Ad type-specific video positioning (normalized 0..1)
-// Calculated for actual Walmart SBV dimensions: 1078×341px
-// Video slot: 544×301px starting at (0, 18)
+// Calibrated for Walmart SBV reference image: 1078×341px
+// Video slot: 541×311px starting at (2, 15) per calibration guide
 const VIDEO_LAYOUTS: Record<string, NormBox> = {
   'SBV': {
-    x: 0.0,
-    y: 0.0528,   // 18 / 341 = 0.0528
-    w: 0.5046,   // 544 / 1078 = 0.5046
-    h: 0.8827,   // 301 / 341 = 0.8827
+    x: 2 / 1078,
+    y: 15 / 341,
+    w: 541 / 1078,
+    h: 311 / 341,
   },
   'Sponsored_Brand_Video': {
-    x: 0.0,
-    y: 0.0528,
-    w: 0.5046,
-    h: 0.8827,
+    x: 2 / 1078,
+    y: 15 / 341,
+    w: 541 / 1078,
+    h: 311 / 341,
   },
-  'Shoppable_Display_Ad': {
-    x: 0.0,
-    y: 0.0528,
-    w: 0.5046,
-    h: 0.8827,
-  },
-  'Display_Ads': {
-    x: 0.0,
-    y: 0.0528,
-    w: 0.5046,
-    h: 0.8827,
+  'Shoppable_Video_Ad': {
+    x: 2 / 1078,
+    y: 15 / 341,
+    w: 541 / 1078,
+    h: 311 / 341,
   },
   'default': {
-    x: 0.0,
-    y: 0.0528,
-    w: 0.5046,
-    h: 0.8827,
+    x: 2 / 1078,
+    y: 15 / 341,
+    w: 541 / 1078,
+    h: 311 / 341,
   }
 };
 
-export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; ad: Ad | null; onOpenChange: (v: boolean)=>void; onCompare: (ad: Ad)=>void; }) {
+import { AdGroup } from "@/lib/aggregateAds";
+
+export function AdModal({ open, ad, group, onOpenChange, onCompare }: { open: boolean; ad: Ad | null; group?: AdGroup | null; onOpenChange: (v: boolean)=>void; onCompare: (ad: Ad)=>void; }) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [fullscreenImageLoaded, setFullscreenImageLoaded] = useState(false);
   const [popupImageLoaded, setPopupImageLoaded] = useState(false);
+  const [fullscreenImageDimensions, setFullscreenImageDimensions] = useState<{ width: number; height: number } | null>(null);
 
   const popupFrameRef = useRef<HTMLDivElement>(null);
   const popupImgRef = useRef<HTMLImageElement>(null);
@@ -56,31 +54,27 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
   const fullscreenFrameRef = useRef<HTMLDivElement>(null);
   const fullscreenImgRef = useRef<HTMLImageElement>(null);
 
-  // Calculate video overlay box dynamically based on actual image dimensions
-  // Video slot is approximately 544×301px starting at (0, 18) for Walmart SBV ads
-  // Add slight padding to ensure full coverage
-  const [dynamicBox, setDynamicBox] = useState<NormBox>(VIDEO_LAYOUTS['default']);
-  
-  useEffect(() => {
-    if (popupImgRef.current && popupImgRef.current.naturalWidth > 0) {
-      const img = popupImgRef.current;
-      const padding = 0; // No padding - use exact slot dimensions
-      const newBox = {
-        x: 0 / img.naturalWidth,  // Start at left edge
-        y: 18 / img.naturalHeight,  // Start at y=18
-        w: (544 + padding * 2) / img.naturalWidth,  // Exact width: 544px
-        h: (301 + padding * 2) / img.naturalHeight,  // Exact height: 301px
-      };
-      // Small delay to ensure video element has time to render with new dimensions
-      setTimeout(() => {
-        setDynamicBox(newBox);
-      }, 10);
-    }
-  }, [ad?.id, popupImageLoaded, fullscreenOpen]);
-  
-  const box: NormBox = dynamicBox;
-  const popupPxRaw = useOverlayBoxFromImage(popupFrameRef.current, popupImgRef.current, box);
-  const fullscreenPxRaw = useOverlayBoxFromImage(fullscreenFrameRef.current, fullscreenImgRef.current, box);
+  const metadataBox = useMemo<NormBox | null>(() => {
+    const vo = ad?.video_overlay;
+    if (!vo || !vo.image_width || !vo.image_height) return null;
+
+    return {
+      x: vo.x / vo.image_width,
+      y: vo.y / vo.image_height,
+      w: vo.width / vo.image_width,
+      h: vo.height / vo.image_height,
+    };
+  }, [ad?.video_overlay]);
+
+  const fallbackBox = useMemo<NormBox>(() => {
+    const typeKey = normalizeAdType(ad?.ad_type ?? "") || "default";
+    return VIDEO_LAYOUTS[typeKey] ?? VIDEO_LAYOUTS['default'];
+  }, [ad?.ad_type]);
+
+  const overlayBox = metadataBox ?? fallbackBox;
+
+  const popupPxRaw = useOverlayBoxFromImage(popupFrameRef.current, popupImgRef.current, overlayBox);
+  const fullscreenPxRaw = useOverlayBoxFromImage(fullscreenFrameRef.current, fullscreenImgRef.current, overlayBox);
   
   // Force recalculation when modal opens (handles cached images)
   useEffect(() => {
@@ -104,73 +98,28 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
     if (popupPxRaw && popupImgRef.current) {
       const img = popupImgRef.current;
       const imgRect = img.getBoundingClientRect();
-      const expectedY = 18 / img.naturalHeight;
-      const expectedW = 544 / img.naturalWidth;
-      const expectedH = 301 / img.naturalHeight;
+      console.debug('[Overlay]', {
+        source: metadataBox ? 'metadata' : 'fallback',
+        natural: `${img.naturalWidth}×${img.naturalHeight}`,
+        rendered: `${Math.round(imgRect.width)}×${Math.round(imgRect.height)}`,
+        box: overlayBox,
+        px: popupPxRaw,
+      });
     }
-  }, [popupPxRaw, ad, box]);
+  }, [popupPxRaw, metadataBox, overlayBox]);
 
   // Apply safety clamps to prevent overflow
+  // NOTE: Disabled clamping for video overlays - they need exact dimensions from metadata
   const clampBox = (px: any, containerEl: HTMLElement | null): any => {
     if (!px || !containerEl) return px;
-    const containerRect = containerEl.getBoundingClientRect();
-    return {
-      left: Math.max(0, px.left),
-      top: Math.max(0, px.top),
-      width: Math.min(px.width, containerRect.width - Math.max(0, px.left)),
-      height: Math.min(px.height, containerRect.height - Math.max(0, px.top)),
-    };
+    // Don't clamp - return exact dimensions for pixel-perfect alignment
+    return px;
   };
 
   // Calculate overlay position from metadata if available
-  const getOverlayFromMetadata = (metadata: VideoOverlay | undefined, imgEl: HTMLImageElement | null, containerEl: HTMLElement | null): any => {
-    if (!metadata || !imgEl || !containerEl) return null;
-
-    const containerRect = containerEl.getBoundingClientRect();
-    const imgRect = imgEl.getBoundingClientRect();
-    
-    // Calculate image offset within container (due to objectFit: contain centering)
-    const offsetX = imgRect.left - containerRect.left;
-    const offsetY = imgRect.top - containerRect.top;
-    
-    // Calculate scale based on rendered image size vs natural size
-    const scaleX = imgRect.width / metadata.image_width;
-    const scaleY = imgRect.height / metadata.image_height;
-
-
-    return {
-      left: offsetX + (metadata.x * scaleX),
-      top: offsetY + (metadata.y * scaleY),
-      width: metadata.width * scaleX,
-      height: metadata.height * scaleY,
-    };
-  };
-
-  // State to store metadata-based overlay positions
-  const [metadataPopupPx, setMetadataPopupPx] = useState<any>(null);
-  const [metadataFullscreenPx, setMetadataFullscreenPx] = useState<any>(null);
-
-  // Recalculate metadata-based overlays when image loads or modal state changes
-  useEffect(() => {
-    if (ad?.video_overlay) {
-      const popupOverlay = getOverlayFromMetadata(ad.video_overlay, popupImgRef.current, popupFrameRef.current);
-      const fullscreenOverlay = getOverlayFromMetadata(ad.video_overlay, fullscreenImgRef.current, fullscreenFrameRef.current);
-      setMetadataPopupPx(popupOverlay);
-      setMetadataFullscreenPx(fullscreenOverlay);
-    }
-  }, [ad?.id, ad?.video_overlay, popupImageLoaded, fullscreenImageLoaded, fullscreenOpen]);
-
-  // Use metadata if available, otherwise use dynamic calculation
-  const popupPxRaw_final = ad?.video_overlay && metadataPopupPx
-    ? metadataPopupPx
-    : popupPxRaw;
-  const fullscreenPxRaw_final = ad?.video_overlay && metadataFullscreenPx
-    ? metadataFullscreenPx
-    : fullscreenPxRaw;
-
-
-  const popupPx = clampBox(popupPxRaw_final, popupFrameRef.current);
-  const fullscreenPx = clampBox(fullscreenPxRaw_final, fullscreenFrameRef.current);
+  // Memoized to prevent recalculation on every render
+  const popupPx = clampBox(popupPxRaw, popupFrameRef.current);
+  const fullscreenPx = clampBox(fullscreenPxRaw, fullscreenFrameRef.current);
 
   useEffect(() => {
     if (!ad?.brand) {
@@ -237,9 +186,16 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
     }
   }, [fullscreenImageLoaded]);
 
+  // Reset image dimensions when modal closes or ad changes
+  useEffect(() => {
+    if (!fullscreenOpen) {
+      setFullscreenImageDimensions(null);
+    }
+  }, [fullscreenOpen, ad?.id]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-6xl w-[90vw]">
         <DialogTitle className="sr-only">{ad ? `${ad.brand} ad details` : "Ad details"}</DialogTitle>
         {logoUrl && (
           <div className="absolute top-4 left-4 z-10">
@@ -252,10 +208,10 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
           </div>
         )}
         {ad && (
-          <div className="grid md:grid-cols-2 gap-6 items-start">
+          <div className="grid md:grid-cols-[2fr_1fr] gap-6 items-start">
             <div
               ref={popupFrameRef}
-              className="rounded-lg overflow-hidden cursor-pointer relative bg-gray-100 flex items-center justify-center min-h-[400px]"
+              className="rounded-lg overflow-hidden cursor-zoom-in relative bg-white flex items-center justify-center min-h-[400px]"
               onClick={() => setFullscreenOpen(true)}
             >
               <img
@@ -301,10 +257,29 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
             </div>
             <div className="space-y-3">
               <h3 className="text-2xl font-bold">{ad.brand}</h3>
-              <div className="text-sm text-muted-foreground">{ad.retailer} • {ad.ad_type}</div>
-              <div className="text-sm"><span className="font-semibold">Keyword:</span> {ad.keyword}</div>
+              <div className="text-sm text-muted-foreground">{ad.retailer.charAt(0).toUpperCase() + ad.retailer.slice(1)} • {normalizeAdType(ad.ad_type)}</div>
               <div className="text-sm"><span className="font-semibold">Client:</span> {ad.client}</div>
-              <div className="text-sm"><span className="font-semibold">Date:</span> {formatLocal(ad.timestamp)}</div>
+              
+              {/* Show all timestamps with keywords if this is a grouped ad */}
+              {group && group.count > 1 ? (
+                <div className="text-sm">
+                  <div className="font-semibold mb-1">Seen {group.count} times:</div>
+                  <div className="max-h-32 overflow-y-auto space-y-1 text-xs bg-muted/30 rounded p-2">
+                    {group.instances.map((instance, idx) => (
+                      <div key={idx} className="flex justify-between gap-2">
+                        <span className="text-muted-foreground italic">{instance.keyword}</span>
+                        <span>{formatLocal(instance.timestamp)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="text-sm"><span className="font-semibold">Keyword:</span> {ad.keyword}</div>
+                  <div className="text-sm"><span className="font-semibold">Date:</span> {formatLocal(ad.timestamp)}</div>
+                </>
+              )}
+              
               <div className="pt-4 flex gap-2">
                 <Button onClick={async () => {
                   try {
@@ -347,6 +322,7 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
                     display: 'block',
                     width: '100%',
                     height: 'auto',
+                    maxWidth: fullscreenImageDimensions ? `${fullscreenImageDimensions.width}px` : '100%',
                     objectFit: 'contain',
                     cursor: 'pointer',
                   }}
@@ -354,7 +330,15 @@ export function AdModal({ open, ad, onOpenChange, onCompare }: { open: boolean; 
                   decoding="async"
                   loading="eager"
                   onClick={() => setFullscreenOpen(false)}
-                  onLoad={() => setFullscreenImageLoaded(prev => !prev)}
+                  onLoad={() => {
+                    if (fullscreenImgRef.current) {
+                      setFullscreenImageDimensions({
+                        width: fullscreenImgRef.current.naturalWidth,
+                        height: fullscreenImgRef.current.naturalHeight,
+                      });
+                    }
+                    setFullscreenImageLoaded(prev => !prev);
+                  }}
                 />
                 {ad.video_url && (
                   <video

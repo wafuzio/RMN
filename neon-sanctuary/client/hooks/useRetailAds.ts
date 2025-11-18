@@ -1,5 +1,5 @@
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
-import { api, RetailersResponse, ClientsResponse, AdsCardsResponse } from "@/lib/api";
+import { api, RetailersResponse, ClientsResponse, AdsCardsResponse, AdsCountResponse } from "@/lib/api";
 
 // Helper: normalize params for stable query keys
 function normalizeParams(p: Record<string, any>) {
@@ -68,12 +68,6 @@ export function useAds(params: {
     pageSize
   });
 
-  // Debug: Log the actual query key to detect churn
-  const keyDebug = JSON.stringify(normalized);
-  if (import.meta.env.DEV) {
-    console.log('[useAds] key:', keyDebug, 'enabled:', enabled);
-  }
-
   return useInfiniteQuery<AdsCardsResponse>({
     queryKey: ["ads", normalized],
     initialPageParam: 1,
@@ -104,5 +98,59 @@ export function useAds(params: {
     refetchOnMount: false,
     retry: false, // Don't retry failed requests - fail fast
     placeholderData: (previousData) => previousData, // Keep previous data while fetching (replaces keepPreviousData)
+  });
+}
+
+export function useAdCount(params: {
+  retailer?: string;
+  client?: string;
+  term?: string;
+  advertiser?: string;
+  start?: string;
+  end?: string;
+  types?: string[];
+  search?: string;
+}) {
+  const { retailer, client, term, advertiser, start, end, types, search } = params;
+
+  // Guard: don't fire query until both retailer and client are present AND non-empty
+  const enabled = Boolean(retailer && client && retailer.trim() && client.trim());
+
+  // Normalize params for stable query key
+  const normalized = normalizeParams({
+    retailer,
+    client,
+    term,
+    advertiser,
+    start,
+    end,
+    types,
+    search,
+  });
+
+  return useQuery<AdsCountResponse>({
+    queryKey: ["adCount", normalized],
+    queryFn: () => {
+      // TypeScript knows these are non-null because enabled=true
+      if (!retailer || !client) {
+        throw new Error('retailer and client are required');
+      }
+      return api.getAdCount({
+        retailer,
+        client,
+        term,
+        advertiser,
+        start,
+        end,
+        types,
+        search,
+      });
+    },
+    enabled,
+    staleTime: 10 * 60 * 1000, // 10 minutes cache - same as backend
+    gcTime: 30 * 60 * 1000, // 30 minutes in memory
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: false, // Don't retry failed requests - fail fast
   });
 }

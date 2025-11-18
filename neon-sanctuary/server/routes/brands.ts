@@ -3,19 +3,28 @@ import { RequestHandler } from "express";
 const FLASK_BASE_URL = process.env.FLASK_BASE_URL || "http://localhost:5006";
 
 export const handleBrands: RequestHandler = async (req, res) => {
-  const { retailer } = req.query;
+  const { retailer, retailers, client, advertiser, start, end, term } = req.query;
+  
+  // Handle both 'retailer' (singular) and 'retailers' (plural) for compatibility
+  const retailerParam = retailers || retailer;
 
-  if (!retailer) {
-    return res.status(400).json({ error: "retailer is required" });
+  if (!retailerParam) {
+    return res.status(400).json({ error: "retailer or retailers parameter is required" });
   }
 
   try {
     const params = new URLSearchParams();
-    params.set("retailer", String(retailer));
-    params.set("client", "all");
-    params.set("page_size", "100000");
+    params.set("retailers", String(retailerParam));
+    
+    // Forward all filter parameters
+    if (client) params.set("client", String(client));
+    if (advertiser) params.set("advertiser", String(advertiser));
+    if (start) params.set("start", String(start));
+    if (end) params.set("end", String(end));
+    if (term) params.set("term", String(term));
 
-    const flaskUrl = `${FLASK_BASE_URL}/api/ads/cards?${params.toString()}`;
+    // Call Flask /api/brands endpoint directly (optimized for brand aggregation)
+    const flaskUrl = `${FLASK_BASE_URL}/api/brands?${params.toString()}`;
 
     const response = await fetch(flaskUrl);
 

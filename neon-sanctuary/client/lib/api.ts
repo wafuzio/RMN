@@ -1,19 +1,21 @@
-import type { 
-  Retailer, 
-  RetailersResponse, 
-  ClientsResponse, 
-  AdCardItem, 
-  AdsCardsResponse 
+import type {
+  Retailer,
+  RetailersResponse,
+  ClientsResponse,
+  AdCardItem,
+  AdsCardsResponse,
+  AdsCountResponse
 } from "@shared/api";
 import { mark, readServerTiming, count } from './metrics';
 
 // Re-export for convenience
-export type { 
-  Retailer, 
-  RetailersResponse, 
-  ClientsResponse, 
-  AdCardItem, 
-  AdsCardsResponse 
+export type {
+  Retailer,
+  RetailersResponse,
+  ClientsResponse,
+  AdCardItem,
+  AdsCardsResponse,
+  AdsCountResponse
 };
 
 // Use relative path in dev (proxied by Vite), absolute in production
@@ -91,6 +93,7 @@ type GetAdsOpts = {
   pageSize?: number;  // camel here; we will map to page_size in query
   start?: string;
   end?: string;
+  tz_offset_minutes?: number;  // User's timezone offset for correct date filtering (e.g., -360 for UTC-6)
   types?: string[];
   search?: string;
   sort?: "latest" | "oldest" | "name";  // Sorting applied on backend before pagination
@@ -99,12 +102,44 @@ type GetAdsOpts = {
 export const api = {
   getRetailers: () => http<RetailersResponse>(`/api/retailers`, undefined, 'retailers'),
   getClients: (retailer: string) => http<ClientsResponse>(`/api/clients?retailer=${encodeURIComponent(retailer)}`, undefined, 'clients'),
-  getBrands: (retailers: string[]) => {
+  getBrands: (retailers: string[], filters?: { client?: string; advertiser?: string; start?: string; end?: string; term?: string }) => {
     const retailerParam = retailers.length > 0 ? retailers.join(',') : 'all';
-    return http<{ brands: Array<{ brand: string; count: number; percentage: number }> }>(`/api/brands?retailers=${encodeURIComponent(retailerParam)}`, undefined, 'brands');
+    const params = new URLSearchParams();
+    params.set('retailers', retailerParam);
+    if (filters?.client) params.set('client', filters.client);
+    if (filters?.advertiser) params.set('advertiser', filters.advertiser);
+    if (filters?.start) params.set('start', filters.start);
+    if (filters?.end) params.set('end', filters.end);
+    if (filters?.term) params.set('term', filters.term);
+    return http<{ brands: Array<{ brand: string; count: number; percentage: number }> }>(`/api/brands?${params.toString()}`, undefined, 'brands');
+  },
+  getAdCount: (params: Omit<GetAdsOpts, 'page' | 'pageSize'>) => {
+    const { retailer, client, term, advertiser, start, end, tz_offset_minutes, types, search } = params;
+
+    if (!retailer) throw new Error('getAdCount: retailer is required');
+    if (!client) throw new Error('getAdCount: client is required');
+
+    const q = new URLSearchParams();
+    q.set('retailer', retailer);
+    q.set('client', client);
+    if (term?.trim()) q.set('term', term.trim());
+    if (advertiser?.trim()) q.set('advertiser', advertiser.trim());
+    if (start?.trim()) q.set('start', start.trim());
+    if (end?.trim()) q.set('end', end.trim());
+    if (typeof tz_offset_minutes === 'number') q.set('tz_offset_minutes', String(tz_offset_minutes));
+    if (search?.trim()) q.set('search', search.trim());
+    if (types?.length) q.set('types', types.join(','));
+
+    const url = `/api/ads/count?${q.toString()}`;
+    console.debug('📡 getAdCount request:', { retailer, client, start, end, tz_offset_minutes });
+
+    return http<AdsCountResponse>(url, undefined, 'ads-count').then((response) => {
+      console.debug('📡 getAdCount response:', { total: response.total });
+      return response;
+    });
   },
   getAds: (params: GetAdsOpts) => {
-    const { retailer, client, term, advertiser, page = 1, pageSize = 24, start, end, types, search, sort } = params;
+    const { retailer, client, term, advertiser, page = 1, pageSize = 24, start, end, tz_offset_minutes, types, search, sort } = params;
 
     // Validate required params
     if (!retailer) throw new Error('getAds: retailer is required');
@@ -122,12 +157,13 @@ export const api = {
     if (advertiser?.trim()) q.set('advertiser', advertiser.trim());
     if (start?.trim()) q.set('start', start.trim());
     if (end?.trim()) q.set('end', end.trim());
+    if (typeof tz_offset_minutes === 'number') q.set('tz_offset_minutes', String(tz_offset_minutes));
     if (search?.trim()) q.set('search', search.trim());
     if (types?.length) q.set('types', types.join(','));
     if (sort) q.set('sort', sort);
 
     const url = `/api/ads/cards?${q.toString()}`;
-    console.debug('📡 getAds request:', { start, end, sort, url });
+    console.debug('📡 getAds request:', { start, end, tz_offset_minutes, sort, url });
 
     return http<AdsCardsResponse>(url, undefined, 'ads').then((response) => {
       console.debug('📡 getAds response received:', {

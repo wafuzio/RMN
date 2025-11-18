@@ -38,10 +38,11 @@ export function isAdTypeNotBrand(value: string | undefined): boolean {
     }
   }
 
-  // Check if it contains multiple ad type keywords
-  const keywordMatches = AD_TYPE_KEYWORDS.filter(kw => 
-    normalized.includes(kw.toLowerCase())
-  ).length;
+  // Check if it contains multiple ad type keywords (whole words only)
+  const keywordMatches = AD_TYPE_KEYWORDS.filter(kw => {
+    const regex = new RegExp(`\\b${kw.toLowerCase()}\\b`);
+    return regex.test(normalized);
+  }).length;
   
   if (keywordMatches >= 2) {
     return true;

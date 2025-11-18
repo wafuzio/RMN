@@ -10,7 +10,7 @@ ALLOWED_FOLDERS = {
     "kroger": {"TOA", "Skyscraper", "Carousel", "Display_Ads", "Main", "runs"},
     "walmart": {"SBA", "SBV", "Tile_Takeover", "Main", "runs"},
     "instacart": {"Shoppable_Display_Ads", "Shoppable_Video_Ads", "Shoppable_Recipe_Ads", "Display_Ads", "Main", "runs"},
-    "amazon": {"Sponsored_Brand", "Sponsored_Product", "Sponsored_Display", "Main", "runs"},
+    "amazon": {"Sponsored_Brand", "Sponsored_Product", "Sponsored_Display", "Sponsored_Brand_Cards", "Sponsored_Brand_Video", "Sponsored_Carousel", "Main", "runs"},
 }
 
 # JSON ad.type → folder mapping only when they differ

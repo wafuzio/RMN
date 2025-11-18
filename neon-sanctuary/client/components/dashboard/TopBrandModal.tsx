@@ -121,7 +121,7 @@ export function TopBrandModal({ open, onOpenChange, topBrands, onRetailerClick }
               >
                 <div className="flex items-center gap-3 flex-1">
                   <div className="font-semibold bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent w-8">#{idx + 1}</div>
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 h-10 w-10 flex items-center justify-start">
                     <BrandLogoImage brandName={brand.brand} />
                   </div>
                   <div className="flex-1 min-w-0">

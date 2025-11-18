@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useEffect } from "react";
 import { API_BASE } from "@/lib/api";
+import { PerformanceCard } from "@/components/PerformanceCard";
 import Index from "./pages/Index";
 import Brands from "./pages/Brands";
 import VideoOverlayTest from "./pages/VideoOverlayTest";
@@ -43,6 +44,8 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      {/* Global performance monitoring card (visible with ?devperf=1) */}
+      <PerformanceCard />
     </TooltipProvider>
   </QueryClientProvider>
 );

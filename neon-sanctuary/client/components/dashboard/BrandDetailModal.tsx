@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { AdCard, Ad } from "./AdCard";
 import { toLocalImageUrl } from "@/utils/imageUrl";
 import { formatLocal } from "@/lib/date";
+import { aggregateAds } from "@/lib/aggregateAds";
+import { AdCardGroup } from "./AdCardGroup";
 
 interface BrandDetail {
   brand: string;
@@ -49,6 +51,8 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
       if (!response.ok) throw new Error("Failed to fetch brand details");
       return response.json() as Promise<BrandDetail>;
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   });
 
   const { data: competitorDetails } = useQuery({
@@ -87,6 +91,8 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
     },
     enabled: selectedCompetitors.size > 0 && !!brandDetail?.top_keywords,
   });
+
+  // Remove the expensive allBrandAds query - we'll show unique counts after clicking a retailer
 
   const { data: filteredAds, isLoading: adsLoading } = useQuery({
     queryKey: ["brand-ads", brand, viewState],
@@ -128,10 +134,35 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
         results.forEach(cards => allAds.push(...cards));
       }
 
-      return allAds;
+      // Deduplicate and filter out invalid ads
+      const dedupeMap = new Map<string, Ad>();
+      for (const ad of allAds) {
+        // Skip ads without valid images
+        if (!ad.image_url || ad.image_url.includes('placeholder')) {
+          continue;
+        }
+        
+        // Build unique ID
+        const id = `${ad.retailer}-${ad.client}-${ad.brand}-${ad.message}-${ad.timestamp}`;
+        if (!dedupeMap.has(id)) {
+          dedupeMap.set(id, ad);
+        }
+      }
+
+      return Array.from(dedupeMap.values());
     },
     enabled: viewState.type !== 'detail' && !!brandDetail,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   });
+
+  // Aggregate ads for grouped display
+  const aggregatedAds = useMemo(() => {
+    if (!filteredAds || filteredAds.length === 0) return [];
+    return aggregateAds(filteredAds);
+  }, [filteredAds]);
+
+  // Unique counts will be shown after clicking into a retailer's ads (when aggregatedAds is populated)
 
   const handleGoBack = () => setViewState(previousViewState);
   const handleOpenAdFullsize = (ad: Ad) => {
@@ -230,7 +261,7 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
                 </button>
               )}
               <div className="h-16 w-16 flex-shrink-0">
-                <BrandLogo brand={brand} className="h-14 w-14" />
+                <BrandLogo brand={brand} size={56} className="h-14 w-14" />
               </div>
               <div>
                 <DialogTitle className="text-2xl">{brand}</DialogTitle>
@@ -294,16 +325,26 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
           </div>
-        ) : viewState.type !== 'detail' && filteredAds ? (
+        ) : viewState.type !== 'detail' && aggregatedAds ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filteredAds.map((ad, idx) => (
-                <div key={idx} className="cursor-pointer" onClick={() => handleOpenAdFullsize(ad)}>
-                  <AdCard
-                    ad={ad}
-                    onRemove={() => {}}
-                    onOpen={() => handleOpenAdFullsize(ad)}
-                  />
+            <div className="modal-content-box flex flex-col gap-4">
+              {aggregatedAds.map((item, idx) => (
+                <div key={idx}>
+                  {item.count > 1 ? (
+                    <AdCardGroup
+                      group={item}
+                      onRemove={() => {}}
+                      onOpen={() => handleOpenAdFullsize(item.cover as any)}
+                    />
+                  ) : (
+                    <div className="cursor-pointer" onClick={() => handleOpenAdFullsize(item.cover as any)}>
+                      <AdCard
+                        ad={item.cover as any}
+                        onRemove={() => {}}
+                        onOpen={() => handleOpenAdFullsize(item.cover as any)}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -391,7 +432,7 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
                         }}
                       >
                         <div className="h-8 w-8 flex-shrink-0">
-                          <BrandLogo brand={item.brand} className="h-8 w-8" />
+                          <BrandLogo brand={item.brand} size={32} className="h-8 w-8" />
                         </div>
                         <div className="flex-1 min-w-0 text-left">
                           <p className="font-medium text-gray-900">

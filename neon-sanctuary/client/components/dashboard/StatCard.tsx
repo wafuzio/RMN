@@ -33,8 +33,8 @@ export function StatCard({ value, label, hint, trend, className, brandName, onCl
 
     const fetchLogo = async () => {
       try {
-        // Use the correct API endpoint: /api/brand_logo/<brand_name>
-        const apiUrl = `/api/brand_logo/${encodeURIComponent(safeBrand)}`;
+        // Use the correct API endpoint: /api/logo/brand/<brand_name>
+        const apiUrl = `/api/logo/brand/${encodeURIComponent(safeBrand)}`;
         console.debug('[StatCard] Fetching brand logo:', { brandName: safeBrand, url: apiUrl });
 
         const response = await fetch(apiUrl);

@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 function groupBy<T>(arr: T[], key: (t: T) => string) {
   const map = new Map<string, T[]>();
@@ -81,28 +82,55 @@ export function Timeline({ timestamps, onRangeChange }: { timestamps: string[]; 
         </Tabs>
       </div>
       <div className="space-y-2">
-        <div className="h-32 w-full flex items-end gap-0.5 overflow-x-auto" role="img" aria-label="Ad volume over time">
-          {points.length === 0 ? (
-            <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No data</div>
-          ) : (
-            points.map((p, i) => {
-              const isInRange = i >= range[0] && i <= range[1];
-              const maxCount = Math.max(...points.map(pt => pt.count), 1);
-              return (
-                <div key={i} className="flex-1 min-w-[3%] flex flex-col items-center gap-1">
-                  <div
-                    className={`w-full rounded-sm transition-all duration-200 ${isInRange ? "bg-gradient-to-t from-[#764ba2] to-[#667eea] shadow-sm" : "bg-gray-300 opacity-30"}`}
-                    style={{ height: Math.max(4, (p.count / maxCount) * 120) + 'px' }}
-                    title={`${p.label}: ${p.count}${isInRange ? "" : " (excluded)"}`}
-                  />
-                  <div className="text-[10px] text-[#6b7280] font-medium text-center whitespace-nowrap overflow-hidden text-ellipsis w-full px-0.5">
-                    {p.label}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+        {points.length === 0 ? (
+          <div className="w-full h-32 flex items-center justify-center text-gray-400 text-sm">No data</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart
+              data={points.map((p, i) => ({
+                ...p,
+                index: points[0] ? Math.round((p.count / points[0].count) * 100) : 100,
+                inRange: i >= range[0] && i <= range[1],
+              }))}
+              margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 12, fill: '#6b7280' }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 12, fill: '#6b7280' }}
+                tickLine={false}
+                axisLine={false}
+                label={{ value: 'Index', angle: -90, position: 'insideLeft', style: { fill: '#6b7280', fontSize: 12 } }}
+              />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '0.5rem' }}
+                labelStyle={{ color: '#fff' }}
+                formatter={(value) => [`${value}`, 'Index']}
+                cursor={{ stroke: '#667eea', strokeWidth: 1 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="index"
+                stroke="url(#lineGradient)"
+                strokeWidth={3}
+                dot={{ fill: '#667eea', r: 5 }}
+                activeDot={{ r: 7, fill: '#764ba2' }}
+                isAnimationActive={true}
+              />
+              <defs>
+                <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#667eea" />
+                  <stop offset="100%" stopColor="#764ba2" />
+                </linearGradient>
+              </defs>
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </div>
       <div className="mt-6">
         <div className="relative pt-8 pb-6">

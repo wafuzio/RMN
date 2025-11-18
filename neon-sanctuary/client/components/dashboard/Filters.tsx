@@ -8,6 +8,15 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from "@/lib/utils";
 import { useAds } from "@/hooks/useRetailAds";
 
+// Helper to format client names for display
+const formatClientName = (client: string): string => {
+  return client
+    .replace(/_/g, " ") // Replace underscores with spaces
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()) // Sentence case each word
+    .join(" ");
+};
+
 // Helper to format ad type names for display
 const formatAdTypeName = (adType: string): string => {
   // Known acronyms that should be fully capitalized
@@ -58,12 +67,14 @@ export interface FiltersState {
   search?: string;
   keywords?: string[];
   datePreset?: { type: DatePresetType; days?: number; months?: number };
+  groupIdentical?: boolean;
 }
 
 export function Filters({
   retailer,
   clients,
   availableAdTypes = [],
+  availableKeywords = [],
   value,
   onChange,
   onApply,
@@ -72,6 +83,7 @@ export function Filters({
   retailer: string;
   clients: string[];
   availableAdTypes?: string[];
+  availableKeywords?: string[];
   value: FiltersState;
   onChange: (next: FiltersState) => void;
   onApply: () => void;
@@ -86,20 +98,6 @@ export function Filters({
   const types = availableAdTypes.length > 0 ? availableAdTypes : [];
   const selectedTypes = new Set(value.types);
   const selectedClients = new Set(value.clients || []);
-
-  // Fetch a broad sample of ads for the first selected client to derive available keywords
-  const firstClient = value.clients?.[0];
-  const keywordsQuery = useAds({
-    retailer,
-    client: firstClient || "",
-    pageSize: 200,
-  });
-  const availableKeywords = useMemo(() => {
-    const pages = keywordsQuery.data?.pages || [];
-    const set = new Set<string>();
-    for (const p of pages) for (const c of p.cards || []) if (c.keyword?.trim()) set.add(c.keyword.trim());
-    return Array.from(set).sort((a,b)=>a.localeCompare(b));
-  }, [keywordsQuery.data]);
   const selectedKeywords = new Set(value.keywords || []);
 
   // Date helpers
@@ -178,7 +176,7 @@ export function Filters({
         <Popover open={openClient} onOpenChange={setOpenClient}>
           <PopoverTrigger asChild>
             <Button variant="outline" className="w-full justify-between">
-              {selectedClients.size === 0 ? "Select clients" : selectedClients.size === clients.length ? "All" : `${selectedClients.size} selected`}
+              {selectedClients.size === 0 ? "Select clients" : selectedClients.size === clients.length ? "All" : selectedClients.size === 1 ? formatClientName(Array.from(selectedClients)[0]) : `${selectedClients.size} selected`}
               <span aria-hidden>▾</span>
             </Button>
           </PopoverTrigger>
@@ -213,7 +211,7 @@ export function Filters({
                       }}
                     >
                       <Checkbox checked={selectedClients.has(c)} aria-label={`toggle ${c}`} />
-                      <span className="ml-2">{c}</span>
+                      <span className="ml-2">{formatClientName(c)}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -375,32 +373,10 @@ export function Filters({
         <label className="block text-sm text-[#6b7280] mb-1">Search terms</label>
         <Popover open={openKeywords} onOpenChange={setOpenKeywords}>
           <PopoverTrigger asChild>
-            <button className={cn(
-              "w-full min-h-[38px] px-3 py-2 text-left border rounded-md bg-white hover:bg-gray-50",
-              selectedKeywords.size ? "flex flex-wrap gap-2" : ""
-            )} aria-haspopup="listbox">
-              {selectedKeywords.size === 0 ? (
-                <span className="text-sm text-gray-500">Select keywords</span>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {(value.keywords || []).map((k) => (
-                    <span key={k} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100 text-sm">
-                      {k}
-                      <button
-                        aria-label={`Remove ${k}`}
-                        className="ml-1 text-gray-500 hover:text-gray-700"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const next = (value.keywords || []).filter(x => x !== k);
-                          onChange({ ...value, keywords: next });
-                        }}
-                      >×</button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </button>
+            <Button variant="outline" className="w-full justify-between">
+              {selectedKeywords.size === 0 ? "Select keywords" : `${selectedKeywords.size} keyword${selectedKeywords.size !== 1 ? 's' : ''}`}
+              <span aria-hidden>▾</span>
+            </Button>
           </PopoverTrigger>
           <PopoverContent className="p-0 w-[320px]" align="start">
             <Command filter={(v, s) => (v.includes(s.toLowerCase()) ? 1 : 0)}>
@@ -429,6 +405,18 @@ export function Filters({
             </Command>
           </PopoverContent>
         </Popover>
+      </div>
+
+      {/* Group Identical Ads Toggle */}
+      <div className="flex items-center gap-2">
+        <Checkbox 
+          id="group-identical"
+          checked={value.groupIdentical ?? true}
+          onCheckedChange={(checked) => onChange({ ...value, groupIdentical: checked as boolean })}
+        />
+        <label htmlFor="group-identical" className="text-sm font-medium cursor-pointer">
+          Group identical ads
+        </label>
       </div>
 
       <div className="flex gap-2 ml-auto">

@@ -160,8 +160,8 @@ export function AllBrandsModal({
                   <div className="font-semibold bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent w-8">
                     #{idx + 1}
                   </div>
-                  <div className="flex-shrink-0">
-                    <BrandLogo brand={brand.brand} className="h-8 w-auto" />
+                  <div className="flex-shrink-0 h-10 w-10 flex items-center justify-start overflow-hidden">
+                    <BrandLogo brand={brand.brand} size={40} className="max-w-full max-h-full" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-900">{brand.brand}</div>
@@ -170,7 +170,7 @@ export function AllBrandsModal({
                 </div>
                 <div className="text-right flex-shrink-0">
                   <div className="font-extrabold text-lg bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent">
-                    {brand.percentage}%
+                    {brand.percentage === 0 ? "<1" : brand.percentage}%
                   </div>
                 </div>
               </button>

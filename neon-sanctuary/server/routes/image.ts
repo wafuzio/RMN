@@ -64,9 +64,10 @@ export const handleImageProxy: RequestHandler = async (req, res) => {
 
     // Set appropriate headers for caching and CORS
     res.set("Content-Type", contentType);
-    res.set("Cache-Control", "public, max-age=86400");
+    res.set("Cache-Control", "public, max-age=31536000, immutable"); // 1 year cache for images
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET");
+    res.set("Access-Control-Expose-Headers", "Server-Timing"); // Expose backend timing to frontend
 
     // Stream the image data
     const buffer = await response.arrayBuffer();
