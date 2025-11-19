@@ -356,7 +356,9 @@ export function Filters({
                       onCheckedChange={(checked) => {
                         const next = new Set(value.types);
                         if (checked) next.add(t); else next.delete(t);
-                        onChange({ ...value, types: Array.from(next) });
+                        const newTypes = Array.from(next);
+                        console.log('🔍 Ad type changed:', t, 'checked:', checked, 'newTypes:', newTypes);
+                        onChange({ ...value, types: newTypes });
                       }}
                       aria-label={`toggle ${t}`}
                     />

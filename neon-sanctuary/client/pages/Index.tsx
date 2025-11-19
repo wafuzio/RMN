@@ -237,15 +237,19 @@ export default function Index() {
   // This stabilizes the filter object identity so useAds doesn't re-run on every render
   // NOTE: Include tz_offset_minutes so backend can adjust date ranges correctly
   // (JavaScript's getTimezoneOffset returns minutes ahead of UTC as negative value)
-  const normalizedFilters = useMemo(() => ({
-    term: filters.keywords?.length ? filters.keywords.join(",") : undefined,
-    start: formatLocalDate(filters.start),
-    end: formatLocalDate(filters.end),
-    tz_offset_minutes: new Date().getTimezoneOffset(), // e.g., -360 for UTC-6
-    types: dedupSorted(filters.types),
-    search: filters.search?.trim() || undefined,
-    sort: sortBy,
-  }), [
+  const normalizedFilters = useMemo(() => {
+    const result = {
+      term: filters.keywords?.length ? filters.keywords.join(",") : undefined,
+      start: formatLocalDate(filters.start),
+      end: formatLocalDate(filters.end),
+      tz_offset_minutes: new Date().getTimezoneOffset(), // e.g., -360 for UTC-6
+      types: dedupSorted(filters.types),
+      search: filters.search?.trim() || undefined,
+      sort: sortBy,
+    };
+    console.log('🔍 normalizedFilters:', result);
+    return result;
+  }, [
     filters.keywords?.join(","),  // Stable string representation
     filters.start?.getTime(),     // Use epoch for date comparison
     filters.end?.getTime(),

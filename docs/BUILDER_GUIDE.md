@@ -969,6 +969,114 @@ When debugging "No image" issues:
 
 ---
 
+## Ad Types Filter Fix (November 2025)
+
+### Issue: Ad Types Filter Not Working
+
+**Problem:** The ad types filter in the frontend was not filtering the displayed cards despite:
+- ✅ Frontend correctly sending `types` parameter in API requests
+- ✅ Express proxy correctly forwarding parameter to Flask
+- ✅ Flask receiving the parameter in request logs
+
+**Root Cause:** The Flask backend in `web/builder_server_v2.py` was accepting the `types` query parameter but never actually using it to filter the cards in the main code paths.
+
+### Code Paths That Needed Fixing
+
+The Flask API has multiple code paths for serving ad cards:
+
+1. **BRAND INDEX FAST PATH** (lines ~1580-1620) - Used when filtering by advertiser
+2. **GENERAL MANIFEST PATH** (lines ~1680-1810) - Used for general queries  
+3. **Legacy filtering path** (lines ~2326-2345) - Only used in specific edge cases
+
+**The bug:** Only the legacy path had types filtering implemented. The main paths that handle 99% of requests had no filtering logic.
+
+### Fix Applied
+
+Added types filtering logic to both main code paths:
+
+#### 1. Brand Index Fast Path
+```python
+# Extract ad type for filtering
+ad_type = ad.get("type") or ad.get("ad_type") or "Main"
+
+# Filter by ad types if specified (comma-separated list)
+if types_filter:
+    types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
+    if types_list:
+        ad_type_normalized = ad_type.lower().replace("_", " ").replace("-", " ")
+        # Check if any requested type matches the ad type (exact or substring)
+        matches = any(req_type in ad_type_normalized or ad_type_normalized in req_type for req_type in types_list)
+        if not matches:
+            continue  # Skip this ad, it doesn't match the types filter
+```
+
+#### 2. General Manifest Path
+```python
+# Parse types filter once if needed
+types_list = []
+if types_filter:
+    types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
+    print(f"🔍 [FLASK DEBUG] Applied types filter: {types_list}")
+
+# In the ad processing loop:
+# Extract ad type for filtering
+ad_type = ad.get("type") or ad.get("ad_type") or "Main"
+
+# Filter by ad types if specified
+if types_list:
+    ad_type_normalized = ad_type.lower().replace("_", " ").replace("-", " ")
+    matches = any(req_type in ad_type_normalized or ad_type_normalized in req_type for req_type in types_list)
+    if not matches:
+        filtered_total += 1  # Count as filtered out, but don't add to cards
+        continue
+```
+
+### Pagination Fix
+
+When the types filter is applied, the pagination logic needed updates:
+
+1. **Load enough ads:** Continue scanning until we have a full page of filtered results
+2. **Correct totals:** Return `filtered_total` instead of original total when filter is active
+3. **Accurate `has_more`:** Base pagination on filtered count, not original count
+
+```python
+# When types filter is applied, calculate total based on filtered count
+display_total = total if not types_filter else filtered_total
+has_more = (offset + len(cards)) < display_total if types_filter else (offset + len(cards)) < total
+
+result = {
+    "total_cards": display_total,
+    "has_more": has_more,
+    # ...
+}
+```
+
+### Matching Logic
+
+The types filter uses flexible matching:
+
+1. **Case insensitive:** `types_list = [t.strip().lower() for t in types_filter.split(',')]`
+2. **Normalized comparison:** Replace underscores/hyphens with spaces
+3. **Substring matching:** Both exact matches and partial matches work
+   - Filter: `"sba"` matches ad type: `"SBA"` ✅
+   - Filter: `"video"` matches ad type: `"Shoppable_Video_Ad"` ✅
+
+### Testing
+
+After the fix:
+- ✅ Selecting "SBA" shows only Sponsored Brand Ads
+- ✅ Selecting "SBV" shows only Sponsored Brand Video ads  
+- ✅ Multiple selections work (e.g., "SBA,SBV")
+- ✅ Pagination works correctly with filtered results
+- ✅ Total counts reflect filtered data
+
+### Files Modified
+
+- `web/builder_server_v2.py` - Added types filtering to both main code paths
+- Added debug logging to track filter application
+
+---
+
 ## Quick Reference: Image & Proxy System
 
 ### How Images Flow Through the System

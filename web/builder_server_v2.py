@@ -1455,6 +1455,7 @@ def api_ads_count():
 
 @app.route("/api/ads/cards", methods=["GET"])
 def api_ads_cards():
+    print(f"🔍 [FLASK DEBUG] api_ads_cards called with args: {dict(request.args)}")
     """
     Get ad cards with filtering and pagination
 
@@ -1581,21 +1582,34 @@ def api_ads_cards():
                 for ad_index, file_retailer, file_client, ts in ad_infos:
                     if 0 <= ad_index < len(ads):
                         ad = ads[ad_index]
-                        
+
+                        # Extract ad type for filtering
+                        ad_type = ad.get("type") or ad.get("ad_type") or "Main"
+
+                        # Filter by ad types if specified (comma-separated list)
+                        if types_filter:
+                            types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
+                            if types_list:
+                                ad_type_normalized = ad_type.lower().replace("_", " ").replace("-", " ")
+                                # Check if any requested type matches the ad type (exact or substring)
+                                matches = any(req_type in ad_type_normalized or ad_type_normalized in req_type for req_type in types_list)
+                                if not matches:
+                                    continue  # Skip this ad, it doesn't match the types filter
+
                         # Build card (simplified, no complex brand extraction)
                         brand = ad.get("brand") or "Unknown"
                         advertisers = ad.get("advertisers") or []
                         message = ad.get("title") or ad.get("message") or ad.get("description") or ""
-                        
+
                         # Build image URL
                         img_path = ad.get("image_path") or ad.get("screenshot") or ""
                         image_url = f"/api/image/{file_retailer}/{file_client}/{img_path}" if img_path else None
-                        
+
                         cards.append({
                             "retailer": file_retailer,
                             "client": file_client,
                             "keyword": data.get("keyword"),
-                            "ad_type": ad.get("type") or ad.get("ad_type") or "Main",
+                            "ad_type": ad_type,
                             "brand": brand,
                             "advertisers": advertisers,
                             "message": message,
@@ -1668,21 +1682,29 @@ def api_ads_cards():
         return jsonify(result)
 
     # Find which runs contain the requested page slice
+    # When types filter is applied, we need to load more ads to account for filtered-out ads
     cards = []
     brands_set = set()
     acc = 0
     need = page_size
     start_needed = offset
+    filtered_total = 0  # Track total ads after applying filters
+
+    # Parse types filter once if needed
+    types_list = []
+    if types_filter:
+        types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
+        print(f"🔍 [FLASK DEBUG] Applied types filter: {types_list}")
 
     for r in rows:
         run_count = int(r["ad_count"] or 0)
-        
+
         # Skip runs before our offset
         if start_needed >= run_count:
             start_needed -= run_count
             acc += run_count
             continue
-        
+
         # This run contains part of the requested slice
         fp = OUTPUT_ROOT / r["json_path"]
         try:
@@ -1693,46 +1715,60 @@ def api_ads_cards():
             continue
 
         all_ads = data.get("ads") or []
-        begin = start_needed
-        take = min(need, max(0, len(all_ads) - begin))
-        
-        for j in range(begin, begin + take):
-            if j >= len(all_ads):
-                break
+
+        # When types filter is active, we need to scan all ads from start_needed onwards
+        # to account for filtered-out ads and still get page_size results
+        start_idx = start_needed
+        for j in range(start_idx, len(all_ads)):
             ad = all_ads[j]
             file_client = r["client"]
             file_retailer = r["retailer"]
-            
+
+            # Extract ad type for filtering
+            ad_type = ad.get("type") or ad.get("ad_type") or "Main"
+
+            # Filter by ad types if specified
+            if types_list:
+                ad_type_normalized = ad_type.lower().replace("_", " ").replace("-", " ")
+                # Check if any requested type matches the ad type (exact or substring)
+                matches = any(req_type in ad_type_normalized or ad_type_normalized in req_type for req_type in types_list)
+                if not matches:
+                    filtered_total += 1  # Count as filtered out, but don't add to cards
+                    continue
+
+            # This ad passes all filters
+            filtered_total += 1
+
             # Extract advertisers array (preferred) or fallback to brand field
             advertisers = ad.get("advertisers") or []
             if not advertisers:
                 ad_brand = ad.get("brand") or ad.get("advertiser")
                 if ad_brand:
                     advertisers = [ad_brand]
-            
+
             # Build brand display string from advertisers
             brand = ' + '.join(advertisers) if advertisers else "Unknown"
-            
+
             # Track unique brands
             for adv in advertisers:
                 if adv and adv != "Unknown":
                     brands_set.add(adv)
-            
+
             message = ad.get("title") or ad.get("message") or ad.get("description") or ""
-            
+
             # Build image URL
             img_path = ad.get("image_path") or ad.get("screenshot") or ""
             image_url = f"/api/image/{file_retailer}/{file_client}/{img_path}" if img_path else None
-            
+
             # Normalize timestamp to ISO Z
             raw_ts = data.get("timestamp") or ""
             iso_ts = raw_ts if raw_ts.endswith("Z") else raw_ts.replace(" ", "T") + "Z" if raw_ts else ""
-            
+
             cards.append({
                 "retailer": file_retailer,
                 "client": file_client,
                 "keyword": data.get("keyword"),
-                "ad_type": ad.get("type") or ad.get("ad_type") or "Main",
+                "ad_type": ad_type,
                 "brand": brand,
                 "advertisers": advertisers,
                 "message": message,
@@ -1744,14 +1780,23 @@ def api_ads_cards():
                 "ad_index": j
             })
 
-        need -= take
+            # Stop when we have enough cards for this page
+            if len(cards) >= page_size:
+                break
+
         acc += run_count
         start_needed = 0
-        
-        if need <= 0:
+
+        if len(cards) >= page_size:
             break
 
-    has_more = (offset + len(cards)) < total
+        # Continue to need more cards if we don't have a full page yet
+        need = page_size - len(cards)
+
+    # When types filter is applied, calculate total based on filtered count
+    # When no filter, use original total
+    display_total = total if not types_filter else filtered_total
+    has_more = (offset + len(cards)) < display_total if types_filter else (offset + len(cards)) < total
 
     result = {
         "retailer": retailer,
@@ -1760,14 +1805,15 @@ def api_ads_cards():
         "page": page,
         "page_size": page_size,
         "has_more": has_more,
-        "total_cards": total,
+        "total_cards": display_total,
         "brands": sorted(list(brands_set)),
         "filters": {"term": term, "start": start_date, "end": end_date}
     }
 
     _set_cache(cache_key, result)
     client_str = _norm_clients_for_cache(clients)
-    print(f"[{retailer}/{client_str}] 📊 Manifest pagination: {len(cards)} cards from {total} total (page {page})")
+    filter_note = f" (types filter: {types_filter})" if types_filter else ""
+    print(f"[{retailer}/{client_str}] 📊 Manifest pagination: {len(cards)} cards from {display_total} total (page {page}){filter_note}")
     return jsonify(result)
     
     # Support client=all or comma-separated list of clients
@@ -2326,15 +2372,22 @@ def api_ads_cards():
     # Filter by ad types if specified (comma-separated list)
     if types_filter:
         types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
+        print(f"🔍 [FLASK DEBUG] types_filter='{types_filter}', types_list={types_list}")
         if types_list:
             filtered_cards = []
+            original_count = len(all_cards)
             for card in all_cards:
                 card_type = (card.get("ad_type") or "").lower()
                 # Normalize for comparison: replace underscores and hyphens with spaces
                 card_type_normalized = card_type.replace("_", " ").replace("-", " ")
                 # Check if any requested type matches the card type (exact or substring)
-                if any(req_type in card_type_normalized or card_type_normalized in req_type for req_type in types_list):
+                matches = any(req_type in card_type_normalized or card_type_normalized in req_type for req_type in types_list)
+                if matches:
                     filtered_cards.append(card)
+                # Debug first few cards
+                if len(filtered_cards) < 3:
+                    print(f"🔍 [FLASK DEBUG] card ad_type='{card.get('ad_type')}' -> normalized='{card_type_normalized}' -> matches={matches}")
+            print(f"🔍 [FLASK DEBUG] Filtered {original_count} -> {len(filtered_cards)} cards")
             all_cards = filtered_cards
 
     # Filter by date range if specified (UTC-aware)

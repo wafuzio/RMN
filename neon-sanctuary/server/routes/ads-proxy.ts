@@ -25,6 +25,14 @@ export const handleAdsProxy: RequestHandler = async (req, res) => {
 
   const flaskUrl = `${FLASK_BASE_URL}/api/ads/cards?${params.toString()}`;
 
+  console.log(" [ads-proxy] Full request to Flask:", flaskUrl);
+  console.debug("[ads-proxy] Proxying to Flask", {
+    retailer,
+    client,
+    types,
+    flaskUrl: flaskUrl.split("?")[0], // Don't log full URL for security
+  });
+
   try {
     console.debug("[ads-proxy] Proxying request to Flask", {
       flaskUrl: flaskUrl.replace(/[?&](retailer|client)=[^&]*/g, "..."),

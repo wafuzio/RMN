@@ -163,6 +163,7 @@ export const api = {
     if (sort) q.set('sort', sort);
 
     const url = `/api/ads/cards?${q.toString()}`;
+    console.log('🔍 API getAds - types param:', { types, typesLength: types?.length, typesJoined: types?.join(',') });
     console.debug('📡 getAds request:', { start, end, tz_offset_minutes, sort, url });
 
     return http<AdsCardsResponse>(url, undefined, 'ads').then((response) => {

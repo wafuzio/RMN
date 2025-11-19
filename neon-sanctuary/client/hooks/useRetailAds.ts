@@ -68,6 +68,22 @@ export function useAds(params: {
     pageSize
   });
 
+  const queryKey = [
+    "ads",
+    retailer,
+    client,
+    term,
+    advertiser,
+    start,
+    end,
+    types,
+    search,
+    sort,
+    pageSize
+  ];
+
+  console.log('🔍 useAds params:', { retailer, client, types, term, start, end });
+
   return useInfiniteQuery<AdsCardsResponse>({
     queryKey: ["ads", normalized],
     initialPageParam: 1,
