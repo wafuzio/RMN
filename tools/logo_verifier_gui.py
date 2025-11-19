@@ -282,6 +282,11 @@ class LogoVerifier:
         
         brand_key, brand_data = self.brands[self.current_index]
         logo_file = brand_data.get("logo_file", "")
+        
+        # Strip brand_logos/ prefix if present to avoid double path
+        if logo_file.startswith("brand_logos/"):
+            logo_file = logo_file[len("brand_logos/"):]
+        
         logo_path = LOGOS_DIR / logo_file
         
         # Delete file

@@ -1656,9 +1656,8 @@ def api_ads_cards():
                         advertisers = ad.get("advertisers") or []
                         message = ad.get("title") or ad.get("message") or ad.get("description") or ""
 
-                        # Build image URL
-                        img_path = ad.get("image_path") or ad.get("screenshot") or ""
-                        image_url = f"/api/image/{file_retailer}/{file_client}/{img_path}" if img_path else None
+                        # Build image URL (always returns non-empty URL)
+                        image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, ad)
 
                         cards.append({
                             "retailer": file_retailer,
@@ -1821,9 +1820,8 @@ def api_ads_cards():
 
             message = ad.get("title") or ad.get("message") or ad.get("description") or ""
 
-            # Build image URL
-            img_path = ad.get("image_path") or ad.get("screenshot") or ""
-            image_url = f"/api/image/{file_retailer}/{file_client}/{img_path}" if img_path else None
+            # Build image URL (always returns non-empty URL)
+            image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, ad)
 
             # Normalize timestamp to ISO Z
             raw_ts = data.get("timestamp") or ""

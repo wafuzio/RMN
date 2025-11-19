@@ -11,13 +11,24 @@ This script:
 """
 
 import json
+import sys
 from pathlib import Path
 from collections import defaultdict
 
 def load_brands_config():
     """Load brands.json and create mapping of all names to canonical"""
-    with open('config/brands.json') as f:
-        brands = json.load(f)
+    brands_file = Path('config/brands.json')
+    if not brands_file.exists():
+        print(f"❌ Brands config not found: {brands_file}")
+        print("Make sure you're running from the project root directory")
+        sys.exit(1)
+    
+    try:
+        with open(brands_file) as f:
+            brands = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"❌ Invalid JSON in brands config: {e}")
+        sys.exit(1)
     
     # Map all names (canonical + synonyms) to canonical name
     name_to_canonical = {}
@@ -36,9 +47,41 @@ def slugify(name):
     """Convert brand name to slug"""
     return name.lower().replace(' ', '_').replace('-', '_').replace("'", "").replace("&", "and")
 
+def validate_results(new_brands_db, logo_files):
+    """Validate the reconciliation results"""
+    issues = []
+    
+    for slug, entry in new_brands_db.items():
+        logo_file = entry.get('logo_file', '')
+        if logo_file and logo_file not in logo_files:
+            issues.append(f"Still missing: {logo_file}")
+    
+    if issues:
+        print(f"⚠️  Validation found {len(issues)} remaining issues:")
+        for issue in issues[:10]:
+            print(f"  {issue}")
+        if len(issues) > 10:
+            print(f"  ... and {len(issues) - 10} more")
+    else:
+        print("✅ Validation passed - all references point to existing files")
+    
+    return len(issues) == 0
+
 def main():
     logo_dir = Path('output/brand_logos')
     db_path = logo_dir / 'brand_logo_database.json'
+    
+    # Check if logo directory exists
+    if not logo_dir.exists():
+        print(f"❌ Logo directory not found: {logo_dir}")
+        print("Run logo_scout.py first to create logos")
+        sys.exit(1)
+    
+    # Check if database exists
+    if not db_path.exists():
+        print(f"❌ Logo database not found: {db_path}")
+        print("Run logo_scout.py first to create the database")
+        sys.exit(1)
     
     # Load brand name mappings
     print("Loading brands.json...")
@@ -46,8 +89,12 @@ def main():
     
     # Load logo database
     print("Loading logo database...")
-    with open(db_path) as f:
-        logo_db = json.load(f)
+    try:
+        with open(db_path) as f:
+            logo_db = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"❌ Invalid JSON in logo database: {e}")
+        sys.exit(1)
     
     brands_db = logo_db.get('brands', {})
     
@@ -118,30 +165,53 @@ def main():
         print(f"\nMissing files (first 10):")
         for slug, brand, file in missing_files[:10]:
             print(f"  {brand}: {file}")
+        if len(missing_files) > 10:
+            print(f"  ... and {len(missing_files) - 10} more")
     
     if orphaned_files:
         print(f"\nOrphaned files (first 10):")
         for file in sorted(orphaned_files)[:10]:
             print(f"  {file}")
+        if len(orphaned_files) > 10:
+            print(f"  ... and {len(orphaned_files) - 10} more")
     
     if unmapped_brands:
         print(f"\nUnmapped brands (not in brands.json, first 10):")
         for slug, brand in unmapped_brands[:10]:
             print(f"  {brand}")
+        if len(unmapped_brands) > 10:
+            print(f"  ... and {len(unmapped_brands) - 10} more")
+    
+    # Validate results before saving
+    print(f"\n🔍 Validating results...")
+    is_valid = validate_results(new_brands_db, logo_files)
     
     # Save updated database
     logo_db['brands'] = new_brands_db
     
     backup_path = db_path.with_suffix('.json.backup')
-    print(f"\nBacking up to {backup_path}...")
-    with open(backup_path, 'w') as f:
-        json.dump(logo_db, f, indent=2)
+    print(f"\n💾 Backing up to {backup_path}...")
+    try:
+        with open(backup_path, 'w') as f:
+            json.dump(logo_db, f, indent=2)
+    except Exception as e:
+        print(f"❌ Failed to create backup: {e}")
+        sys.exit(1)
     
-    print(f"Writing updated database...")
-    with open(db_path, 'w') as f:
-        json.dump(logo_db, f, indent=2)
+    print(f"💾 Writing updated database...")
+    try:
+        with open(db_path, 'w') as f:
+            json.dump(logo_db, f, indent=2)
+    except Exception as e:
+        print(f"❌ Failed to write database: {e}")
+        print(f"Backup is available at: {backup_path}")
+        sys.exit(1)
     
     print(f"\n✅ Done! New DB has {len(new_brands_db)} entries")
+    if is_valid:
+        print("🎉 All logo references are valid!")
+    else:
+        print("⚠️  Some issues remain - check the validation output above")
 
 if __name__ == '__main__':
     main()

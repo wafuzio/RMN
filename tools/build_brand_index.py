@@ -107,23 +107,33 @@ def build_brand_index():
                     
                     # Group ads by brand (including co-brands)
                     brand_ads = defaultdict(list)
+                    indexed_ads = set()  # Track which ads we've indexed (avoid double counting)
+                    
                     for idx, ad in enumerate(ads):
+                        brands_for_ad = set()  # Track brands for this specific ad
+                        
                         # Index primary brand
                         brand = ad.get('brand') or ''
                         if brand and brand.lower() != 'unknown':
                             canonical_brand = canonicalize_brand(brand)
                             if canonical_brand:
                                 brand_ads[canonical_brand].append(idx)
-                                ads_indexed += 1
+                                brands_for_ad.add(canonical_brand)
                         
                         # Index co-brands from advertisers array
                         advertisers = ad.get('advertisers', [])
                         for advertiser in advertisers:
                             if advertiser and advertiser.strip():
                                 canonical_advertiser = canonicalize_brand(advertiser)
-                                if canonical_advertiser and canonical_advertiser not in brand_ads:
+                                if canonical_advertiser:
                                     brand_ads[canonical_advertiser].append(idx)
-                                    ads_indexed += 1
+                                    brands_for_ad.add(canonical_advertiser)
+                        
+                        # Count this ad only once, regardless of how many brands it has
+                        if brands_for_ad:
+                            indexed_ads.add(idx)
+                    
+                    ads_indexed += len(indexed_ads)
                     
                     # Add to index
                     # Store relative path from OUTPUT_ROOT

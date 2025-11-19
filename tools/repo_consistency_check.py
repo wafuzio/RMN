@@ -93,7 +93,8 @@ def check_outputs():
                         print(f"ERROR: Image found in runs/: {f}")
             
             # Check JSONs in runs for schema shape and timestamps
-            for run_json in (client_dir / "runs").glob("**/*.json"):
+            # Only validate canonical run_results_*.json files, skip metadata and reports
+            for run_json in (client_dir / "runs").glob("**/run_results_*.json"):
                 try:
                     data = json.loads(run_json.read_text())
                 except Exception as e:
@@ -125,12 +126,12 @@ def check_outputs():
 
 def check_brand_logos():
     print("\n=== Checking Brand Logos ===")
-    logos_dir = ROOT / "brand_logos"
+    logos_dir = ROOT / "output" / "brand_logos"
     db_file = logos_dir / "brand_logo_database.json"
     front = logos_dir / "frontend_logos.json"
     
     if not logos_dir.exists():
-        print("WARN: brand_logos/ not found at project root.")
+        print("WARN: output/brand_logos/ not found.")
         return
     
     if not db_file.exists():
@@ -161,7 +162,7 @@ def check_brand_logos():
             for brand, path in mapping.items():
                 if not path.startswith("brand_logos/"):
                     print(f"ERROR: frontend_logos path not rooted at brand_logos/: {brand} -> {path}")
-                if not (ROOT / path).exists():
+                if not (ROOT / "output" / path).exists():
                     print(f"WARN: frontend logo path missing on disk: {path}")
         except Exception as e:
             print(f"ERROR: Invalid frontend_logos.json: {e}")

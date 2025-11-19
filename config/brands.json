@@ -31,7 +31,8 @@
   {
     "name": "Applegate",
     "synonyms": [
-      "Applegate Natural"]
+      "Applegate Natural"
+    ]
   },
   {
     "name": "Atkins",
@@ -63,7 +64,8 @@
     "name": "Barilla",
     "synonyms": [
       "Barilla Pasta",
-      "Barilla Protein"
+      "Barilla Protein",
+      "MSG:More Texture, More Sauce Grip. Shop now."
     ]
   },
   {
@@ -79,6 +81,12 @@
     "name": "Bertolli",
     "synonyms": [
       "MSMAlwaysOn0625"
+    ]
+  },
+  {
+    "name": "Betty Crocker",
+    "synonyms": [
+      "MSG:$0.99 Each When You Buy 5. Happiness is homemade."
     ]
   },
   {
@@ -151,7 +159,6 @@
     "name": "Boost",
     "synonyms": [
       "TOABoostAugDec2025",
-      "BOOST",
       "BOOST Advanced"
     ]
   },
@@ -324,6 +331,12 @@
     "name": "Dolly Parton",
     "synonyms": [
       "MSG:Save Now. Dolly Parton Breakfast"
+    ]
+  },
+  {
+    "name": "Doritos",
+    "synonyms": [
+      "MSG:Doritos Late Night® Jalapeño Popper & Golden Sriracha"
     ]
   },
   {
@@ -571,7 +584,8 @@
     "synonyms": [
       "MSG:Advertisement: Hershey, Honey Maid, Jet-Puffed. Let's S'more More. Shop Now.",
       "Hersheys",
-      "Hershey"
+      "Hershey",
+      "MSG:HERSHEY'S KISSES. Get To Making Merry. Fill the holidays with treats and cheer."
     ]
   },
   {
@@ -854,6 +868,12 @@
     ]
   },
   {
+    "name": "Mars Wrigley",
+    "synonyms": [
+      "MSG:Mars Wrigley Holiday. Shop Now."
+    ]
+  },
+  {
     "name": "Marzetti",
     "synonyms": []
   },
@@ -1092,7 +1112,8 @@
       "Procter and Gamble",
       "Procter",
       "MSG:P&G. Spend $15 SAVE $5. Mix & Match participating items to SAVE. Save Now.",
-      "MSG:P&G Wicked Products. Get a Free $15 Movie Ticket. Spend $25, click to find out how to get your ticket. Save Now."
+      "MSG:P&G Wicked Products. Get a Free $15 Movie Ticket. Spend $25, click to find out how to get your ticket. Save Now.",
+      "MSG:P&G Fabric. Save up to $8 on Tide & Downy. Clip digital coupons to SAVE. Save Now."
     ]
   },
   {
@@ -1127,7 +1148,8 @@
       "PeetsFallCampaign2025TOA",
       "Peets",
       "MSG:Peet's Coffee Single Serve Pods",
-      "MSG:Peet's Coffee for Brews that Feel Like Fall"
+      "MSG:Peet's Coffee for Brews that Feel Like Fall",
+      "MSG:Peet's Coffee. Shop Now."
     ]
   },
   {
@@ -1400,7 +1422,8 @@
     "name": "Tillamook",
     "synonyms": [
       "MSG:Tillamook Ice Cream, Cheese and Cream Cheese. On a blue background with a festive holiday look.",
-      "MSG:Seasonal Tillamook Ice Cream Flavors"
+      "MSG:Seasonal Tillamook Ice Cream Flavors",
+      "MSG:Tillamook Limited Edition Ice Cream Flavors"
     ]
   },
   {
@@ -1425,7 +1448,9 @@
   },
   {
     "name": "Tru Fru",
-    "synonyms": []
+    "synonyms": [
+      "Fru"
+    ]
   },
   {
     "name": "Tyson",
@@ -1471,11 +1496,9 @@
   },
   {
     "name": "Wild Planet",
-    "synonyms": []
-  },
-  {
-    "name": "Wild Planet Not",
-    "synonyms": []
+    "synonyms": [
+      "Wild Planet Not"
+    ]
   },
   {
     "name": "Wilde Protein Chips",
