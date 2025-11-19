@@ -3,8 +3,8 @@ import { RequestHandler } from "express";
 const FLASK_BASE_URL = process.env.FLASK_BASE_URL || "http://localhost:5006";
 
 export const handleBrands: RequestHandler = async (req, res) => {
-  const { retailer, retailers, client, advertiser, start, end, term } = req.query;
-  
+  const { retailer, retailers, client, advertiser, start, end, term, types } = req.query;
+
   // Handle both 'retailer' (singular) and 'retailers' (plural) for compatibility
   const retailerParam = retailers || retailer;
 
@@ -15,13 +15,14 @@ export const handleBrands: RequestHandler = async (req, res) => {
   try {
     const params = new URLSearchParams();
     params.set("retailers", String(retailerParam));
-    
+
     // Forward all filter parameters
     if (client) params.set("client", String(client));
     if (advertiser) params.set("advertiser", String(advertiser));
     if (start) params.set("start", String(start));
     if (end) params.set("end", String(end));
     if (term) params.set("term", String(term));
+    if (types) params.set("types", String(types));
 
     // Call Flask /api/brands endpoint directly (optimized for brand aggregation)
     const flaskUrl = `${FLASK_BASE_URL}/api/brands?${params.toString()}`;

@@ -7,6 +7,7 @@ interface BrandsFilters {
   start?: string;
   end?: string;
   term?: string;
+  types?: string[];
 }
 
 export function useBrands(retailers: string[], filters?: BrandsFilters) {

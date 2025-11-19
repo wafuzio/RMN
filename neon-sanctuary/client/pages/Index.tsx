@@ -289,6 +289,7 @@ export default function Index() {
     ...debouncedFilters,
   });
 
+
   // Count queries for total cards (much faster than loading full cards)
   const krogerCountQuery = useAdCount({
     retailer: isKrogerSelected ? "kroger" : undefined,
@@ -445,15 +446,39 @@ export default function Index() {
   ]);
 
   // Derive available ad types from the fetched data
+  // Use a ref to persist types across filter changes so dropdown always shows all types
+  const allSeenTypesRef = useRef<Set<string>>(new Set());
+
   const availableAdTypes = useMemo(() => {
-    const typeSet = new Set<string>();
+    const typeSet = allSeenTypesRef.current;
+
+    // Add types from current flatAds
     for (const ad of flatAds) {
       if (ad.ad_type?.trim()) {
         typeSet.add(ad.ad_type.trim());
       }
     }
+
+    // Also add types from raw query responses to catch all available types
+    const allQueriesData = [
+      krogerQuery.data,
+      walmartQuery.data,
+      instacartQuery.data,
+      amazonQuery.data,
+    ];
+
+    for (const queryData of allQueriesData) {
+      if (queryData?.cards) {
+        for (const ad of queryData.cards) {
+          if (ad.ad_type?.trim()) {
+            typeSet.add(ad.ad_type.trim());
+          }
+        }
+      }
+    }
+
     return Array.from(typeSet).sort();
-  }, [flatAds]);
+  }, [flatAds, krogerQuery.data, walmartQuery.data, instacartQuery.data, amazonQuery.data]);
 
   // Derive available keywords from the fetched data, filtered by selected clients
   const availableKeywords = useMemo(() => {
@@ -514,7 +539,8 @@ export default function Index() {
     client: filters.clients?.join(','),
     start: debouncedFilters.start,
     end: debouncedFilters.end,
-    term: debouncedFilters.term
+    term: debouncedFilters.term,
+    types: debouncedFilters.types
   };
   const { data: brandsData } = useBrands(retailers, brandsFilters);
   const apiBrands = brandsData?.brands || [];

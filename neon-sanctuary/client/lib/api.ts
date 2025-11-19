@@ -102,7 +102,7 @@ type GetAdsOpts = {
 export const api = {
   getRetailers: () => http<RetailersResponse>(`/api/retailers`, undefined, 'retailers'),
   getClients: (retailer: string) => http<ClientsResponse>(`/api/clients?retailer=${encodeURIComponent(retailer)}`, undefined, 'clients'),
-  getBrands: (retailers: string[], filters?: { client?: string; advertiser?: string; start?: string; end?: string; term?: string }) => {
+  getBrands: (retailers: string[], filters?: { client?: string; advertiser?: string; start?: string; end?: string; term?: string; types?: string[] }) => {
     const retailerParam = retailers.length > 0 ? retailers.join(',') : 'all';
     const params = new URLSearchParams();
     params.set('retailers', retailerParam);
@@ -111,6 +111,7 @@ export const api = {
     if (filters?.start) params.set('start', filters.start);
     if (filters?.end) params.set('end', filters.end);
     if (filters?.term) params.set('term', filters.term);
+    if (filters?.types?.length) params.set('types', filters.types.join(','));
     return http<{ brands: Array<{ brand: string; count: number; percentage: number }> }>(`/api/brands?${params.toString()}`, undefined, 'brands');
   },
   getAdCount: (params: Omit<GetAdsOpts, 'page' | 'pageSize'>) => {

@@ -196,6 +196,21 @@ def _cache_key(params: dict) -> str:
     key_str = json.dumps(normalized, sort_keys=True)
     return hashlib.md5(key_str.encode()).hexdigest()
 
+def _matches_ad_type_filter(ad, types_list):
+    """Shared filtering logic to ensure consistency between pre-count and card building"""
+    if not types_list:
+        return True
+
+    ad_type = ad.get("type") or ad.get("ad_type") or "Main"
+    ad_type_normalized = ad_type.lower().replace("_", " ").replace("-", " ")
+
+    # Normalize both sides before comparison
+    for req_type in types_list:
+        req_type_normalized = req_type.lower().replace("_", " ").replace("-", " ")
+        if req_type_normalized == ad_type_normalized or req_type_normalized in ad_type_normalized or ad_type_normalized in req_type_normalized:
+            return True
+    return False
+
 def _get_cached(key: str):
     """Get cached result if not expired"""
     if key in _cache:
@@ -1402,7 +1417,7 @@ def api_ads_count():
     """
     Fast count endpoint using brand index or run manifest.
     Does NOT load cards - only metadata.
-    
+
     Query params:
     - retailer (required): Retailer name
     - client (optional): Client name or "all"
@@ -1410,7 +1425,8 @@ def api_ads_count():
     - advertiser (optional): Brand/advertiser filter
     - start (optional): Start date YYYY-MM-DD (inclusive)
     - end (optional): End date YYYY-MM-DD (inclusive)
-    
+    - types (optional): Comma-separated list of ad types to filter by
+
     Returns: {"total": number, "retailer": str, "client": str, "filters": {...}}
     """
     retailer = request.args.get("retailer") or None
@@ -1419,6 +1435,50 @@ def api_ads_count():
     start = request.args.get("start") or None
     end = request.args.get("end") or None
     advertiser_in = request.args.get("advertiser") or None
+    types_filter = (request.args.get("types") or "").strip()
+
+    # If types filter is specified, we need to load JSONs to filter by ad type
+    if types_filter:
+        types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
+
+        # For type-filtered queries, count matching ads by loading JSONs
+        total = 0
+        rows = []
+
+        # Collect matching runs
+        for r in mf_runs():
+            if retailer and r["retailer"] != retailer:
+                continue
+            if clients and r["client"] not in clients:
+                continue
+            if term and r.get("keyword") != term:
+                continue
+            if start and r["day"] < start:
+                continue
+            if end and r["day"] > end:
+                continue
+            rows.append(r)
+
+        # Load each file and count ads that match types filter
+        for r in rows:
+            fp = OUTPUT_ROOT / r["json_path"]
+            try:
+                with open(fp, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                ads = data.get("ads") or []
+                for ad in ads:
+                    if _matches_ad_type_filter(ad, types_list):
+                        total += 1
+            except Exception as e:
+                print(f"[ads-count] Error loading {fp}: {e}")
+                continue
+
+        return jsonify({
+            "total": total,
+            "retailer": retailer,
+            "client": _norm_clients_for_cache(clients),
+            "filters": {"term": term, "advertiser": advertiser_in, "start": start, "end": end, "types": types_filter}
+        })
 
     # Brand-filtered → use brand index
     if advertiser_in:
@@ -1583,18 +1643,13 @@ def api_ads_cards():
                     if 0 <= ad_index < len(ads):
                         ad = ads[ad_index]
 
-                        # Extract ad type for filtering
-                        ad_type = ad.get("type") or ad.get("ad_type") or "Main"
+                        # Apply shared filtering logic
+                        types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()] if types_filter else []
+                        if not _matches_ad_type_filter(ad, types_list):
+                            continue  # Skip this ad, doesn't match the types filter
 
-                        # Filter by ad types if specified (comma-separated list)
-                        if types_filter:
-                            types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
-                            if types_list:
-                                ad_type_normalized = ad_type.lower().replace("_", " ").replace("-", " ")
-                                # Check if any requested type matches the ad type (exact or substring)
-                                matches = any(req_type in ad_type_normalized or ad_type_normalized in req_type for req_type in types_list)
-                                if not matches:
-                                    continue  # Skip this ad, it doesn't match the types filter
+                        # Extract ad type for card data
+                        ad_type = ad.get("type") or ad.get("ad_type") or "Main"
 
                         # Build card (simplified, no complex brand extraction)
                         brand = ad.get("brand") or "Unknown"
@@ -1681,20 +1736,38 @@ def api_ads_cards():
         _set_cache(cache_key, result)
         return jsonify(result)
 
-    # Find which runs contain the requested page slice
-    # When types filter is applied, we need to load more ads to account for filtered-out ads
-    cards = []
-    brands_set = set()
-    acc = 0
-    need = page_size
-    start_needed = offset
-    filtered_total = 0  # Track total ads after applying filters
-
     # Parse types filter once if needed
     types_list = []
     if types_filter:
         types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
         print(f"🔍 [FLASK DEBUG] Applied types filter: {types_list}")
+
+
+    # FAST PRE-COUNT: Get total matching ads first for accurate pagination
+    filtered_total = 0
+    if types_filter:
+        print(f"🔍 [FLASK DEBUG] Pre-counting total matching ads...")
+        for r in rows:
+            fp = OUTPUT_ROOT / r["json_path"]
+            try:
+                with open(fp, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                all_ads = data.get("ads") or []
+                for ad in all_ads:
+                    if _matches_ad_type_filter(ad, types_list):
+                        filtered_total += 1
+            except Exception:
+                continue
+        print(f"🔍 [FLASK DEBUG] Found {filtered_total} total matching ads")
+    else:
+        filtered_total = total  # No filter, use original total
+
+    # Now build the actual page of cards
+    cards = []
+    brands_set = set()
+    acc = 0
+    need = page_size
+    start_needed = offset
 
     for r in rows:
         run_count = int(r["ad_count"] or 0)
@@ -1724,20 +1797,12 @@ def api_ads_cards():
             file_client = r["client"]
             file_retailer = r["retailer"]
 
-            # Extract ad type for filtering
+            # Apply shared filtering logic
+            if not _matches_ad_type_filter(ad, types_list):
+                continue  # Skip this ad, doesn't match filter
+
+            # Extract ad type for card data
             ad_type = ad.get("type") or ad.get("ad_type") or "Main"
-
-            # Filter by ad types if specified
-            if types_list:
-                ad_type_normalized = ad_type.lower().replace("_", " ").replace("-", " ")
-                # Check if any requested type matches the ad type (exact or substring)
-                matches = any(req_type in ad_type_normalized or ad_type_normalized in req_type for req_type in types_list)
-                if not matches:
-                    filtered_total += 1  # Count as filtered out, but don't add to cards
-                    continue
-
-            # This ad passes all filters
-            filtered_total += 1
 
             # Extract advertisers array (preferred) or fallback to brand field
             advertisers = ad.get("advertisers") or []
@@ -1793,10 +1858,9 @@ def api_ads_cards():
         # Continue to need more cards if we don't have a full page yet
         need = page_size - len(cards)
 
-    # When types filter is applied, calculate total based on filtered count
-    # When no filter, use original total
-    display_total = total if not types_filter else filtered_total
-    has_more = (offset + len(cards)) < display_total if types_filter else (offset + len(cards)) < total
+    # Use pre-counted filtered total for accurate pagination
+    display_total = filtered_total
+    has_more = (offset + len(cards)) < display_total
 
     result = {
         "retailer": retailer,
@@ -2521,6 +2585,7 @@ def api_brands():
     - start (optional): start date (YYYY-MM-DD)
     - end (optional): end date (YYYY-MM-DD)
     - term (optional): keyword filter
+    - types (optional): comma-separated list of ad types to filter by
     """
     retailers_param = (request.args.get("retailers") or "all").strip().lower()
     clients = _parse_clients(request)
@@ -2528,6 +2593,7 @@ def api_brands():
     start_date = request.args.get("start")
     end_date = request.args.get("end")
     term = (request.args.get("term") or "").strip().lower()
+    types_filter = (request.args.get("types") or "").strip()
 
     # Check cache first
     cache_params = {
@@ -2536,7 +2602,8 @@ def api_brands():
         "advertiser": advertiser,
         "start": start_date,
         "end": end_date,
-        "term": term
+        "term": term,
+        "types": types_filter
     }
     cache_key = f"brands_{_cache_key(cache_params)}"
     
@@ -2605,14 +2672,19 @@ def api_brands():
                             if idx >= len(ads):
                                 continue
                             ad = ads[idx]
-                            
+
+                            # Apply types filter if specified
+                            types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()] if types_filter else []
+                            if not _matches_ad_type_filter(ad, types_list):
+                                continue
+
                             # Extract advertisers
                             advertisers = ad.get("advertisers") or []
                             if not advertisers:
                                 ad_brand = ad.get("brand") or ad.get("advertiser")
                                 if ad_brand:
                                     advertisers = [ad_brand]
-                            
+
                             # Count each advertiser
                             for adv in advertisers:
                                 if not adv or adv == "Unknown":
@@ -2681,15 +2753,20 @@ def api_brands():
             
             # Get ads
             ads = data.get("ads") or []
-            
+
             for ad in ads:
+                # Apply types filter if specified
+                types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()] if types_filter else []
+                if not _matches_ad_type_filter(ad, types_list):
+                    continue
+
                 # Extract advertisers
                 advertisers = ad.get("advertisers") or []
                 if not advertisers:
                     ad_brand = ad.get("brand") or ad.get("advertiser")
                     if ad_brand:
                         advertisers = [ad_brand]
-                
+
                 # Count each advertiser
                 for adv in advertisers:
                     if not adv or adv == "Unknown":
