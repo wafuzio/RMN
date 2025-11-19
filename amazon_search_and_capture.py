@@ -217,6 +217,132 @@ def _get_container_signature(container):
         return None
 
 
+def _normalize_sb_container(el):
+    """
+    Given any node in a Sponsored Brand module, return the top-level SB container:
+    - id starts with CardInstance (v2)
+    - or has data-card-metrics-id containing 'sb-themed-collection' (v2)
+    - or cel_widget_id contains 'sb-themed-collection' (v1)
+    Returns the same node if no better ancestor found.
+    """
+    try:
+        c = el.locator("xpath=ancestor::div[starts-with(@id,'CardInstance')][1]")
+        if c.count() > 0:
+            return c.first
+        c = el.locator("xpath=ancestor::div[contains(@data-card-metrics-id,'sb-themed-collection')][1]")
+        if c.count() > 0:
+            return c.first
+        c = el.locator("xpath=ancestor::div[contains(@cel_widget_id,'sb-themed-collection')][1]")
+        if c.count() > 0:
+            return c.first
+    except Exception:
+        pass
+    return el
+
+
+def _is_sb_container(el):
+    """
+    True if el is a Sponsored Brand container (metrics/headline/aria evidence).
+    NOTE: This is ONLY for traditional Sponsored Brands, NOT Brand Cards.
+    """
+    try:
+        m = el.get_attribute("data-card-metrics-id") or ""
+        if "sb-themed-collection" in m:
+            return True
+    except Exception:
+        pass
+    try:
+        c = el.get_attribute("cel_widget_id") or ""
+        if "sb-themed-collection" in c:
+            return True
+    except Exception:
+        pass
+    try:
+        if el.locator("a[data-elementid='sb-headline']").count() > 0:
+            return True
+        if el.locator("a[aria-label*='Sponsored ad from']").count() > 0:
+            return True
+    except Exception:
+        return None
+
+
+def _normalize_display_container(el):
+    """
+    Return a stable, canonical display ad container so cropping is consistent
+    and dedupe works. Prefer AdHolder; fall back to desktop-ad-* wrapper.
+    """
+    try:
+        c = el.locator("xpath=ancestor::div[contains(@class,'AdHolder')][1]")
+        if c.count() > 0:
+            return c.first
+        c = el.locator("xpath=ancestor::div[starts-with(@id,'desktop-ad') or contains(@id,'desktop-ad-')][1]")
+        if c.count() > 0:
+            return c.first
+        c = el.locator("xpath=ancestor::div[contains(@id,'ad-creative') or contains(@id,'adv-creative')][1]")
+        if c.count() > 0:
+            return c.first
+    except Exception:
+        pass
+    return el
+
+
+def _creative_fingerprint(el):
+    """
+    Build a stable fingerprint for an ad creative from image srcs + link hrefs.
+    This collapses duplicates even when different DOM nodes are selected.
+    """
+    try:
+        # Collect image URLs and hrefs; strip query noise
+        imgs = el.locator("img[src]").all()
+        srcs = set()
+        for i in imgs:
+            s = (i.get_attribute("src") or "").split("?")[0]
+            if s:
+                srcs.add(s)
+        links = el.locator("a[href]").all()
+        hrefs = set()
+        for a in links:
+            h = a.get_attribute("href") or ""
+            if h:
+                hrefs.add(h)
+        key = "|".join(sorted(srcs)) + "||" + "|".join(sorted(hrefs))
+        return hashlib.md5(key.encode("utf-8")).hexdigest() if key else None
+    except Exception:
+        return None
+
+
+def _center_card_horizontally(card):
+    """
+    For horizontally scrolling brand carousels, center a given card in its scrollable parent.
+    """
+    try:
+        handle = card.element_handle()
+        card.page.evaluate("""
+            (el) => {
+                // find nearest horizontally scrollable ancestor
+                function getScrollableAncestor(n) {
+                    while (n && n !== document.body) {
+                        const st = getComputedStyle(n);
+                        if (/auto|scroll/.test(st.overflowX)) return n;
+                        n = n.parentElement;
+                    }
+                    return null;
+                }
+                const parent = getScrollableAncestor(el);
+                if (parent) {
+                    const r = el.getBoundingClientRect();
+                    const pr = parent.getBoundingClientRect();
+                    const target = parent.scrollLeft + (r.left - pr.left) - (parent.clientWidth - r.width)/2;
+                    parent.scrollLeft = Math.max(0, target);
+                } else {
+                    el.scrollIntoView({block: 'center', inline: 'center'});
+                }
+            }
+        """, handle)
+    except Exception:
+        pass
+
+
 def _check_bbox_overlap(new_bbox, existing_bboxes, overlap_threshold=0.3):
     """Check if new bounding box overlaps significantly with any existing ones."""
     try:
@@ -296,6 +422,10 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
     # Additional dedupe mechanisms for SB modules
     captured_containers = set()  # Container signature dedupe (ID/metrics-based)
     captured_bboxes = []  # Geometric overlap check (bounding boxes)
+    seen_video_hashes = set()  # SBV dedupe by video source
+    # Display ad dedupe mechanisms
+    captured_display_fingerprints = set()
+    captured_display_bboxes = []
     success = False
 
     # Performance controls and time budget
@@ -348,6 +478,27 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         ],
                     )
                 page = bctx.new_page()
+
+                # Optional response hook to catch streamed MP4s
+                try:
+                    def save_mp4_response(response):
+                        try:
+                            url = response.url
+                            ctype = (response.headers.get("content-type") or "").lower()
+                            if (url.endswith(".mp4") or "video/mp4" in ctype) and "amazon" in url:
+                                body = response.body()
+                                if body and len(body) > 1024:
+                                    vid_name = f"sbv{_short_hash(url)}{int(time.time())}.mp4"
+                                    mp4_path = os.path.join(output_dir, "Sponsored_Brand_Video", vid_name)
+                                    os.makedirs(os.path.dirname(mp4_path), exist_ok=True)
+                                    with open(mp4_path, "wb") as f:
+                                        f.write(body)
+                                    log(f"sbv: mp4 saved (intercept) -> {mp4_path}")
+                        except Exception:
+                            pass
+                    page.on("response", save_mp4_response)
+                except Exception:
+                    pass
 
                 # Wire minimal browser events (avoid noisy response logs)
                 try:
@@ -539,58 +690,107 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                 # 2) Sponsored Brand Video (SBV) - Comprehensive
                 try:
                     log("sbv: detect")
+                    # Optional quick markers (to verify in logs)
+                    video_single_count = page.locator('*[cel_widget_id^="VIDEO_SINGLE_PRODUCT"]').count()
+                    sbv_video_count = page.locator('*[cel_widget_id*="sbv-video-single-product"]').count()
+                    sbv_search_count = page.locator('*[cel_widget_id*="sbv-search-"]').count()
+                    loom_bottom_count = page.locator('*[cel_widget_id*="loom-desktop-bottom-slot"]').count()
+                    component_type_count = page.locator('[data-component-type="sbv-video-single-product"]').count()
+                    log(
+                        f"sbv: markers -> VIDEO_SINGLE_PRODUCT: {video_single_count}, "
+                        f"sbv-video-single-product: {sbv_video_count}, "
+                        f"sbv-search-: {sbv_search_count}, "
+                        f"loom-bottom: {loom_bottom_count}, "
+                        f"component-type: {component_type_count}"
+                    )
                     # Look for video containers using stable data attributes
                     # Enhanced SBV detection with priority order and better deduplication
                     sbv_selectors = [
-                        # Top SBV: specific boundary containers
-                        '*[data-cel-widget*="sb-video-product-collection-desktop-cards"]',  # Top SBV container
-                        '*[cel_widget_id*="sb-video-product-collection-desktop"]',  # Top SBV widget
-                        # Mid SBV: specific boundary containers  
-                        '*[data-component-type="sbv-video-single-product"]',  # Mid SBV: proper boundary
-                        # Bottom SBV: if exists, add specific selectors
-                        '.sbv-ad-content-container',  # Fallback: complete SBV ad container
+                        # Single-product SBV cards (preferred)
+                        '[data-component-type="sbv-video-single-product"]',
+                        '*[cel_widget_id^="VIDEO_SINGLE_PRODUCT"]',
+                        '*[cel_widget_id*="sbv-video-single-product"]',   # variant used on some pages
+                        '*[cel_widget_id*="sb-video-single-product"]',    # variant seen in the wild
+
+                        # Wrappers that can hold one or more SBV cards (top/mid/bottom slots)
+                        '*[cel_widget_id*="sb-video-product-collection"]',
+                        '*[data-cel-widget*="sb-video-product-collection"]',
+                        '*[cel_widget_id*="sbv-search-"]',                # e.g., sbv-search-bottom, sbv-search-top
+                        '*[data-cel-widget*="sbv-search-"]',
+                        '*[cel_widget_id*="loom-desktop-bottom-slot"]',   # bottom-slot
+                        '*[cel_widget_id*="loom-desktop-inline-slot"]',   # mid/inline slot
+                        '.sbv-ad-content-container'
                     ]
                     
                     all_sbv_elements = []
-                    seen_elements = set()  # Track by element handle to avoid duplicates
                     
                     for selector in sbv_selectors:
                         try:
                             elements = page.locator(selector).all()
                             log(f"sbv: selector '{selector}' found {len(elements)} elements")
+
                             for el in elements:
-                                if el.is_visible() and el.locator('video').count() > 0:
-                                    # Use element's bounding box as unique identifier, but filter out full-page captures
-                                    try:
-                                        bbox = el.bounding_box()
-                                        if bbox:
-                                            # Skip elements that are too large (likely full-page captures)
-                                            if bbox['width'] > 1300 or bbox['height'] > 1000:
-                                                log(f"sbv: skipped full-page element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']}")
-                                                continue
-                                            
-                                            # Skip elements that are extremely far off-screen (likely invalid)
-                                            if bbox['y'] < -20000:
-                                                log(f"sbv: skipped extremely off-screen element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']}")
-                                                continue
-                                            
-                                            # Tighter deduplication: elements at same position (within 50px) are considered duplicates regardless of size differences
-                                            position_key = (round(bbox['x'] / 50) * 50, round(bbox['y'] / 50) * 50)
-                                            if position_key in seen_elements:
-                                                log(f"sbv: skipped duplicate element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']} (same position as existing)")
-                                                continue
-                                            seen_elements.add(position_key)
-                                            all_sbv_elements.append(el)
-                                            log(f"sbv: added unique element at {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']}")
-                                    except Exception:
-                                        # Fallback: just add if we can't get bounding box
-                                        all_sbv_elements.append(el)
+                                # Build candidate list: if this is a wrapper, expand to the inner cards
+                                inner = el.locator(
+                                    '[data-component-type="sbv-video-single-product"], '
+                                    '*[cel_widget_id^="VIDEO_SINGLE_PRODUCT"], '
+                                    '*[cel_widget_id*="sbv-video-single-product"], '
+                                    '*[cel_widget_id*="sb-video-single-product"]'
+                                )
+
+                                candidates = inner.all() if inner.count() > 0 else [el]
+
+                                for c in candidates:
+                                    # Optional dedupe by container signature to avoid wrapper+card double-add
+                                    sig = _get_container_signature(c) or _get_container_signature(el)
+                                    if sig and sig in captured_containers:
+                                        log(f"sbv: duplicate by signature -> {sig}")
+                                        continue
+                                    if sig:
+                                        captured_containers.add(sig)
+
+                                    # DO NOT require <video> yet — we hydrate later
+                                    if c.is_visible():
+                                        all_sbv_elements.append(c)
                         except Exception as e:
                             log(f"sbv: selector error {selector} -> {e}")
                     
+                    log(f"sbv: discovered {len(all_sbv_elements)} candidates (pre-hydration)")
+
+                    if len(all_sbv_elements) == 0:
+                        try:
+                            log("sbv: fallback — hydrating bottom slot for SBV")
+                            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                            time.sleep(1.2)  # allow ad JS to mount bottom-slot
+                        except Exception:
+                            pass
+
+                        # Rerun the exact discovery loop once (same selectors & wrapper expansion)
+                        all_sbv_elements = []
+                        for selector in sbv_selectors:
+                            elements = page.locator(selector).all()
+                            log(f"sbv: [fallback] selector '{selector}' found {len(elements)} elements")
+                            for el in elements:
+                                inner = el.locator(
+                                    '[data-component-type="sbv-video-single-product"], '
+                                    '*[cel_widget_id^="VIDEO_SINGLE_PRODUCT"], '
+                                    '*[cel_widget_id*="sbv-video-single-product"], '
+                                    '*[cel_widget_id*="sb-video-single-product"]'
+                                )
+                                candidates = inner.all() if inner.count() > 0 else [el]
+                                for c in candidates:
+                                    sig = _get_container_signature(c) or _get_container_signature(el)
+                                    if sig and sig in captured_containers:
+                                        continue
+                                    if sig:
+                                        captured_containers.add(sig)
+                                    if c.is_visible():
+                                        all_sbv_elements.append(c)
+
+                        log(f"sbv: [fallback] discovered {len(all_sbv_elements)} candidates (pre-hydration)")
+
                     # Process all unique SBV elements found
                     sbv_count = len(all_sbv_elements)
-                    log(f"sbv: found {sbv_count} total video elements")
                     processed_count = 0
                     for sbv_idx, sbv_widget in enumerate(all_sbv_elements):
                         if processed_count >= 5:  # Limit to 5 SBVs (increased from 2)
@@ -615,12 +815,71 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 for selector in container_selectors:
                                     candidate = sbv_widget.locator(selector)
                                     if candidate.count() > 0:
-                                        sbv_container = candidate.first
+                                        sbv_container = candidate.first()
                                         break
                                 
                                 # Final fallback - use the video widget itself (better than full page)
                                 if not sbv_container:
                                     sbv_container = sbv_widget
+                                
+                                # Dedup by SBV container signature first
+                                sig = _get_container_signature(sbv_container) or _get_container_signature(sbv_widget)
+                                if sig and sig in captured_containers:
+                                    log(f"sbv: duplicate container skipped -> {sig}")
+                                    continue
+                                if sig:
+                                    captured_containers.add(sig)
+                                
+                                # Hydrate each SBV just before screenshot/MP4 (not during discovery)
+                                try:
+                                    sbv_container.scroll_into_view_if_needed()
+                                    time.sleep(0.6)
+                                    page.wait_for_function(
+                                        "(el) => !!(el.querySelector('video') || el.querySelector('source'))",
+                                        arg=sbv_container,
+                                        timeout=6000
+                                    )
+                                except Exception:
+                                    # Poke once to force currentSrc/hydration
+                                    try:
+                                        play_btn = sbv_container.locator('button[aria-label*="play" i], [class*="play" i]').first()
+                                        if play_btn.count() > 0:
+                                            play_btn.click()
+                                        else:
+                                            box = sbv_container.bounding_box()
+                                            if box:
+                                                page.mouse.click(box['x'] + box['width']/2, box['y'] + box['height']/2)
+                                        time.sleep(0.8)
+                                    except Exception:
+                                        pass
+                                
+                                # Optional debug (helps verify hydration is working)
+                                has_media = sbv_container.locator('video, source').count()
+                                log(f"sbv: media tags present after hydration -> {has_media}")
+                                
+                                # Dedupe by video URL only if a URL was actually resolved (don't skip otherwise)
+                                video_url = ""
+                                try:
+                                    v = sbv_container.locator('video').first()
+                                    if v.count() > 0:
+                                        video_url = v.evaluate("el => el.currentSrc || el.src || ''") or ''
+                                        if not video_url:
+                                            s = v.locator('source').first()
+                                            if s.count() > 0:
+                                                video_url = s.get_attribute('src') or ''
+                                    else:
+                                        s = sbv_container.locator('source').first()
+                                        if s.count() > 0:
+                                            video_url = s.get_attribute('src') or ''
+                                except Exception:
+                                    pass
+                                
+                                if video_url:
+                                    vhash = _short_hash(video_url)
+                                    if vhash in seen_video_hashes:
+                                        log(f"sbv: duplicate by video url -> {video_url}")
+                                        continue
+                                    seen_video_hashes.add(vhash)
                                 
                                 # Extract enhanced data from SBV internal structure
                                 brand_txt, brand_canon, message = _extract_brand_and_message(sbv_container)
@@ -773,15 +1032,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     log("sb-brands: detect")
                     # Look for both traditional SB layouts and individual cards
                     sb_selectors = [
-                        # Traditional mid-page SB layouts (full containers) - both cel_widget_id and data-card-metrics-id
-                        'div[cel_widget_id*="sb-themed-collection-v2-desktop_loom-desktop-inline-slot"]',  # Mid-page SB containers (v1)
-                        'div[data-card-metrics-id*="sb-themed-collection-v2-desktop_loom-desktop-inline-slot"]',  # Mid-page SB containers (v2)
-                        'div[cel_widget_id*="sb-themed-collection"]:not([cel_widget_id*="inline-slot"])',  # Other SB containers (v1)
-                        'div[data-card-metrics-id*="sb-themed-collection"]:not([data-card-metrics-id*="inline-slot"])',  # Other SB containers (v2)
-                        # SB Headlines - find parent container for full capture
-                        'a[data-elementid="sb-headline"]',  # SB headlines (will find parent container)
-                        # Individual cards in themed collections (fallback)
-                        'div[cel_widget_id*="sb-themed-collection"] div[data-asin]',  # Individual ASIN cards
+                        # SB containers (v1/v2) - ONLY traditional Sponsored Brands
+                        'div[cel_widget_id*="sb-themed-collection-v2-desktop_loom-desktop-inline-slot"]',
+                        'div[data-card-metrics-id*="sb-themed-collection-v2-desktop_loom-desktop-inline-slot"]',
+                        'div[cel_widget_id*="sb-themed-collection"]:not([cel_widget_id*="inline-slot"])',
+                        'div[data-card-metrics-id*="sb-themed-collection"]:not([data-card-metrics-id*="inline-slot"])',
+                        # SB headline anchor; we'll normalize to container
+                        'a[data-elementid="sb-headline"]',
                     ]
                     
                     all_sb_elements = []
@@ -815,6 +1072,25 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         if not el.is_visible():
                             continue
                         try:
+                            # Normalize to the true SB container
+                            container = _normalize_sb_container(el)
+                            
+                            # Hard gate: skip if not an SB container
+                            if not _is_sb_container(container):
+                                log("sb-brands: skip — not an SB container")
+                                continue
+                            
+                            # Also ensure we are not grabbing a search result tile
+                            try:
+                                if container.locator('xpath=self::*[@data-component-type="s-search-result"]').count() > 0:
+                                    log("sb-brands: skip — this is a product tile (s-search-result)")
+                                    continue
+                            except Exception:
+                                pass
+                            
+                            # From here on, use container for bbox/signature and screenshots
+                            el = container
+                            
                             # Container signature dedupe
                             container_sig = _get_container_signature(el)
                             if container_sig and container_sig in captured_containers:
@@ -968,199 +1244,240 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             log(f"sb-themed: saved -> {fname}")
                         except Exception as e:
                             log(f"sb-themed: screenshot fail -> {e}")
-                
-                    # Special handling for "Brands related to your search" - split into individual cards
-                    try:
-                        log("sb-brands: looking for individual bottom brand cards")
-                        
-                        # Try multiple selectors for the brands carousel
-                        brands_carousel = None
-                        carousel_selectors = [
-                            'div.a-cardui[data-card-metrics-id*="multi-brand-creative-desktop"]:has(span[aria-label="Brands related to your search"])',
-                            'div[data-card-metrics-id*="multi-brand-creative-desktop"]',
-                            '*:has(span[aria-label="Brands related to your search"])',
-                            'div:has-text("Brands related to your search")',
-                        ]
-                        
-                        for selector in carousel_selectors:
-                            carousel_candidates = page.locator(selector)
-                            if carousel_candidates.count() > 0:
-                                brands_carousel = carousel_candidates.first
-                                log(f"sb-brands: found brands carousel with selector: {selector}")
-                                break
-                        
-                        if brands_carousel:
-                            # Try multiple methods to find complete brand card containers
-                            brand_cards = None
-                            card_selectors = [
-                                'div[data-index="0"], div[data-index="1"], div[data-index="2"]',  # Specific: brand card containers with data-index
-                                'div[data-index]',  # Primary: div elements with data-index (complete cards)
-                                '*[data-index]',  # Fallback: Any elements with data-index (complete cards)
-                                'ul li',  # Fallback: complete li containers
-                                'li',     # Fallback: Direct li elements - complete containers  
-                            ]
-                            
-                            for card_selector in card_selectors:
-                                cards = brands_carousel.locator(card_selector)
-                                card_count_found = cards.count()
-                                log(f"sb-brands: selector '{card_selector}' found {card_count_found} cards")
-                                if card_count_found > 0:
-                                    # Debug: Check what each card contains
-                                    for i in range(min(card_count_found, 3)):
-                                        try:
-                                            card = cards.nth(i)
-                                            img_count = card.locator('img').count()
-                                            link_count = card.locator('a').count()
-                                            log(f"sb-brands: card {i} has {img_count} images and {link_count} links")
-                                        except Exception:
-                                            pass
-                                    
-                                    brand_cards = cards
-                                    log(f"sb-brands: using selector: {card_selector}")
-                                    break
-                            
-                            if brand_cards:
-                                card_count = brand_cards.count()
-                            else:
-                                card_count = 0
-                                log("sb-brands: no brand cards found with any selector")
-                        else:
-                            card_count = 0
-                            log("sb-brands: no brands carousel found with any selector")
-                        
-                        # Process brand cards if found
-                        if brand_cards and card_count > 0:
-                            for card_idx in range(min(card_count, 3)):  # Limit to 3 cards
-                                if time_left() < 10:
-                                    break
-                                try:
-                                    brand_li = brand_cards.nth(card_idx)
-                                    if brand_li.is_visible():
-                                        # Debug: Check what we're actually capturing
-                                        try:
-                                            bbox = brand_li.bounding_box()
-                                            tag_name = brand_li.evaluate("el => el.tagName")
-                                            class_name = brand_li.get_attribute("class") or "no-class"
-                                            child_count = brand_li.locator("*").count()
-                                            log(f"sb-brands: card {card_idx} -> tag: {tag_name}, class: {class_name}, children: {child_count}, bbox: {bbox}")
-                                        except Exception as e:
-                                            log(f"sb-brands: debug error for card {card_idx} -> {e}")
-                                        # Get brand name and store URL from the brand store link (more reliable than image alt)
-                                        brand_name = 'unknown'
-                                        store_url = ''
-                                        
-                                        # Try to get brand from the store link aria-label or data-label
-                                        store_link = brand_li.locator('a[aria-label*="Shop"], a[data-label*="Shop"]')
-                                        if store_link.count() > 0:
-                                            aria_label = store_link.first.get_attribute('aria-label') or ''
-                                            data_label = store_link.first.get_attribute('data-label') or ''
-                                            store_url = store_link.first.get_attribute('href') or ''
-                                            
-                                            # Extract brand name from "Shop [Brand Name]" pattern
-                                            if aria_label.startswith('Shop '):
-                                                brand_name = aria_label[5:]  # Remove "Shop " prefix
-                                            elif data_label.startswith('Shop '):
-                                                brand_name = data_label[5:]  # Remove "Shop " prefix
-                                        
-                                        # Fallback to image alt if store link method fails
-                                        if brand_name == 'unknown':
-                                            brand_img = brand_li.locator('img[alt]:not([alt=""])')
-                                            if brand_img.count() > 0:
-                                                brand_name = brand_img.first.get_attribute('alt') or 'unknown'
-                                        
-                                        brand_canon = brand_name.lower().replace(' ', '_').replace('.', '')
-                                        
-                                        # Debug: Log brand extraction for troubleshooting
-                                        log(f"sb-brands: card {card_idx} brand extraction -> name: '{brand_name}', canon: '{brand_canon}'")
-                                        
-                                        # Reset hover filename for this card iteration
-                                        fname_hover = None
-                                        
-                                        # Take two screenshots: normal state and hover state
-                                        try:
-                                            brand_li.scroll_into_view_if_needed()
-                                            time.sleep(0.3)
-                                            
-                                            # 1) Screenshot normal state (no hover)
-                                            fname_normal = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Card", client, keyword, run_id, f"card_{card_idx}_normal", ".png")
-                                            fpath_normal = os.path.join(output_dir, "Sponsored_Brand_Cards", fname_normal)
-                                            os.makedirs(os.path.dirname(fpath_normal), exist_ok=True)
-                                            
-                                            # Debug: Check path before screenshot
-                                            log(f"sb-brands: card {card_idx} screenshot path -> '{fpath_normal}' (type: {type(fpath_normal)})")
-                                            
-                                            brand_li.screenshot(path=fpath_normal, timeout=4000)
-                                            log(f"sb-brands: normal state saved -> {fname_normal}")
-                                            
-                                            # 2) Screenshot hover state
-                                            try:
-                                                logo_img = brand_li.locator('img').first
-                                                if logo_img.count() > 0:
-                                                    logo_img.hover()
-                                                    time.sleep(0.5)  # Wait for hover animations/transitions
-                                                    
-                                                    fname_hover = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Card", client, keyword, run_id, f"card_{card_idx}_hover", ".png")
-                                                    fpath_hover = os.path.join(output_dir, "Sponsored_Brand_Cards", fname_hover)
-                                                    
-                                                    brand_li.screenshot(path=fpath_hover, timeout=4000)
-                                                    log(f"sb-brands: hover state saved -> {fname_hover}")
-                                                else:
-                                                    log(f"sb-brands: no logo found for hover on card {card_idx}")
-                                            except Exception as hover_error:
-                                                log(f"sb-brands: hover screenshot failed for card {card_idx} -> {hover_error}")
-                                            
-                                        except Exception as screenshot_error:
-                                            log(f"sb-brands: card screenshots error for card {card_idx} -> {screenshot_error}")
-                                            continue  # Skip this card and move to next
-                                        
-                                        # Look for slogan/message text within this li - focus on structure, not hashed classes
-                                        message = ""
-                                        try:
-                                            # Target the stable structure: span.a-truncate-full (Amazon's stable class) within any link
-                                            slogan_el = brand_li.locator('a span.a-truncate-full, span.a-truncate-full')
-                                            if slogan_el.count() > 0:
-                                                message = slogan_el.first.inner_text()
-                                            # Fallback: look for any span with sentence-like text (contains periods)
-                                            elif brand_li.locator('span:has-text(".")').count() > 0:
-                                                message = brand_li.locator('span:has-text(".")').first.inner_text()
-                                        except Exception:
-                                            pass
-                                        
-                                        # Add to ads array
-                                        module_id, eid = _build_ids("Sponsored_Brand_Card", "Brand_Card", brand_canon, f"bottom_card_{card_idx}", run_id, card_idx)
-                                        ads.append({
-                                            "id": eid,
-                                            "module_id": module_id,
-                                            "type": "Sponsored_Brand_Card",
-                                            "subtype": "Brand_Card",
-                                            "brand": brand_name,
-                                            "brand_logo": None,
-                                            "title": brand_name or None,
-                                            "description": message or None,
-                                            "cta": None,
-                                            "href": store_url or None,
-                                            "image_url": None,
-                                            "image_path": f"Sponsored_Brand_Cards/{fname_normal}",
-                                            "products": [],
-                                            "brand_canonical": brand_canon,
-                                            "advertisers": [brand_canon] if brand_canon else [],
-                                            "image_path_hover": f"Sponsored_Brand_Cards/{fname_hover}" if fname_hover else None,
-                                            "video_path": None,
-                                            "message": message,
-                                            "position": f"bottom_card_{card_idx}",
-                                            "store_url": store_url,
-                                            "metadata": {
-                                                "extraction_method": "store_link" if store_url else "image_alt"
-                                            },
-                                        })
-                                        log(f"sb-brands: individual card saved -> normal: {fname_normal}, hover: {fname_hover or 'failed'}")
-                                except Exception as e:
-                                    log(f"sb-brands: individual card error -> {e}")
-                    except Exception as e:
-                        log(f"sb-brands: individual cards error -> {e}")
-                        
                 except Exception as e:
                     log(f"sb-brands: detect error -> {e}")
+
+                # 3a.5) Sponsored Brand Cards - INDEPENDENT section (separate from main SB)
+                try:
+                    log("sb-cards: detect - INDEPENDENT processing")
+                    
+                    # Try multiple selectors for the brands carousel - completely independent from main SB
+                    brands_carousel = None
+                    carousel_selectors = [
+                        'div.a-cardui[data-card-metrics-id*="multi-brand-creative-desktop"]:has(span[aria-label="Brands related to your search"])',
+                        'div[data-card-metrics-id*="multi-brand-creative-desktop"]',
+                        '*:has(span[aria-label="Brands related to your search"])',
+                        'div:has-text("Brands related to your search")',
+                    ]
+                    
+                    for selector in carousel_selectors:
+                        carousel_candidates = page.locator(selector)
+                        if carousel_candidates.count() > 0:
+                            brands_carousel = carousel_candidates.first
+                            log(f"sb-cards: found brands carousel with selector: {selector}")
+                            break
+                    
+                    # Initialize brand_cards variable
+                    brand_cards = None
+                    
+                    if brands_carousel:
+                        # Try multiple methods to find complete brand card containers
+                        card_selectors = [
+                            'div[data-index="0"], div[data-index="1"], div[data-index="2"]',  # Specific: brand card containers with data-index
+                            'div[data-index]',  # Primary: div elements with data-index (complete cards)
+                            '*[data-index]',  # Fallback: Any elements with data-index (complete cards)
+                            'ul li',  # Fallback: complete li containers
+                            'li',     # Fallback: Direct li elements - complete containers  
+                        ]
+                        
+                        for card_selector in card_selectors:
+                            cards = brands_carousel.locator(card_selector)
+                            card_count_found = cards.count()
+                            log(f"sb-cards: selector '{card_selector}' found {card_count_found} cards")
+                            if card_count_found > 0:
+                                # Debug: Check what each card contains
+                                for i in range(min(card_count_found, 3)):
+                                    try:
+                                        card = cards.nth(i)
+                                        img_count = card.locator('img').count()
+                                        link_count = card.locator('a').count()
+                                        log(f"sb-cards: card {i} has {img_count} images and {link_count} links")
+                                    except Exception:
+                                        pass
+                                
+                                brand_cards = cards
+                                log(f"sb-cards: using selector: {card_selector}")
+                                break
+                        
+                        if brand_cards:
+                            card_count = brand_cards.count()
+                        else:
+                            card_count = 0
+                            log("sb-cards: no brand cards found with any selector")
+                    else:
+                        card_count = 0
+                        log("sb-cards: no brands carousel found with any selector")
+                    
+                    # Process brand cards if found
+                    if brand_cards and card_count > 0:
+                        for card_idx in range(min(card_count, 3)):  # Limit to 3 cards
+                            if time_left() < 10:
+                                break
+                            try:
+                                brand_li = brand_cards.nth(card_idx)
+
+                                # 1) Try to get it into view horizontally first
+                                _center_card_horizontally(brand_li)
+                                try:
+                                    brand_li.scroll_into_view_if_needed()
+                                    time.sleep(0.2)
+                                except Exception:
+                                    pass
+
+                                # 2) Re-check visibility after centering
+                                if not brand_li.is_visible():
+                                    # If a nav-left control exists, click it once to expose card 0,
+                                    # then try again (useful when the carousel initializes to card 1)
+                                    try:
+                                        nav_left = brands_carousel.locator('button[aria-label*="left" i], a[aria-label*="left" i]').first
+                                        if nav_left.count() > 0:
+                                            nav_left.click()
+                                            time.sleep(0.3)
+                                            _center_card_horizontally(brand_li)
+                                            brand_li.scroll_into_view_if_needed()
+                                            time.sleep(0.2)
+                                    except Exception:
+                                        pass
+
+                                if not brand_li.is_visible():
+                                    log(f"sb-cards: card {card_idx} still not visible, skipping")
+                                    continue
+
+                                if brand_li.is_visible():
+                                    # Debug: Check what we're actually capturing
+                                    try:
+                                        bbox = brand_li.bounding_box()
+                                        tag_name = brand_li.evaluate("el => el.tagName")
+                                        class_name = brand_li.get_attribute("class") or "no-class"
+                                        child_count = brand_li.locator("*").count()
+                                        log(f"sb-cards: card {card_idx} -> tag: {tag_name}, class: {class_name}, children: {child_count}, bbox: {bbox}")
+                                    except Exception as e:
+                                        log(f"sb-cards: debug error for card {card_idx} -> {e}")
+                                    # Get brand name and store URL from the brand store link (more reliable than image alt)
+                                    brand_name = 'unknown'
+                                    store_url = ''
+                                    
+                                    # Try to get brand from the store link aria-label or data-label
+                                    store_link = brand_li.locator('a[aria-label*="Shop"], a[data-label*="Shop"]')
+                                    if store_link.count() > 0:
+                                        aria_label = store_link.first.get_attribute('aria-label') or ''
+                                        data_label = store_link.first.get_attribute('data-label') or ''
+                                        store_url = store_link.first.get_attribute('href') or ''
+                                        
+                                        # Extract brand name from "Shop [Brand Name]" pattern
+                                        if aria_label.startswith('Shop '):
+                                            brand_name = aria_label[5:]  # Remove "Shop " prefix
+                                        elif data_label.startswith('Shop '):
+                                            brand_name = data_label[5:]  # Remove "Shop " prefix
+                                    
+                                    # Fallback to image alt if store link method fails
+                                    if brand_name == 'unknown':
+                                        brand_img = brand_li.locator('img[alt]:not([alt=""])')
+                                        if brand_img.count() > 0:
+                                            brand_name = brand_img.first.get_attribute('alt') or 'unknown'
+                                    
+                                    brand_canon = brand_name.lower().replace(' ', '_').replace('.', '')
+                                    
+                                    # Debug: Log brand extraction for troubleshooting
+                                    log(f"sb-cards: card {card_idx} brand extraction -> name: '{brand_name}', canon: '{brand_canon}'")
+                                    
+                                    # Reset hover filename for this card iteration
+                                    fname_hover = None
+                                    
+                                    # Take two screenshots: normal state and hover state
+                                    try:
+                                        # Freeze transitions to avoid false "invisible" due to CSS transitions
+                                        try:
+                                            page.evaluate("""
+                                                () => {
+                                                    const st = document.createElement('style');
+                                                    st.textContent = '*{animation:none !important; transition:none !important;}';
+                                                    document.head.appendChild(st);
+                                                }
+                                            """)
+                                        except Exception:
+                                            pass
+                                        
+                                        brand_li.scroll_into_view_if_needed()
+                                        time.sleep(0.3)
+                                        
+                                        # 1) Screenshot normal state (no hover)
+                                        fname_normal = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Card", client, keyword, run_id, f"card_{card_idx}_normal", ".png")
+                                        fpath_normal = os.path.join(output_dir, "Sponsored_Brand_Cards", fname_normal)
+                                        os.makedirs(os.path.dirname(fpath_normal), exist_ok=True)
+                                        
+                                        # Debug: Check path before screenshot
+                                        log(f"sb-cards: card {card_idx} screenshot path -> '{fpath_normal}' (type: {type(fpath_normal)})")
+                                        
+                                        brand_li.screenshot(path=fpath_normal, timeout=4000)
+                                        log(f"sb-cards: normal state saved -> {fname_normal}")
+                                        
+                                        # 2) Screenshot hover state
+                                        try:
+                                            logo_img = brand_li.locator('img').first
+                                            if logo_img.count() > 0:
+                                                logo_img.hover()
+                                                time.sleep(0.5)  # Wait for hover animations/transitions
+                                                
+                                                fname_hover = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Card", client, keyword, run_id, f"card_{card_idx}_hover", ".png")
+                                                fpath_hover = os.path.join(output_dir, "Sponsored_Brand_Cards", fname_hover)
+                                                
+                                                brand_li.screenshot(path=fpath_hover, timeout=4000)
+                                                log(f"sb-cards: hover state saved -> {fname_hover}")
+                                            else:
+                                                log(f"sb-cards: no logo found for hover on card {card_idx}")
+                                        except Exception as hover_error:
+                                            log(f"sb-cards: hover screenshot failed for card {card_idx} -> {hover_error}")
+                                        
+                                    except Exception as screenshot_error:
+                                        log(f"sb-cards: card screenshots error for card {card_idx} -> {screenshot_error}")
+                                        continue  # Skip this card and move to next
+                                    
+                                    # Look for slogan/message text within this li - focus on structure, not hashed classes
+                                    message = ""
+                                    try:
+                                        # Target the stable structure: span.a-truncate-full (Amazon's stable class) within any link
+                                        slogan_el = brand_li.locator('a span.a-truncate-full, span.a-truncate-full')
+                                        if slogan_el.count() > 0:
+                                            message = slogan_el.first.inner_text()
+                                        # Fallback: look for any span with sentence-like text (contains periods)
+                                        elif brand_li.locator('span:has-text(".")').count() > 0:
+                                            message = brand_li.locator('span:has-text(".")').first.inner_text()
+                                    except Exception:
+                                        pass
+                                    
+                                    # Add to ads array
+                                    module_id, eid = _build_ids("Sponsored_Brand_Card", "Brand_Card", brand_canon, f"bottom_card_{card_idx}", run_id, card_idx)
+                                    ads.append({
+                                        "id": eid,
+                                        "module_id": module_id,
+                                        "type": "Sponsored_Brand_Card",
+                                        "subtype": "Brand_Card",
+                                        "brand": brand_name,
+                                        "brand_logo": None,
+                                        "title": brand_name or None,
+                                        "description": message or None,
+                                        "cta": None,
+                                        "href": store_url or None,
+                                        "image_url": None,
+                                        "image_path": f"Sponsored_Brand_Cards/{fname_normal}",
+                                        "products": [],
+                                        "brand_canonical": brand_canon,
+                                        "advertisers": [brand_canon] if brand_canon else [],
+                                        "image_path_hover": f"Sponsored_Brand_Cards/{fname_hover}" if fname_hover else None,
+                                        "video_path": None,
+                                        "message": message,
+                                        "position": f"bottom_card_{card_idx}",
+                                        "store_url": store_url,
+                                        "metadata": {
+                                            "extraction_method": "store_link" if store_url else "image_alt"
+                                        },
+                                    })
+                                    log(f"sb-cards: individual card saved -> normal: {fname_normal}, hover: {fname_hover or 'failed'}")
+                            except Exception as e:
+                                log(f"sb-cards: individual card error -> {e}")
+                except Exception as e:
+                    log(f"sb-cards: detect error -> {e}")
 
                 # 3b) Sponsored Display Ads (with proper hydration wait)
                 try:
@@ -1190,38 +1507,51 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     log(f"display: found {display_count} total display ads")
                     
                     display_idx = 0
-                    for i, ad in enumerate(all_display_ads[:3]):  # Limit to 3 for performance
+                    for i, raw_ad in enumerate(all_display_ads[:3]):  # Limit to 3 for performance
                         if time_left() < 10:
                             break
+                        
+                        # Normalize to canonical container so cropping is consistent
+                        ad = _normalize_display_container(raw_ad)
+
+                        # Visibility pass AFTER normalization
                         if not ad.is_visible():
+                            try:
+                                ad.scroll_into_view_if_needed()
+                                time.sleep(0.3)
+                            except Exception:
+                                pass
+                        if not ad.is_visible():
+                            log(f"display: skipping (not visible) index={i}")
+                            continue
+
+                        # Skip if this is clearly a product tile or inside an SB container
+                        if ad.locator('xpath=ancestor::div[@data-component-type="s-search-result"]').count() > 0:
+                            log("display: skip (inside product tile)")
+                            continue
+                        if ad.locator('xpath=ancestor::div[contains(@cel_widget_id,"sb-") or contains(@data-card-metrics-id,"sb-")]').count() > 0:
+                            log("display: skip (inside SB container)")
+                            continue
+
+                        # Compute creative fingerprint and geometric overlap for dedupe
+                        fp = _creative_fingerprint(ad)
+                        bbox = None
+                        try:
+                            bbox = ad.bounding_box()
+                        except Exception:
+                            pass
+
+                        # Strong dedupe: same creative fp => skip
+                        if fp and fp in captured_display_fingerprints:
+                            log("display: duplicate (fingerprint)")
+                            continue
+
+                        # Geometric dedupe: if bbox overlaps heavily with a prior display ad, skip
+                        if bbox and _check_bbox_overlap(bbox, captured_display_bboxes, overlap_threshold=0.5):
+                            log(f"display: duplicate (bbox overlap) -> {bbox}")
                             continue
                         
                         try:
-                            # Debug: Check why ads are being skipped
-                            skip_reason = None
-                            
-                            # Skip if it's inside other ad types or is a sponsored product
-                            if ad.locator('xpath=ancestor::div[contains(@cel_widget_id,"sb-themed-collection") or contains(@data-card-metrics-id,"sb-themed-collection")]').count() > 0:
-                                skip_reason = "inside SB collection"
-                            elif ad.locator('xpath=ancestor::div[contains(@cel_widget_id,"VIDEO_SINGLE_PRODUCT")]').count() > 0:
-                                skip_reason = "inside SBV"
-                            elif ad.locator('xpath=ancestor::a[@data-elementid="sb-headline"]').count() > 0:
-                                skip_reason = "inside SB headline"
-                            elif ad.get_attribute('data-asin'):
-                                skip_reason = f"has data-asin: {ad.get_attribute('data-asin')}"
-                            else:
-                                # Skip if it's too large (likely main screenshot capture)
-                                try:
-                                    bbox = ad.bounding_box()
-                                    if bbox and (bbox['width'] > 1200 or bbox['height'] > 800):
-                                        skip_reason = f"too large: {bbox['width']}x{bbox['height']}"
-                                except Exception:
-                                    pass
-                            
-                            if skip_reason:
-                                log(f"display: skipping ad {i} -> {skip_reason}")
-                                continue
-                            
                             brand_txt, brand_canon, message = _extract_brand_and_message(ad)
                             
                             # Extract product description from display ads (multiple possible structures)
@@ -1259,12 +1589,6 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             except Exception as e:
                                 log(f"display: product description extraction error -> {e}")
                             
-                            anchor = _module_anchor(ad)
-                            if anchor in seen_anchors:
-                                log(f"display: duplicate anchor skipped -> {anchor}")
-                                continue
-                            seen_anchors.add(anchor)
-                            
                             fname = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Display", client, keyword, run_id, display_idx, ".png")
                             fpath = os.path.join(output_dir, "Sponsored_Display", fname)
                             
@@ -1301,6 +1625,19 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 log(f"display: hydration wait error -> {e}")
                             
                             ad.screenshot(path=fpath, timeout=4000)
+                            
+                            # Update dedupe sets after successful screenshot
+                            if bbox:
+                                captured_display_bboxes.append(bbox)
+                            if fp:
+                                captured_display_fingerprints.add(fp)
+                            
+                            # Use the normalized container to compute anchor, not the raw element
+                            anchor = _module_anchor(ad)
+                            if anchor in seen_anchors:
+                                log(f"display: duplicate anchor skipped -> {anchor}")
+                                continue
+                            seen_anchors.add(anchor)
                             
                             # Add to ads array
                             module_id, eid = _build_ids("Sponsored_Display", "Display_Ad", brand_canon, anchor, run_id, display_idx)
@@ -2247,6 +2584,11 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     
                     if container.count() == 0:
                         log(f"sb-headline: no container found for headline {i}")
+                        continue
+                    
+                    container = _normalize_sb_container(container)
+                    if not _is_sb_container(container):
+                        log("sb-headline: skip — not an SB container after normalize")
                         continue
                     
                     brand_txt, brand_canon, message = _extract_brand_and_message(container)
