@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""
+Build a brand index for fast brand-based ad lookups.
+
+Creates an index file that maps:
+  brand_name -> [(retailer, client, json_path, ad_indices), ...]
+
+This allows instant lookups instead of scanning all JSON files.
+
+Features:
+- Supports both nested (runs/<run_id>/) and flat (runs/) structures
+- Indexes both ad.brand and ad.advertisers[] (co-branded ads)
+- Uses core/brands.py canonicalization for true brand mapping
+"""
+
+import os
+import json
+import sys
+from pathlib import Path
+from datetime import datetime
+from collections import defaultdict
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Import brand canonicalization from core
+try:
+    from core.brands import canonicalize
+    USE_BRAND_CANONICALIZATION = True
+except ImportError:
+    print("⚠️  core/brands.py not found, using basic lowercase canonicalization")
+    USE_BRAND_CANONICALIZATION = False
+
+OUTPUT_ROOT = Path(__file__).parent.parent / "output"
+INDEX_FILE = OUTPUT_ROOT / "brand_index.json"
+
+
+def canonicalize_brand(brand: str) -> str:
+    """Normalize brand name for consistent indexing"""
+    if not brand:
+        return ""
+    
+    # Use core/brands.py if available
+    if USE_BRAND_CANONICALIZATION:
+        canonical = canonicalize(brand)
+        if canonical:
+            return canonical.lower()
+    
+    # Fallback to basic lowercase
+    return brand.strip().lower()
+
+
+def build_brand_index():
+    """Scan all JSON files and build brand index"""
+    print("🔍 Building brand index...")
+    start_time = datetime.now()
+    
+    # brand_name -> [(retailer, client, json_path, [ad_indices]), ...]
+    brand_index = defaultdict(list)
+    
+    files_scanned = 0
+    ads_indexed = 0
+    
+    # Scan all retailers
+    for retailer_dir in OUTPUT_ROOT.iterdir():
+        if not retailer_dir.is_dir() or retailer_dir.name.startswith('.'):
+            continue
+            
+        retailer = retailer_dir.name
+        print(f"  📁 Scanning {retailer}...")
+        
+        # Scan all clients
+        for client_dir in retailer_dir.iterdir():
+            if not client_dir.is_dir() or client_dir.name.startswith('.'):
+                continue
+                
+            client = client_dir.name
+            
+            # Scan runs directory
+            runs_dir = client_dir / "runs"
+            if not runs_dir.exists():
+                continue
+            
+            # Collect all JSON files (both nested and flat structures)
+            json_files = []
+            
+            # 1. Nested structure: runs/<run_id>/run_results_*.json
+            for run_dir in runs_dir.iterdir():
+                if run_dir.is_dir():
+                    json_files.extend(run_dir.glob("run_results_*.json"))
+            
+            # 2. Flat structure: runs/run_results_*.json (Kroger/Instacart legacy)
+            json_files.extend(runs_dir.glob("run_results_*.json"))
+            
+            # Process all found JSON files
+            for json_file in json_files:
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    files_scanned += 1
+                    
+                    # Extract ads array
+                    ads = data.get('ads', [])
+                    if not ads:
+                        continue
+                    
+                    # Group ads by brand (including co-brands)
+                    brand_ads = defaultdict(list)
+                    for idx, ad in enumerate(ads):
+                        # Index primary brand
+                        brand = ad.get('brand') or ''
+                        if brand and brand.lower() != 'unknown':
+                            canonical_brand = canonicalize_brand(brand)
+                            if canonical_brand:
+                                brand_ads[canonical_brand].append(idx)
+                                ads_indexed += 1
+                        
+                        # Index co-brands from advertisers array
+                        advertisers = ad.get('advertisers', [])
+                        for advertiser in advertisers:
+                            if advertiser and advertiser.strip():
+                                canonical_advertiser = canonicalize_brand(advertiser)
+                                if canonical_advertiser and canonical_advertiser not in brand_ads:
+                                    brand_ads[canonical_advertiser].append(idx)
+                                    ads_indexed += 1
+                    
+                    # Add to index
+                    # Store relative path from OUTPUT_ROOT
+                    rel_path = str(json_file.relative_to(OUTPUT_ROOT))
+                    
+                    for canonical_brand, indices in brand_ads.items():
+                        brand_index[canonical_brand].append({
+                            'retailer': retailer,
+                            'client': client,
+                            'json_path': rel_path,
+                            'ad_indices': indices,
+                            'run_id': data.get('run_id'),
+                            'timestamp': data.get('timestamp')
+                        })
+                
+                except Exception as e:
+                    print(f"    ⚠️  Error reading {json_file}: {e}")
+                    continue
+    
+    # Convert defaultdict to regular dict for JSON serialization
+    brand_index_dict = dict(brand_index)
+    
+    # Add metadata
+    index_data = {
+        'version': '1.0',
+        'built_at': datetime.now().isoformat(),
+        'stats': {
+            'total_brands': len(brand_index_dict),
+            'files_scanned': files_scanned,
+            'ads_indexed': ads_indexed
+        },
+        'index': brand_index_dict
+    }
+    
+    # Write index file
+    print(f"\n💾 Writing index to {INDEX_FILE}...")
+    with open(INDEX_FILE, 'w', encoding='utf-8') as f:
+        json.dump(index_data, f, indent=2)
+    
+    elapsed = (datetime.now() - start_time).total_seconds()
+    
+    print(f"\n✅ Brand index built successfully!")
+    print(f"   📊 {len(brand_index_dict):,} brands indexed")
+    print(f"   📄 {files_scanned:,} files scanned")
+    print(f"   🎯 {ads_indexed:,} ads indexed")
+    print(f"   ⏱️  {elapsed:.2f}s")
+    print(f"   📁 {INDEX_FILE}")
+
+
+if __name__ == '__main__':
+    build_brand_index()

@@ -14,7 +14,7 @@ ALLOWED = {
     "kroger": {"TOA", "Skyscraper", "Carousel", "Display_Ads", "Main", "runs"},
     "walmart": {"SBA", "SBV", "Tile_Takeover", "Main", "runs"},
     "instacart": {"Shoppable_Display_Ads", "Shoppable_Video_Ads", "Shoppable_Recipe_Ads", "Display_Ads", "Main", "runs"},
-    "amazon": {"Sponsored_Brand", "Sponsored_Product", "Sponsored_Display", "Sponsored_Brand_Cards", "Main", "runs"},
+    "amazon": {"Sponsored_Brand", "Sponsored_Product", "Sponsored_Display", "Main", "runs"},
 }
 
 # ISO 8601 with timezone regex (rough check)
