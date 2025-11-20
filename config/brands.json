@@ -35,6 +35,12 @@
     ]
   },
   {
+    "name": "Artesano",
+    "synonyms": [
+      "MSG:Chicken Sandwich"
+    ]
+  },
+  {
     "name": "Atkins",
     "synonyms": []
   },
@@ -65,7 +71,8 @@
     "synonyms": [
       "Barilla Pasta",
       "Barilla Protein",
-      "MSG:More Texture, More Sauce Grip. Shop now."
+      "MSG:More Texture, More Sauce Grip. Shop now.",
+      "MSG:Capture Sauce the Italian Way"
     ]
   },
   {
@@ -80,7 +87,8 @@
   {
     "name": "Bertolli",
     "synonyms": [
-      "MSMAlwaysOn0625"
+      "MSMAlwaysOn0625",
+      "MSG:Bertolli, Marie Callender's, Birds Eye Meals. Shop Now."
     ]
   },
   {
@@ -114,7 +122,8 @@
     "name": "Birds Eye",
     "synonyms": [
       "MSMAlwaysOn0625",
-      "BirdsEye"
+      "BirdsEye",
+      "MSG:Bertolli, Marie Callender's, Birds Eye Meals. Shop Now."
     ]
   },
   {
@@ -220,7 +229,9 @@
   },
   {
     "name": "Cheerios",
-    "synonyms": []
+    "synonyms": [
+      "MSG:Grain Bars Weekly Digital Deal for $1.79. Save Now!"
+    ]
   },
   {
     "name": "Cheez-It",
@@ -232,7 +243,8 @@
   {
     "name": "Chex",
     "synonyms": [
-      "MSG:Chex Party Mix. Buy 2 Get 3 Free Offer."
+      "MSG:Chex Party Mix. Buy 2 Get 3 Free Offer.",
+      "MSG:Peanuts. Happiness is Sharing. Shop Now."
     ]
   },
   {
@@ -516,6 +528,12 @@
     "synonyms": []
   },
   {
+    "name": "Greenfield Natural Meat Co.",
+    "synonyms": [
+      "MSG:Greenfield Natural Meat Co."
+    ]
+  },
+  {
     "name": "GRILLO'S PICKLES",
     "synonyms": []
   },
@@ -609,6 +627,12 @@
     "name": "Hostess",
     "synonyms": [
       "MSG:Hostess®. Fluffie Nommie Snackies. Go full yum at snack time with your Hostess® faves. Shop Now."
+    ]
+  },
+  {
+    "name": "Hot Pockets",
+    "synonyms": [
+      "MSG:2 Hot Pockets High Protein flavor with a dark background"
     ]
   },
   {
@@ -768,7 +792,8 @@
       "MSG:Beat The Rush & Save! Stock Up On Holiday Dinner Essentials!!Save On Whole Turkey & $1.99 Kroger Hickory Smoked Ham- 3 Days Only On Saturday-Monday!Shop All",
       "MSG:Thanksgiving Starts at the GrillCharcoal, pellets, spices, sauces and gear - everything you need to fire up the feast.Shop All",
       "MSG:Private Selection Berries. Shop Now.",
-      "MSG:Restaurant quality sushi made fresh Daily. Shop Now."
+      "MSG:Restaurant quality sushi made fresh Daily. Shop Now.",
+      "MSG:Beat The Rush & Save! Stock Up On Holiday Dinner Essentials!!Save On Kroger, Butterball and Jennie O Turkeys!!Shop All"
     ]
   },
   {
@@ -864,7 +889,8 @@
       "MSG:Marie Callender's, Healthy Choice and Banquet Mega.  Shop Now.",
       "MSG:Marie Callender's Pies. Shop Now.",
       "MSG:Marie Callender's Family Size Meals. Shop Now.",
-      "MSG:Marie Callender's and Banquet Pot Pies. Shop Now."
+      "MSG:Marie Callender's and Banquet Pot Pies. Shop Now.",
+      "MSG:Bertolli, Marie Callender's, Birds Eye Meals. Shop Now."
     ]
   },
   {
@@ -950,6 +976,12 @@
     "synonyms": []
   },
   {
+    "name": "Mott's",
+    "synonyms": [
+      "MSG:Grain Bars Weekly Digital Deal for $1.79. Save Now!"
+    ]
+  },
+  {
     "name": "Mrs. Buttersworth",
     "synonyms": [
       "MSG:Shop Now. Mrs. Butterworth's."
@@ -976,6 +1008,12 @@
   {
     "name": "Natural Vitality",
     "synonyms": []
+  },
+  {
+    "name": "Nature Valley",
+    "synonyms": [
+      "MSG:Grain Bars Weekly Digital Deal for $1.79. Save Now!"
+    ]
   },
   {
     "name": "Nature's Bounty",
@@ -1113,7 +1151,9 @@
       "Procter",
       "MSG:P&G. Spend $15 SAVE $5. Mix & Match participating items to SAVE. Save Now.",
       "MSG:P&G Wicked Products. Get a Free $15 Movie Ticket. Spend $25, click to find out how to get your ticket. Save Now.",
-      "MSG:P&G Fabric. Save up to $8 on Tide & Downy. Clip digital coupons to SAVE. Save Now."
+      "MSG:P&G Fabric. Save up to $8 on Tide & Downy. Clip digital coupons to SAVE. Save Now.",
+      "MSG:P&G. More deals. More Cheer. Essentials for a holiday ready home. Shop Now.",
+      "MSG:P&G. Feel Your Best This Holiday. Save more with sick day essentials. Shop Now."
     ]
   },
   {
@@ -1171,7 +1211,8 @@
     "synonyms": [
       "PhillyHolidayTOA",
       "MSG:Philadelphia Cream Cheese. Shop Now.",
-      "Philadelphia Cream"
+      "Philadelphia Cream",
+      "MSG:8 oz block of cream cheese with bagel."
     ]
   },
   {

@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn, formatCompactNumber } from "@/lib/utils";
 import { isAdTypeNotBrand } from "@/lib/brand-utils";
 import { useState, useEffect, useRef } from "react";
 
@@ -91,7 +91,7 @@ export function StatCard({ value, label, hint, trend, className, brandName, onCl
       aria-label={`${label} statistic`}
     >
       <div className="w-1/2 flex flex-col">
-        <div className="text-xl leading-tight font-extrabold bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent line-clamp-2">{value}</div>
+        <div className="text-xl leading-tight font-extrabold bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent line-clamp-2">{formatCompactNumber(value)}</div>
         <div className="mt-3 text-sm text-[#6b7280]">{label}</div>
         {hint && <div className="mt-1 text-xs text-[#6b7280]">{hint}</div>}
         {trend && (

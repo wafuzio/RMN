@@ -479,27 +479,6 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     )
                 page = bctx.new_page()
 
-                # Optional response hook to catch streamed MP4s
-                try:
-                    def save_mp4_response(response):
-                        try:
-                            url = response.url
-                            ctype = (response.headers.get("content-type") or "").lower()
-                            if (url.endswith(".mp4") or "video/mp4" in ctype) and "amazon" in url:
-                                body = response.body()
-                                if body and len(body) > 1024:
-                                    vid_name = f"sbv{_short_hash(url)}{int(time.time())}.mp4"
-                                    mp4_path = os.path.join(output_dir, "Sponsored_Brand_Video", vid_name)
-                                    os.makedirs(os.path.dirname(mp4_path), exist_ok=True)
-                                    with open(mp4_path, "wb") as f:
-                                        f.write(body)
-                                    log(f"sbv: mp4 saved (intercept) -> {mp4_path}")
-                        except Exception:
-                            pass
-                    page.on("response", save_mp4_response)
-                except Exception:
-                    pass
-
                 # Wire minimal browser events (avoid noisy response logs)
                 try:
                     page.on("console", lambda m: log(f"[console:{m.type}] {m.text}"))
@@ -623,12 +602,30 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         # Start at top
                         page.evaluate("window.scrollTo(0, 0)")
                         time.sleep(0.5)
-                        
-                        # Scroll to bottom to trigger all lazy loading
-                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                        time.sleep(3.0)  # Wait for content to load
-                        log("main: bottom scroll complete")
-                        
+
+                        steps = 8
+                        try:
+                            for _ in range(steps):
+                                page.mouse.wheel(0, 900)
+                                time.sleep(0.7)
+                        except Exception as scroll_err:
+                            log(f"main: stepped scroll error -> {scroll_err}")
+                        log("main: stepped scroll complete")
+
+                        try:
+                            log("main: carousel hydration probe")
+                            carousels = page.locator('span[data-component-type="s-searchgrid-carousel"]')
+                            car_count = carousels.count()
+                            log(f"main: found {car_count} carousel containers for hydration")
+                            for idx in range(min(car_count, 6)):
+                                try:
+                                    carousels.nth(idx).scroll_into_view_if_needed()
+                                    time.sleep(0.5)
+                                except Exception as e:
+                                    log(f"main: carousel hydration error idx={idx} -> {e}")
+                        except Exception as e:
+                            log(f"main: carousel hydration probe error -> {e}")
+
                         # Center on "Brands related to your search" element for screenshot
                         try:
                             log("main: centering on 'Brands related to your search' element")
@@ -682,7 +679,30 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     log("main: screenshot")
                     main_name = _std_filename("amazon", "search_results", "Main", client, keyword, run_id, 0, ".png")
                     main_path = os.path.join(output_dir, "Main", main_name)
-                    page.screenshot(path=main_path, full_page=True, timeout=10000)
+
+                    screenshot_ok = False
+                    try:
+                        page.screenshot(path=main_path, full_page=True, timeout=10000)
+                        screenshot_ok = True
+                    except Exception as e:
+                        log(f"main: primary screenshot error -> {e}")
+                        # Fallback: element-based screenshot of the full HTML root
+                        try:
+                            log("main: screenshot fallback via html locator")
+                            page.locator("html").screenshot(path=main_path)
+                            screenshot_ok = True
+                        except Exception as e2:
+                            log(f"main: screenshot fallback fail -> {e2}")
+
+                    # Canonical HTML snapshot: tie DOM to the main screenshot moment
+                    try:
+                        log("html: save")
+                        html_content = page.content()
+                        with open(html_path, "w", encoding="utf-8") as f:
+                            f.write(html_content)
+                        log(f"html: saved -> {html_path} exists={os.path.exists(html_path)} size={os.path.getsize(html_path) if os.path.exists(html_path) else 0}")
+                    except Exception as e:
+                        log(f"html: save error -> {e}")
                     log(f"main: saved -> {main_path} exists={os.path.exists(main_path)} size={os.path.getsize(main_path) if os.path.exists(main_path) else 0}")
                 except Exception as e:
                     log(f"main: fail -> {e}")
@@ -706,20 +726,31 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     # Look for video containers using stable data attributes
                     # Enhanced SBV detection with priority order and better deduplication
                     sbv_selectors = [
-                        # Single-product SBV cards (preferred)
+                        # Single-product SBV cards (preferred attributes)
                         '[data-component-type="sbv-video-single-product"]',
                         '*[cel_widget_id^="VIDEO_SINGLE_PRODUCT"]',
                         '*[cel_widget_id*="sbv-video-single-product"]',   # variant used on some pages
                         '*[cel_widget_id*="sb-video-single-product"]',    # variant seen in the wild
 
-                        # Wrappers that can hold one or more SBV cards (top/mid/bottom slots)
+                        # Single-product SBV cards (class-based fallbacks)
+                        '*[class*="sbv-video-single-product"]',
+
+                        # Wrappers that can hold one or more SBV cards (top/mid/bottom slots, attribute-based)
                         '*[cel_widget_id*="sb-video-product-collection"]',
                         '*[data-cel-widget*="sb-video-product-collection"]',
                         '*[cel_widget_id*="sbv-search-"]',                # e.g., sbv-search-bottom, sbv-search-top
                         '*[data-cel-widget*="sbv-search-"]',
                         '*[cel_widget_id*="loom-desktop-bottom-slot"]',   # bottom-slot
                         '*[cel_widget_id*="loom-desktop-inline-slot"]',   # mid/inline slot
-                        '.sbv-ad-content-container'
+
+                        # Known wrapper classes for SBV scrollers/containers
+                        '.sbv-ad-content-container',
+                        '*[class*="sbv-desktop-scroller"]',
+                        '*[class*="a-scroller-horizontal"]',
+
+                        # Inner video/player nodes (fallback; we'll climb to card container)
+                        '*[class*="sbv-video-player"]',
+                        '*[class*="sbv-video"]',
                     ]
                     
                     all_sbv_elements = []
@@ -815,7 +846,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 for selector in container_selectors:
                                     candidate = sbv_widget.locator(selector)
                                     if candidate.count() > 0:
-                                        sbv_container = candidate.first()
+                                        sbv_container = candidate.first
                                         break
                                 
                                 # Final fallback - use the video widget itself (better than full page)
@@ -832,17 +863,27 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 
                                 # Hydrate each SBV just before screenshot/MP4 (not during discovery)
                                 try:
+                                    # Center horizontally within any scroller so off-screen cards become visible
+                                    try:
+                                        _center_card_horizontally(sbv_container)
+                                    except Exception:
+                                        pass
+
                                     sbv_container.scroll_into_view_if_needed()
                                     time.sleep(0.6)
-                                    page.wait_for_function(
-                                        "(el) => !!(el.querySelector('video') || el.querySelector('source'))",
-                                        arg=sbv_container,
-                                        timeout=6000
-                                    )
+
+                                    # Use an ElementHandle for hydration wait to avoid locator ambiguity
+                                    el_handle = sbv_container.element_handle()
+                                    if el_handle:
+                                        page.wait_for_function(
+                                            "(el) => !!(el && (el.querySelector('video') || el.querySelector('source')))",
+                                            arg=el_handle,
+                                            timeout=6000
+                                        )
                                 except Exception:
-                                    # Poke once to force currentSrc/hydration
+                                    # Poke once to force currentSrc/hydration if wait_for_function failed
                                     try:
-                                        play_btn = sbv_container.locator('button[aria-label*="play" i], [class*="play" i]').first()
+                                        play_btn = sbv_container.locator('button[aria-label*="play" i], [class*="play" i]').first
                                         if play_btn.count() > 0:
                                             play_btn.click()
                                         else:
@@ -860,15 +901,15 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 # Dedupe by video URL only if a URL was actually resolved (don't skip otherwise)
                                 video_url = ""
                                 try:
-                                    v = sbv_container.locator('video').first()
+                                    v = sbv_container.locator('video').first
                                     if v.count() > 0:
                                         video_url = v.evaluate("el => el.currentSrc || el.src || ''") or ''
                                         if not video_url:
-                                            s = v.locator('source').first()
+                                            s = v.locator('source').first
                                             if s.count() > 0:
                                                 video_url = s.get_attribute('src') or ''
                                     else:
-                                        s = sbv_container.locator('source').first()
+                                        s = sbv_container.locator('source').first
                                         if s.count() > 0:
                                             video_url = s.get_attribute('src') or ''
                                 except Exception:
@@ -1926,10 +1967,16 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 if labelledby_element.count() > 0:
                                     labelledby_id = labelledby_element.get_attribute('aria-labelledby')
                                     if labelledby_id:
-                                        # Find the heading element by ID
-                                        heading_element = page.locator(f'#{labelledby_id}')
-                                        if heading_element.count() > 0:
-                                            heading = heading_element.inner_text().strip()
+                                        # Find the heading element by ID, scoped to the same widget block
+                                        heading_locator = carousel_container.locator(
+                                            f'xpath=ancestor::div[contains(@class, "s-include-content-margin")][1]//h2[@id="{labelledby_id}"]'
+                                        )
+                                        if heading_locator.count() == 0:
+                                            heading_locator = carousel_container.locator(
+                                                'xpath=ancestor::div[contains(@class, "s-include-content-margin")][1]//h2'
+                                            )
+                                        if heading_locator.count() > 0:
+                                            heading = heading_locator.first.inner_text().strip()
                                             log(f"car: extracted header '{heading}' from carousel {carousel_idx} using aria-labelledby")
                                         else:
                                             log(f"car: heading element not found for ID '{labelledby_id}'")
@@ -1952,35 +1999,14 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             # Find parent container that includes both header and carousel
                             try:
                                 # Look for a parent that contains both the heading and the carousel
-                                if heading != "Unknown Carousel":
-                                    # Find the heading element first
-                                    labelledby_element = carousel_container.locator('[aria-labelledby]').first
-                                    if labelledby_element.count() > 0:
-                                        labelledby_id = labelledby_element.get_attribute('aria-labelledby')
-                                        if labelledby_id:
-                                            heading_element = page.locator(f'#{labelledby_id}')
-                                            if heading_element.count() > 0:
-                                                # Find common parent of heading and carousel
-                                                common_parent = heading_element.locator('xpath=ancestor::div[descendant::span[@data-component-type="s-searchgrid-carousel"]][1]')
-                                                if common_parent.count() > 0:
-                                                    container_el = common_parent.first
-                                                    log(f"car: using common parent container (includes header) for '{heading}'")
-                                                else:
-                                                    # Fallback: use carousel container only
-                                                    container_el = carousel_container
-                                                    log(f"car: fallback to carousel-only container for '{heading}'")
-                                            else:
-                                                container_el = carousel_container
-                                                log(f"car: heading element not found, using carousel-only for '{heading}'")
-                                        else:
-                                            container_el = carousel_container
-                                            log(f"car: no labelledby ID, using carousel-only for '{heading}'")
-                                    else:
-                                        container_el = carousel_container
-                                        log(f"car: no labelledby element, using carousel-only for '{heading}'")
+                                common_parent = carousel_container.locator('xpath=ancestor::div[contains(@class, "s-include-content-margin")][1]')
+                                if common_parent.count() > 0:
+                                    container_el = common_parent.first
+                                    log(f"car: using common parent container (includes header) for '{heading}'")
                                 else:
+                                    # Fallback: use carousel container only
                                     container_el = carousel_container
-                                    log(f"car: unknown heading, using carousel-only container")
+                                    log(f"car: fallback to carousel-only container for '{heading}'")
                             except Exception as e:
                                 log(f"car: parent container detection error -> {e}, using carousel-only")
                                 container_el = carousel_container
@@ -3045,16 +3071,6 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     log("sp: none found")
             except Exception as e:
                 log(f"sp: aggregate error -> {e}")
-
-            # Save HTML at the end
-            try:
-                log("html: save")
-                html_content = page.content()
-                with open(html_path, "w", encoding="utf-8") as f:
-                    f.write(html_content)
-                log(f"html: saved -> {html_path} exists={os.path.exists(html_path)} size={os.path.getsize(html_path) if os.path.exists(html_path) else 0}")
-            except Exception as e:
-                log(f"html: save error -> {e}")
 
             success = True
         except Exception as e:

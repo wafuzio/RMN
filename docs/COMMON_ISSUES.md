@@ -25,6 +25,59 @@ This document catalogs recurring problems across retailers and their proven solu
 
 ---
 
+## Playwright locator misuse – `'Locator' object is not callable`
+
+**Cause:** Playwright's sync API exposes `.first`, `.last`, and `.nth` as properties. Calling them like `.first()` or chaining `.first().locator(...).count()` calls the locator object, raising `'Locator' object is not callable`.
+
+**Fix:**
+- Call `.count()` / `.all()` on the parent locator *before* narrowing.
+- Access the property handle via `locator.first` (no parentheses) and operate on that handle.
+- Ensure event handlers also use properties (`m.type`, `m.text`, `r.method`, `r.url`).
+
+```python
+links = container.locator('a[aria-label]')
+if links.count() > 0:
+    link = links.first
+    label = (link.get_attribute('aria-label') or '').strip()
+```
+
+**Logs:** `sbv: screenshot fail -> 'Locator' object is not callable`
+
+---
+
+## F-string backslash errors (`f-string expression part cannot include a backslash`)
+
+**Cause:** Embedding escaped quotes/locators directly inside an f-string expression, e.g. `f"{page.locator('*[cel_widget_id^=\"VIDEO\"]').count()}"`.
+
+**Fix:** Compute locator counts in variables first, then reference those variables in the f-string. Keeps code readable and avoids illegal backslashes.
+
+```python
+count = page.locator('*[cel_widget_id^="VIDEO_SINGLE_PRODUCT"]').count()
+log(f"sbv markers -> VIDEO_SINGLE_PRODUCT: {count}")
+```
+
+---
+
+## Unwanted "garbage" SBV MP4s
+
+**Cause:** A global `page.on("response", ...)` hook dumped every MP4 response into `Sponsored_Brand_Video/`, including analytics beacons and unrelated ads.
+
+**Fix:** Remove the interceptor and only save MP4s via the canonical SBV download path (where we already have the widget context and filename). This keeps output clean and canonically named.
+
+---
+
+## SBV detection misses wrappers/span nodes
+
+**Symptoms:** Legit SBV modules (e.g., `<span data-component-type="sbv-video-single-product">`) never appear in JSON/screenshots.
+
+**Fix:**
+1. Broaden `sbv_selectors` to include `*[cel_widget_id*="sbv-video-single-product"]`, `sb-video-single-product`, `sbv-search-*`, `loom-desktop-*`, and `sb-video-product-collection` variants (no `div` restriction).
+2. For each matched element, expand wrappers into inner SBV cards via `el.locator('[data-component-type="sbv-video-single-product"], *[cel_widget_id^="VIDEO_SINGLE_PRODUCT"], …')` before deduping.
+3. Capture `data-index`, `data-uuid`, `cel_widget_id`, and `data-cel-widget` from both the slot wrapper and the inner widget; include them in `metadata` and dedupe sets (`seen_sbv_widget_uuids`).
+4. Add marker logging (counts per selector family) to confirm what’s present on the page.
+
+---
+
 ## Images time out with context.request
 
 **Cause:** No session cookies or missing Referer header.

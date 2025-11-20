@@ -6,7 +6,7 @@
     "cheese puffs"
   ],
   "test2": [
-    "healthy potato chips"
+    "acne skin care"
   ],
   "pickle": [
     "pickle spears"
@@ -36,7 +36,7 @@
     "foot cream"
   ],
   "wmt": [
-    "cheese crackers"
+    "acne skin care"
   ],
   "batteries": [
     "AAA batteries"
@@ -48,10 +48,10 @@
     "light potato chips"
   ],
   "tax test wmt": [
-    "blue bunnt"
+    "acne skin care"
   ],
   "tax test wmt 2": [
-    "ice pop"
+    "acne skin care"
   ],
   "pork rinds": [],
   "barilla": [
@@ -90,5 +90,8 @@
   ],
   "Proactiv test": [
     "sunscreen"
+  ],
+  "test 3": [
+    "acne kit"
   ]
 }
