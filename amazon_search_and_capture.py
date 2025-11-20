@@ -423,9 +423,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
     captured_containers = set()  # Container signature dedupe (ID/metrics-based)
     captured_bboxes = []  # Geometric overlap check (bounding boxes)
     seen_video_hashes = set()  # SBV dedupe by video source
-    # Display ad dedupe mechanisms
+    # Display ad dedupe mechanisms (separate slots so left rail and bottom don't dedupe each other)
     captured_display_fingerprints = set()
     captured_display_bboxes = []
+    captured_left_display_fingerprints = set()
+    captured_left_display_bboxes = []
+    captured_bottom_display_fingerprints = set()
+    captured_bottom_display_bboxes = []
     success = False
 
     # Performance controls and time budget
@@ -883,14 +887,8 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 except Exception:
                                     # Poke once to force currentSrc/hydration if wait_for_function failed
                                     try:
-                                        play_btn = sbv_container.locator('button[aria-label*="play" i], [class*="play" i]').first
-                                        if play_btn.count() > 0:
-                                            play_btn.click()
-                                        else:
-                                            box = sbv_container.bounding_box()
-                                            if box:
-                                                page.mouse.click(box['x'] + box['width']/2, box['y'] + box['height']/2)
-                                        time.sleep(0.8)
+                                        _ = sbv_container.locator('video, source').count()
+                                        time.sleep(0.3)
                                     except Exception:
                                         pass
                                 
@@ -1372,8 +1370,10 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                     try:
                                         nav_left = brands_carousel.locator('button[aria-label*="left" i], a[aria-label*="left" i]').first
                                         if nav_left.count() > 0:
-                                            nav_left.click()
-                                            time.sleep(0.3)
+                                            try:
+                                                brands_carousel.evaluate("el => { try { el.scrollLeft = 0; } catch(e) {} }")
+                                            except Exception:
+                                                pass
                                             _center_card_horizontally(brand_li)
                                             brand_li.scroll_into_view_if_needed()
                                             time.sleep(0.2)
@@ -1525,6 +1525,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     log("display: detect")
                     # Look for display ads by stable structure, avoiding hashed classes
                     display_selectors = [
+                        'div.s-left-ads-item div.AdHolder',  # Left rail skyscraper placements
                         'div[data-cel-widget*="MAIN-ADVERTISING"]',  # Stable widget pattern
                         'div[data-cel-widget*="advertising"]:not([data-asin]):not([cel_widget_id*="sb-"]):not([cel_widget_id*="VIDEO_SINGLE_PRODUCT"])',
                         'iframe[id*="ad"]',  # Stable iframe pattern
@@ -1548,7 +1549,10 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     log(f"display: found {display_count} total display ads")
                     
                     display_idx = 0
-                    for i, raw_ad in enumerate(all_display_ads[:3]):  # Limit to 3 for performance
+                    left_display_count = 0
+                    bottom_display_count = 0
+                    other_display_count = 0
+                    for i, raw_ad in enumerate(all_display_ads[:10]):  # Soft limit for performance
                         if time_left() < 10:
                             break
                         
@@ -1574,6 +1578,35 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             log("display: skip (inside SB container)")
                             continue
 
+                        # Classify display slot (left rail / bottom / other)
+                        slot = "other"
+                        try:
+                            if ad.locator('xpath=ancestor::div[contains(@class,"s-left-ads-item")]').count() > 0:
+                                slot = "left"
+                            elif ad.locator('xpath=.//div[contains(@cel_widget_id,"footer-slot_ad-placements") or contains(@cel_widget_id,"bottom-advertising")]').count() > 0:
+                                slot = "bottom"
+                        except Exception:
+                            pass
+
+                        # Enforce per-slot limits so we don't overshoot
+                        if slot == "left" and left_display_count >= MAX_LEFT_DISPLAY:
+                            log("display: skipping (left slot max reached)")
+                            continue
+                        if slot == "bottom" and bottom_display_count >= MAX_BOTTOM_DISPLAY:
+                            log("display: skipping (bottom slot max reached)")
+                            continue
+
+                        # Choose per-slot dedupe sets
+                        if slot == "left":
+                            slot_fingerprints = captured_left_display_fingerprints
+                            slot_bboxes = captured_left_display_bboxes
+                        elif slot == "bottom":
+                            slot_fingerprints = captured_bottom_display_fingerprints
+                            slot_bboxes = captured_bottom_display_bboxes
+                        else:
+                            slot_fingerprints = captured_display_fingerprints
+                            slot_bboxes = captured_display_bboxes
+
                         # Compute creative fingerprint and geometric overlap for dedupe
                         fp = _creative_fingerprint(ad)
                         bbox = None
@@ -1582,13 +1615,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         except Exception:
                             pass
 
-                        # Strong dedupe: same creative fp => skip
-                        if fp and fp in captured_display_fingerprints:
+                        # Strong dedupe: same creative fp within this slot => skip
+                        if fp and fp in slot_fingerprints:
                             log("display: duplicate (fingerprint)")
                             continue
 
-                        # Geometric dedupe: if bbox overlaps heavily with a prior display ad, skip
-                        if bbox and _check_bbox_overlap(bbox, captured_display_bboxes, overlap_threshold=0.5):
+                        # Geometric dedupe within this slot
+                        if bbox and _check_bbox_overlap(bbox, slot_bboxes, overlap_threshold=0.5):
                             log(f"display: duplicate (bbox overlap) -> {bbox}")
                             continue
                         
@@ -1667,12 +1700,20 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             
                             ad.screenshot(path=fpath, timeout=4000)
                             
-                            # Update dedupe sets after successful screenshot
+                            # Update dedupe sets after successful screenshot (per slot)
                             if bbox:
-                                captured_display_bboxes.append(bbox)
+                                slot_bboxes.append(bbox)
                             if fp:
-                                captured_display_fingerprints.add(fp)
-                            
+                                slot_fingerprints.add(fp)
+
+                            # Increment per-slot counters
+                            if slot == "left":
+                                left_display_count += 1
+                            elif slot == "bottom":
+                                bottom_display_count += 1
+                            else:
+                                other_display_count += 1
+
                             # Use the normalized container to compute anchor, not the raw element
                             anchor = _module_anchor(ad)
                             if anchor in seen_anchors:

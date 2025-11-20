@@ -137,20 +137,20 @@ class AmazonAdapter(RetailerAdapter):
                     counts["sky"] = sp_count  # Keep sky count for backward compatibility
                     break
 
-            # 3) Sponsored Carousel - Featured product carousels
-            sc_dir = os.path.join(ctx.output_dir, "Sponsored_Carousel")
-            os.makedirs(sc_dir, exist_ok=True)
-            sc_candidates = [
-                "div[cel_widget_id*='FEATURED_ASINS_LIST']",
-                "div[data-cel-widget*='FEATURED_ASINS_LIST']",
-            ]
-            for sel in sc_candidates:
-                loc = page.locator(sel).first
-                if loc.count() > 0:
-                    out = os.path.join(sc_dir, f"amazon_carousel_{ctx.client}_{ts}.png")
-                    if safe_screenshot(loc, out):
-                        counts["car"] += 1  # Keep car count for backward compatibility
-                        break
+            # 3) Sponsored Carousel - Featured product carousels (disabled; handled by main scraper)
+            # sc_dir = os.path.join(ctx.output_dir, "Sponsored_Carousel")
+            # os.makedirs(sc_dir, exist_ok=True)
+            # sc_candidates = [
+            #     "div[cel_widget_id*='FEATURED_ASINS_LIST']",
+            #     "div[data-cel-widget*='FEATURED_ASINS_LIST']",
+            # ]
+            # for sel in sc_candidates:
+            #     loc = page.locator(sel).first
+            #     if loc.count() > 0:
+            #         out = os.path.join(sc_dir, f"amazon_carousel_{ctx.client}_{ts}.png")
+            #         if safe_screenshot(loc, out):
+            #             counts["car"] += 1  # Keep car count for backward compatibility
+            #             break
             
             # 4) Sponsored Brand Cards - Individual bottom brand cards
             sbc_dir = os.path.join(ctx.output_dir, "Sponsored_Brand_Cards")
