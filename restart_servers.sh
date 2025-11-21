@@ -98,6 +98,20 @@ if [ "$PORTS_OK" = false ]; then
     exit 1
 fi
 
+# Rebuild indexes (brand index and run manifest) before starting servers
+echo ""
+echo "🔄 Rebuilding brand index..."
+cd "$SCRAPER_DIR"
+python3 tools/build_brand_index.py || echo "⚠️ Brand index rebuild failed (continuing startup)"
+
+echo ""
+echo "🔄 Rebuilding run manifest..."
+python3 tools/build_run_manifest.py || echo "⚠️ Run manifest rebuild failed (continuing startup)"
+
+echo ""
+echo "🔄 Harvesting Amazon brand logos..."
+python3 tools/harvest_amazon_brand_logos.py || echo "⚠️ Amazon logo harvest failed (continuing startup)"
+
 # ============================================
 # Step 3: Start servers
 # ============================================

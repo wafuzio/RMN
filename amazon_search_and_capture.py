@@ -121,23 +121,71 @@ def _extract_brand_and_message(container):
         al = container.locator('a[aria-label]')
         if al.count() > 0:
             label = (al.first.get_attribute('aria-label') or '').strip()
-            # Common pattern: Sponsored ad from <Brand>.
-            m = re.search(r"from\s+([^\.\"]+)", label, re.IGNORECASE)
+            # Strict pattern: "Sponsored ad from <Brand>" only
+            # This avoids matching rating text like "from 756 reviews"
+            m = re.search(r"Sponsored\s+ad\s+from\s+([^\.\"]+)", label, re.IGNORECASE)
             if m:
                 brand = m.group(1).strip()
-            if not message:
+
+            # Ignore generic feedback UI such as "Leave feedback on Sponsored ad"
+            is_feedback_ui = bool(re.search(r"leave\s+feedback\s+on\s+sponsored\s+ad", label, re.IGNORECASE))
+            if not message and not is_feedback_ui:
                 message = label
     except Exception:
         pass
+
+    # SBV-specific: try video[aria-label] when we still don't have a brand
+    if not brand:
+        try:
+            v = container.locator('video[aria-label]').first
+            if v.count() > 0:
+                v_label = (v.get_attribute('aria-label') or '').strip()
+                # Split off the SBV preamble before the first '.'
+                parts = v_label.split('.', 1)
+                product_seg = parts[1].strip() if len(parts) == 2 else v_label
+                tokens = product_seg.split()
+                if tokens:
+                    cand = tokens[0]
+                    # Basic filters: non-empty, not purely numeric, not a review token
+                    if cand and not re.match(r"^[0-9.,]+$", cand):
+                        if not re.search(r"\breviews?\b", cand, re.IGNORECASE) \
+                           and not re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
+                           and not re.search(r"\brated\b", cand, re.IGNORECASE):
+                            brand = cand
+                if v_label and not message:
+                    message = v_label
+        except Exception:
+            pass
     # Try logo alt
     if not brand:
         try:
-            logo = container.locator('img[alt]').first
-            if logo.count() > 0:
+            logos = container.locator('img[alt]').all()
+            for logo in logos[:8]:  # Scan up to a few candidates to skip rating stars/UI icons
                 alt = (logo.get_attribute('alt') or '').strip()
-                # Heuristic: short alts likely brand names
-                if 1 <= len(alt.split()) <= 4:
-                    brand = alt
+                if not alt:
+                    continue
+                # Heuristic: short alts likely brand names, but ignore rating/review-style and UI/badge alts
+                tokens = alt.split()
+                if not (1 <= len(tokens) <= 4):
+                    continue
+                # Filter out obvious non-brand patterns like review counts / star ratings
+                if re.search(r"\breviews?\b", alt, re.IGNORECASE) \
+                   or re.search(r"\bout of 5 stars\b", alt, re.IGNORECASE) \
+                   or re.search(r"\brated\b", alt, re.IGNORECASE):
+                    continue
+                # Filter out generic UI/badge alts
+                if re.search(r"thumbs?\s+up\s+feedback", alt, re.IGNORECASE) \
+                   or re.search(r"thumbs?\s+down\s+feedback", alt, re.IGNORECASE) \
+                   or re.search(r"\bscroll\b", alt, re.IGNORECASE) \
+                   or re.search(r"\bicon\b", alt, re.IGNORECASE) \
+                   or re.search(r"climate\s+pledge\s+friendly", alt, re.IGNORECASE):
+                    continue
+                # Skip alts that are mostly numeric (e.g. "4.4" or "4.4 756")
+                numeric_like = sum(1 for t in tokens if re.match(r"^[0-9.,]+$", t))
+                if numeric_like > len(tokens) / 2.0:
+                    continue
+                brand = alt
+                break
         except Exception:
             pass
     # Try headline text as message/brand source
@@ -151,6 +199,29 @@ def _extract_brand_and_message(container):
                 m2 = re.search(r"Shop\s+([^|\n\r]+)$", ht)
                 if m2 and not brand:
                     brand = m2.group(1).strip()
+
+                # Display/SBV fallback: infer brand from leading tokens of product title
+                if not brand:
+                    # Use the text before the first '|' as the brand-bearing segment
+                    title_seg = ht.split('|', 1)[0].strip()
+                    t_tokens = title_seg.split()
+                    if t_tokens:
+                        brand_tokens = []
+                        for tok in t_tokens:
+                            # Stop when we hit a token with digits (usually quantity/size)
+                            if any(ch.isdigit() for ch in tok):
+                                break
+                            brand_tokens.append(tok)
+                            if len(brand_tokens) >= 2:
+                                break
+
+                        cand = " ".join(brand_tokens).strip()
+                        if cand and not re.match(r"^[0-9.,]+$", cand):
+                            # Reuse the same filters we use elsewhere (avoid review/rating noise)
+                            if not re.search(r"\breviews?\b", cand, re.IGNORECASE) \
+                               and not re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
+                               and not re.search(r"\brated\b", cand, re.IGNORECASE):
+                                brand = cand
     except Exception:
         pass
     # Canonicalize brand
@@ -884,13 +955,10 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                             arg=el_handle,
                                             timeout=6000
                                         )
-                                except Exception:
-                                    # Poke once to force currentSrc/hydration if wait_for_function failed
-                                    try:
-                                        _ = sbv_container.locator('video, source').count()
-                                        time.sleep(0.3)
-                                    except Exception:
-                                        pass
+                                except Exception as hydrate_error:
+                                    # On Amazon, SBV "play" clicks can navigate into PDPs. Avoid clicking here;
+                                    # if hydration fails we still proceed with whatever media is present.
+                                    log(f"sbv: hydration wait error -> {hydrate_error}; continuing without click")
                                 
                                 # Optional debug (helps verify hydration is working)
                                 has_media = sbv_container.locator('video, source').count()
@@ -1371,6 +1439,11 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                         nav_left = brands_carousel.locator('button[aria-label*="left" i], a[aria-label*="left" i]').first
                                         if nav_left.count() > 0:
                                             try:
+                                                nav_left.click()
+                                                time.sleep(0.3)
+                                            except Exception:
+                                                pass
+                                            try:
                                                 brands_carousel.evaluate("el => { try { el.scrollLeft = 0; } catch(e) {} }")
                                             except Exception:
                                                 pass
@@ -1416,8 +1489,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                         brand_img = brand_li.locator('img[alt]:not([alt=""])')
                                         if brand_img.count() > 0:
                                             brand_name = brand_img.first.get_attribute('alt') or 'unknown'
-                                    
-                                    brand_canon = brand_name.lower().replace(' ', '_').replace('.', '')
+
+                                    # Use shared canonicalization so SB Cards align with other retailers
+                                    if brand_name and brand_name.lower() != 'unknown':
+                                        canon = canonicalize(brand_name)
+                                        brand_canon = canon or brand_name
+                                    else:
+                                        brand_canon = None
                                     
                                     # Debug: Log brand extraction for troubleshooting
                                     log(f"sb-cards: card {card_idx} brand extraction -> name: '{brand_name}', canon: '{brand_canon}'")
