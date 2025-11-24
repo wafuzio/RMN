@@ -76,8 +76,20 @@ def save_database(db):
 
 
 def normalize_brand_key(brand):
-    """Normalize brand name to database key format"""
-    return brand.lower().replace("'", "").replace("&", "and").replace(".", "").replace(" ", "_").strip()
+    """Normalize brand name to database key format.
+
+    Uses Unicode normalization so that names like 'göt2b' and 'got2b'
+    collapse to the same key, while preserving behavior for existing
+    ASCII-only keys.
+    """
+    import unicodedata
+    s = (brand or "").strip()
+    # Strip accents/diacritics
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    # Existing ASCII normalization
+    s = s.lower().replace("'", "").replace("&", "and").replace(".", "").replace(" ", "_")
+    return s.strip()
 
 
 def fetch_cards(api_base, retailer, client, page=1, page_size=100):
@@ -87,15 +99,32 @@ def fetch_cards(api_base, retailer, client, page=1, page_size=100):
     return r.json()
 
 
+def split_cobrands(brand: str):
+    """Split co-branded strings into individual brand names."""
+    if not brand:
+        return []
+    # Split on common co-brand separators (&, /, +, comma, " x ", " and ")
+    parts = re.split(r"\s*(?:&|/|,|\+|\band\b| x | X )\s*", brand)
+    return [p.strip() for p in parts if p.strip()]
+
+
 def unique_brands_from_cards(cards):
     brands = set()
     for c in cards:
         b = (c.get("brand") or "").strip()
-        if b and b.lower() not in {
+        if not b:
+            continue
+        low = b.lower()
+        if low in {
             "display ad", "shoppable display ad", "shoppable video ad", "video ad",
             "sponsored product", "sponsored products", "unknown", "n/a"
-        } and "shoppable" not in b.lower():
-            brands.add(b)
+        } or "shoppable" in low:
+            continue
+        # Split potential co-brands into separate entries
+        for part in split_cobrands(b) or [b]:
+            part = part.strip()
+            if part:
+                brands.add(part)
     return sorted(brands)
 
 

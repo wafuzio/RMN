@@ -41,30 +41,25 @@ def deduplicate_logos(base_dir):
         print(f"❌ Database not found: {db_file}")
         return
     
-    # Scan all logo files and group by content hash
+    # Scan all logo files (recursively) and group by content hash
     print("🔍 Scanning logo files...")
     hash_to_files = defaultdict(list)
     
-    for filepath in logos_dir.glob("*.png"):
-        if filepath.name == "brand_logo_database.json":
+    for filepath in logos_dir.rglob("*.*"):
+        if filepath.name == "brand_logo_database.json" or not filepath.is_file():
             continue
-        
+        if filepath.suffix.lower().lstrip('.') not in ["png", "jpg", "jpeg", "gif", "webp"]:
+            continue
         content_hash = get_content_hash(filepath)
         hash_to_files[content_hash].append(filepath)
-    
-    # Also scan other image formats
-    for ext in ['jpg', 'jpeg', 'gif', 'webp']:
-        for filepath in logos_dir.glob(f"*.{ext}"):
-            content_hash = get_content_hash(filepath)
-            hash_to_files[content_hash].append(filepath)
     
     # Group files by brand and rename to clean numbered format
     print("\n🔄 Renaming to clean format...")
     brand_files = defaultdict(list)
     
     # Group by brand name (everything before hash or number)
-    for filepath in logos_dir.glob("*.*"):
-        if filepath.name == "brand_logo_database.json":
+    for filepath in logos_dir.rglob("*.*"):
+        if filepath.name == "brand_logo_database.json" or not filepath.is_file():
             continue
         
         # Extract brand name (everything before _ or .)
@@ -117,22 +112,31 @@ def deduplicate_logos(base_dir):
                 dup.unlink()
                 files_removed += 1
         
-        # Rename to clean numbered format
+        # Rename to clean numbered format (preserve relative subdirectory)
         for idx, filepath in enumerate(unique_files, 1):
             if idx == 1:
                 new_name = f"{brand_name}{ext}"
             else:
                 new_name = f"{brand_name}_{idx}{ext}"
-            
+
             new_path = filepath.parent / new_name
+            # Compute relative path from logos_dir for DB storage
+            rel_dir = filepath.parent.relative_to(logos_dir).as_posix()
+            rel_path = f"{rel_dir}/{new_name}" if rel_dir != "." and rel_dir != "" else new_name
             
             if filepath.name != new_name:
                 print(f"   📝 Renaming: {filepath.name} → {new_name}")
                 
-                # Update database references
+                # Update database references (normalize away any leading
+                # brand_logos/ prefix and store path relative to logo root).
                 for brand_key, brand_data in database["brands"].items():
-                    if brand_data.get("logo_file", "").endswith(filepath.name):
-                        brand_data["logo_file"] = f"brand_logos/{new_name}"
+                    lf = (brand_data.get("logo_file", "") or "").strip()
+                    if lf.startswith("brand_logos/"):
+                        lf_cmp = lf.split("/", 1)[1]
+                    else:
+                        lf_cmp = lf
+                    if lf_cmp.endswith(filepath.name):
+                        brand_data["logo_file"] = rel_path
                 
                 filepath.rename(new_path)
                 files_renamed += 1

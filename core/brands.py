@@ -49,7 +49,7 @@ def canonicalize(text: str | None) -> str | None:
     # Common words to skip (not real brands in this context)
     SKIP_WORDS = {
         'now', 'shop', 'save', 'buy', 'get', 'free', 'new', 'all', 'more', 
-        'today', 'here', 'click', 'learn', 'find', 'see', 'view', 'explore'
+        'today', 'here', 'click', 'learn', 'find', 'see', 'view', 'explore',
     }
     
     # Check for multi-word brand names (case-insensitive substring match)
@@ -72,10 +72,17 @@ def canonicalize(text: str | None) -> str | None:
     tokens = re.findall(r"[A-Za-z][A-Za-z0-9&''\-]+", text)
     choices = list(_SYNONYM_TO_CANON.keys())
     for t in tokens:
+        tok = t.lower()
         # Skip common words
-        if t.lower() in SKIP_WORDS:
+        if tok in SKIP_WORDS:
             continue
-        m = get_close_matches(t.lower(), choices, n=1, cutoff=0.86)
+        # Avoid using very short tokens (3-4 chars) for fuzzy brand matching,
+        # since they are often generic words (e.g., "blue") and collide with
+        # unrelated brand names (e.g., "Bluey"). Exact matches are already
+        # handled earlier via _SYNONYM_TO_CANON.
+        if len(tok) <= 4:
+            continue
+        m = get_close_matches(tok, choices, n=1, cutoff=0.86)
         if m:
             return _SYNONYM_TO_CANON[m[0]]
     return None

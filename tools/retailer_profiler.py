@@ -148,7 +148,11 @@ def run_profile(base_url: str, keyword: str, profile_dir: str, headed: bool = Tr
 
             # hashed classes
             class_attrs = page.eval_on_selector_all("[class]", "els => els.map(e => e.className)")
-            class_blob = " ".join(class_attrs) if class_attrs else ""
+            # Some frameworks may return complex objects here; coerce everything to str
+            if class_attrs:
+                class_blob = " ".join(str(c) for c in class_attrs)
+            else:
+                class_blob = ""
             hashed_hits = len(re.findall(r"\b(sc-[a-zA-Z0-9_-]+|css-[a-zA-Z0-9_-]+|k2-[a-zA-Z0-9_-]+)\b", class_blob))
             hashed_class_density = density(hashed_hits)
 

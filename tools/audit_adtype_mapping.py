@@ -11,6 +11,7 @@ ALLOWED_FOLDERS = {
     "walmart": {"SBA", "SBV", "Tile_Takeover", "Main", "runs"},
     "instacart": {"Shoppable_Display_Ads", "Shoppable_Video_Ads", "Shoppable_Recipe_Ads", "Display_Ads", "Main", "runs"},
     "amazon": {"Sponsored_Brand", "Sponsored_Product", "Sponsored_Display", "Sponsored_Brand_Cards", "Sponsored_Brand_Video", "Sponsored_Carousel", "Main", "runs"},
+    "target": {"ListingPageBannerAd", "Sponsored_Logo", "Main", "runs"},
 }
 
 # JSON ad.type → folder mapping only when they differ
@@ -159,12 +160,12 @@ def audit_retailer(retailer: str) -> Dict[Tuple[str, str], Dict[str, Any]]:
 
 def main():
     final: Dict[str, Dict[Tuple[str, str], Dict[str, Any]]] = {}
-    for r in ("kroger", "walmart", "instacart", "amazon"):
+    for r in ("kroger", "walmart", "instacart", "amazon", "target"):
         final[r] = audit_retailer(r)
 
     # Print a terse matrix first
     print("Retailer Ad-Type Mapping Audit (JSON + Filename + Folder):")
-    for r in ("kroger", "walmart", "instacart", "amazon"):
+    for r in ("kroger", "walmart", "instacart", "amazon", "target"):
         items = final[r]
         if not items:
             print(f"- {r}: no runs found")
@@ -175,7 +176,7 @@ def main():
 
     # Build a checklist summary per retailer/ad_type
     print("\nChecklist Summary:")
-    for r in ("kroger", "walmart", "instacart", "amazon"):
+    for r in ("kroger", "walmart", "instacart", "amazon", "target"):
         items = final[r]
         if not items:
             print(f"- {r}: no data")

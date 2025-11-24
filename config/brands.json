@@ -22,6 +22,12 @@
     "synonyms": []
   },
   {
+    "name": "Annie Chun",
+    "synonyms": [
+      "MSG:Annie Chun’s noodle bowls on a bright purple background. Save Now."
+    ]
+  },
+  {
     "name": "Annie's",
     "synonyms": [
       "Annie's Natural",
@@ -36,9 +42,7 @@
   },
   {
     "name": "Artesano",
-    "synonyms": [
-      "MSG:Chicken Sandwich"
-    ]
+    "synonyms": []
   },
   {
     "name": "Atkins",
@@ -88,7 +92,8 @@
     "name": "Bertolli",
     "synonyms": [
       "MSMAlwaysOn0625",
-      "MSG:Bertolli, Marie Callender's, Birds Eye Meals. Shop Now."
+      "MSG:Bertolli, Marie Callender's, Birds Eye Meals. Shop Now.",
+      "MSG:Bertolli, Birds Eye and P.F. Chang's Home Menu Frozen Meals. Save Now."
     ]
   },
   {
@@ -123,7 +128,7 @@
     "synonyms": [
       "MSMAlwaysOn0625",
       "BirdsEye",
-      "MSG:Bertolli, Marie Callender's, Birds Eye Meals. Shop Now."
+      "MSG:Bertolli, Birds Eye and P.F. Chang's Home Menu Frozen Meals. Save Now."
     ]
   },
   {
@@ -137,7 +142,9 @@
     "synonyms": [
       "F25May262025May31TOAAlwaysOn",
       "MSG:Feed with Love. Make the promise of a lifetime. One bowl at a time.",
+      "Feed with Love. Make the promise of a lifetime. One bowl at a time.",
       "MSG:Save on Blue Pet Foods. Feed delicious recipes, made with real meat first.",
+      "Save on Blue Pet Foods. Feed delicious recipes, made with real meat first.",
       "Blue Food"
     ]
   },
@@ -151,7 +158,9 @@
   },
   {
     "name": "Bluey",
-    "synonyms": []
+    "synonyms": [
+      "MSG:Bluey Makes Snack Time Fun. Shop Bluey grocery, toys & more. Shop Now."
+    ]
   },
   {
     "name": "Boiron",
@@ -287,6 +296,12 @@
     "synonyms": []
   },
   {
+    "name": "Colgate-Palmolive",
+    "synonyms": [
+      "MSG:Colgate-Palmolive. Keep the Holiday Smiles Strong. Shop Now."
+    ]
+  },
+  {
     "name": "Core Power",
     "synonyms": [
       "Core Power with Fairlife Cow",
@@ -340,9 +355,9 @@
     ]
   },
   {
-    "name": "Dolly Parton",
+    "name": "Dolly Parton's",
     "synonyms": [
-      "MSG:Save Now. Dolly Parton Breakfast"
+      "Dolly Parton"
     ]
   },
   {
@@ -600,7 +615,6 @@
   {
     "name": "Hershey's",
     "synonyms": [
-      "MSG:Advertisement: Hershey, Honey Maid, Jet-Puffed. Let's S'more More. Shop Now.",
       "Hersheys",
       "Hershey",
       "MSG:HERSHEY'S KISSES. Get To Making Merry. Fill the holidays with treats and cheer."
@@ -706,7 +720,8 @@
       "Kelloggs",
       "Kellogg Company",
       "Kellogg's Cereal",
-      "MSG:Kellogg's Cereals Giant Size Boxes. Only $4.99. Shop Now."
+      "MSG:Kellogg's Cereals Giant Size Boxes. Only $4.99. Shop Now.",
+      "MSG:Holiday treats made from Kellogg's Rice Krispies, Crispix, and Corn Flakes with text: \"Stir Up Holiday Treats: Festive recipes for every gathering\"."
     ]
   },
   {
@@ -793,7 +808,8 @@
       "MSG:Thanksgiving Starts at the GrillCharcoal, pellets, spices, sauces and gear - everything you need to fire up the feast.Shop All",
       "MSG:Private Selection Berries. Shop Now.",
       "MSG:Restaurant quality sushi made fresh Daily. Shop Now.",
-      "MSG:Beat The Rush & Save! Stock Up On Holiday Dinner Essentials!!Save On Kroger, Butterball and Jennie O Turkeys!!Shop All"
+      "MSG:Beat The Rush & Save! Stock Up On Holiday Dinner Essentials!!Save On Kroger, Butterball and Jennie O Turkeys!!Shop All",
+      "MSG:Freshly made sushi now by Private Selection. Shop Now."
     ]
   },
   {
@@ -811,7 +827,9 @@
   },
   {
     "name": "Late July",
-    "synonyms": []
+    "synonyms": [
+      "MSG:Buy one, Get One FREE"
+    ]
   },
   {
     "name": "Lay's",
@@ -834,7 +852,8 @@
   {
     "name": "Lindt",
     "synonyms": [
-      "MSG:Treating"
+      "MSG:Treating",
+      "MSG:Sharing"
     ]
   },
   {
@@ -890,7 +909,8 @@
       "MSG:Marie Callender's Pies. Shop Now.",
       "MSG:Marie Callender's Family Size Meals. Shop Now.",
       "MSG:Marie Callender's and Banquet Pot Pies. Shop Now.",
-      "MSG:Bertolli, Marie Callender's, Birds Eye Meals. Shop Now."
+      "MSG:Bertolli, Marie Callender's, Birds Eye Meals. Shop Now.",
+      "MSG:Marie Callender's, Reddi-wip, Swiss Miss, Duncan Hines and Dolly Parton's. Shop Now."
     ]
   },
   {
@@ -957,6 +977,12 @@
   {
     "name": "Miracle Whip",
     "synonyms": []
+  },
+  {
+    "name": "Miss Vickies",
+    "synonyms": [
+      "MSG:Simply and Miss Vickies"
+    ]
   },
   {
     "name": "Momofuku Soy",
@@ -1153,13 +1179,15 @@
       "MSG:P&G Wicked Products. Get a Free $15 Movie Ticket. Spend $25, click to find out how to get your ticket. Save Now.",
       "MSG:P&G Fabric. Save up to $8 on Tide & Downy. Clip digital coupons to SAVE. Save Now.",
       "MSG:P&G. More deals. More Cheer. Essentials for a holiday ready home. Shop Now.",
-      "MSG:P&G. Feel Your Best This Holiday. Save more with sick day essentials. Shop Now."
+      "MSG:P&G. Feel Your Best This Holiday. Save more with sick day essentials. Shop Now.",
+      "MSG:P&G. More Savings the Merrier. SAVE more on the perfect stocking stuffers. Shop Now."
     ]
   },
   {
     "name": "P.F. Chang's",
     "synonyms": [
-      "MSMAlwaysOn0625"
+      "MSMAlwaysOn0625",
+      "MSG:Bertolli, Birds Eye and P.F. Chang's Home Menu Frozen Meals. Save Now."
     ]
   },
   {
@@ -1240,6 +1268,12 @@
     ]
   },
   {
+    "name": "POM Wonderful",
+    "synonyms": [
+      "MSG:POM Wonderful Fresh Pomegranates"
+    ]
+  },
+  {
     "name": "Pompeian",
     "synonyms": []
   },
@@ -1291,7 +1325,9 @@
   },
   {
     "name": "Reddi-Wip",
-    "synonyms": []
+    "synonyms": [
+      "MSG:Marie Callender's, Reddi-wip, Swiss Miss, Duncan Hines and Dolly Parton's. Shop Now."
+    ]
   },
   {
     "name": "Refresh",
@@ -1359,7 +1395,8 @@
   {
     "name": "Simply",
     "synonyms": [
-      "MSG:Simply OJ Promo. Save now thru 12/2."
+      "MSG:Simply OJ Promo. Save now thru 12/2.",
+      "MSG:Simply and Miss Vickies"
     ]
   },
   {
@@ -1372,6 +1409,12 @@
     "name": "Snack Factory",
     "synonyms": [
       "MSG:Save $1 and celebrate!"
+    ]
+  },
+  {
+    "name": "Snyder's of Hanover",
+    "synonyms": [
+      "MSG:Get 2 for $6_Build a pretzel cabin with Snyder’s of Hanover®_Save Now"
     ]
   },
   {
@@ -1438,6 +1481,12 @@
   {
     "name": "Sweeten",
     "synonyms": []
+  },
+  {
+    "name": "Swiss Miss",
+    "synonyms": [
+      "MSG:Marie Callender's, Reddi-wip, Swiss Miss, Duncan Hines and Dolly Parton's. Shop Now."
+    ]
   },
   {
     "name": "Systane",
@@ -1544,6 +1593,12 @@
   {
     "name": "Wilde Protein Chips",
     "synonyms": []
+  },
+  {
+    "name": "Wright",
+    "synonyms": [
+      "MSG:Wright® Brand Bacon in packaging and on waffles. Save Now."
+    ]
   },
   {
     "name": "Yasso",

@@ -65,6 +65,25 @@ def _brand_slug(name: str) -> str:
     return s
 
 
+def _norm_brand_for_match(name: str) -> str:
+    """Normalize brand names for matching (lowercase, strip punctuation/whitespace).
+
+    This is stricter than display but lenient enough to treat 'Band-Aid',
+    'BAND AID', and 'Band Aid Brand Adhesive Bandages' as the same core brand
+    while still distinguishing 'Welly' from 'Band Aid'.
+    """
+    if not name:
+        return ""
+    s = name.lower()
+    # Remove common decorations
+    for ch in ["®", "™"]:
+        s = s.replace(ch, "")
+    s = s.replace("&", "and")
+    # Keep only letters/digits
+    s = re.sub(r"[^a-z0-9]", "", s)
+    return s.strip()
+
+
 def _timestamp_iso() -> str:
     """ISO timestamp with Z"""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -512,6 +531,27 @@ def harvest_walmart_brand_logo(
                 }
             
             href = brand_link.get_attribute("href") or ""
+
+            # Extra safety: verify PDP brand text actually matches requested brand.
+            try:
+                pdp_brand_text = (brand_link.inner_text() or "").strip()
+            except Exception:
+                pdp_brand_text = ""
+
+            norm_target = _norm_brand_for_match(brand_canonical)
+            norm_pdp = _norm_brand_for_match(pdp_brand_text)
+
+            if norm_target and norm_pdp and not (
+                norm_target in norm_pdp or norm_pdp in norm_target
+            ):
+                print(f"  ❌ PDP brand mismatch: wanted='{brand_canonical}' got='{pdp_brand_text}'")
+                return {
+                    "ok": False,
+                    "brand": brand_canonical,
+                    "logo_file": None,
+                    "logo_url": None,
+                    "reason": f"pdp_brand_mismatch:{pdp_brand_text}",
+                }
             
             # Check if it's a real store link
             if not href.startswith("/brand/"):

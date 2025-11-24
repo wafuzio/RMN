@@ -98,9 +98,9 @@ def main():
     
     brands_db = logo_db.get('brands', {})
     
-    # Get actual logo files
+    # Get actual logo files (including verified/ and unverified/ buckets)
     print("Scanning logo files...")
-    logo_files = {f.name: f for f in logo_dir.glob('*') 
+    logo_files = {f.name: f for f in logo_dir.rglob('*')
                   if f.is_file() and f.suffix in ['.png', '.jpg', '.jpeg', '.svg', '.webp']}
     
     print(f"\nCurrent state:")
@@ -120,17 +120,22 @@ def main():
         brand_name = entry.get('brand_name', '')
         logo_file = entry.get('logo_file', '')
         
-        # Fix logo_file path (remove brand_logos/ prefix)
+        # Fix logo_file path (remove brand_logos/ prefix). We allow
+        # subdirectories like "verified/" or "unverified/"; keep those
+        # components but normalize away any leading brand_logos/ segment.
         if logo_file.startswith('brand_logos/'):
-            logo_file = logo_file.replace('brand_logos/', '')
+            logo_file = logo_file.replace('brand_logos/', '', 1)
             entry['logo_file'] = logo_file
             wrong_paths.append(slug)
         
-        # Check if file exists
-        if logo_file not in logo_files:
+        # Check if file exists. Database may store either a bare filename
+        # ("foo.png") or a relative path ("verified/foo.png"). We key the
+        # on-disk scan by filename only, so match by basename.
+        logo_key = logo_file.split('/')[-1] if logo_file else ''
+        if logo_key not in logo_files:
             missing_files.append((slug, brand_name, logo_file))
         else:
-            orphaned_files.discard(logo_file)
+            orphaned_files.discard(logo_key)
         
         # Map to canonical brand name
         canonical = name_to_canonical.get(brand_name) or name_to_canonical.get(brand_name.lower())

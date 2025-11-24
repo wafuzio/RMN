@@ -266,11 +266,35 @@ class LogoVerifier:
         if self.current_index >= len(self.brands):
             return
         
-        # Mark as verified in database
+        # Mark as verified in database and move file into verified/ bucket
         brand_key, brand_data = self.brands[self.current_index]
         if brand_key in self.db["brands"]:
-            self.db["brands"][brand_key]["verified"] = True
-            self.db["brands"][brand_key]["verified_at"] = self.get_timestamp()
+            entry = self.db["brands"][brand_key]
+            entry["verified"] = True
+            entry["verified_at"] = self.get_timestamp()
+
+            # Normalize stored logo_file to a path relative to LOGOS_DIR
+            logo_file = (entry.get("logo_file", "") or "").strip()
+            if logo_file.startswith("brand_logos/"):
+                logo_file = logo_file[len("brand_logos/"):]
+            
+            src_path = (LOGOS_DIR / logo_file) if logo_file else None
+            filename = src_path.name if src_path else None
+            if src_path and filename and src_path.exists():
+                verified_dir = LOGOS_DIR / "verified"
+                verified_dir.mkdir(parents=True, exist_ok=True)
+                dest_rel = f"verified/{filename}"
+                dest_path = verified_dir / filename
+                if dest_path != src_path:
+                    try:
+                        src_path.rename(dest_path)
+                    except Exception:
+                        # If rename fails, keep original path
+                        dest_rel = logo_file or filename
+                # Store path relative to logo root (no brand_logos/ prefix)
+                entry["logo_file"] = dest_rel
+                # Update in-memory brand_data so subsequent operations see it
+                self.brands[self.current_index] = (brand_key, entry)
         
         self.kept_count += 1
         self.next_logo()

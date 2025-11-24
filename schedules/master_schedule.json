@@ -1,6 +1,63 @@
 {
   "schedules": [
     {
+      "id": "amazon_curology_curology_97f1c596",
+      "retailer": "amazon",
+      "client": "curology",
+      "keywords": [
+        "curology",
+        "zit stickers"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-11-21T06:02:59Z",
+      "updated_at": "2025-11-21T06:02:59Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__curology__curology.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/curology"
+    },
+    {
+      "id": "amazon_proactiv_proactiv_121fdc3d",
+      "retailer": "amazon",
+      "client": "Proactiv",
+      "keywords": [
+        "proactiv",
+        "acne skin care",
+        "acne kit"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-11-24T05:20:54Z",
+      "updated_at": "2025-11-24T05:20:54Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__proactiv__proactiv.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/proactiv"
+    },
+    {
       "id": "instacart_blue_bunny_ice_cream_bar_1a875879",
       "retailer": "instacart",
       "client": "blue bunny",
@@ -274,34 +331,30 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/pickle"
     },
     {
-      "id": "instacart_proactiv_proactiv_f645c3bb",
+      "id": "instacart_proactiv_proactiv_ef5b0f1e",
       "retailer": "instacart",
       "client": "Proactiv",
       "keywords": [
-        "Proactiv",
-        "acne kit",
+        "proactiv",
         "acne skin care",
-        "benzoyl peroxide"
+        "acne kit"
       ],
       "days": [
         "monday",
         "tuesday",
         "wednesday",
         "thursday",
-        "friday",
-        "saturday",
-        "sunday"
+        "friday"
       ],
       "times": [
-        "09:45",
-        "12:25",
-        "15:40",
-        "20:10"
+        "08:00",
+        "12:00",
+        "16:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-26T04:52:15Z",
-      "updated_at": "2025-10-26T04:52:15Z",
+      "created_at": "2025-11-24T05:20:54Z",
+      "updated_at": "2025-11-24T05:20:54Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__proactiv__proactiv.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/proactiv"
     },
@@ -334,30 +387,6 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/sour_cream"
     },
     {
-      "id": "kroger_bandaid_default_bb730234",
-      "retailer": "kroger",
-      "client": "bandaid",
-      "keywords": [],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "11:55"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-16T18:32:00.029721Z",
-      "updated_at": "2025-10-16T18:32:00.029721Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__bandaid__default.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/bandaid"
-    },
-    {
       "id": "kroger_barilla_barilla_pasta_c54e9124",
       "retailer": "kroger",
       "client": "barilla",
@@ -384,32 +413,6 @@
       "updated_at": "2025-10-16T22:11:32Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__barilla__barilla_pasta.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/barilla"
-    },
-    {
-      "id": "kroger_blue_bunny_default_7d181867",
-      "retailer": "kroger",
-      "client": "blue bunny",
-      "keywords": [],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday"
-      ],
-      "times": [
-        "09:10",
-        "09:15",
-        "09:20",
-        "09:25",
-        "10:15"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-16T18:32:00.029215Z",
-      "updated_at": "2025-10-16T18:32:00.029215Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__blue bunny__default.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/blue_bunny"
     },
     {
       "id": "kroger_blue_bunny_ice_cream_bar_68c4af98",
@@ -657,30 +660,6 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/milkpep"
     },
     {
-      "id": "kroger_pickle_default_dfe6b621",
-      "retailer": "kroger",
-      "client": "pickle",
-      "keywords": [],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday"
-      ],
-      "times": [
-        "08:10",
-        "13:20",
-        "16:05"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-16T18:32:00.029949Z",
-      "updated_at": "2025-10-16T18:32:00.029949Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__pickle__default.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pickle"
-    },
-    {
       "id": "kroger_pickle_pickle_spears_0f600cb6",
       "retailer": "kroger",
       "client": "pickle",
@@ -707,32 +686,6 @@
       "updated_at": "2025-10-22T04:52:13Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__pickle__pickle_spears.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pickle"
-    },
-    {
-      "id": "kroger_pork_rinds_default_762c7d02",
-      "retailer": "kroger",
-      "client": "pork rinds",
-      "keywords": [],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "12:00",
-        "16:00",
-        "20:00"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-16T18:32:00.031913Z",
-      "updated_at": "2025-10-16T18:32:00.031913Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__pork rinds__default.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pork_rinds"
     },
     {
       "id": "kroger_pork_rinds_pork_rinds_e207573e",
@@ -763,34 +716,30 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pork_rinds"
     },
     {
-      "id": "kroger_proactiv_proactiv_95fe29f6",
+      "id": "kroger_proactiv_proactiv_a8537e9c",
       "retailer": "kroger",
       "client": "Proactiv",
       "keywords": [
-        "Proactiv",
-        "acne kit",
+        "proactiv",
         "acne skin care",
-        "benzoyl peroxide"
+        "acne kit"
       ],
       "days": [
         "monday",
         "tuesday",
         "wednesday",
         "thursday",
-        "friday",
-        "saturday",
-        "sunday"
+        "friday"
       ],
       "times": [
-        "09:45",
-        "12:25",
-        "15:40",
-        "20:10"
+        "08:00",
+        "12:00",
+        "16:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-26T04:52:15Z",
-      "updated_at": "2025-10-26T04:52:15Z",
+      "created_at": "2025-11-24T05:20:54Z",
+      "updated_at": "2025-11-24T05:20:54Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__proactiv__proactiv.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/proactiv"
     },
@@ -821,6 +770,34 @@
       "updated_at": "2025-10-22T04:22:47Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__sour_cream__light_sour_cream.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/sour_cream"
+    },
+    {
+      "id": "target_proactiv_proactiv_d609b685",
+      "retailer": "target",
+      "client": "Proactiv",
+      "keywords": [
+        "proactiv",
+        "acne skin care",
+        "acne kit"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday"
+      ],
+      "times": [
+        "08:00",
+        "12:00",
+        "16:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2025-11-24T05:20:54Z",
+      "updated_at": "2025-11-24T05:20:54Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__proactiv__proactiv.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/proactiv"
     },
     {
       "id": "walmart_blue_bunny_ice_cream_bar_8c6c4d72",
@@ -1096,34 +1073,30 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/pickle"
     },
     {
-      "id": "walmart_proactiv_proactiv_9527ad3a",
+      "id": "walmart_proactiv_proactiv_420f3632",
       "retailer": "walmart",
       "client": "Proactiv",
       "keywords": [
-        "Proactiv",
-        "acne kit",
+        "proactiv",
         "acne skin care",
-        "benzoyl peroxide"
+        "acne kit"
       ],
       "days": [
         "monday",
         "tuesday",
         "wednesday",
         "thursday",
-        "friday",
-        "saturday",
-        "sunday"
+        "friday"
       ],
       "times": [
-        "09:45",
-        "12:25",
-        "15:40",
-        "20:10"
+        "08:00",
+        "12:00",
+        "16:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-26T04:52:15Z",
-      "updated_at": "2025-10-26T04:52:15Z",
+      "created_at": "2025-11-24T05:20:54Z",
+      "updated_at": "2025-11-24T05:20:54Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__proactiv__proactiv.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/proactiv"
     },

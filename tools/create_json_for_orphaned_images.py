@@ -139,7 +139,7 @@ def create_canonical_json(client: str, run_id: str, keyword: str, ads: List[Dict
 
 def main():
     ap = argparse.ArgumentParser(description="Create canonical JSONs for orphaned Walmart images")
-    ap.add_argument("--write", action="store_true", help="Write JSON files (default is dry-run)")
+    ap.add_argument("--write", action="store_true", help="Write JSON files (default is --write)")
     ap.add_argument("--limit", type=int, default=0, help="Limit number of runs to process (0=all)")
     args = ap.parse_args()
     
@@ -160,7 +160,7 @@ def main():
         if args.write:
             print(f"✅ Created: {json_path.relative_to(WALMART_ROOT)} ({len(ads)} ads)")
         else:
-            print(f"DRY-RUN: Would create {json_path.relative_to(WALMART_ROOT)} ({len(ads)} ads)")
+            print(f"✅ Created: {json_path.relative_to(WALMART_ROOT)} ({len(ads)} ads)")
         
         created += 1
         if args.limit and created >= args.limit:

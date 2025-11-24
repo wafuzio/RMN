@@ -1,0 +1,27 @@
+{
+  "id": "amazon_curology_curology_97f1c596",
+  "retailer": "amazon",
+  "client": "curology",
+  "keywords": [
+    "curology",
+    "zit stickers"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "08:00",
+    "12:00",
+    "16:00"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-11-21T06:02:59Z",
+  "updated_at": "2025-11-21T06:02:59Z"
+}

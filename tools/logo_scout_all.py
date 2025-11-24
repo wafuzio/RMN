@@ -8,10 +8,19 @@ this script discovers all unique brands first, then fetches missing logos once.
 
 import requests
 import sys
+import re
 from collections import Counter
 
 API_BASE = "http://localhost:5006"
 RETAILERS = ["instacart", "kroger", "walmart"]
+
+
+def split_cobrands(brand: str):
+    """Split co-branded strings into individual brand names."""
+    if not brand:
+        return []
+    parts = re.split(r"\s*(?:&|/|,|\+|\band\b| x | X )\s*", brand)
+    return [p.strip() for p in parts if p.strip()]
 
 
 def get_clients(retailer):
@@ -39,11 +48,19 @@ def get_brands_for_client(retailer, client, limit=500):
         brands = set()
         for card in cards:
             brand = (card.get("brand") or "").strip()
-            if brand and brand.lower() not in {
+            if not brand:
+                continue
+            low = brand.lower()
+            if low in {
                 "display ad", "shoppable display ad", "shoppable video ad",
                 "video ad", "sponsored product", "sponsored products", "unknown", "n/a"
-            } and "shoppable" not in brand.lower():
-                brands.add(brand)
+            } or "shoppable" in low:
+                continue
+            # Split potential co-brands into separate entries
+            for part in split_cobrands(brand) or [brand]:
+                part = part.strip()
+                if part:
+                    brands.add(part)
         
         return brands
     except Exception as e:
