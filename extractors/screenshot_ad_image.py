@@ -18,7 +18,9 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
+import urllib.request
+import urllib.error
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
