@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useRetailers, useClients, useAds, useAdCount } from "@/hooks/useRetailAds";
 import { useBrands } from "@/hooks/useBrands";
+import type { Retailer } from "@/lib/api";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -101,12 +102,39 @@ function useDnD<T>(items: T[], setItems: (v:T[])=>void) {
   } as const;
 }
 
+// Helper: Check if ad type should be displayed in narrow column (skyscraper/sponsored brand layout)
+function isColumnAdType(ad: any): boolean {
+  const columnTypes = ["Skyscraper", "Tile_Takeover", "Sponsored_Brand_Card", "Sponsored_Logo"];
+  if (columnTypes.includes(ad.ad_type)) {
+    return true;
+  }
+  // Left rail Sponsored Display ads also go in the column
+  if (ad.ad_type === "Sponsored_Display" && ad.slot === "left_rail") {
+    return true;
+  }
+  return false;
+}
+
+// Helper: Check if ad group should be displayed in narrow column
+function isColumnAdGroup(group: any, ads: any[]): boolean {
+  // Check the first instance's properties
+  if (group.instances.length > 0) {
+    const firstAd = ads.find(a => a.id === group.instances[0].id);
+    if (firstAd) {
+      return isColumnAdType(firstAd);
+    }
+  }
+  // Fallback to checking just ad_type
+  const columnTypes = ["Skyscraper", "Tile_Takeover", "Sponsored_Brand_Card", "Sponsored_Logo"];
+  return columnTypes.includes(group.ad_type);
+}
+
 export default function Index() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
   // Parse URL parameters for initial state
-  const urlRetailer = searchParams.get("retailer") as "kroger"|"amazon"|"instacart"|"walmart" | null;
+  const urlRetailer = searchParams.get("retailer") as Retailer | null;
   const urlClient = searchParams.get("client");
   const urlClients = searchParams.get("clients")?.split(",").filter(Boolean);
   const urlTypes = searchParams.get("types")?.split(",").filter(Boolean);
@@ -114,8 +142,8 @@ export default function Index() {
   const urlDays = searchParams.get("days");
   const urlStart = searchParams.get("start");
   const urlEnd = searchParams.get("end");
-  
-  const [retailers, setRetailers] = useState<("kroger"|"amazon"|"instacart"|"walmart")[]>(() => {
+
+  const [retailers, setRetailers] = useState<Retailer[]>(() => {
     return urlRetailer ? [urlRetailer] : ["kroger"];
   });
   const { data: retailersData } = useRetailers();
@@ -166,6 +194,50 @@ export default function Index() {
   const [leftFilters, setLeftFilters] = useState<FiltersState | null>(null);
   const [rightFilters, setRightFilters] = useState<FiltersState | null>(null);
   const [sortBy, setSortBy] = useState<"latest" | "oldest" | "name">("latest");
+
+  // Fetch clients for ALL selected retailers and merge them
+  // NOTE: We fetch for each selected retailer and combine the results
+  const krogerClients = useClients(retailers.includes("kroger") ? "kroger" : undefined);
+  const amazonClients = useClients(retailers.includes("amazon") ? "amazon" : undefined);
+  const instacartClients = useClients(retailers.includes("instacart") ? "instacart" : undefined);
+  const walmartClients = useClients(retailers.includes("walmart") ? "walmart" : undefined);
+  const targetClients = useClients(retailers.includes("target") ? "target" : undefined);
+  const albertsonsClients = useClients(retailers.includes("albertsons") ? "albertsons" : undefined);
+  const foodLionClients = useClients(retailers.includes("food_lion") ? "food_lion" : undefined);
+  const gopuffClients = useClients(retailers.includes("gopuff") ? "gopuff" : undefined);
+  const doordashClients = useClients(retailers.includes("doordash") ? "doordash" : undefined);
+  const meijerClients = useClients(retailers.includes("meijer") ? "meijer" : undefined);
+  const hyveeClients = useClients(retailers.includes("hyvee") ? "hyvee" : undefined);
+  const ultaClients = useClients(retailers.includes("ulta") ? "ulta" : undefined);
+
+  const allClientsList = useMemo(() => {
+    const merged = new Set<string>();
+    const queries = [
+      krogerClients, amazonClients, instacartClients, walmartClients, targetClients,
+      albertsonsClients, foodLionClients, gopuffClients, doordashClients, meijerClients, hyveeClients, ultaClients
+    ];
+    queries.forEach(query => {
+      if (query.data?.clients) {
+        query.data.clients.forEach(client => merged.add(client));
+      }
+    });
+    return Array.from(merged).sort();
+  }, [
+    krogerClients.data?.clients?.join(","),
+    amazonClients.data?.clients?.join(","),
+    instacartClients.data?.clients?.join(","),
+    walmartClients.data?.clients?.join(","),
+    targetClients.data?.clients?.join(","),
+    albertsonsClients.data?.clients?.join(","),
+    foodLionClients.data?.clients?.join(","),
+    gopuffClients.data?.clients?.join(","),
+    doordashClients.data?.clients?.join(","),
+    meijerClients.data?.clients?.join(","),
+    hyveeClients.data?.clients?.join(","),
+    ultaClients.data?.clients?.join(","),
+  ]);
+
+  // For backward compatibility with single-retailer logic, keep primary retailer reference
   const { data: clientsResp } = useClients(primaryRetailer);
 
   // Restore last session state
@@ -179,10 +251,34 @@ export default function Index() {
       }
       if (saved.filters && typeof saved.filters === "object") {
         const f = saved.filters as Partial<FiltersState> & { start?: string; end?: string; client?: string };
-        const parsedStart = f.start ? new Date(f.start) : undefined;
-        const parsedEnd = f.end ? new Date(f.end) : undefined;
-        const start = parsedStart && isFinite(+parsedStart) ? parsedStart : undefined;
-        const end = parsedEnd && isFinite(+parsedEnd) ? parsedEnd : undefined;
+        const datePreset = f.datePreset || { type: "last_52_weeks" };
+        
+        // Recompute dates based on preset type (don't rely on stored dates for relative presets)
+        let start: Date | undefined;
+        let end: Date | undefined;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (datePreset.type === "lifetime") {
+          start = undefined;
+          end = undefined;
+        } else if (datePreset.type === "last_52_weeks") {
+          start = new Date(today);
+          start.setDate(start.getDate() - (52 * 7 - 1));
+          end = today;
+        } else if (datePreset.type === "custom" && f.start && f.end) {
+          // Only use stored dates for custom preset
+          const parsedStart = new Date(f.start);
+          const parsedEnd = new Date(f.end);
+          start = isFinite(+parsedStart) ? parsedStart : undefined;
+          end = isFinite(+parsedEnd) ? parsedEnd : undefined;
+        } else {
+          // For other presets, default to last 52 weeks
+          start = new Date(today);
+          start.setDate(start.getDate() - (52 * 7 - 1));
+          end = today;
+        }
+        
         const parsed: FiltersState = {
           types: Array.isArray(f.types) ? f.types : [],
           search: typeof f.search === "string" ? f.search : "",
@@ -190,7 +286,7 @@ export default function Index() {
           clients: Array.isArray(f.clients) ? f.clients : (typeof f.client === "string" ? [f.client] : []),
           start,
           end,
-          datePreset: f.datePreset || { type: "lifetime" },
+          datePreset,
           groupIdentical: f.groupIdentical ?? true,
         };
         setFilters(prev => ({ ...prev, ...parsed }));
@@ -213,17 +309,34 @@ export default function Index() {
     } catch {}
   }, [retailers, filters]);
 
+  // Auto-filter clients when available clients change (retailer selection changes)
+  // Removes clients that are no longer available in selected retailers
+  useEffect(() => {
+    if (!filters.clients?.length) return;
+
+    const availableSet = new Set(allClientsList);
+    const validClients = filters.clients.filter(c => availableSet.has(c));
+
+    // Only update if some clients were filtered out
+    if (validClients.length !== filters.clients.length) {
+      setFilters(prev => ({
+        ...prev,
+        clients: validClients.length > 0 ? validClients : []
+      }));
+    }
+  }, [allClientsList]);
+
   // Auto-select first client if none selected
   useEffect(() => {
-    if (clientsResp?.clients.length && !filters.clients?.length) {
-      setFilters(prev => ({ ...prev, clients: [clientsResp.clients[0]] }));
+    if (allClientsList.length && !filters.clients?.length) {
+      setFilters(prev => ({ ...prev, clients: [allClientsList[0]] }));
     }
-  }, [clientsResp, filters.clients]);
+  }, [allClientsList, filters.clients?.length]);
 
   // Handle multiple clients by creating queries for each
   // When all clients are selected, use the special "all" client parameter
   const selectedClients = filters.clients || [];
-  const allClientsAvailable = clientsResp?.clients || [];
+  const allClientsAvailable = allClientsList;
   const isAllClientsSelected = selectedClients.length > 0 && selectedClients.length === allClientsAvailable.length;
 
   // If all clients are selected, use "all"; otherwise send comma-separated list
@@ -289,6 +402,12 @@ export default function Index() {
     ...debouncedFilters,
   });
 
+  const isTargetSelected = retailers.includes("target");
+  const targetQuery = useAds({
+    retailer: isTargetSelected ? "target" : undefined,
+    client: selectedClient,
+    ...debouncedFilters,
+  });
 
   // Count queries for total cards (much faster than loading full cards)
   const krogerCountQuery = useAdCount({
@@ -315,12 +434,19 @@ export default function Index() {
     ...debouncedFilters,
   });
 
+  const targetCountQuery = useAdCount({
+    retailer: isTargetSelected ? "target" : undefined,
+    client: selectedClient,
+    ...debouncedFilters,
+  });
+
   // Collect all queries - one per retailer now
   const allQueries = [
     krogerQuery,
     walmartQuery,
     instacartQuery,
     amazonQuery,
+    targetQuery,
   ];
 
   // Build retailer-based query map (for backward compatibility)
@@ -329,6 +455,7 @@ export default function Index() {
     walmart: [walmartQuery],
     instacart: [instacartQuery],
     amazon: [amazonQuery],
+    target: [targetQuery],
   };
   const retailerQueries = retailers.flatMap(r => queryMap[r]);
 
@@ -408,16 +535,19 @@ export default function Index() {
         ...(isWalmartSelected ? (walmartQuery.data?.pages.flatMap(p => p.cards || []) || []) : []),
         ...(isInstacartSelected ? (instacartQuery.data?.pages.flatMap(p => p.cards || []) || []) : []),
         ...(isAmazonSelected ? (amazonQuery.data?.pages.flatMap(p => p.cards || []) || []) : []),
+        ...(isTargetSelected ? (targetQuery.data?.pages.flatMap(p => p.cards || []) || []) : []),
       ];
 
       // Dedupe using stable IDs (prevents duplicates from pagination/multiple queries)
-      // Also filter out ads without valid images
+      // Also filter out ads without valid images (except for Sponsored_Logo which may use placeholder)
       const uniq = new Map<string, Ad>();
       for (let i = 0; i < allCards.length; i++) {
         const c = allCards[i] as any;
-        
+
         // Skip ads without valid images (has_image: false or missing image_url)
-        if (c.has_image === false || !c.image_url || c.image_url.includes('placeholder')) {
+        // Exception: Allow Sponsored_Logo ads through even with placeholder images
+        const isSponsoredLogo = c.ad_type === "Sponsored_Logo";
+        if (!isSponsoredLogo && (c.has_image === false || !c.image_url || c.image_url.includes('placeholder'))) {
           continue;
         }
         
@@ -431,7 +561,6 @@ export default function Index() {
 
       const result = Array.from(uniq.values());
 
-
       return result;
     } catch (error) {
       console.error('Error in flatAds:', error);
@@ -442,6 +571,7 @@ export default function Index() {
     walmartQuery.data,
     instacartQuery.data,
     amazonQuery.data,
+    targetQuery.data,
     retailers
   ]);
 
@@ -450,41 +580,56 @@ export default function Index() {
   const allSeenTypesRef = useRef<Set<string>>(new Set());
 
   const availableAdTypes = useMemo(() => {
-    const typeSet = allSeenTypesRef.current;
+    const typeSet = new Set<string>();
 
-    // Add types from current flatAds
+    // Add types from current flatAds (already filtered by selected retailers)
     for (const ad of flatAds) {
       if (ad.ad_type?.trim()) {
         typeSet.add(ad.ad_type.trim());
       }
     }
 
-    // Also add types from raw query responses to catch all available types
-    const allQueriesData = [
-      krogerQuery.data,
-      walmartQuery.data,
-      instacartQuery.data,
-      amazonQuery.data,
+    // Also add types from raw query responses for selected retailers only
+    const selectedQueriesData = [
+      ...(isKrogerSelected ? [krogerQuery.data] : []),
+      ...(isWalmartSelected ? [walmartQuery.data] : []),
+      ...(isInstacartSelected ? [instacartQuery.data] : []),
+      ...(isAmazonSelected ? [amazonQuery.data] : []),
+      ...(isTargetSelected ? [targetQuery.data] : []),
     ];
 
-    for (const queryData of allQueriesData) {
-      if (queryData?.cards) {
-        for (const ad of queryData.cards) {
-          if (ad.ad_type?.trim()) {
-            typeSet.add(ad.ad_type.trim());
+    for (const queryData of selectedQueriesData) {
+      if (queryData?.pages) {
+        for (const page of queryData.pages) {
+          for (const ad of page.cards || []) {
+            if (ad.ad_type?.trim()) {
+              typeSet.add(ad.ad_type.trim());
+            }
           }
         }
       }
     }
 
     return Array.from(typeSet).sort();
-  }, [flatAds, krogerQuery.data, walmartQuery.data, instacartQuery.data, amazonQuery.data]);
+  }, [
+    flatAds,
+    isKrogerSelected,
+    isWalmartSelected,
+    isInstacartSelected,
+    isAmazonSelected,
+    isTargetSelected,
+    krogerQuery.data,
+    walmartQuery.data,
+    instacartQuery.data,
+    amazonQuery.data,
+    targetQuery.data,
+  ]);
 
   // Derive available keywords from the fetched data, filtered by selected clients
   const availableKeywords = useMemo(() => {
     const keywordSet = new Set<string>();
     const selectedClientSet = new Set(filters.clients || []);
-    
+
     for (const ad of flatAds) {
       // Only include keywords from ads matching the selected clients
       if (selectedClientSet.size === 0 || selectedClientSet.has(ad.client)) {
@@ -495,6 +640,23 @@ export default function Index() {
     }
     return Array.from(keywordSet).sort();
   }, [flatAds, filters.clients]);
+
+  // Auto-filter ad types when available types change (retailer selection changes)
+  // Removes ad types that are no longer available in selected retailers
+  useEffect(() => {
+    if (!filters.types?.length) return;
+
+    const availableSet = new Set(availableAdTypes);
+    const validTypes = filters.types.filter(t => availableSet.has(t));
+
+    // Only update if some types were filtered out
+    if (validTypes.length !== filters.types.length) {
+      setFilters(prev => ({
+        ...prev,
+        types: validTypes
+      }));
+    }
+  }, [availableAdTypes, filters.types?.length]);
 
   const [ads, setAds] = useState<Ad[]>([]);
   // sync local ads list with fetched pages (enables reordering/dismiss)
@@ -511,14 +673,55 @@ export default function Index() {
   const dnd = useDnD(ads, setAds);
 
   // Fetch all timestamps for timeline visualization (not limited by pagination)
-  const { data: timelineData } = useTimeline({
-    retailer: primaryRetailer,
+  // Query ALL selected retailers and merge timestamps for accurate volume trend
+  const krogerTimeline = useTimeline({
+    retailer: isKrogerSelected ? "kroger" : "",
     client: filters.clients?.join(','),
     start: debouncedFilters.start,
     end: debouncedFilters.end,
     term: debouncedFilters.term
   });
-  const timestamps = timelineData || [];
+  const walmartTimeline = useTimeline({
+    retailer: isWalmartSelected ? "walmart" : "",
+    client: filters.clients?.join(','),
+    start: debouncedFilters.start,
+    end: debouncedFilters.end,
+    term: debouncedFilters.term
+  });
+  const instacartTimeline = useTimeline({
+    retailer: isInstacartSelected ? "instacart" : "",
+    client: filters.clients?.join(','),
+    start: debouncedFilters.start,
+    end: debouncedFilters.end,
+    term: debouncedFilters.term
+  });
+  const amazonTimeline = useTimeline({
+    retailer: isAmazonSelected ? "amazon" : "",
+    client: filters.clients?.join(','),
+    start: debouncedFilters.start,
+    end: debouncedFilters.end,
+    term: debouncedFilters.term
+  });
+  const targetTimeline = useTimeline({
+    retailer: isTargetSelected ? "target" : "",
+    client: filters.clients?.join(','),
+    start: debouncedFilters.start,
+    end: debouncedFilters.end,
+    term: debouncedFilters.term
+  });
+  
+  // Merge all timeline timestamps
+  const timestamps = useMemo(() => {
+    const all = [
+      ...(krogerTimeline.data || []),
+      ...(walmartTimeline.data || []),
+      ...(instacartTimeline.data || []),
+      ...(amazonTimeline.data || []),
+      ...(targetTimeline.data || []),
+    ];
+    console.log(`[Timeline] Merged ${all.length} timestamps from all retailers`);
+    return all;
+  }, [krogerTimeline.data, walmartTimeline.data, instacartTimeline.data, amazonTimeline.data, targetTimeline.data]);
 
   const totalCards = useMemo(() => {
     return [
@@ -526,12 +729,14 @@ export default function Index() {
       walmartCountQuery,
       instacartCountQuery,
       amazonCountQuery,
+      targetCountQuery,
     ].reduce((sum, query) => sum + (query.data?.total || 0), 0);
   }, [
     krogerCountQuery.data,
     walmartCountQuery.data,
     instacartCountQuery.data,
     amazonCountQuery.data,
+    targetCountQuery.data,
   ]);
   
   // Get brand aggregations from dedicated brands endpoint with current filters
@@ -632,6 +837,7 @@ export default function Index() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => navigate("/brands")} className="px-3 py-2 rounded-md bg-white/10 text-white border border-white/30 hover:bg-white/20 focus-visible:ring-2" aria-label="View brand gallery">Brand Gallery</button>
+            <button onClick={() => navigate("/retail-snapshot")} className="px-3 py-2 rounded-md bg-white/10 text-white border border-white/30 hover:bg-white/20 focus-visible:ring-2" aria-label="View retail snapshots">Retail Snapshot</button>
             <button onClick={()=>{ setCompareMode(v=>{ const next = !v; if (next) { setLeftFilters({ ...filters }); setRightFilters({ ...filters }); } return next; }); }} className="px-3 py-2 rounded-md bg-white/10 text-white border border-white/30 hover:bg-white/20 focus-visible:ring-2" aria-pressed={compareMode} aria-label="Toggle compare mode">Compare Mode</button>
             <button onClick={downloadCSV} className="px-3 py-2 rounded-md bg-white text-[#111827] hover:bg-gray-50 focus-visible:ring-2" aria-label="Download CSV">Download CSV</button>
             <button onClick={()=>{
@@ -667,7 +873,7 @@ export default function Index() {
 
             <Filters
               retailer={primaryRetailer}
-              clients={clientsResp?.clients || []}
+              clients={allClientsList}
               availableAdTypes={availableAdTypes}
               availableKeywords={availableKeywords}
               value={filters}
@@ -740,11 +946,11 @@ export default function Index() {
                 <div className="space-y-4">
                   {filters.groupIdentical && adGroups ? (
                     adGroups.map((group, idx) => {
-                      if (group.ad_type === "Skyscraper" || group.ad_type === "Tile_Takeover") return null;
+                      if (isColumnAdGroup(group, ads)) return null;
                       return (
                         <div key={group.group_id}>
-                          <AdCardGroup 
-                            group={group} 
+                          <AdCardGroup
+                            group={group}
                             onRemove={(id) => {
                               // Remove all instances in the group
                               setAds(prev => prev.filter(a => !group.instances.some(inst => inst.id === a.id)));
@@ -763,13 +969,14 @@ export default function Index() {
                             dragIndex={dnd.dragIndex}
                             dragOverIndex={dnd.dragOverIndex}
                             currentIndex={idx}
+                            isLeftColumn={true}
                           />
                         </div>
                       );
                     })
                   ) : (
                     sortedAds.map((ad, idx) => {
-                      if (ad.ad_type === "Skyscraper" || ad.ad_type === "Tile_Takeover") return null;
+                      if (isColumnAdType(ad)) return null;
                       return (
                         <div
                           key={ad.id}
@@ -778,7 +985,7 @@ export default function Index() {
                           <div className="absolute z-10 m-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <input aria-label="Select ad" type="checkbox" className="h-4 w-4" checked={selected.has(ad.id)} onChange={()=>toggleSelect(ad.id)} />
                           </div>
-                          <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} dragIndex={dnd.dragIndex} dragOverIndex={dnd.dragOverIndex} currentIndex={idx} />
+                          <AdCard ad={ad} onRemove={dismiss} onOpen={setModalAd} draggableProps={dnd.makeProps(idx)} dragIndex={dnd.dragIndex} dragOverIndex={dnd.dragOverIndex} currentIndex={idx} isLeftColumn={true} />
                         </div>
                       );
                     })
@@ -787,7 +994,7 @@ export default function Index() {
                 <div className="space-y-4">
                   {filters.groupIdentical && adGroups ? (
                     adGroups.map((group, idx) => {
-                      if (group.ad_type !== "Skyscraper" && group.ad_type !== "Tile_Takeover") return null;
+                      if (!isColumnAdGroup(group, ads)) return null;
                       return (
                         <div key={group.group_id}>
                           <AdCardGroup 
@@ -814,11 +1021,12 @@ export default function Index() {
                     })
                   ) : (
                     sortedAds.map((ad, idx) => {
-                      if (ad.ad_type !== "Skyscraper" && ad.ad_type !== "Tile_Takeover") return null;
+                      if (!isColumnAdType(ad)) return null;
                       return (
                         <div
                           key={ad.id}
                           onClickCapture={(e)=>{ const target = e.target as HTMLElement; if (target?.closest('input[type=\"checkbox\"]')) e.stopPropagation(); }}
+                          style={ad.ad_type === "Sponsored_Display" && ad.slot === "left_rail" ? { minHeight: '1600px' } : undefined}
                         >
                           <div className="absolute z-10 m-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <input aria-label="Select ad" type="checkbox" className="h-4 w-4" checked={selected.has(ad.id)} onChange={()=>toggleSelect(ad.id)} />

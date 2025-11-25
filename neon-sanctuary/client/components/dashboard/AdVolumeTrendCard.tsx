@@ -19,7 +19,12 @@ interface AdVolumeTrendPoint {
 
 export function AdVolumeTrendCard({ timestamps }: { timestamps: string[] }) {
   const points: AdVolumeTrendPoint[] = useMemo(() => {
-    if (!timestamps || timestamps.length === 0) return [];
+    if (!timestamps || timestamps.length === 0) {
+      console.log('[AdVolumeTrend] No timestamps provided');
+      return [];
+    }
+
+    console.log(`[AdVolumeTrend] Processing ${timestamps.length} timestamps`);
 
     // Parse dates
     const dates = timestamps
@@ -30,7 +35,10 @@ export function AdVolumeTrendCard({ timestamps }: { timestamps: string[] }) {
       })
       .filter(d => !isNaN(d.getTime()));
 
-    if (dates.length === 0) return [];
+    if (dates.length === 0) {
+      console.log('[AdVolumeTrend] No valid dates after parsing');
+      return [];
+    }
 
     // Group by day
     const format = (d: Date) => d.toISOString().slice(0, 10);
@@ -39,6 +47,8 @@ export function AdVolumeTrendCard({ timestamps }: { timestamps: string[] }) {
     const result = Array.from(grouped.entries())
       .map(([k, vals]) => ({ label: k, count: vals.length, date: vals[0] }))
       .sort((a, b) => +a.date - +b.date);
+
+    console.log(`[AdVolumeTrend] Grouped into ${result.length} unique days:`, result.map(r => r.label));
 
     if (result.length === 0) return [];
 

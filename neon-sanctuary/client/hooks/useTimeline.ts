@@ -12,6 +12,8 @@ interface TimelineParams {
 export function useTimeline(params: TimelineParams) {
   const { retailer, client, advertiser, start, end, term } = params;
   
+  console.log('[useTimeline] Called with:', { retailer, client, start, end, term });
+  
   return useQuery({
     queryKey: ['timeline', retailer, client, advertiser, start, end, term],
     queryFn: async () => {
@@ -23,6 +25,7 @@ export function useTimeline(params: TimelineParams) {
       if (end) searchParams.set('end', end);
       if (term) searchParams.set('term', term);
       
+      console.log('[useTimeline] Fetching:', `/api/timeline?${searchParams.toString()}`);
       const response = await fetch(`/api/timeline?${searchParams.toString()}`);
       if (!response.ok) {
         throw new Error(`Timeline fetch failed: ${response.statusText}`);
