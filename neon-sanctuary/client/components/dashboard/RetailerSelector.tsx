@@ -7,6 +7,14 @@ const RETAILERS: { id: Retailer; label: string; }[] = [
   { id: "amazon", label: "Amazon" },
   { id: "instacart", label: "Instacart" },
   { id: "walmart", label: "Walmart" },
+  { id: "target", label: "Target" },
+  { id: "albertsons", label: "Albertsons" },
+  { id: "food_lion", label: "Food Lion" },
+  { id: "gopuff", label: "Gopuff" },
+  { id: "doordash", label: "Doordash" },
+  { id: "meijer", label: "Meijer" },
+  { id: "hyvee", label: "Hy-Vee" },
+  { id: "ulta", label: "Ulta" },
 ];
 
 export function RetailerSelector({ value, onChange, enabledRetailers }: { value: Retailer[]; onChange: (r: Retailer[])=>void; enabledRetailers: Set<string>; }) {

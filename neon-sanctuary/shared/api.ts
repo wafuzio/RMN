@@ -12,7 +12,7 @@ export interface DemoResponse {
 }
 
 // Shared API types
-export type Retailer = "kroger" | "instacart" | "walmart" | "amazon";
+export type Retailer = "kroger" | "instacart" | "walmart" | "amazon" | "target" | "albertsons" | "food_lion" | "gopuff" | "doordash" | "meijer" | "hyvee" | "ulta";
 
 export interface RetailersResponse { 
   retailers: string[]; 
@@ -47,6 +47,7 @@ export interface AdCardItem {
   run_date?: string;
   run_file?: string; // JSON file path for this ad
   ad_index?: number; // Index of ad within its run
+  slot?: string; // "left_rail" | "bottom" | "top" for Sponsored_Display ads
 }
 
 export interface BrandAggregation {

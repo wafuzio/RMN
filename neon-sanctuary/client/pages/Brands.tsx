@@ -9,16 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Search, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GaleLogo from "../../../web/assets/logos/GALE.svg";
+import type { Retailer } from "@/lib/api";
 
 // Lazy load modal for code splitting
 const BrandDetailModal = React.lazy(() => import("@/components/dashboard/BrandDetailModal").then(m => ({ default: m.BrandDetailModal })));
 
 export default function Brands() {
   const navigate = useNavigate();
-  const allRetailers = ["kroger", "amazon", "instacart", "walmart"] as const;
-  const [selectedRetailers, setSelectedRetailers] = useState<Array<typeof allRetailers[number]>>(
-    [...allRetailers]
-  );
+  const allRetailers: Retailer[] = ["kroger", "amazon", "instacart", "walmart", "target"];
+  const [selectedRetailers, setSelectedRetailers] = useState<Retailer[]>([...allRetailers]);
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
@@ -30,8 +29,11 @@ export default function Brands() {
   const filteredBrands = useMemo(() => {
     if (!brandsData?.brands) return [];
 
-    // Filter by debounced search term
-    let filtered = brandsData.brands;
+    // Exclude retailer brands
+    const excludedBrands = new Set(["Kroger", "Walmart"]);
+
+    // Filter by debounced search term and exclude retailer brands
+    let filtered = brandsData.brands.filter(b => !excludedBrands.has(b.brand));
     if (debouncedSearch) {
       const term = debouncedSearch.toLowerCase();
       filtered = filtered.filter(b => b.brand.toLowerCase().includes(term));
@@ -69,7 +71,7 @@ export default function Brands() {
     };
   }, [brandsData]); // Only run when initial data loads, not on every filter change
 
-  const toggleRetailer = (retailer: typeof allRetailers[number]) => {
+  const toggleRetailer = (retailer: Retailer) => {
     setSelectedRetailers((prev) => {
       if (prev.includes(retailer)) {
         return prev.filter(r => r !== retailer);

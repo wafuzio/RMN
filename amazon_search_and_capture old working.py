@@ -120,8 +120,9 @@ def _extract_brand_and_message(container):
         al = container.locator('a[aria-label]')
         if al.count() > 0:
             label = (al.first.get_attribute('aria-label') or '').strip()
-            # Common pattern: Sponsored ad from <Brand>.
-            m = re.search(r"from\s+([^\.\"]+)", label, re.IGNORECASE)
+            # Strict pattern: "Sponsored ad from <Brand>" only
+            # This avoids matching rating text like "from 756 reviews"
+            m = re.search(r"Sponsored\s+ad\s+from\s+([^\.\"]+)", label, re.IGNORECASE)
             if m:
                 brand = m.group(1).strip()
             if not message:

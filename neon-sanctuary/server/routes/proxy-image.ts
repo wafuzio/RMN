@@ -61,12 +61,13 @@ export const handleProxyImage: RequestHandler = async (req, res) => {
       type: contentType.startsWith("video/") ? "video" : "image",
       size: buffer.byteLength,
     });
-    res.send(Buffer.from(buffer));
+    return res.send(Buffer.from(buffer));
   } catch (error) {
     console.error("[proxy-image] Error:", {
       url,
       message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
-    res.status(500).json({ error: "Failed to proxy resource" });
+    return res.status(500).json({ error: "Failed to proxy resource" });
   }
 };

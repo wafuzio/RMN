@@ -40,6 +40,8 @@ class BrandReviewTool:
         # Data
         self.unknown_ads = []
         self.current_index = 0
+        # Track delete-armed state for double-click delete behavior
+        self.delete_armed_index = None
         self.lexicon_path = "config/brands.json"
         self.lexicon_brands = []  # Cache lexicon in memory
         
@@ -155,9 +157,12 @@ class BrandReviewTool:
         button_frame = ttk.Frame(right_frame)
         button_frame.pack(fill=tk.X)
         
-        ttk.Button(button_frame, text="← Previous", command=self.previous_ad).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="1 Previous", command=self.previous_ad).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Skip", command=self.next_ad).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Save All Similar & Next →", command=self.save_correction, style="Accent.TButton").pack(side=tk.LEFT, padx=5)
+        # Store delete button so we can change its label when armed
+        self.delete_button = ttk.Button(button_frame, text="Delete Ad", command=self.delete_current_ad)
+        self.delete_button.pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Save All Similar & Next 1", command=self.save_correction, style="Accent.TButton").pack(side=tk.LEFT, padx=5)
         # Dynamic house ad button - will show "Mark as Kroger House Ad" or "Mark as Walmart House Ad"
         self.house_ad_button = ttk.Button(button_frame, text="Mark as House Ad", command=self.mark_as_house_ad)
         self.house_ad_button.pack(side=tk.LEFT, padx=5)
@@ -932,6 +937,11 @@ class BrandReviewTool:
             self.root.quit()
             return
         
+        # Reset delete-armed state when changing ads
+        self.delete_armed_index = None
+        if hasattr(self, 'delete_button'):
+            self.delete_button.config(text="Delete Ad")
+
         ad_data = self.unknown_ads[self.current_index]
         ad = ad_data['ad']
         
@@ -1557,7 +1567,221 @@ class BrandReviewTool:
         else:
             messagebox.showinfo("Complete", "All unknown brands have been reviewed!")
             self.root.quit()
-    
+
+    def delete_current_ad(self):
+        """Two-step delete: first click arms, second click deletes without popups."""
+        if not self.unknown_ads:
+            return
+
+        # First click: arm delete for this index
+        if self.delete_armed_index != self.current_index:
+            self.delete_armed_index = self.current_index
+            if hasattr(self, 'delete_button'):
+                self.delete_button.config(text="Confirm Delete")
+            return
+
+        # Second click on the same ad: perform deletion
+        ad_data = self.unknown_ads[self.current_index]
+        json_file = ad_data.get('json_file')
+        target_ad = ad_data.get('ad') or {}
+
+        # Capture content signature for bulk-deleting identical ads without images
+        base_header = (target_ad.get('header') or '').strip()
+        base_products = [
+            (p.get('title') or '').strip()
+            for p in (target_ad.get('products') or [])
+        ]
+
+        if not json_file:
+            # Nothing we can safely update; just remove from in-memory queue
+            del self.unknown_ads[self.current_index]
+            self.delete_armed_index = None
+            if hasattr(self, 'delete_button'):
+                self.delete_button.config(text="Delete Ad")
+            if self.unknown_ads:
+                if self.current_index >= len(self.unknown_ads):
+                    self.current_index = max(0, len(self.unknown_ads) - 1)
+                self.show_current_ad()
+            else:
+                messagebox.showinfo("Complete", "All unknown brands have been reviewed!")
+                self.root.quit()
+            return
+
+        try:
+            with open(json_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read JSON:\n{e}")
+            return
+
+        target_type = target_ad.get('type')
+        target_position = target_ad.get('position')
+        target_image_url = target_ad.get('image_url')
+        target_href = target_ad.get('href')
+
+        def _matches(ad_obj):
+            if not isinstance(ad_obj, dict):
+                return False
+            type_match = ad_obj.get('type') == target_type
+            position_match = ad_obj.get('position') == target_position
+            image_url_match = (
+                target_image_url is None or
+                ad_obj.get('image_url') == target_image_url
+            )
+            href_match = (
+                target_href is None or
+                ad_obj.get('href') == target_href
+            )
+            return ((type_match and position_match and (image_url_match or href_match)) or ad_obj == target_ad)
+
+        deleted = False
+
+        # Canonical format: {"ads": [...]} 
+        if 'ads' in data and isinstance(data['ads'], list):
+            ads_list = data['ads']
+            for idx, ad_obj in enumerate(ads_list):
+                if _matches(ad_obj):
+                    del ads_list[idx]
+                    deleted = True
+                    break
+        # Legacy format: {"results": [{"ads": [...]}]}
+        elif 'results' in data:
+            results = data.get('results', [])
+            for result in results:
+                ads_list = result.get('ads', [])
+                if not isinstance(ads_list, list):
+                    continue
+                for idx, ad_obj in enumerate(ads_list):
+                    if _matches(ad_obj):
+                        del ads_list[idx]
+                        deleted = True
+                        break
+                if deleted:
+                    break
+
+        if not deleted:
+            # If we can't find it in JSON, still drop it from the queue
+            del self.unknown_ads[self.current_index]
+            self.delete_armed_index = None
+            if hasattr(self, 'delete_button'):
+                self.delete_button.config(text="Delete Ad")
+            if self.unknown_ads:
+                if self.current_index >= len(self.unknown_ads):
+                    self.current_index = max(0, len(self.unknown_ads) - 1)
+                self.show_current_ad()
+            else:
+                messagebox.showinfo("Complete", "All unknown brands have been reviewed!")
+                self.root.quit()
+            return
+
+        # Save updated JSON
+        try:
+            with open(json_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            # If saving fails, still fall through to removing from the queue
+            pass
+
+        # Attempt to delete the image file if it exists
+        image_path = ad_data.get('image_path')
+        if image_path and os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+            except Exception as e:
+                print(f"[WARN] Failed to delete image file {image_path}: {e}")
+
+        # Helper to compare header + full product titles list
+        def _same_header_and_products(ad_obj):
+            if not isinstance(ad_obj, dict):
+                return False
+            header = (ad_obj.get('header') or '').strip()
+            if header != base_header:
+                return False
+            products = [
+                (p.get('title') or '').strip()
+                for p in (ad_obj.get('products') or [])
+            ]
+            return products == base_products
+
+        # Remove from in-memory queue for the primary ad
+        del self.unknown_ads[self.current_index]
+
+        # Also delete any other ads in the queue with matching header+products and no image
+        extra_indices = []
+        for idx, info in enumerate(self.unknown_ads):
+            ad_obj = info.get('ad') or {}
+            if not _same_header_and_products(ad_obj):
+                continue
+            img_path = info.get('image_path')
+            if img_path and os.path.exists(img_path):
+                continue  # has an image; keep it
+            extra_indices.append(idx)
+
+        # For each matching extra ad, prune it from its JSON and delete its image if present
+        for idx in extra_indices:
+            info = self.unknown_ads[idx]
+            jf = info.get('json_file')
+            if not jf:
+                continue
+            try:
+                with open(jf, 'r', encoding='utf-8') as f:
+                    data2 = json.load(f)
+            except Exception:
+                continue
+
+            removed_any = False
+
+            def _prune_ads_list(ads_list):
+                nonlocal removed_any
+                if not isinstance(ads_list, list):
+                    return
+                new_ads = []
+                for a in ads_list:
+                    if _same_header_and_products(a):
+                        removed_any = True
+                        continue
+                    new_ads.append(a)
+                if removed_any:
+                    ads_list[:] = new_ads
+
+            if 'ads' in data2 and isinstance(data2['ads'], list):
+                _prune_ads_list(data2['ads'])
+            elif 'results' in data2:
+                for res in data2.get('results', []):
+                    _prune_ads_list(res.get('ads', []))
+
+            if removed_any:
+                try:
+                    with open(jf, 'w', encoding='utf-8') as f:
+                        json.dump(data2, f, indent=2, ensure_ascii=False)
+                except Exception:
+                    pass
+
+            img2 = info.get('image_path')
+            if img2 and os.path.exists(img2):
+                try:
+                    os.remove(img2)
+                except Exception as e:
+                    print(f"[WARN] Failed to delete image file {img2}: {e}")
+
+        # Remove matching extras from in-memory queue (from highest index down)
+        for idx in sorted(extra_indices, reverse=True):
+            if 0 <= idx < len(self.unknown_ads):
+                del self.unknown_ads[idx]
+
+        # Reset delete state and advance
+        self.delete_armed_index = None
+        if hasattr(self, 'delete_button'):
+            self.delete_button.config(text="Delete Ad")
+
+        if self.unknown_ads:
+            if self.current_index >= len(self.unknown_ads):
+                self.current_index = max(0, len(self.unknown_ads) - 1)
+            self.show_current_ad()
+        else:
+            messagebox.showinfo("Complete", "All unknown brands have been reviewed!")
+            self.root.quit()
+
     def mark_as_house_ad(self):
         """Mark the current ad as a retailer house ad (Kroger or Walmart)"""
         # Get retailer from current ad's JSON file path

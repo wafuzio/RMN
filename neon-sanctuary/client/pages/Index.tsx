@@ -117,8 +117,8 @@ function isColumnAdType(ad: any): boolean {
 
 // Helper: Check if ad group should be displayed in narrow column
 function isColumnAdGroup(group: any, ads: any[]): boolean {
-  // Check the first instance's properties
-  if (group.instances.length > 0) {
+  // Safely check if the group has instances
+  if (Array.isArray(group.instances) && group.instances.length > 0) {
     const firstAd = ads.find(a => a.id === group.instances[0].id);
     if (firstAd) {
       return isColumnAdType(firstAd);
@@ -834,6 +834,7 @@ export default function Index() {
           <div className="flex items-center gap-3">
             <img src={GaleLogo} alt="GALE" className="h-8 w-auto" />
             <h1 className="text-white text-2xl font-extrabold">Retail Ad Monitoring</h1>
+            <button onClick={() => navigate("/experiments")} className="text-xs text-slate-400 hover:text-slate-300 px-2 py-1 rounded transition">labs</button>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => navigate("/brands")} className="px-3 py-2 rounded-md bg-white/10 text-white border border-white/30 hover:bg-white/20 focus-visible:ring-2" aria-label="View brand gallery">Brand Gallery</button>

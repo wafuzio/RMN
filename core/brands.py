@@ -5,6 +5,7 @@ Returns canonical brand names from text using a lexicon.
 from __future__ import annotations
 import json
 import re
+import unicodedata
 from difflib import get_close_matches
 from pathlib import Path
 
@@ -14,9 +15,44 @@ BRANDS_PATH = PROJECT_ROOT / "config" / "brands.json"
 
 _CACHE: list[dict] | None = None
 _SYNONYM_TO_CANON: dict[str, str] = {}
+_NORMALIZED_TO_CANON: dict[str, str] = {}
+
+def _normalize_brand(brand: str | None) -> str:
+    """
+    Normalize a brand name for matching.
+    Removes apostrophes, hyphens, accents, and converts to lowercase.
+    """
+    if not brand:
+        return ""
+
+    brand = str(brand)
+
+    # Normalize unicode (decompose accents)
+    brand = unicodedata.normalize('NFD', brand)
+
+    # Remove diacritics (accents)
+    brand = ''.join(char for char in brand if unicodedata.category(char) != 'Mn')
+
+    # Convert to lowercase
+    brand = brand.lower()
+
+    # Replace common separators with space
+    brand = brand.replace('&', ' and ')
+    brand = brand.replace('+', ' and ')
+    brand = brand.replace("'", ' ')  # Replace apostrophe with space
+    brand = brand.replace('-', ' ')  # Replace hyphen with space
+
+    # Remove all remaining punctuation except spaces
+    brand = re.sub(r"[^\w\s]", "", brand)
+
+    # Collapse multiple spaces
+    brand = re.sub(r'\s+', ' ', brand)
+
+    # Strip
+    return brand.strip()
 
 def _load():
-    global _CACHE, _SYNONYM_TO_CANON
+    global _CACHE, _SYNONYM_TO_CANON, _NORMALIZED_TO_CANON
     if _CACHE is not None:
         return
     try:
@@ -33,9 +69,17 @@ def _load():
         ]
     _CACHE = data
     _SYNONYM_TO_CANON.clear()
+    _NORMALIZED_TO_CANON.clear()
     for b in data:
-        for s in [b["name"], *b.get("synonyms", [])]:
-            _SYNONYM_TO_CANON[s.lower()] = b["name"]
+        canonical_name = b["name"]
+        # Build both exact-match and normalized dictionaries
+        for s in [canonical_name, *b.get("synonyms", [])]:
+            # Exact match (case-insensitive)
+            _SYNONYM_TO_CANON[s.lower()] = canonical_name
+            # Normalized match (removes apostrophes, hyphens, accents)
+            normalized = _normalize_brand(s)
+            if normalized:
+                _NORMALIZED_TO_CANON[normalized] = canonical_name
 
 def canonicalize(text: str | None) -> str | None:
     """Return canonical brand name from free text (header/message), else None."""
@@ -45,6 +89,11 @@ def canonicalize(text: str | None) -> str | None:
     low = text.strip().lower()
     if low in _SYNONYM_TO_CANON:
         return _SYNONYM_TO_CANON[low]
+
+    # Try normalized matching (handles apostrophes, hyphens, accents)
+    normalized = _normalize_brand(text)
+    if normalized and normalized in _NORMALIZED_TO_CANON:
+        return _NORMALIZED_TO_CANON[normalized]
     
     # Common words to skip (not real brands in this context)
     SKIP_WORDS = {

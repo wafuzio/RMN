@@ -1,5 +1,5 @@
 {
-  "id": "kroger_proactiv_proactiv_a8537e9c",
+  "id": "kroger_proactiv_proactiv_cc74ba79",
   "retailer": "kroger",
   "client": "Proactiv",
   "keywords": [
@@ -10,17 +10,20 @@
   "days": [
     "friday",
     "monday",
+    "saturday",
+    "sunday",
     "thursday",
     "tuesday",
     "wednesday"
   ],
   "times": [
-    "08:00",
-    "12:00",
-    "16:00"
+    "08:05",
+    "12:05",
+    "16:05",
+    "21:00"
   ],
   "enabled": true,
   "tz": "",
-  "created_at": "2025-11-24T05:20:54Z",
-  "updated_at": "2025-11-24T05:20:54Z"
+  "created_at": "2025-11-25T04:52:02Z",
+  "updated_at": "2025-11-25T04:52:02Z"
 }

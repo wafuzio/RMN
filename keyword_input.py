@@ -155,6 +155,7 @@ import retailers.kroger.adapter  # noqa: F401
 import retailers.amazon.adapter  # noqa: F401
 import retailers.instacart.adapter  # noqa: F401
 import retailers.walmart.adapter  # noqa: F401
+import retailers.target.adapter  # noqa: F401
 
 # Optional: try eager imports; if they fail, globals stay None and the lazy path runs later
 try:
@@ -181,16 +182,24 @@ class KeywordInputApp:
         self.root = root
         self.root.title("Retail Ad Monitor")
         
-        # Load saved window geometry or use defaults
+        # Load saved window geometry or use adaptive defaults based on screen size
         self.geometry_file = os.path.join(get_base_dir(), "logs", "window_geometry.txt")
         self.state_file = os.path.join(get_base_dir(), "logs", "gui_state.json")
         saved_geometry = self.load_window_geometry()
         if saved_geometry:
             self.root.geometry(saved_geometry)
         else:
-            self.root.geometry("900x1100")
+            # Adaptive sizing: use 70% of screen, capped at reasonable max
+            screen_w = self.root.winfo_screenwidth()
+            screen_h = self.root.winfo_screenheight()
+            win_w = min(int(screen_w * 0.7), 1200)
+            win_h = min(int(screen_h * 0.8), 900)
+            # Center on screen
+            x = (screen_w - win_w) // 2
+            y = (screen_h - win_h) // 2
+            self.root.geometry(f"{win_w}x{win_h}+{x}+{y}")
         
-        self.root.minsize(760, 1000)
+        self.root.minsize(700, 500)
         
         # Save geometry on window close
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -281,18 +290,28 @@ class KeywordInputApp:
         # Start periodic daemon status refresh (every 30 seconds)
         self.refresh_daemon_status()
         
-        # Set up the main frame
-        main_frame = ttk.Frame(root, padding=20, style='App.TFrame')
+        # Set up the main frame with notebook (tabs)
+        main_frame = ttk.Frame(root, padding=10, style='App.TFrame')
         main_frame.grid(row=0, column=0, sticky="nsew")
         main_frame.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
 
-        # Create a canvas for scrolling
-        canvas = tk.Canvas(main_frame, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(main_frame)
+        self.notebook.grid(row=0, column=0, sticky="nsew")
+        
+        # ===== TAB 1: Ad Scraper (existing functionality) =====
+        ad_scraper_frame = ttk.Frame(self.notebook, padding=10, style='App.TFrame')
+        ad_scraper_frame.rowconfigure(0, weight=1)
+        ad_scraper_frame.columnconfigure(0, weight=1)
+        self.notebook.add(ad_scraper_frame, text="  Ad Scraper  ")
+        
+        # Create a canvas for scrolling (inside Ad Scraper tab)
+        canvas = tk.Canvas(ad_scraper_frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(ad_scraper_frame, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
 
-        # Place canvas + scrollbar into the grid (this is what was missing)
+        # Place canvas + scrollbar into the grid
         canvas.grid(row=0, column=0, sticky="nsew")
         scrollbar.grid(row=0, column=1, sticky="ns")
 
@@ -312,28 +331,96 @@ class KeywordInputApp:
             canvas.configure(scrollregion=canvas.bbox("all"))
         scrollable_frame.bind("<Configure>", _on_inner_configure)
 
-        # Mouse wheel support (mac/Win/Linux)
-        def _on_mousewheel(event):
-            # Only scroll if mouse is over the canvas
-            widget = event.widget
-            # Don't scroll canvas if we're over a combobox, scrolledtext, or listbox (dropdown popup)
-            if isinstance(widget, (ttk.Combobox, tk.Text, tk.Listbox)):
-                return
-            # Also check widget class name for ttk popdown listbox
-            widget_class = widget.winfo_class()
-            if widget_class in ('Listbox', 'TCombobox'):
-                return
-            if getattr(event, "num", None) == 4 or event.delta > 0:
-                canvas.yview_scroll(-1, "units")
-            else:
-                canvas.yview_scroll(1, "units")
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)  # Win/mac
-        canvas.bind_all("<Button-4>", _on_mousewheel)   # Linux up
-        canvas.bind_all("<Button-5>", _on_mousewheel)   # Linux down
-
         # Store references
         self.canvas = canvas
         self.scrollable_frame = scrollable_frame
+        
+        # Store reference to get_active_canvas for use in scroll handlers
+        def _get_active_canvas():
+            """Get the canvas for the currently active tab."""
+            try:
+                active_tab = self.notebook.index(self.notebook.select())
+                if active_tab == 0:
+                    return self.canvas  # Ad Scraper tab
+                elif active_tab == 1 and hasattr(self, 'sc_canvas'):
+                    return self.sc_canvas  # Screen Capture tab
+            except:
+                pass
+            return self.canvas
+        
+        self._get_active_canvas = _get_active_canvas
+        
+        # Mouse wheel scroll handler
+        def _on_mousewheel(event):
+            # Don't scroll if we're in a dropdown
+            widget_class = str(event.widget.winfo_class())
+            if 'Listbox' in widget_class or 'Combobox' in widget_class:
+                return "break"
+            
+            target_canvas = self._get_active_canvas()
+            
+            # On macOS, delta can be positive or negative
+            # Positive delta = scroll up, negative = scroll down
+            if event.delta:
+                # macOS uses smaller delta values, scale appropriately
+                if sys.platform == 'darwin':
+                    # macOS: delta is typically 1-4 for trackpad, larger for mouse
+                    scroll_units = -int(event.delta)
+                else:
+                    # Windows: delta is ±120
+                    scroll_units = -int(event.delta / 120) * 3
+                target_canvas.yview_scroll(scroll_units, "units")
+            return "break"
+        
+        # Linux scroll buttons
+        def _on_scroll_up(event):
+            target_canvas = self._get_active_canvas()
+            target_canvas.yview_scroll(-3, "units")
+            return "break"
+        
+        def _on_scroll_down(event):
+            target_canvas = self._get_active_canvas()
+            target_canvas.yview_scroll(3, "units")
+            return "break"
+        
+        # Bind scroll events globally
+        self.root.bind_all("<MouseWheel>", _on_mousewheel)
+        if sys.platform != 'darwin':
+            # Linux scroll buttons
+            self.root.bind_all("<Button-4>", _on_scroll_up)
+            self.root.bind_all("<Button-5>", _on_scroll_down)
+        
+        # Keyboard scroll support (arrow keys, page up/down)
+        def _on_key_scroll(event):
+            # Skip if focus is in a text entry widget
+            widget = event.widget
+            if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry)):
+                return
+            
+            target_canvas = self._get_active_canvas()
+            
+            if event.keysym == 'Up':
+                target_canvas.yview_scroll(-1, "units")
+            elif event.keysym == 'Down':
+                target_canvas.yview_scroll(1, "units")
+            elif event.keysym == 'Prior':  # Page Up
+                target_canvas.yview_scroll(-1, "pages")
+            elif event.keysym == 'Next':  # Page Down
+                target_canvas.yview_scroll(1, "pages")
+            elif event.keysym == 'Home':
+                target_canvas.yview_moveto(0)
+            elif event.keysym == 'End':
+                target_canvas.yview_moveto(1)
+        
+        self.root.bind_all("<Up>", _on_key_scroll)
+        self.root.bind_all("<Down>", _on_key_scroll)
+        self.root.bind_all("<Prior>", _on_key_scroll)
+        self.root.bind_all("<Next>", _on_key_scroll)
+        self.root.bind_all("<Home>", _on_key_scroll)
+        self.root.bind_all("<End>", _on_key_scroll)
+        
+        # ===== TAB 2: Screen Capture =====
+        self._build_screen_capture_tab()
 
         # Client/Product field + New button
         client_frame = ttk.Frame(scrollable_frame, style='Card.TFrame')
@@ -408,9 +495,30 @@ class KeywordInputApp:
             if "Instacart" in self.retailer_picker.vars:
                 self.retailer_picker.vars["Instacart"].set(True)
         
-        # --- Debug Options (restored) ---
-        debug_frame = ttk.LabelFrame(scrollable_frame, text="Debug Options", style='Card.TLabelframe', padding=10)
-        debug_frame.pack(fill=tk.X, padx=20, pady=(6, 10))
+        # --- Debug Options (collapsible, collapsed by default) ---
+        debug_header_frame = ttk.Frame(scrollable_frame, style='Card.TFrame')
+        debug_header_frame.pack(fill=tk.X, padx=20, pady=(6, 0))
+        
+        self.debug_expanded = tk.BooleanVar(value=False)  # Collapsed by default
+        
+        def toggle_debug():
+            if self.debug_expanded.get():
+                debug_content_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
+                debug_toggle_btn.config(text="▼ Debug Options")
+            else:
+                debug_content_frame.pack_forget()
+                debug_toggle_btn.config(text="▶ Debug Options")
+        
+        debug_toggle_btn = ttk.Button(
+            debug_header_frame, 
+            text="▶ Debug Options",
+            command=lambda: (self.debug_expanded.set(not self.debug_expanded.get()), toggle_debug()),
+            width=20
+        )
+        debug_toggle_btn.pack(side=tk.LEFT)
+        
+        debug_content_frame = ttk.LabelFrame(scrollable_frame, text="", style='Card.TLabelframe', padding=10)
+        # Don't pack initially - collapsed by default
 
         self.debug_vars = {}
         self.debug_vars['break_on_px']        = tk.BooleanVar(value=False)
@@ -419,12 +527,12 @@ class KeywordInputApp:
         self.debug_vars['pdb_on_exception']   = tk.BooleanVar(value=True)
         self.debug_vars['open_run_folder']    = tk.BooleanVar(value=True)
 
-        ttk.Checkbutton(debug_frame, text="Break on PX",        variable=self.debug_vars['break_on_px']).grid(row=0, column=0, sticky="w", padx=(0,20))
-        ttk.Checkbutton(debug_frame, text="Break on /blocked",  variable=self.debug_vars['break_on_blocked']).grid(row=0, column=1, sticky="w", padx=(0,20))
-        ttk.Checkbutton(debug_frame, text="Line trace (typing)",variable=self.debug_vars['line_trace']).grid(row=0, column=2, sticky="w", padx=(0,20))
-        ttk.Checkbutton(debug_frame, text="PDB on exception",   variable=self.debug_vars['pdb_on_exception']).grid(row=0, column=3, sticky="w")
+        ttk.Checkbutton(debug_content_frame, text="Break on PX",        variable=self.debug_vars['break_on_px']).grid(row=0, column=0, sticky="w", padx=(0,20))
+        ttk.Checkbutton(debug_content_frame, text="Break on /blocked",  variable=self.debug_vars['break_on_blocked']).grid(row=0, column=1, sticky="w", padx=(0,20))
+        ttk.Checkbutton(debug_content_frame, text="Line trace (typing)",variable=self.debug_vars['line_trace']).grid(row=0, column=2, sticky="w", padx=(0,20))
+        ttk.Checkbutton(debug_content_frame, text="PDB on exception",   variable=self.debug_vars['pdb_on_exception']).grid(row=0, column=3, sticky="w")
 
-        paths_frame = ttk.Frame(debug_frame, style='Card.TFrame')
+        paths_frame = ttk.Frame(debug_content_frame, style='Card.TFrame')
         paths_frame.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(10, 0))
         paths_frame.columnconfigure(0, weight=1)
         paths_frame.columnconfigure(1, weight=1)
@@ -437,7 +545,7 @@ class KeywordInputApp:
         self.output_root_var = tk.StringVar(value="<auto: retailer-specific>")
         ttk.Entry(paths_frame, textvariable=self.output_root_var, width=50).grid(row=1, column=1, sticky="ew")
 
-        ttk.Checkbutton(debug_frame, text="Open run folder when done", variable=self.debug_vars['open_run_folder']).grid(row=2, column=0, columnspan=2, sticky="w", pady=(5,0))
+        ttk.Checkbutton(debug_content_frame, text="Open run folder when done", variable=self.debug_vars['open_run_folder']).grid(row=2, column=0, columnspan=2, sticky="w", pady=(5,0))
         
         # Instructions
         instructions = ttk.Label(
@@ -1345,31 +1453,23 @@ class KeywordInputApp:
         return scheduled_times
     
     def is_time_conflicted(self, hour_24, minute, days, exclude_client=None):
-        """Check if a specific time conflicts with existing schedules
+        """Check if a specific time conflicts with existing schedules.
         
-        IMPORTANT: Checks across ALL retailers because they share the same Playwright browser.
-        Multiple scrapers cannot run simultaneously regardless of retailer.
+        Only checks within the SAME retailer since each retailer uses its own
+        Chrome profile and can run independently.
         """
         scheduled_times = self.get_all_scheduled_times(exclude_client)
         
-        # Get current retailer (for debug logging only)
+        # Get current retailer - conflicts only matter within same retailer
         retailer_slug = self._schedule_retailer_slug()
         
-        # DEBUG: Log what we're checking
-        print(f"[DEBUG] Checking conflicts for {retailer_slug} at {hour_24}:{minute:02d} on {days}")
-        print(f"[DEBUG] Total scheduled times: {len(scheduled_times)}")
-        print(f"[DEBUG] Sample scheduled times: {list(scheduled_times)[:5]}")
-        
         for day in days:
-            # Check for conflicts across ALL retailers (not just same retailer)
-            # Format: (retailer, day, hour, minute)
-            # We need to check if ANY retailer has this time scheduled
-            for scheduled_tuple in scheduled_times:
-                sched_retailer, sched_day, sched_hour, sched_minute = scheduled_tuple
-                if sched_day == day and sched_hour == hour_24 and sched_minute == minute:
-                    print(f"[DEBUG] CONFLICT FOUND: {scheduled_tuple} conflicts with {retailer_slug}/{day}/{hour_24}:{minute:02d}")
+            day_lower = day.lower()
+            
+            # Only check conflicts within the SAME retailer (same Chrome profile)
+            for sched_retailer, sched_day, sched_hour, sched_minute in scheduled_times:
+                if sched_retailer == retailer_slug and sched_day.lower() == day_lower and sched_hour == hour_24 and sched_minute == minute:
                     return True
-        print(f"[DEBUG] No conflicts found")
         return False
     
     def find_next_available_time(self, preferred_hour, preferred_minute, preferred_ampm, days, exclude_client=None):
@@ -1418,11 +1518,22 @@ class KeywordInputApp:
         elif ampm == "AM" and hour_12 == 12:
             hour_24 = 0
 
+        # Get current retailer - only check conflicts within same retailer
         retailer_slug = self._schedule_retailer_slug()
         scheduled = self.get_all_scheduled_times(exclude_client=exclude_client)
+        
         allowed = []
         for m in range(0, 60, 5):
-            conflicted = any((retailer_slug, day, hour_24, m) in scheduled for day in days)
+            # Only check conflicts within the SAME retailer (same Chrome profile)
+            conflicted = False
+            for day in days:
+                day_lower = day.lower()
+                for sched_retailer, sched_day, sched_hour, sched_minute in scheduled:
+                    if sched_retailer == retailer_slug and sched_day.lower() == day_lower and sched_hour == hour_24 and sched_minute == m:
+                        conflicted = True
+                        break
+                if conflicted:
+                    break
             if not conflicted:
                 allowed.append(f"{m:02d}")
         return allowed
@@ -1436,8 +1547,10 @@ class KeywordInputApp:
         if not selected_days:
             return True
 
+        # Get current retailer - only check conflicts within same retailer
         retailer_slug = self._schedule_retailer_slug()
         scheduled = self.get_all_scheduled_times(exclude_client=selected_client)
+        
         for hour_var, minute_var, ampm_var in self.time_vars:
             try:
                 h = int(hour_var.get())
@@ -1447,9 +1560,13 @@ class KeywordInputApp:
                 h24 = h
                 if a == "PM" and h < 12: h24 += 12
                 if a == "AM" and h == 12: h24 = 0
+                
+                # Only check conflicts within the SAME retailer (same Chrome profile)
                 for day in selected_days:
-                    if (retailer_slug, day, h24, m) in scheduled:
-                        return True
+                    day_lower = day.lower()
+                    for sched_retailer, sched_day, sched_hour, sched_minute in scheduled:
+                        if sched_retailer == retailer_slug and sched_day.lower() == day_lower and sched_hour == h24 and sched_minute == m:
+                            return True
             except Exception:
                 return True
         return False
@@ -1478,6 +1595,978 @@ class KeywordInputApp:
                 self.schedule_button.config(state="disabled")
             except Exception:
                 pass
+    
+    # =========================================================================
+    # SCREEN CAPTURE TAB
+    # =========================================================================
+    
+    # Retailer department URLs for screen capture
+    RETAILER_DEPARTMENTS = {
+        "kroger": {
+            "main": ("Homepage", "https://www.kroger.com/"),
+            "departments": [
+                ("Dairy & Eggs", "https://www.kroger.com/pl/dairy-eggs/06"),
+                ("Frozen", "https://www.kroger.com/pl/frozen/04"),
+                ("Beverages", "https://www.kroger.com/pl/beverages/02"),
+                ("Snacks", "https://www.kroger.com/pl/snacks/07"),
+                ("Pantry", "https://www.kroger.com/pl/pantry/03"),
+                ("Meat & Seafood", "https://www.kroger.com/pl/meat-seafood/05"),
+                ("Deli", "https://www.kroger.com/pl/deli/80"),
+                ("Bakery", "https://www.kroger.com/pl/bakery/81"),
+            ]
+        },
+        "walmart": {
+            "main": ("Homepage", "https://www.walmart.com/"),
+            "departments": [
+                ("Grocery", "https://www.walmart.com/browse/food/976759"),
+                ("Frozen Food", "https://www.walmart.com/browse/food/frozen-food/976759_976791"),
+                ("Dairy & Eggs", "https://www.walmart.com/browse/food/dairy-eggs/976759_976782"),
+                ("Beverages", "https://www.walmart.com/browse/food/beverages/976759_976780"),
+                ("Snacks", "https://www.walmart.com/browse/food/snacks-cookies-chips/976759_976787"),
+                ("Pantry", "https://www.walmart.com/browse/food/pantry/976759_976794"),
+                ("Meat & Seafood", "https://www.walmart.com/browse/food/meat-seafood/976759_976785"),
+            ]
+        },
+        "amazon": {
+            "main": ("Homepage", "https://www.amazon.com/"),
+            "departments": [
+                ("Grocery & Gourmet", "https://www.amazon.com/grocery-gourmet-food/b?node=16310101"),
+                ("Snack Foods", "https://www.amazon.com/Snack-Foods-Grocery/b?node=16322721"),
+                ("Beverages", "https://www.amazon.com/Beverages/b?node=16318401"),
+                ("Breakfast Foods", "https://www.amazon.com/Breakfast-Foods-Grocery/b?node=16310231"),
+                ("Candy & Chocolate", "https://www.amazon.com/Candy-Chocolate-Grocery/b?node=16322461"),
+            ]
+        },
+        "instacart": {
+            "main": ("Homepage", "https://www.instacart.com/"),
+            "departments": [
+                ("Dairy & Eggs", "https://www.instacart.com/store/publix/collections/dairy-eggs"),
+                ("Frozen", "https://www.instacart.com/store/publix/collections/frozen"),
+                ("Beverages", "https://www.instacart.com/store/publix/collections/beverages"),
+                ("Snacks & Candy", "https://www.instacart.com/store/publix/collections/snacks-candy"),
+                ("Pantry", "https://www.instacart.com/store/publix/collections/pantry"),
+            ]
+        },
+        "target": {
+            "main": ("Homepage", "https://www.target.com/"),
+            "departments": [
+                ("Grocery", "https://www.target.com/c/grocery/-/N-5xt1a"),
+                ("Frozen Foods", "https://www.target.com/c/frozen-foods-grocery/-/N-5xt0z"),
+                ("Dairy", "https://www.target.com/c/dairy-grocery/-/N-5xt0y"),
+                ("Beverages", "https://www.target.com/c/beverages-grocery/-/N-5xt0p"),
+                ("Snacks", "https://www.target.com/c/snacks-grocery/-/N-5xt1d"),
+            ]
+        },
+    }
+    
+    def _build_screen_capture_tab(self):
+        """Build the Screen Capture tab with front page and department capture options."""
+        # Create frame for Screen Capture tab
+        screen_capture_frame = ttk.Frame(self.notebook, padding=10, style='App.TFrame')
+        screen_capture_frame.rowconfigure(0, weight=1)
+        screen_capture_frame.columnconfigure(0, weight=1)
+        self.notebook.add(screen_capture_frame, text="  Screen Capture  ")
+        
+        # Create scrollable canvas for this tab
+        sc_canvas = tk.Canvas(screen_capture_frame, highlightthickness=0)
+        sc_scrollbar = ttk.Scrollbar(screen_capture_frame, orient="vertical", command=sc_canvas.yview)
+        sc_canvas.configure(yscrollcommand=sc_scrollbar.set)
+        
+        sc_canvas.grid(row=0, column=0, sticky="nsew")
+        sc_scrollbar.grid(row=0, column=1, sticky="ns")
+        
+        sc_scrollable = ttk.Frame(sc_canvas)
+        self._sc_window = sc_canvas.create_window((0, 0), window=sc_scrollable, anchor="nw")
+        
+        def _on_sc_canvas_configure(e):
+            sc_canvas.itemconfigure(self._sc_window, width=e.width)
+        sc_canvas.bind("<Configure>", _on_sc_canvas_configure)
+        
+        def _on_sc_inner_configure(e):
+            sc_canvas.configure(scrollregion=sc_canvas.bbox("all"))
+        sc_scrollable.bind("<Configure>", _on_sc_inner_configure)
+        
+        # Store reference
+        self.sc_canvas = sc_canvas
+        self.sc_scrollable = sc_scrollable
+        
+        # Initialize capture state
+        self.sc_retailer_vars = {}  # {retailer: {main: BooleanVar, depts: {name: BooleanVar}, custom_urls: []}}
+        self.sc_custom_url_entries = {}  # {retailer: [Entry widgets]}
+        self.sc_capture_status = {}  # {retailer: Label widget for status}
+        
+        # ===== Header =====
+        header_frame = ttk.Frame(sc_scrollable, style='Card.TFrame')
+        header_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        ttk.Label(
+            header_frame, 
+            text="Front Page & Department Screenshots",
+            font=("Inter", 14, "bold"),
+            style='TLabel'
+        ).pack(anchor="w")
+        
+        ttk.Label(
+            header_frame,
+            text="Capture homepage and department pages for competitive intelligence",
+            style='Body.TLabel'
+        ).pack(anchor="w", pady=(5, 0))
+        
+        # ===== Output Path Display =====
+        output_frame = ttk.Frame(sc_scrollable, style='Card.TFrame')
+        output_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(output_frame, text="Output:", style='TLabel').pack(side=tk.LEFT)
+        
+        output_root = self._get_screen_capture_output_root()
+        self.sc_output_label = ttk.Label(
+            output_frame, 
+            text=str(output_root),
+            style='Body.TLabel'
+        )
+        self.sc_output_label.pack(side=tk.LEFT, padx=(10, 0))
+        
+        ttk.Button(
+            output_frame,
+            text="📂 Open",
+            command=self._open_screen_capture_folder,
+            width=8
+        ).pack(side=tk.RIGHT)
+        
+        # ===== Retailer Sections =====
+        for retailer in ["kroger", "walmart", "amazon", "instacart", "target"]:
+            self._build_retailer_capture_section(sc_scrollable, retailer)
+        
+        # ===== Global Controls =====
+        controls_frame = ttk.Frame(sc_scrollable, style='Card.TFrame')
+        controls_frame.pack(fill=tk.X, pady=(15, 10))
+        
+        ttk.Button(
+            controls_frame,
+            text="📸 Capture Selected",
+            command=self._run_screen_captures,
+            style='Primary.TButton'
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(
+            controls_frame,
+            text="Select All Main Pages",
+            command=self._select_all_main_pages,
+            style='Secondary.TButton'
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(
+            controls_frame,
+            text="Clear All",
+            command=self._clear_all_captures,
+            style='Danger.TButton'
+        ).pack(side=tk.LEFT)
+        
+        # ===== Schedule Settings =====
+        self._build_frontpage_schedule_section(sc_scrollable)
+        
+        # ===== Capture Log =====
+        log_frame = ttk.LabelFrame(sc_scrollable, text="Capture Log", style='Card.TLabelframe', padding=8)
+        log_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+        
+        self.sc_log = scrolledtext.ScrolledText(log_frame, height=10, wrap="word")
+        self.sc_log.pack(fill=tk.BOTH, expand=True)
+        self.sc_log.configure(font=("Inter", 10), state="disabled")
+    
+    def _build_frontpage_schedule_section(self, parent):
+        """Build the scheduling section for front page captures."""
+        schedule_frame = ttk.LabelFrame(parent, text="Scheduled Captures", style='Card.TLabelframe', padding=10)
+        schedule_frame.pack(fill=tk.X, pady=(15, 0))
+        
+        # Load existing config
+        config = self._load_frontpage_schedule()
+        
+        # Enable/disable toggle
+        enable_frame = ttk.Frame(schedule_frame, style='Card.TFrame')
+        enable_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.sc_schedule_enabled = tk.BooleanVar(value=config.get("enabled", True))
+        ttk.Checkbutton(
+            enable_frame,
+            text="Enable scheduled front page captures",
+            variable=self.sc_schedule_enabled,
+            command=self._on_frontpage_schedule_changed
+        ).pack(side=tk.LEFT)
+        
+        # Times frame
+        times_outer = ttk.Frame(schedule_frame, style='Card.TFrame')
+        times_outer.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(times_outer, text="Capture times:", style='TLabel').pack(side=tk.LEFT)
+        
+        # Time entries (up to 3)
+        self.sc_time_vars = []
+        times = config.get("times", ["08:00"])
+        for i in range(3):
+            var = tk.StringVar(value=times[i] if i < len(times) else "")
+            self.sc_time_vars.append(var)
+            entry = ttk.Entry(times_outer, textvariable=var, width=6)
+            entry.pack(side=tk.LEFT, padx=(10, 0))
+            # Bind to detect changes
+            var.trace_add('write', lambda *args: self._on_frontpage_schedule_changed())
+        
+        ttk.Label(times_outer, text="(24h format, e.g. 08:00, 14:30)", style='Body.TLabel').pack(side=tk.LEFT, padx=(10, 0))
+        
+        # Days of week
+        days_frame = ttk.LabelFrame(schedule_frame, text="Days to Run", padding=5, style='Card.TLabelframe')
+        days_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        day_boxes = ttk.Frame(days_frame, style='Card.TFrame')
+        day_boxes.pack(fill=tk.X, pady=5)
+        
+        day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        config_days = set(d.lower() for d in config.get("days", day_names))
+        
+        self.sc_day_vars = {}
+        for i, day in enumerate(day_names):
+            var = tk.BooleanVar(value=day.lower() in config_days)
+            self.sc_day_vars[day] = var
+            cb = ttk.Checkbutton(day_boxes, text=day[:3], variable=var, command=self._on_frontpage_schedule_changed)
+            cb.grid(row=0, column=i, padx=5)
+        
+        # Retailer selection for scheduled captures
+        retailers_frame = ttk.LabelFrame(schedule_frame, text="Retailers to Capture", padding=5, style='Card.TLabelframe')
+        retailers_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        retailer_boxes = ttk.Frame(retailers_frame, style='Card.TFrame')
+        retailer_boxes.pack(fill=tk.X, pady=5)
+        
+        all_retailers = ["kroger", "walmart", "amazon", "instacart", "target"]
+        config_retailers = set(config.get("retailers", all_retailers))
+        
+        self.sc_sched_retailer_vars = {}
+        for i, retailer in enumerate(all_retailers):
+            var = tk.BooleanVar(value=retailer in config_retailers)
+            self.sc_sched_retailer_vars[retailer] = var
+            cb = ttk.Checkbutton(retailer_boxes, text=retailer.title(), variable=var, command=self._on_frontpage_schedule_changed)
+            cb.grid(row=0, column=i, padx=8)
+        
+        # Save button
+        buttons_frame = ttk.Frame(schedule_frame, style='Card.TFrame')
+        buttons_frame.pack(fill=tk.X)
+        
+        self.sc_schedule_save_btn = ttk.Button(
+            buttons_frame,
+            text="Save Schedule",
+            command=self._save_frontpage_schedule,
+            style='Primary.TButton'
+        )
+        self.sc_schedule_save_btn.pack(side=tk.LEFT, padx=(0, 10))
+        self.sc_schedule_save_btn.state(['disabled'])
+        
+        # Status label
+        self.sc_schedule_status = ttk.Label(buttons_frame, text="", style='Body.TLabel')
+        self.sc_schedule_status.pack(side=tk.LEFT)
+        
+        # Show current schedule status
+        self._update_frontpage_schedule_status()
+    
+    def _load_frontpage_schedule(self):
+        """Load the front page capture schedule config."""
+        config_path = os.path.join(get_base_dir(), "schedules", "frontpage_capture.json")
+        default = {
+            "enabled": True,
+            "days": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+            "times": ["08:00"],
+            "retailers": ["kroger", "walmart", "target", "amazon", "instacart"]
+        }
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                for k, v in default.items():
+                    config.setdefault(k, v)
+                return config
+            except Exception:
+                pass
+        return default
+    
+    def _on_frontpage_schedule_changed(self, *args):
+        """Called when any schedule setting changes - enable save button."""
+        if hasattr(self, 'sc_schedule_save_btn'):
+            self.sc_schedule_save_btn.state(['!disabled'])
+    
+    def _save_frontpage_schedule(self):
+        """Save the front page capture schedule to JSON."""
+        # Gather values
+        times = [v.get().strip() for v in self.sc_time_vars if v.get().strip()]
+        # Validate time format
+        valid_times = []
+        for t in times:
+            if len(t) >= 4 and ':' in t:
+                try:
+                    h, m = t.split(':')
+                    h, m = int(h), int(m)
+                    if 0 <= h <= 23 and 0 <= m <= 59:
+                        valid_times.append(f"{h:02d}:{m:02d}")
+                except ValueError:
+                    pass
+        
+        if not valid_times:
+            valid_times = ["08:00"]  # Default
+        
+        days = [day.lower() for day, var in self.sc_day_vars.items() if var.get()]
+        retailers = [r for r, var in self.sc_sched_retailer_vars.items() if var.get()]
+        
+        config = {
+            "enabled": self.sc_schedule_enabled.get(),
+            "days": days,
+            "times": valid_times,
+            "retailers": retailers,
+            "description": "Daily front page screenshot capture"
+        }
+        
+        # Save to file
+        config_path = os.path.join(get_base_dir(), "schedules", "frontpage_capture.json")
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2)
+            
+            self.sc_schedule_save_btn.state(['disabled'])
+            self._update_frontpage_schedule_status()
+            self._sc_log(f"Schedule saved: {', '.join(valid_times)} on {len(days)} days for {len(retailers)} retailers")
+        except Exception as e:
+            self._sc_log(f"Failed to save schedule: {e}")
+    
+    def _update_frontpage_schedule_status(self):
+        """Update the schedule status label."""
+        config = self._load_frontpage_schedule()
+        if config.get("enabled"):
+            times = config.get("times", [])
+            days = config.get("days", [])
+            retailers = config.get("retailers", [])
+            status = f"✓ Active: {', '.join(times)} on {len(days)} days ({len(retailers)} retailers)"
+        else:
+            status = "○ Disabled"
+        
+        if hasattr(self, 'sc_schedule_status'):
+            self.sc_schedule_status.configure(text=status)
+    
+    def _build_retailer_capture_section(self, parent, retailer: str):
+        """Build a collapsible section for a single retailer's capture options."""
+        dept_config = self.RETAILER_DEPARTMENTS.get(retailer, {})
+        main_name, main_url = dept_config.get("main", ("Homepage", f"https://www.{retailer}.com/"))
+        departments = dept_config.get("departments", [])
+        
+        # Initialize state for this retailer
+        self.sc_retailer_vars[retailer] = {
+            "main": tk.BooleanVar(value=True),  # Main page enabled by default
+            "depts": {},
+            "custom_urls": [],
+        }
+        self.sc_custom_url_entries[retailer] = []
+        
+        # Retailer frame
+        retailer_frame = ttk.LabelFrame(
+            parent, 
+            text=f"  {retailer.title()}  ",
+            style='Card.TLabelframe',
+            padding=10
+        )
+        retailer_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Main page row
+        main_row = ttk.Frame(retailer_frame, style='Card.TFrame')
+        main_row.pack(fill=tk.X, pady=(0, 8))
+        
+        ttk.Checkbutton(
+            main_row,
+            text=f"📍 {main_name}",
+            variable=self.sc_retailer_vars[retailer]["main"]
+        ).pack(side=tk.LEFT)
+        
+        ttk.Label(
+            main_row,
+            text=main_url,
+            style='Body.TLabel',
+            foreground='gray'
+        ).pack(side=tk.LEFT, padx=(10, 0))
+        
+        # Status label for this retailer
+        self.sc_capture_status[retailer] = ttk.Label(
+            main_row,
+            text="",
+            style='Body.TLabel'
+        )
+        self.sc_capture_status[retailer].pack(side=tk.RIGHT)
+        
+        # Departments section
+        if departments:
+            dept_label = ttk.Label(
+                retailer_frame,
+                text="Departments:",
+                style='TLabel',
+                font=("Inter", 10, "bold")
+            )
+            dept_label.pack(anchor="w", pady=(5, 5))
+            
+            # Grid of department checkboxes (2 columns)
+            dept_grid = ttk.Frame(retailer_frame, style='Card.TFrame')
+            dept_grid.pack(fill=tk.X, padx=(20, 0))
+            
+            for i, (dept_name, dept_url) in enumerate(departments):
+                var = tk.BooleanVar(value=False)
+                self.sc_retailer_vars[retailer]["depts"][dept_name] = (var, dept_url)
+                
+                row = i // 2
+                col = i % 2
+                
+                cb = ttk.Checkbutton(
+                    dept_grid,
+                    text=dept_name,
+                    variable=var
+                )
+                cb.grid(row=row, column=col, sticky="w", padx=(0, 30), pady=2)
+        
+        # Custom URL section
+        custom_frame = ttk.Frame(retailer_frame, style='Card.TFrame')
+        custom_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        ttk.Label(
+            custom_frame,
+            text="Custom URLs:",
+            style='TLabel',
+            font=("Inter", 10, "bold")
+        ).pack(anchor="w")
+        
+        # Container for custom URL entries
+        self.sc_custom_url_containers = getattr(self, 'sc_custom_url_containers', {})
+        url_container = ttk.Frame(custom_frame, style='Card.TFrame')
+        url_container.pack(fill=tk.X, padx=(20, 0), pady=(5, 0))
+        self.sc_custom_url_containers[retailer] = url_container
+        
+        # Add URL button
+        ttk.Button(
+            custom_frame,
+            text="+ Add URL",
+            command=lambda r=retailer: self._add_custom_url_entry(r),
+            width=12
+        ).pack(anchor="w", padx=(20, 0), pady=(5, 0))
+    
+    def _add_custom_url_entry(self, retailer: str):
+        """Add a new custom URL entry field for a retailer."""
+        container = self.sc_custom_url_containers.get(retailer)
+        if not container:
+            return
+        
+        row_frame = ttk.Frame(container, style='Card.TFrame')
+        row_frame.pack(fill=tk.X, pady=(2, 0))
+        
+        # Name entry
+        name_var = tk.StringVar(value="")
+        name_entry = ttk.Entry(row_frame, textvariable=name_var, width=20)
+        name_entry.pack(side=tk.LEFT, padx=(0, 5))
+        name_entry.insert(0, "Page Name")
+        name_entry.bind("<FocusIn>", lambda e: name_entry.delete(0, tk.END) if name_entry.get() == "Page Name" else None)
+        
+        # URL entry
+        url_var = tk.StringVar(value="")
+        url_entry = ttk.Entry(row_frame, textvariable=url_var, width=50)
+        url_entry.pack(side=tk.LEFT, padx=(0, 5))
+        url_entry.insert(0, "https://")
+        
+        # Enabled checkbox
+        enabled_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row_frame, variable=enabled_var).pack(side=tk.LEFT, padx=(0, 5))
+        
+        # Remove button
+        def remove_entry():
+            row_frame.destroy()
+            # Remove from tracking list
+            for i, entry in enumerate(self.sc_custom_url_entries[retailer]):
+                if entry.get("frame") == row_frame:
+                    self.sc_custom_url_entries[retailer].pop(i)
+                    break
+        
+        ttk.Button(
+            row_frame,
+            text="✕",
+            command=remove_entry,
+            width=3
+        ).pack(side=tk.LEFT)
+        
+        # Track this entry
+        self.sc_custom_url_entries[retailer].append({
+            "frame": row_frame,
+            "name_var": name_var,
+            "url_var": url_var,
+            "enabled_var": enabled_var,
+        })
+    
+    def _get_screen_capture_output_root(self):
+        """Get the output root for screen captures."""
+        from pathlib import Path
+        
+        if os.getenv("FRONT_PAGE_OUTPUT_ROOT"):
+            return Path(os.getenv("FRONT_PAGE_OUTPUT_ROOT"))
+        
+        base = get_base_dir()
+        return Path(base) / "output" / "screen_capture"
+    
+    def _resolve_capture_profile(self, retailer: str) -> str | None:
+        """
+        Resolve profile directory for screen capture - uses same logic as 
+        screenshot_front_page.py and retailer adapters for consistency.
+        
+        Priority:
+        1. {RETAILER}_PROFILE_DIR env var
+        2. SCRAPER_HOME/profiles/{retailer}
+        3. ~/ChromeProfiles/{retailer}_clean_profile (main scraper pattern)
+        4. ~/ChromeProfiles/{retailer}
+        5. Project root profiles/{retailer}
+        6. None (incognito mode)
+        """
+        from pathlib import Path
+        
+        # Priority 1: Retailer-specific env var (same as adapters use)
+        env_var = f"{retailer.upper()}_PROFILE_DIR"
+        env_path = os.getenv(env_var)
+        if env_path and os.path.isdir(env_path):
+            return env_path
+        
+        # Priority 2: SCRAPER_HOME/profiles/<retailer>
+        scraper_home = os.getenv("SCRAPER_HOME")
+        if scraper_home:
+            profile_path = Path(scraper_home) / "profiles" / retailer
+            if profile_path.is_dir():
+                return str(profile_path)
+        
+        # Priority 3: ~/ChromeProfiles/<retailer>_clean_profile (matches main scraper)
+        chrome_profiles = Path.home() / "ChromeProfiles"
+        if chrome_profiles.is_dir():
+            # Try retailer_clean_profile first (Kroger pattern)
+            clean_profile = chrome_profiles / f"{retailer}_clean_profile"
+            if clean_profile.is_dir():
+                return str(clean_profile)
+            # Try just retailer name
+            retailer_profile = chrome_profiles / retailer
+            if retailer_profile.is_dir():
+                return str(retailer_profile)
+        
+        # Priority 4: Project root profiles/<retailer>
+        base = get_base_dir()
+        profile_path = Path(base) / "profiles" / retailer
+        if profile_path.is_dir():
+            return str(profile_path)
+        
+        # No profile found - will use incognito mode
+        return None
+    
+    def _open_screen_capture_folder(self):
+        """Open the screen capture output folder in Finder."""
+        output_root = self._get_screen_capture_output_root()
+        output_root.mkdir(parents=True, exist_ok=True)
+        
+        if sys.platform == "darwin":
+            subprocess.run(["open", str(output_root)])
+        elif sys.platform == "win32":
+            subprocess.run(["explorer", str(output_root)])
+        else:
+            subprocess.run(["xdg-open", str(output_root)])
+    
+    def _select_all_main_pages(self):
+        """Select all main page checkboxes."""
+        for retailer in self.sc_retailer_vars:
+            self.sc_retailer_vars[retailer]["main"].set(True)
+    
+    def _clear_all_captures(self):
+        """Clear all capture selections."""
+        for retailer in self.sc_retailer_vars:
+            self.sc_retailer_vars[retailer]["main"].set(False)
+            for dept_name, (var, url) in self.sc_retailer_vars[retailer]["depts"].items():
+                var.set(False)
+    
+    def _sc_log_message(self, msg: str):
+        """Write a message to the screen capture log."""
+        try:
+            self.sc_log.configure(state="normal")
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self.sc_log.insert("end", f"[{timestamp}] {msg}\n")
+            self.sc_log.see("end")
+        finally:
+            self.sc_log.configure(state="disabled")
+    
+    def _run_screen_captures(self):
+        """Run screen captures for all selected pages."""
+        # Collect all URLs to capture
+        captures = []  # List of (retailer, name, url)
+        
+        for retailer, config in self.sc_retailer_vars.items():
+            dept_config = self.RETAILER_DEPARTMENTS.get(retailer, {})
+            
+            # Main page
+            if config["main"].get():
+                main_name, main_url = dept_config.get("main", ("Homepage", f"https://www.{retailer}.com/"))
+                captures.append((retailer, main_name, main_url))
+            
+            # Departments
+            for dept_name, (var, dept_url) in config["depts"].items():
+                if var.get():
+                    captures.append((retailer, dept_name, dept_url))
+            
+            # Custom URLs
+            for entry in self.sc_custom_url_entries.get(retailer, []):
+                if entry["enabled_var"].get():
+                    name = entry["name_var"].get().strip()
+                    url = entry["url_var"].get().strip()
+                    if url and url != "https://":
+                        if not name or name == "Page Name":
+                            name = "Custom"
+                        captures.append((retailer, name, url))
+        
+        if not captures:
+            self._sc_log_message("⚠️ No pages selected for capture")
+            return
+        
+        self._sc_log_message(f"Starting capture of {len(captures)} page(s)...")
+        
+        # Run captures in background thread
+        def run_captures():
+            from pathlib import Path
+            
+            output_root = self._get_screen_capture_output_root()
+            success_count = 0
+            
+            for i, (retailer, name, url) in enumerate(captures, 1):
+                # Update status
+                self.root.after(0, lambda r=retailer: self.sc_capture_status[r].config(text="⏳ Capturing..."))
+                
+                # Log profile being used
+                profile = self._resolve_capture_profile(retailer)
+                profile_msg = f"profile: {os.path.basename(profile)}" if profile else "incognito"
+                self.root.after(0, lambda msg=f"[{i}/{len(captures)}] {retailer}: {name} ({profile_msg})...": self._sc_log_message(msg))
+                
+                try:
+                    result = self._capture_single_page(retailer, name, url, output_root)
+                    
+                    if result["success"]:
+                        success_count += 1
+                        self.root.after(0, lambda r=retailer: self.sc_capture_status[r].config(text="✅"))
+                        self.root.after(0, lambda msg=f"  ✓ Saved: {result['path']}": self._sc_log_message(msg))
+                    else:
+                        self.root.after(0, lambda r=retailer: self.sc_capture_status[r].config(text="❌"))
+                        self.root.after(0, lambda msg=f"  ✗ Failed: {result['error']}": self._sc_log_message(msg))
+                
+                except Exception as e:
+                    self.root.after(0, lambda r=retailer: self.sc_capture_status[r].config(text="❌"))
+                    self.root.after(0, lambda msg=f"  ✗ Error: {e}": self._sc_log_message(msg))
+            
+            # Final summary
+            self.root.after(0, lambda: self._sc_log_message(f"\n{'='*40}"))
+            self.root.after(0, lambda: self._sc_log_message(f"Completed: {success_count}/{len(captures)} successful"))
+            self.root.after(0, lambda: self._sc_log_message(f"{'='*40}\n"))
+        
+        # Start in background thread
+        thread = threading.Thread(target=run_captures, daemon=True)
+        thread.start()
+    
+    def _capture_single_page(self, retailer: str, page_name: str, url: str, output_root) -> dict:
+        """Capture a single page screenshot."""
+        from pathlib import Path
+        import base64
+        
+        try:
+            from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+        except ImportError:
+            return {"success": False, "path": None, "error": "Playwright not installed"}
+        
+        # Generate output path
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M.%S")
+        safe_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in page_name.lower())
+        filename = f"{retailer}__{safe_name}__D{timestamp}.png"
+        
+        # Determine subfolder based on page type
+        if page_name.lower() in ["homepage", "main", "front page"]:
+            subfolder = "front_pages"
+        else:
+            subfolder = "departments"
+        
+        output_path = Path(output_root) / retailer / subfolder / filename
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Get profile directory (same resolution as screenshot_front_page.py and adapters)
+        profile_dir = self._resolve_capture_profile(retailer)
+        
+        # Retry logic for profile lock conflicts
+        max_retries = 6  # Wait up to 60 seconds (6 x 10s)
+        retry_delay = 10
+        
+        for attempt in range(max_retries):
+            try:
+                return self._do_capture(
+                    retailer, url, page_name, output_path, profile_dir
+                )
+            except Exception as e:
+                error_msg = str(e).lower()
+                # Check if it's a profile lock error
+                if 'processsingleton' in error_msg or 'already in use' in error_msg or 'singletonlock' in error_msg:
+                    if attempt < max_retries - 1:
+                        print(f"  [{retailer}] Profile in use, waiting {retry_delay}s... (attempt {attempt + 1}/{max_retries})")
+                        import time
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        return {"success": False, "path": None, "error": f"Profile busy after {max_retries} attempts: {e}"}
+                # Not a lock error
+                return {"success": False, "path": None, "error": str(e)}
+        
+        return {"success": False, "path": None, "error": "Unexpected error in retry loop"}
+    
+    def _do_capture(self, retailer: str, url: str, page_name: str, output_path, profile_dir: str):
+        """Actually perform the capture - separated for retry logic."""
+        from playwright.sync_api import sync_playwright
+        
+        with sync_playwright() as p:
+            # Launch browser
+            if profile_dir and os.path.isdir(profile_dir):
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir=profile_dir,
+                    headless=False,
+                    viewport={"width": 1920, "height": 1080},
+                    device_scale_factor=1.0,
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        # Focus prevention - don't steal focus from user's active window
+                        "--no-startup-window",
+                        "--silent-launch",
+                        "--disable-focus-on-load",
+                        "--noerrdialogs",
+                    ]
+                )
+                page = context.pages[0] if context.pages else context.new_page()
+                browser = None
+            else:
+                browser = p.chromium.launch(
+                    headless=False,
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        # Focus prevention - don't steal focus from user's active window
+                        "--no-startup-window",
+                        "--silent-launch",
+                        "--disable-focus-on-load",
+                        "--noerrdialogs",
+                    ]
+                )
+                context = browser.new_context(
+                    viewport={"width": 1920, "height": 1080},
+                    device_scale_factor=1.0,
+                )
+                page = context.new_page()
+            
+            try:
+                # Navigate
+                page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=10000)
+                except:
+                    pass  # Continue even if networkidle times out
+                
+                page.wait_for_timeout(2000)
+                
+                # Retailer-specific handling
+                if retailer == "kroger":
+                    # Close Kroger popups (store selector, newsletter, terms, etc.)
+                    popup_selectors = [
+                        'button.kds-Modal-closeButton',  # Kroger's modal close button class
+                        'button[aria-label="Close pop-up"]',  # Terms modal
+                        'button[aria-label="Close"]',
+                        'button[aria-label="close"]',
+                        '[data-testid="ModalCloseButton"]',
+                        '[data-testid="modal-close-button"]',
+                        '.kds-DismissalButton',  # Kroger dismissal button
+                        '.ReactModal__Content button[aria-label*="lose"]',
+                        '[role="dialog"] button[aria-label*="lose"]',
+                        '[role="dialog"] button[aria-label*="pop-up"]',
+                    ]
+                    for selector in popup_selectors:
+                        try:
+                            popup_btn = page.locator(selector).first
+                            if popup_btn.is_visible(timeout=500):
+                                popup_btn.click()
+                                print(f"[{retailer}] Closed popup: {selector}")
+                                page.wait_for_timeout(500)
+                        except:
+                            pass
+                    
+                    # Hide any remaining modals via JS (removes from DOM rendering)
+                    page.evaluate("""
+                        () => {
+                            // Hide modal overlays
+                            document.querySelectorAll('.ReactModalPortal, .kds-Modal-overlay, [role="dialog"], [class*="Modal"], [class*="Overlay"]')
+                                .forEach(el => el.remove());
+                        }
+                    """)
+                    page.wait_for_timeout(300)
+                
+                elif retailer == "target":
+                    # Target needs extra time for hydration
+                    hydration_selectors = [
+                        '[data-test="@web/Homepage"]',
+                        '[data-test="carousel"]',
+                        '[data-test="product-card"]',
+                        '[class*="ProductCard"]',
+                    ]
+                    for selector in hydration_selectors:
+                        try:
+                            page.wait_for_selector(selector, timeout=5000)
+                            break
+                        except:
+                            pass
+                    
+                    # Extra scroll to trigger lazy loading
+                    page.evaluate("window.scrollTo(0, 500)")
+                    page.wait_for_timeout(1000)
+                    page.evaluate("window.scrollTo(0, 1500)")
+                    page.wait_for_timeout(1000)
+                    page.evaluate("window.scrollTo(0, 0)")
+                    page.wait_for_timeout(1500)
+                
+                # Disable animations
+                page.add_style_tag(content="""
+                    * { animation: none !important; transition: none !important; }
+                    html { scroll-behavior: auto !important; }
+                """)
+                
+                # Neutralize ALL sticky/fixed elements before scrolling
+                page.evaluate("""
+                    () => {
+                        document.querySelectorAll('*').forEach(el => {
+                            const style = window.getComputedStyle(el);
+                            if (style.position === 'sticky' || style.position === 'fixed') {
+                                el.style.setProperty('position', 'relative', 'important');
+                            }
+                        });
+                    }
+                """)
+                
+                # Warm up lazy content (multiple passes for Target)
+                try:
+                    vh = page.evaluate("() => window.innerHeight")
+                    doc_h = page.evaluate("() => document.body.scrollHeight")
+                    step = int(vh * 0.7)
+                    
+                    # First pass: scroll down slowly to trigger lazy loading
+                    y = 0
+                    while y < doc_h - vh:
+                        page.evaluate(f"window.scrollTo(0, {y})")
+                        page.wait_for_timeout(300)
+                        y += step
+                        doc_h = page.evaluate("() => document.body.scrollHeight")
+                    
+                    # Scroll to absolute bottom
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    page.wait_for_timeout(500)
+                    
+                    # Target, Walmart, Instacart: second pass with longer waits for full hydration
+                    if retailer in ('target', 'walmart', 'instacart'):
+                        print(f"  [{retailer}] Running second scroll pass for full hydration...")
+                        page.evaluate("window.scrollTo(0, 0)")
+                        page.wait_for_timeout(300)
+                        # Re-check doc height after first pass
+                        doc_h = page.evaluate("() => document.body.scrollHeight")
+                        y = 0
+                        while y < doc_h - vh:
+                            page.evaluate(f"window.scrollTo(0, {y})")
+                            page.wait_for_timeout(400)
+                            y += step
+                        # Final scroll to bottom and wait
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                        page.wait_for_timeout(500)
+                    
+                    page.evaluate("window.scrollTo(0, 0)")
+                    page.wait_for_timeout(800)
+                except:
+                    pass
+                
+                # Capture screenshot using CDP (consistent viewport width for all retailers)
+                client = context.new_cdp_session(page)
+                
+                # For Target/Instacart: extra step to ensure sticky elements are fully neutralized
+                if retailer in ('target', 'instacart'):
+                    print(f"  [{retailer}] Ensuring consistent viewport for capture...")
+                    page.evaluate("""
+                        () => {
+                            // Remove all sticky/fixed positioning
+                            const allElements = document.querySelectorAll('*');
+                            allElements.forEach(el => {
+                                const style = window.getComputedStyle(el);
+                                if (style.position === 'sticky' || style.position === 'fixed') {
+                                    el.style.setProperty('position', 'relative', 'important');
+                                }
+                            });
+                            // Also hide any overlay/modal elements that might interfere
+                            document.querySelectorAll('[class*="overlay"], [class*="Overlay"], [class*="modal"], [class*="Modal"]').forEach(el => {
+                                el.style.setProperty('display', 'none', 'important');
+                            });
+                        }
+                    """)
+                    page.wait_for_timeout(300)
+                
+                shot = client.send("Page.captureScreenshot", {
+                    "format": "png",
+                    "fromSurface": True,
+                    "captureBeyondViewport": True
+                })
+                data = base64.b64decode(shot["data"])
+                output_path.write_bytes(data)
+                
+                # Save HTML
+                html_path = output_path.with_suffix('.html')
+                try:
+                    html_content = page.content()
+                    html_path.write_text(html_content, encoding='utf-8')
+                except Exception as e:
+                    print(f"[warn] Failed to save HTML: {e}")
+                    html_path = None
+                
+                # Save readable text
+                text_path = output_path.with_suffix('.txt')
+                try:
+                    from scripts.screenshot_front_page import extract_readable_text
+                    title = page.title() or "Unknown"
+                    page_url = page.url
+                    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    header = f"""{'='*70}
+FRONT PAGE TEXT CAPTURE
+{'='*70}
+Title: {title}
+URL: {page_url}
+Retailer: {retailer}
+Captured: {timestamp_str}
+{'='*70}
+
+"""
+                    text_content = extract_readable_text(page, retailer)
+                    text_path.write_text(header + text_content, encoding='utf-8')
+                except Exception as e:
+                    print(f"[warn] Failed to save text: {e}")
+                    text_path = None
+                
+                # Cleanup
+                context.close()
+                if browser:
+                    browser.close()
+                
+                return {
+                    "success": True,
+                    "path": str(output_path),
+                    "html_path": str(html_path) if html_path else None,
+                    "text_path": str(text_path) if text_path else None,
+                    "error": None
+                }
+            except Exception as e:
+                context.close()
+                if browser:
+                    browser.close()
+                raise
     
     def apply_theme(self, style: ttk.Style, mode="light"):
         """Apply theme styling to all widgets"""
@@ -1549,6 +2638,17 @@ class KeywordInputApp:
         # Progressbar
         style.configure('blue.Horizontal.TProgressbar',
             troughcolor=c["trough"], background=c["bar"], bordercolor=c["trough"], lightcolor=c["bar"], darkcolor=c["bar"])
+
+        # Notebook (tabs) - selected tab is larger/more prominent
+        style.configure('TNotebook', background=c["bg"], borderwidth=0)
+        style.configure('TNotebook.Tab', 
+            background=c["border"], foreground=c["muted"],
+            padding=(12, 6), font=("Inter", 10))
+        style.map('TNotebook.Tab',
+            background=[('selected', c["primary"]), ('active', c["card"])],
+            foreground=[('selected', 'white'), ('active', c["text"])],
+            padding=[('selected', (18, 10))],  # Larger padding when selected
+            font=[('selected', ("Inter", 12, "bold"))])
 
         # Global bg for root window (non-ttk)
         try:
@@ -2651,6 +3751,12 @@ class KeywordInputApp:
         # Get number of runs
         num_runs = self.runs_var.get()
         
+        # Get saved times from schedule_config if available
+        saved_times = []
+        if hasattr(self, 'schedule_config') and "times" in self.schedule_config:
+            saved_times = self.schedule_config.get("times", [])
+            print(f"[DEBUG] update_time_selectors: Found {len(saved_times)} saved times: {saved_times}")
+        
         # Create time selectors
         for i in range(num_runs):
             # Create frame for this time selector
@@ -2673,21 +3779,30 @@ class KeywordInputApp:
             )
             hour_combo.pack(side=tk.LEFT, padx=(10, 0))
             
-            # Default values based on common run times with conflict checking
-            default_times = [
-                (8, 0, "AM"),   # 8 AM
-                (12, 0, "PM"),  # 12 PM  
-                (4, 0, "PM"),   # 4 PM
-            ]
-            
-            if i < len(default_times):
-                default_hour, default_minute, default_ampm = default_times[i]
+            # Use saved times if available, otherwise use defaults
+            if i < len(saved_times):
+                # Use saved time from schedule
+                saved_hour, saved_minute, saved_ampm = saved_times[i]
+                default_hour = int(saved_hour)
+                default_minute = int(saved_minute)
+                default_ampm = saved_ampm
+                print(f"[DEBUG] Using saved time for slot {i}: {default_hour}:{default_minute:02d} {default_ampm}")
             else:
-                # Generate spaced out times for additional runs
-                base_hour = 8 + (i * 4)
-                default_hour = base_hour % 12 or 12
-                default_minute = 0
-                default_ampm = "AM" if base_hour < 12 else "PM"
+                # Fall back to default times
+                default_times = [
+                    (8, 0, "AM"),   # 8 AM
+                    (12, 0, "PM"),  # 12 PM  
+                    (4, 0, "PM"),   # 4 PM
+                ]
+                
+                if i < len(default_times):
+                    default_hour, default_minute, default_ampm = default_times[i]
+                else:
+                    # Generate spaced out times for additional runs
+                    base_hour = 8 + (i * 4)
+                    default_hour = base_hour % 12 or 12
+                    default_minute = 0
+                    default_ampm = "AM" if base_hour < 12 else "PM"
             
             # Check for conflicts and find alternative if needed
             selected_client = self.client_var.get() if hasattr(self, 'client_var') else None
@@ -2822,13 +3937,12 @@ class KeywordInputApp:
                 self.time_widget_refs = []
             self.time_widget_refs.append(time_widgets)
         
-        # Load saved times if available - check if we have a selected client
-        selected_client = self.client_var.get() if hasattr(self, 'client_var') else None
-        if selected_client and selected_client != PLACEHOLDER:
-            self.schedule_config = self.load_schedule_config(selected_client)
-            self.load_saved_times()
-        else:
-            # No client selected, just use defaults (already set above)
+        # Saved times are now loaded at the start of this method from self.schedule_config
+        # No need to reload here - just refresh conflict displays
+        try:
+            if hasattr(self, 'refresh_all_conflict_displays'):
+                self.refresh_all_conflict_displays()
+        except Exception:
             pass
         
         # Update save button state based on conflicts

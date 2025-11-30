@@ -2,24 +2,26 @@ import { AdGroup } from "@/lib/aggregateAds";
 import { AdCard, Ad } from "./AdCard";
 import { Badge } from "@/components/ui/badge";
 
-export function AdCardGroup({ 
-  group, 
-  onRemove, 
+export function AdCardGroup({
+  group,
+  onRemove,
   onOpen,
   draggableProps,
   dragIndex,
   dragOverIndex,
   currentIndex,
-  priority
-}: { 
-  group: AdGroup; 
-  onRemove: (groupId: string) => void; 
+  priority,
+  isLeftColumn = false
+}: {
+  group: AdGroup;
+  onRemove: (groupId: string) => void;
   onOpen: (group: AdGroup) => void;
   draggableProps?: any;
   dragIndex?: number | null;
   dragOverIndex?: number | null;
   currentIndex?: number;
   priority?: boolean;
+  isLeftColumn?: boolean;
 }) {
   // Convert cover to Ad type for existing AdCard component
   // Use first keyword or join multiple keywords
@@ -54,6 +56,7 @@ export function AdCardGroup({
       dragOverIndex={dragOverIndex}
       currentIndex={currentIndex}
       priority={priority}
+      isLeftColumn={isLeftColumn}
     />
   );
 }

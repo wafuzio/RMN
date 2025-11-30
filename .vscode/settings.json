@@ -1,0 +1,7 @@
+{
+    "builder.serverUrl": "http://localhost:3000",
+    "builder.command": "python3 web/builder_server_v2.py",
+    "builder.runDevServer": false,
+    "builder.autoDetectDevServer": true,
+    "builder.launchType": "editor"
+}

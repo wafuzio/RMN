@@ -53,16 +53,29 @@ export const handleAdsProxy: RequestHandler = async (req, res) => {
       });
     }
 
+    // Validate content-type before parsing JSON to prevent "body stream already read" errors
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      console.error("[ads-proxy] Response is not JSON", {
+        contentType,
+        status: response.status,
+      });
+      return res.status(500).json({
+        error: `Invalid response type from Flask: expected JSON, got ${contentType}`,
+      });
+    }
+
     const data = await response.json();
     console.debug("[ads-proxy] Successfully fetched ads from Flask", {
       count: (data as any).cards?.length || 0,
     });
-    res.json(data);
+    return res.json(data);
   } catch (error) {
     console.error("[ads-proxy] Error proxying request", {
       flaskUrl: flaskUrl.split("?")[0],
       message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
-    res.status(500).json({ error: "Failed to fetch ads from Flask backend" });
+    return res.status(500).json({ error: "Failed to fetch ads from Flask backend" });
   }
 };

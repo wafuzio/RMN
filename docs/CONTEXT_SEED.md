@@ -134,13 +134,22 @@ python3 auth/retailer_auth.py --retailer kroger --profile-dir ~/ChromeProfiles/k
 - `launcher.py` - App bundle launcher
 
 **Extractors:**
-- `ad_extractors/toa_extractor.py` - TOA ads
-- `ad_extractors/skyscraper_extractor.py` - Skyscraper ads
-- `ad_extractors/carousel_extractor.py` - Carousel ads (Featured only)
+- `extractors/screenshot_ad_image.py` - Universal ad image extractor (Kroger, Instacart)
+- `extractors/screenshot_toa_image.py` - Legacy TOA-specific extractor
+- `ad_extractors/toa_extractor.py` - TOA ads (legacy)
+- `ad_extractors/skyscraper_extractor.py` - Skyscraper ads (legacy)
+- `ad_extractors/carousel_extractor.py` - Carousel ads (Featured only, legacy)
 
 **API & Frontend:**
 - `web/builder_server_v2.py` - Flask API for Builder GUI
 - `neon-sanctuary/` - React frontend (Builder GUI)
+
+**Repair Tools:**
+- `tools/rebuild_kroger_images_from_archive.py` - Regenerate missing images from archived HTML/JSON pairs
+- `tools/repair_kroger_image_paths.py` - Backfill missing image paths where files exist
+- `tools/fix_bluey_rebuild_labels.py` - Fix specific brand mislabeling from rebuilds
+- `tools/repair_blue_bunny_sweet_pairings.py` - Fix Unknown brand ads with known creative
+- `tools/build_brand_index.py` - Rebuild brand index from all run JSONs
 
 **Logs:**
 - `logs/<retailer>/keyword_input.log` - GUI activity
@@ -194,7 +203,28 @@ Successfully migrated all Walmart data to canonical schema with 100% image cover
 - [ ] **Kroger JSON Schema** - TODO (legacy `results[].ads[]` format)
 - [ ] **Instacart JSON Schema** - TODO (legacy `results[].ads[]` format)
 - [ ] **Amazon JSON Schema** - TODO (not yet implemented)
-- [ ] **Brand Lexicon Integration** - Walmart uses `core/brands.py` for canonicalization
+- [x] **Brand Lexicon Integration** - ✅ COMPLETE
+  - All retailers use `core/brands.py` for canonicalization
+  - Fuzzy matching improved to ignore short tokens (≤4 chars)
+  - Full-phrase synonyms prevent generic word collisions
+
+- [x] **Kroger Image Rebuild Tools** - ✅ COMPLETE (Nov 2025)
+  - `tools/rebuild_kroger_images_from_archive.py` - Offline image regeneration from archived HTML
+  - `tools/repair_kroger_image_paths.py` - Backfill missing image_path fields where PNGs exist
+  - `tools/fix_bluey_rebuild_labels.py` - Fix mislabeled Blue Buffalo ads from 2025-11-24 rebuild
+  - `tools/repair_blue_bunny_sweet_pairings.py` - Fix Blue Bunny TOA ads showing as Unknown
+  - **Context:** Kroger runs had missing `image_path` fields despite PNGs existing on disk
+  - **Root cause:** Screenshot extractor failed to wire paths back into JSON (URL mismatch + structure mismatch)
+  - **Solution:** Repair tools backfill paths and regenerate missing images from archived HTML/JSON pairs
+
+- [x] **Brand Canonicalization Improvements** - ✅ COMPLETE (Nov 2025)
+  - Removed hardcoded 'blue' skip from fuzzy matching
+  - Ignore short tokens (≤4 chars) in fuzzy matching to prevent generic word collisions
+  - Added full-phrase synonyms for Blue Buffalo, Blue Bunny, Bluey, Birds Eye, Bertolli, Annie Chun, P.F. Chang's
+  - **Context:** "Blue Pet Foods" was incorrectly canonicalized to "Bluey" instead of "Blue Buffalo"
+  - **Root cause:** Fuzzy token matching on "blue" matched short brand name "Bluey"
+  - **Solution:** Skip short tokens in fuzzy matching; use exact/phrase matching first
+  - Prevents brand collisions while preserving distinct brands
 
 - [ ] **Amazon selectors refinement**
   - Tighten selectors for SB/SBV/SP and right-rail SD

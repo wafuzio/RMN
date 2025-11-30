@@ -478,39 +478,38 @@ def get_brand_lexicon() -> dict:
 def canonicalize_brand(raw: str | None) -> str | None:
     """
     Map raw brand to canonical name via brands.json (names + synonyms).
-    Uses aggressive normalization (strips product descriptors) for lexicon matching.
+    Uses case-insensitive, punctuation-insensitive matching.
     Falls back to original raw brand if not found in lexicon.
     """
-    from utils.brand_utils import normalize_brand_for_lexicon_matching
-    
+    from utils.brand_utils import normalize_brand_for_matching
+
     raw = (raw or "").strip()
     if not raw:
         return None
-    
+
     # Load brands.json directly for case-insensitive matching
     try:
         brands_arr = json.loads(BRAND_LEXICON_PATH.read_text())
     except Exception:
         return raw
-    
-    # Use aggressive normalization for lexicon matching
-    # This strips product descriptors like "- Grain", "Snax Crazy", "Grand Ice Cream"
-    normalized = normalize_brand_for_lexicon_matching(raw)
-    
+
+    # Use normalization for lexicon matching
+    normalized = normalize_brand_for_matching(raw)
+
     # Check all canonical names and synonyms
     for entry in brands_arr:
         canonical_name = entry.get("name", "").strip()
         if not canonical_name:
             continue
-            
-        if normalize_brand_for_lexicon_matching(canonical_name) == normalized:
+
+        if normalize_brand_for_matching(canonical_name) == normalized:
             return canonical_name
-            
+
         for synonym in entry.get("synonyms", []):
-            if normalize_brand_for_lexicon_matching(synonym) == normalized:
+            if normalize_brand_for_matching(synonym) == normalized:
                 return canonical_name
-    
-    # fallback: return original raw brand (preserves "Seven Sundays- Grain" if not in lexicon)
+
+    # fallback: return original raw brand if not found in lexicon
     return raw
 
 
@@ -590,13 +589,22 @@ def brand_logo_url_for(brand_canonical: str | None, retailer: str | None) -> str
     allowed = rec.get("retailers")
     if allowed and retailer and retailer not in allowed:
         return None
-    filename = os.path.basename(rec.get("logo_file") or "")
-    if not filename:
+    raw = (rec.get("logo_file") or "").strip()
+    if not raw:
         return None
-    path = (BRAND_LOGOS_DIR / filename)
+    # Normalize stored path: drop optional "brand_logos/" prefix and treat the
+    # remainder as a path relative to BRAND_LOGOS_DIR. This allows values like
+    # "verified/foo.png", "unverified/foo.png", or just "foo.png".
+    if raw.startswith("brand_logos/"):
+        rel = raw.split("/", 1)[1]
+    else:
+        rel = raw
+    if not rel:
+        return None
+    path = (BRAND_LOGOS_DIR / rel)
     if not path.is_file():
         return None
-    return f"/api/brand_logo/{filename}"
+    return f"/api/brand_logo/{rel}"
 
 
 def is_blocked_brand(brand_name: str | None) -> bool:
@@ -1659,11 +1667,25 @@ def api_ads_cards():
                         # Build image URL (always returns non-empty URL)
                         image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, ad)
 
+                        # Extract slot field, with fallback for legacy Sponsored_Display scrapes
+                        slot = ad.get("slot")
+                        if not slot:
+                            ad_type_raw = (ad.get("type") or ad.get("ad_type") or "").lower()
+                            subtype_raw = (ad.get("subtype") or "").lower()
+                            if "sponsored_display" in ad_type_raw or "sponsored display" in ad_type_raw:
+                                if "left_rail" in subtype_raw:
+                                    slot = "left_rail"
+                                elif "bottom" in subtype_raw:
+                                    slot = "bottom"
+                                else:
+                                    slot = "top"
+
                         cards.append({
                             "retailer": file_retailer,
                             "client": file_client,
                             "keyword": data.get("keyword"),
                             "ad_type": ad_type,
+                            "slot": slot,
                             "brand": brand,
                             "advertisers": advertisers,
                             "message": message,
@@ -1698,7 +1720,7 @@ def api_ads_cards():
         
         _set_cache(cache_key, result)
         client_str = _norm_clients_for_cache(clients)
-        print(f"[{retailer}/{client_str}] 🚀 Brand index fast path: {len(cards)} cards from {total} total (page {page})")
+        print(f"[{retailer}/{client_str}]  Brand index fast path: {len(cards)} cards from {total} total (page {page})")
         return jsonify(result)
     
     # GENERAL PATH: Manifest-based file-level pagination
@@ -1739,13 +1761,13 @@ def api_ads_cards():
     types_list = []
     if types_filter:
         types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
-        print(f"🔍 [FLASK DEBUG] Applied types filter: {types_list}")
+        print(f" [FLASK DEBUG] Applied types filter: {types_list}")
 
 
     # FAST PRE-COUNT: Get total matching ads first for accurate pagination
     filtered_total = 0
     if types_filter:
-        print(f"🔍 [FLASK DEBUG] Pre-counting total matching ads...")
+        print(f" [FLASK DEBUG] Pre-counting total matching ads...")
         for r in rows:
             fp = OUTPUT_ROOT / r["json_path"]
             try:
@@ -1757,7 +1779,7 @@ def api_ads_cards():
                         filtered_total += 1
             except Exception:
                 continue
-        print(f"🔍 [FLASK DEBUG] Found {filtered_total} total matching ads")
+        print(f" [FLASK DEBUG] Found {filtered_total} total matching ads")
     else:
         filtered_total = total  # No filter, use original total
 
@@ -1820,6 +1842,19 @@ def api_ads_cards():
 
             message = ad.get("title") or ad.get("message") or ad.get("description") or ""
 
+            # Extract slot field, with fallback for legacy Sponsored_Display scrapes
+            slot = ad.get("slot")
+            if not slot:
+                ad_type_raw = (ad.get("type") or ad.get("ad_type") or "").lower()
+                subtype_raw = (ad.get("subtype") or "").lower()
+                if "sponsored_display" in ad_type_raw or "sponsored display" in ad_type_raw:
+                    if "left_rail" in subtype_raw:
+                        slot = "left_rail"
+                    elif "bottom" in subtype_raw:
+                        slot = "bottom"
+                    else:
+                        slot = "top"
+
             # Build image URL (always returns non-empty URL)
             image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, ad)
 
@@ -1832,6 +1867,7 @@ def api_ads_cards():
                 "client": file_client,
                 "keyword": data.get("keyword"),
                 "ad_type": ad_type,
+                "slot": slot,
                 "brand": brand,
                 "advertisers": advertisers,
                 "message": message,
@@ -2311,6 +2347,22 @@ def api_ads_cards():
                         parsed_advertisers = [canonicalize(adv) or adv for adv in parsed_advertisers]
                         # Filter out blocked brands (ad types)
                         advertisers = [adv for adv in parsed_advertisers if not is_blocked_brand(adv)]
+                # Drop advertisers that are really just the ad type repeated
+                if advertisers:
+                    ad_type_val = ad.get("type") or ad.get("ad_type") or ""
+
+                    def _norm_name(s: str) -> str:
+                        # Lowercase, strip spaces/underscores for comparison
+                        return ''.join((s or "").lower().replace('_', ' ').split())
+
+                    norm_type = _norm_name(ad_type_val)
+                    type_label = type_label_for(ad_type_val)
+                    norm_label = _norm_name(type_label)
+
+                    advertisers = [
+                        adv for adv in advertisers
+                        if _norm_name(adv) not in {norm_type, norm_label}
+                    ]
 
                 # Format brand string for display
                 brand = ' + '.join(advertisers) if advertisers else "Unknown"
@@ -2687,11 +2739,13 @@ def api_brands():
                             for adv in advertisers:
                                 if not adv or adv == "Unknown":
                                     continue
-                                brand_normalized = adv.lower()
-                                if brand_normalized not in brand_counts:
-                                    brand_case_map[brand_normalized] = adv
-                                    brand_counts[brand_normalized] = 0
-                                brand_counts[brand_normalized] += 1
+                                canonical_brand = canonicalize_brand(adv)
+                                if not canonical_brand:
+                                    canonical_brand = adv.lower()
+                                if canonical_brand not in brand_counts:
+                                    brand_case_map[canonical_brand] = canonical_brand
+                                    brand_counts[canonical_brand] = 0
+                                brand_counts[canonical_brand] += 1
                     
                     except Exception as e:
                         print(f"[brands] Error processing {fp}: {e}")
@@ -2769,11 +2823,13 @@ def api_brands():
                 for adv in advertisers:
                     if not adv or adv == "Unknown":
                         continue
-                    brand_normalized = adv.lower()
-                    if brand_normalized not in brand_counts:
-                        brand_case_map[brand_normalized] = adv
-                        brand_counts[brand_normalized] = 0
-                    brand_counts[brand_normalized] += 1
+                    canonical_brand = canonicalize_brand(adv)
+                    if not canonical_brand:
+                        canonical_brand = adv.lower()
+                    if canonical_brand not in brand_counts:
+                        brand_case_map[canonical_brand] = canonical_brand
+                        brand_counts[canonical_brand] = 0
+                    brand_counts[canonical_brand] += 1
         
         # Build response
         total = sum(brand_counts.values())
@@ -3794,34 +3850,49 @@ def api_logo(retailer):
 
 @app.route("/api/brand_logo/<path:brand_name>")
 def api_brand_logo(brand_name: str):
+    """Serve brand logo files from output/brand_logos.
+
+    Accepts either a brand name (e.g., "Outshine") or a relative filename
+    (e.g., "verified/outshine.png"). The latter is used when the database
+    stores a subdirectory under BRAND_LOGOS_DIR such as verified/ or
+    unverified/.
     """
-    Serve brand logo files from output/brand_logos.
-    Accepts either a brand name (e.g., "Outshine") or filename (e.g., "outshine.png").
-    Looks up the actual filename in the brand logo database.
-    """
-    brand_name = os.path.basename(brand_name)  # Security: prevent path traversal
-    
-    # If it already has an extension, try to serve it directly
-    if '.' in brand_name:
-        path = (BRAND_LOGOS_DIR / brand_name).resolve()
-        if path.exists() and path.is_file():
-            return send_file(path, as_attachment=False)
+
+    # Basic path traversal guard: reject any ".." segments
+    parts = [p for p in brand_name.split("/") if p]
+    if any(p == ".." for p in parts):
+        abort(400)
+
+    # If it already has an extension, try to serve it directly as a path
+    # relative to BRAND_LOGOS_DIR. This allows URLs like
+    # /api/brand_logo/unverified/foo.png or /api/brand_logo/verified/foo.png.
+    if "." in brand_name:
+        direct_path = (BRAND_LOGOS_DIR / "/".join(parts)).resolve()
+        if direct_path.exists() and direct_path.is_file():
+            return send_file(direct_path, as_attachment=False)
     
     # Otherwise, look up the brand in the database
     db = get_brand_logo_db()
     brand_key = brand_slug(brand_name)  # Normalize to database key format
     
     if brand_key in db.get("brands", {}):
-        logo_file = db["brands"][brand_key].get("logo_file")
+        logo_file = (db["brands"][brand_key].get("logo_file") or "").strip()
         if logo_file:
-            path = (BRAND_LOGOS_DIR / logo_file).resolve()
-            if path.exists() and path.is_file():
-                return send_file(path, as_attachment=False)
+            # Normalize optional "brand_logos/" prefix and treat remaining
+            # portion as a path relative to BRAND_LOGOS_DIR.
+            if logo_file.startswith("brand_logos/"):
+                rel = logo_file.split("/", 1)[1]
+            else:
+                rel = logo_file
+            logo_path = (BRAND_LOGOS_DIR / rel).resolve()
+            if logo_path.exists() and logo_path.is_file():
+                return send_file(logo_path, as_attachment=False)
     
-    # Fallback: try case-insensitive filename match
-    for file in BRAND_LOGOS_DIR.glob("*"):
-        if file.stem.lower() == brand_name.lower():
-            return send_file(file, as_attachment=False)
+    # Fallback: try case-insensitive filename match anywhere under
+    # BRAND_LOGOS_DIR (supports nested verified/unverified folders).
+    for file in BRAND_LOGOS_DIR.rglob("*"):
+        if file.is_file() and file.stem.lower() == brand_name.lower():
+            return send_file(file.resolve(), as_attachment=False)
     
     abort(404)
 

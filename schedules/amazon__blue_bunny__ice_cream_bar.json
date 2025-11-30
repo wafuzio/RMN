@@ -1,0 +1,28 @@
+{
+  "id": "amazon_blue_bunny_ice_cream_bar_7399dc31",
+  "retailer": "amazon",
+  "client": "blue bunny",
+  "keywords": [
+    "ice cream bar"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "08:25",
+    "12:25",
+    "16:15",
+    "17:05",
+    "20:05"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-11-25T04:53:11Z",
+  "updated_at": "2025-11-25T04:53:11Z"
+}

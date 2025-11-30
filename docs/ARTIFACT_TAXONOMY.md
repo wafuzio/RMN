@@ -27,6 +27,32 @@ brand_logos/                    # At project root (sibling to output/)
 - **Database tracking**: JSON tracks URLs, retailers, first/last seen dates
 - **Automatic enrichment**: Logo paths added to ad JSON via `brand_logo` field (relative to project root)
 
+## Brand Canonicalization
+
+All brand names are canonicalized via `core/brands.py` using a three-tier matching strategy:
+
+**Matching Order:**
+1. **Exact match** - Direct lookup in `config/brands.json` canonical names
+2. **Phrase match** - Multi-word substring matching against synonyms (e.g., "Save on Blue Pet Foods" → "Blue Buffalo")
+3. **Fuzzy token match** - Individual word matching with `difflib.get_close_matches` (cutoff=0.85)
+   - **Critical:** Ignores short tokens (≤4 chars) to prevent generic word collisions
+   - Example: "blue" is skipped to avoid "Blue Pet Foods" → "Bluey" mismatch
+
+**Synonym Types in brands.json:**
+- Plain brand names: `"BlueBunny"`, `"Blue-Bunny"`
+- Full message phrases: `"MSG:Serve Up Sweet Pairings. Top holiday treats..."`
+- Campaign codes: `"F25May262025May31TOAAlwaysOn"`
+
+**Common Issues:**
+- **Short token collisions**: Generic words like "blue", "new", "red" can match multiple brands
+  - **Fix**: Add full-phrase synonyms; fuzzy matching now skips tokens ≤4 chars
+- **Unknown brands**: Ad has advertiser but not in lexicon
+  - **Fix**: Use Brand Review Tool to add to `brands.json`
+- **Mislabeled brands**: Wrong brand assigned during rebuild
+  - **Fix**: Use brand-specific repair scripts (see `tools/fix_bluey_rebuild_labels.py`)
+
+**See:** `core/brands.py`, `config/brands.json`, `docs/COMMON_ISSUES.md` → Brand canonicalization
+
 ### Kroger
 ```
 output/kroger/<client>/
@@ -189,7 +215,7 @@ Each retailer outputs different JSON structures, requiring retailer-specific cod
 - ✅ Nested runs structure: `output/walmart/<client>/runs/<run_id>/run_results_<run_id>.json`
 - **Status**: Production-ready, fully compliant with canonical schema
 
-**⚠️ Kroger** (`kroger_search_and_capture.py`) - **LEGACY FORMAT**:
+**⚠️ Kroger** (`kroger_search_and_capture.py`) - **LEGACY FORMAT** (repair tools available):
 - ❌ Uses nested `results[].ads[]` structure (not flat `ads[]`)
 - ❌ Missing top-level: `client`, `run_id`
 - ❌ Timestamp not ISO 8601 with timezone
@@ -197,6 +223,12 @@ Each retailer outputs different JSON structures, requiring retailer-specific cod
 - ✅ Saves images to ad-type folders (TOA/, Skyscraper/, Carousel/)
 - ✅ Ad structure has: `type`, `message`, `description`, `cta`, `image_url`, `href`, `advertisers`
 - ℹ️ JSON type `CuratedCarousel` maps to `Carousel/` folder (explicit mapping)
+- ✅ **Repair tools available (Nov 2025):**
+  - `tools/rebuild_kroger_images_from_archive.py` - Regenerate missing images offline from archived HTML
+  - `tools/repair_kroger_image_paths.py` - Backfill missing `image_path` fields where PNGs exist
+  - Brand-specific repair scripts for known mislabelings (Blue Buffalo/Bluey, Blue Bunny/Unknown)
+  - **Common issue:** `image_path` missing despite PNGs existing (extractor URL/structure mismatch)
+  - **Fix pattern:** Run repair tool → rebuild brand index → verify in dashboard
 - **Needs**: Flatten to canonical schema, add missing fields, ISO timestamps
 
 **⚠️ Instacart** (`instacart_search_and_capture.py`) - **LEGACY FORMAT**:
@@ -247,5 +279,14 @@ When updating a scraper:
 - `utils/path_taxonomy.py` - Defines allowed folders per retailer
 - `filename_utils.py` - Generates standardized filenames
 - `brand_logo_database.py` - Manages centralized brand logo database
+- `core/brands.py` - Brand canonicalization logic (exact → phrase → fuzzy matching)
+- `config/brands.json` - Canonical brand names and synonyms
 - `scripts/deduplicate_brand_logos.py` - Cleanup utility for existing logos
+- `tools/build_brand_index.py` - Rebuild brand index from all run JSONs
 - `docs/RETAILER_ONBOARDING_CHECKLIST.md` - Full onboarding guide
+
+**Repair Tools:**
+- `tools/rebuild_kroger_images_from_archive.py` - Offline image regeneration
+- `tools/repair_kroger_image_paths.py` - Backfill missing image_path fields
+- `tools/fix_bluey_rebuild_labels.py` - Fix Blue Buffalo/Bluey mislabeling
+- `tools/repair_blue_bunny_sweet_pairings.py` - Fix Blue Bunny Unknown ads

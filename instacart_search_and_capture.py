@@ -543,6 +543,11 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     '--window-size=1920,1080',  # Force initial outer window size
                     '--force-device-scale-factor=1',  # Force DPR
                     '--high-dpi-support=1',
+                    # Focus prevention - don't steal focus from user's active window
+                    '--no-startup-window',
+                    '--silent-launch',
+                    '--disable-focus-on-load',
+                    '--noerrdialogs',
                 ],
             )
             

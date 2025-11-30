@@ -16,6 +16,7 @@ import { handleProxyImage } from "./routes/proxy-image";
 import { handlePlaceholderAd } from "./routes/placeholder";
 import { handleImageProxy } from "./routes/image";
 import { handleVideoProxy } from "./routes/video";
+import { handleListSnapshots, handleGetSnapshot } from "./routes/snapshots";
 
 // Wrapper for regex route to extract ID from path
 const handlePlaceholderAdRegex: RequestHandler = (req, res, next) => {
@@ -89,6 +90,16 @@ export function createServer() {
   app.get("/api/brands", handleBrands);
   app.get("/api/brand-details", handleBrandDetails);
   app.get("/api/timeline", handleTimeline);
+
+  // Snapshots API routes
+  app.get("/api/snapshots", handleListSnapshots);
+  app.get(/^\/api\/snapshot\/([^/]+)\/([^/]+)\/(\d{4}-\d{2}-\d{2})\/(.+)$/, (req, res, next) => {
+    req.params.retailer = req.params[0];
+    req.params.pageType = req.params[1];
+    req.params.date = req.params[2];
+    req.params.time = req.params[3];
+    return handleGetSnapshot(req, res, next);
+  });
 
   return app;
 }

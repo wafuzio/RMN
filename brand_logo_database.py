@@ -25,16 +25,23 @@ class BrandLogoDatabase:
             base_dir: Base directory for the project (defaults to script directory)
         """
         if base_dir is None:
-            base_dir = Path(__file__).parent
+            # Default to project root (two levels up from this file) so that
+            # logos live under output/brand_logos like the rest of the stack.
+            base_dir = Path(__file__).resolve().parents[1]
         else:
             base_dir = Path(base_dir)
         
         self.base_dir = base_dir
-        self.logos_dir = base_dir / "brand_logos"
+        # Canonical on-disk location for logos
+        self.logos_dir = base_dir / "output" / "brand_logos"
         self.db_file = self.logos_dir / "brand_logo_database.json"
         
-        # Create directories
+        # Create directories (root plus verified/unverified buckets)
         self.logos_dir.mkdir(exist_ok=True)
+        self.verified_dir = self.logos_dir / "verified"
+        self.unverified_dir = self.logos_dir / "unverified"
+        self.verified_dir.mkdir(exist_ok=True)
+        self.unverified_dir.mkdir(exist_ok=True)
         
         # Load existing database
         self.database = self._load_database()
@@ -68,8 +75,12 @@ class BrandLogoDatabase:
         return brand.lower().replace("'", "").replace("&", "and").replace(".", "").replace(" ", "_").strip()
     
     def _find_next_logo_number(self, brand_key: str, ext: str) -> int:
-        """Find the next available number for a brand logo"""
-        existing_files = list(self.logos_dir.glob(f"{brand_key}*.{ext}"))
+        """Find the next available number for a brand logo.
+
+        Checks across all existing logo locations (root and subdirectories)
+        to avoid reusing a number.
+        """
+        existing_files = list(self.logos_dir.rglob(f"{brand_key}*.{ext}"))
         if not existing_files:
             return 1
         
@@ -126,7 +137,7 @@ class BrandLogoDatabase:
                     ext = 'webp'
             
             # Check if this exact image content already exists for this brand
-            existing_files = list(self.logos_dir.glob(f"{brand_key}*.{ext}"))
+            existing_files = list(self.logos_dir.rglob(f"{brand_key}*.{ext}"))
             for existing_file in existing_files:
                 existing_hash = hashlib.md5(existing_file.read_bytes()).hexdigest()
                 if existing_hash == content_hash:
@@ -141,13 +152,17 @@ class BrandLogoDatabase:
             else:
                 filename = f"{brand_key}_{logo_number}.{ext}"
             
-            filepath = self.logos_dir / filename
+            # New downloads are treated as unverified by default and saved
+            # under the unverified/ bucket.
+            filepath = self.unverified_dir / filename
             
             # Save image
             with open(filepath, 'wb') as f:
                 f.write(response.content)
             
-            return f"brand_logos/{filename}"
+            # Store path relative to the logo root; the Flask server and
+            # tooling can resolve this under output/brand_logos.
+            return f"unverified/{filename}"
         
         except Exception as e:
             print(f"Warning: Could not download logo from {url}: {e}")

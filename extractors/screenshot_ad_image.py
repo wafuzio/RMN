@@ -181,21 +181,38 @@ def _derive_client(args: argparse.Namespace, image_urls: List[Dict[str, Any]]) -
     if args.client:
         return _sanitize(args.client)
 
-    # Priority 2: derive from --output path (handles .../output/<client>/runs/<ts>)
+    # Priority 2: derive from --output path
+    # Handles both old (.../output/<client>) and new (.../output/<retailer>/<client>) layouts
     try:
         outp = os.path.normpath(args.output or '')
         if outp:
+            parts = outp.split(os.sep)
+            try:
+                idx = parts.index("output")
+                # New layout: output/<retailer>/<client>/...
+                if idx + 2 < len(parts) and parts[idx + 1] not in ('runs', ''):
+                    # Check if parts[idx+1] looks like a retailer (kroger, walmart, etc.)
+                    potential_retailer = parts[idx + 1].lower()
+                    known_retailers = {'kroger', 'walmart', 'amazon', 'instacart', 'target', 'albertsons'}
+                    if potential_retailer in known_retailers:
+                        client = parts[idx + 2]
+                        if client and client not in ('runs', 'output', ''):
+                            return _sanitize(client)
+                # Old layout: output/<client>/...
+                if idx + 1 < len(parts):
+                    client = parts[idx + 1]
+                    if client and client not in ('runs', 'output', ''):
+                        return _sanitize(client)
+            except ValueError:
+                pass
+            
+            # Fallback: basename logic for runs/ paths
             base = os.path.basename(outp)
             parent = os.path.basename(os.path.dirname(outp))
-            # .../output/<client>/runs/<ts>
             if parent == 'runs':
                 client = os.path.basename(os.path.dirname(os.path.dirname(outp)))
                 if client and client != 'output':
                     return _sanitize(client)
-            # .../output/<client>
-            gp = os.path.basename(os.path.dirname(outp))
-            if gp == 'output' and base and base != 'output':
-                return _sanitize(base)
     except Exception:
         pass
 
@@ -204,6 +221,18 @@ def _derive_client(args: argparse.Namespace, image_urls: List[Dict[str, Any]]) -
         if image_urls:
             sf = image_urls[0].get('source_file') or ''
             if sf:
+                # Try new layout first
+                parts = os.path.normpath(sf).split(os.sep)
+                try:
+                    idx = parts.index("output")
+                    known_retailers = {'kroger', 'walmart', 'amazon', 'instacart', 'target', 'albertsons'}
+                    if idx + 2 < len(parts) and parts[idx + 1].lower() in known_retailers:
+                        client = parts[idx + 2]
+                        if client and client not in ('runs', 'output', ''):
+                            return _sanitize(client)
+                except ValueError:
+                    pass
+                # Fallback
                 cand = os.path.basename(os.path.dirname(os.path.normpath(sf)))
                 if cand and cand != 'output':
                     return _sanitize(cand)
@@ -265,7 +294,20 @@ def extract_image_urls_from_json(
     html_file_norm = _normalize_path(html_file) if html_file else None
 
     # Walk results
-    for result in (data.get("results") or []):
+    results_iter = data.get("results") or []
+    if not results_iter:
+        ads_top = data.get("ads") or []
+        if isinstance(ads_top, list) and ads_top:
+            pseudo_result = {
+                "timestamp": data.get("timestamp", ""),
+                "source_file": html_file or data.get("source_file", ""),
+                "search_term": data.get("search_term", data.get("keyword", "unknown")),
+                "keyword": data.get("keyword", "unknown"),
+                "ads": ads_top,
+            }
+            results_iter = [pseudo_result]
+
+    for result in results_iter:
         # Time window gating (only if not using a specific html target)
         if cutoff_time is not None:
             ts_str = result.get("timestamp", "")
@@ -372,9 +414,18 @@ def update_json_with_image_paths(json_file: str, image_urls: List[Dict[str, Any]
         image_url = img_info.get('url', '')
         saved_path = img_info['saved_image_path']
         
-        # Create a key to match ads (type + position + url)
-        key = (ad_type, position, image_url)
-        path_map[key] = saved_path
+        # Create keys to match ads (type + position + url)
+        key_full = (ad_type, position, image_url)
+        path_map[key_full] = saved_path
+
+        # Also support Kroger-style relative URLs stored in JSON (e.g., /content/...) 
+        if isinstance(image_url, str):
+            idx = image_url.find("/content/")
+            if idx != -1:
+                rel_url = image_url[idx:]
+                key_rel = (ad_type, position, rel_url)
+                if key_rel not in path_map:
+                    path_map[key_rel] = saved_path
     
     if not path_map:
         print("⚠️ No saved paths to update")
@@ -402,6 +453,39 @@ def update_json_with_image_paths(json_file: str, image_urls: List[Dict[str, Any]
                 # Convert absolute path to relative: /path/to/output/kroger/client/TOA/file.png -> TOA/file.png
                 try:
                     # Extract just the last 2-3 parts (ad_type/filename or client/ad_type/filename)
+                    parts = saved_path.split(os.sep)
+                    if 'TOA' in parts:
+                        idx = parts.index('TOA')
+                        relative_path = os.sep.join(parts[idx:])
+                    elif 'Skyscraper' in parts:
+                        idx = parts.index('Skyscraper')
+                        relative_path = os.sep.join(parts[idx:])
+                    elif 'Carousel' in parts:
+                        idx = parts.index('Carousel')
+                        relative_path = os.sep.join(parts[idx:])
+                    else:
+                        relative_path = os.path.basename(saved_path)
+                except Exception:
+                    relative_path = os.path.basename(saved_path)
+                
+                ad[field_name] = relative_path
+                updated_count += 1
+                print(f"  ✓ Updated {ad_type} ad (position {position}): {field_name} = {relative_path}")
+
+    top_ads = data.get('ads')
+    if isinstance(top_ads, list):
+        for ad in top_ads:
+            ad_type = ad.get('type')
+            position = ad.get('position')
+            image_url = ad.get('image_url', '')
+            
+            key = (ad_type, position, image_url)
+            if key in path_map:
+                saved_path = path_map[key]
+                
+                field_name = 'image_path'
+                
+                try:
                     parts = saved_path.split(os.sep)
                     if 'TOA' in parts:
                         idx = parts.index('TOA')
@@ -518,12 +602,13 @@ def process_images(
                             "--no-first-run",
                             "--no-default-browser-check",
                             "--disable-session-crashed-bubble",
-                            # Minimize window to avoid user seeing flash (headed mode for CDN)
-                            "--start-minimized",
-                            "--window-position=0,0",
-                            "--window-size=10,10",
                             "--disable-renderer-backgrounding",
                             "--disable-backgrounding-occluded-windows",
+                            # Focus prevention - don't steal focus from user's active window
+                            "--no-startup-window",
+                            "--silent-launch",
+                            "--disable-focus-on-load",
+                            "--noerrdialogs",
                         ],
                     )
                     page = context.pages[0] if context.pages else context.new_page()

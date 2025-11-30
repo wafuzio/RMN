@@ -6,23 +6,16 @@
     "jenis ice cream"
   ],
   "days": [
-    "friday",
-    "monday",
     "saturday",
-    "sunday",
-    "thursday",
-    "tuesday",
-    "wednesday"
+    "sunday"
   ],
   "times": [
-    "08:00",
-    "12:00",
-    "16:00",
-    "22:45",
-    "23:45"
+    "08:05",
+    "12:05",
+    "16:05"
   ],
   "enabled": true,
   "tz": "",
   "created_at": "2025-10-22T03:51:29Z",
-  "updated_at": "2025-10-22T03:51:29Z"
+  "updated_at": "2025-11-25T04:46:44Z"
 }

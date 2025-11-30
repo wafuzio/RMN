@@ -8,6 +8,23 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from "@/lib/utils";
 import { useAds } from "@/hooks/useRetailAds";
 
+// Ad type groups configuration
+const AD_TYPE_GROUPS = {
+  "Video Ads": ["SBV", "Sponsored_Brand_Video", "Shoppable_Video_Ad"],
+  "Banner Ads": ["TOA", "Listing_Page_Banner_Ad", "Shoppable_Display_Ad"],
+  "Display Ads": ["Sponsored_Display"],
+  "Carousel Ads": ["Sponsored_Carousel", "Curated_Carousel"],
+  "Ad Tiles": ["Sponsored_Brand_Cards", "Skyscraper", "Tile_Takeover"],
+} as const;
+
+// Create reverse mapping: ad type -> group name
+const AD_TYPE_TO_GROUP = Object.entries(AD_TYPE_GROUPS).reduce((acc, [group, types]) => {
+  types.forEach(t => {
+    acc[t] = group;
+  });
+  return acc;
+}, {} as Record<string, string>);
+
 // Helper to format client names for display
 const formatClientName = (client: string): string => {
   return client
@@ -345,26 +362,67 @@ export function Filters({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="p-0 w-[320px]" align="start">
-            <div className="p-3 space-y-2 max-h-[400px] overflow-y-auto">
+            <div className="p-3 space-y-3 max-h-[400px] overflow-y-auto">
               {types.length === 0 ? (
                 <div className="text-sm text-gray-500 py-4 text-center">No ad types available</div>
               ) : (
-                types.map((t) => (
-                  <label key={t} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer">
-                    <Checkbox
-                      checked={selectedTypes.has(t)}
-                      onCheckedChange={(checked) => {
-                        const next = new Set(value.types);
-                        if (checked) next.add(t); else next.delete(t);
-                        const newTypes = Array.from(next);
-                        console.log('🔍 Ad type changed:', t, 'checked:', checked, 'newTypes:', newTypes);
-                        onChange({ ...value, types: newTypes });
-                      }}
-                      aria-label={`toggle ${t}`}
-                    />
-                    <span className="text-sm">{formatAdTypeName(t)}</span>
-                  </label>
-                ))
+                Object.entries(AD_TYPE_GROUPS).map(([groupName, groupTypes]) => {
+                  // Filter to only show groups that have available types
+                  const availableInGroup = groupTypes.filter(t => types.includes(t));
+                  if (availableInGroup.length === 0) return null;
+
+                  // Check how many items in this group are selected
+                  const selectedInGroup = availableInGroup.filter(t => selectedTypes.has(t)).length;
+                  const isGroupFullySelected = selectedInGroup === availableInGroup.length;
+                  const isGroupPartiallySelected = selectedInGroup > 0 && selectedInGroup < availableInGroup.length;
+
+                  return (
+                    <div key={groupName} className="space-y-1">
+                      {/* Group header - clickable to select/deselect all in group */}
+                      <label className="flex items-center gap-2 p-2 rounded hover:bg-blue-50 cursor-pointer bg-gray-50 border-l-2 border-gray-300">
+                        <Checkbox
+                          checked={isGroupFullySelected}
+                          ref={(el) => {
+                            if (el && isGroupPartiallySelected) {
+                              el.indeterminate = true;
+                            }
+                          }}
+                          onCheckedChange={(checked) => {
+                            const next = new Set(value.types);
+                            if (checked) {
+                              // Add all items in this group
+                              availableInGroup.forEach(t => next.add(t));
+                            } else {
+                              // Remove all items in this group
+                              availableInGroup.forEach(t => next.delete(t));
+                            }
+                            onChange({ ...value, types: Array.from(next) });
+                          }}
+                          aria-label={`toggle ${groupName}`}
+                        />
+                        <span className="text-sm font-semibold text-gray-700">{groupName}</span>
+                      </label>
+
+                      {/* Group items */}
+                      <div className="space-y-1 pl-4">
+                        {availableInGroup.map((t) => (
+                          <label key={t} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer">
+                            <Checkbox
+                              checked={selectedTypes.has(t)}
+                              onCheckedChange={(checked) => {
+                                const next = new Set(value.types);
+                                if (checked) next.add(t); else next.delete(t);
+                                onChange({ ...value, types: Array.from(next) });
+                              }}
+                              aria-label={`toggle ${t}`}
+                            />
+                            <span className="text-sm text-gray-600">{formatAdTypeName(t)}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           </PopoverContent>

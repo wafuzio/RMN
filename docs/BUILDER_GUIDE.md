@@ -581,6 +581,74 @@ Your scraper data doesn't include brand information. This is a data issue, not a
 1. Update your scraper to extract brand names
 2. Re-run scrapes to collect new data
 
+### Kroger Data Issues
+
+#### Many ads show "Unknown" brand
+**Cause:** Brand canonicalization failed or image rebuild used incorrect brand.
+
+**Fix:**
+1. **Check if raw data has brand:**
+   ```bash
+   cat output/kroger/<client>/runs/run_results_*.json | jq '.ads[] | select(.advertisers)'
+   ```
+
+2. **If brand exists in raw JSON but missing in aggregated:**
+   - Brand was lost during aggregation or rebuild
+   - Use repair scripts to fix specific creatives:
+   ```bash
+   python tools/repair_blue_bunny_sweet_pairings.py
+   python tools/build_brand_index.py
+   ```
+
+3. **If brand missing in raw JSON:**
+   - Scraper didn't extract advertiser
+   - Re-run scrape or use Brand Review Tool to manually tag
+
+#### Images missing despite files existing
+**Cause:** `image_path` field not wired into JSON during extraction.
+
+**Symptoms:**
+- PNG files exist in TOA/, Skyscraper/, Carousel/ folders
+- Dashboard shows "No image" placeholder
+- JSON has `image_url` but no `image_path`
+
+**Fix:**
+```bash
+# Backfill missing image_path fields
+python tools/repair_kroger_image_paths.py
+
+# Regenerate missing images from archive
+python tools/rebuild_kroger_images_from_archive.py
+
+# Rebuild brand index
+python tools/build_brand_index.py
+```
+
+**Verification:**
+```bash
+# Check if image_path exists in JSON
+cat output/kroger/<client>/runs/run_results_*.json | jq '.ads[] | select(.image_path)'
+
+# Check if PNG files exist
+find output/kroger/<client> -name "*.png" -type f
+
+# Compare counts
+echo "JSON ads with image_path:"
+cat output/kroger/<client>/runs/run_results_*.json | jq '[.ads[] | select(.image_path)] | length'
+echo "PNG files on disk:"
+find output/kroger/<client> -name "*.png" -type f | wc -l
+```
+
+**Common scenarios:**
+- **Scenario 1:** PNGs exist, JSON has no `image_path`
+  - **Fix:** `python tools/repair_kroger_image_paths.py`
+- **Scenario 2:** No PNGs, JSON has `image_url`
+  - **Fix:** `python tools/rebuild_kroger_images_from_archive.py`
+- **Scenario 3:** Brand mislabeled (e.g., "Bluey" instead of "Blue Buffalo")
+  - **Fix:** `python tools/fix_bluey_rebuild_labels.py`
+
+**See:** `docs/COMMON_ISSUES.md` → Kroger image paths missing
+
 #### Vite running on wrong port
 If Vite starts on 3001 instead of 3000:
 ```bash

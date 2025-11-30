@@ -4,13 +4,20 @@ interface RetailerLogoProps {
   alt?: string;
 }
 
-const RETAILER_LOGO_URLS: Record<string, string> = {
-  instacart: "https://cdn.builder.io/api/v1/image/assets%2F856cf3d807e24856a8ddedcb12249a98%2F1c902f9d5339441f90cf514dd0bacd92",
-  kroger: "https://cdn.builder.io/api/v1/image/assets%2F856cf3d807e24856a8ddedcb12249a98%2Fcb0a59f99e9a4e82ae96201c8b6682ab",
+const RETAILER_LOGO_HEIGHTS: Record<string, number> = {
+  albertsons: 49,
+  food_lion: 58,
+  gopuff: 40,
+  doordash: 45,
+  meijer: 50,
+  hyvee: 55,
+  ulta: 56,
 };
 
 export function RetailerLogo({ retailer, className = "h-8 w-auto", alt }: RetailerLogoProps) {
-  const logoUrl = RETAILER_LOGO_URLS[retailer.toLowerCase()] || `/api/logo/${retailer.toLowerCase()}`;
+  const logoUrl = `/api/logo/${retailer.toLowerCase()}`;
+  const isFromSelector = className.includes('h-16');
+  const heightPx = isFromSelector ? (RETAILER_LOGO_HEIGHTS[retailer.toLowerCase()] || 64) : undefined;
 
   return (
     <img
@@ -19,7 +26,7 @@ export function RetailerLogo({ retailer, className = "h-8 w-auto", alt }: Retail
       className={`${className} object-contain`}
       crossOrigin="anonymous"
       referrerPolicy="no-referrer"
-      style={{ maxHeight: '100%', maxWidth: '100%', display: 'block' }}
+      style={{ display: 'block', ...(heightPx && { height: `${heightPx}px`, width: 'auto' }) }}
       onError={(e) => {
         const target = e.target as HTMLImageElement;
         target.style.display = 'none';

@@ -90,8 +90,9 @@ def get_output_root():
 def get_profile_dir(retailer: str, cli_profile: str = None):
     """Resolve profile directory for retailer.
     
-    Uses a SEPARATE profile from the main scraper to avoid conflicts when both
-    run simultaneously. Front page captures use *_frontpage_profile directories.
+    For bot-protected sites (Kroger, Walmart, Target), we use the MAIN scraper profile
+    which has established session cookies. Fresh profiles get blocked.
+    For other sites (Amazon, Instacart), we use dedicated frontpage profiles.
     """
     # Priority 1: CLI argument
     if cli_profile and Path(cli_profile).is_dir():
@@ -102,8 +103,36 @@ def get_profile_dir(retailer: str, cli_profile: str = None):
     if os.getenv(env_var) and Path(os.getenv(env_var)).is_dir():
         return os.getenv(env_var)
     
-    # Priority 3: ~/ChromeProfiles/<retailer>_frontpage_profile (dedicated for screenshots)
     chrome_profiles = Path.home() / "ChromeProfiles"
+    
+    # Priority 3: For bot-protected sites, use dedicated frontpage profile
+    # These need to be seeded from the main scraper profile once to have session cookies
+    # Run: cp -r ~/ChromeProfiles/kroger_clean_profile ~/ChromeProfiles/kroger_frontpage_profile
+    if retailer in ('kroger', 'walmart', 'target'):
+        frontpage_profile = chrome_profiles / f"{retailer}_frontpage_profile"
+        if frontpage_profile.exists():
+            return str(frontpage_profile)
+        # Fallback to main profile only if frontpage profile doesn't exist
+        main_profile_names = {
+            'kroger': 'kroger_clean_profile',
+            'walmart': 'walmart_clean2', 
+            'target': 'target_profile',
+        }
+        main_profile = chrome_profiles / main_profile_names.get(retailer, f"{retailer}_profile")
+        if main_profile.exists():
+            # Auto-clone the main profile for frontpage use
+            import shutil
+            print(f"[{retailer}] Cloning main profile to frontpage profile...")
+            shutil.copytree(str(main_profile), str(frontpage_profile), dirs_exist_ok=True)
+            # Remove lock files from the clone
+            for lock in ['SingletonLock', 'SingletonCookie', 'SingletonSocket']:
+                lock_path = frontpage_profile / lock
+                if lock_path.exists() or lock_path.is_symlink():
+                    lock_path.unlink()
+            print(f"[{retailer}] Created frontpage profile from main profile")
+            return str(frontpage_profile)
+    
+    # Priority 4: ~/ChromeProfiles/<retailer>_frontpage_profile (dedicated for screenshots)
     if chrome_profiles.is_dir():
         frontpage_profile = chrome_profiles / f"{retailer}_frontpage_profile"
         # Create if it doesn't exist - front page captures don't need login state
@@ -640,7 +669,7 @@ def capture_fullpage_cdp(context, page, output_path: Path, retailer: str = None)
     try:
         vh = page.evaluate("() => window.innerHeight")
         doc_h = page.evaluate("() => document.body.scrollHeight")
-        step = int(vh * 0.7)
+        step = int(vh * 0.4)  # Smaller steps = more positions for images to hydrate
         
         # Scroll down to trigger lazy loading
         y = 0
@@ -789,8 +818,8 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
                 'chromium_sandbox': True,  # CRITICAL: Force sandbox ON
             }
             
-            # Use real Chrome for PX-protected sites
-            use_real_chrome = retailer in ('walmart', 'target')
+            # Use real Chrome for bot-protected sites (Walmart, Target, Kroger)
+            use_real_chrome = retailer in ('walmart', 'target', 'kroger')
             if use_real_chrome:
                 launch_options['channel'] = 'chrome'
                 print(f"[{retailer}] Launching real Chrome...")
@@ -885,6 +914,62 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
                     }
                 """)
                 page.wait_for_timeout(300)
+                
+                # Scroll through page to trigger lazy-loaded images
+                print(f"[{retailer}] Scrolling to trigger lazy-load images...")
+                page.evaluate("""
+                    async () => {
+                        const delay = ms => new Promise(r => setTimeout(r, ms));
+                        const viewportHeight = window.innerHeight;
+                        const totalHeight = document.body.scrollHeight;
+                        
+                        // Scroll down in small chunks (40% viewport) to ensure all images enter viewport
+                        for (let y = 0; y < totalHeight; y += viewportHeight * 0.4) {
+                            window.scrollTo(0, y);
+                            await delay(300);  // Wait for images in viewport to start loading
+                        }
+                        
+                        // Scroll to bottom
+                        window.scrollTo(0, totalHeight);
+                        await delay(400);
+                        
+                        // Scroll back to top
+                        window.scrollTo(0, 0);
+                        await delay(300);
+                    }
+                """)
+                
+                # Now wait for all images to finish loading
+                print(f"[{retailer}] Waiting for images to finish loading...")
+                page.evaluate("""
+                    () => {
+                        return new Promise((resolve) => {
+                            const images = document.querySelectorAll('img');
+                            let loaded = 0;
+                            const total = images.length;
+                            if (total === 0) { resolve(); return; }
+                            
+                            const checkDone = () => {
+                                loaded++;
+                                if (loaded >= total) resolve();
+                            };
+                            
+                            images.forEach(img => {
+                                if (img.complete) {
+                                    checkDone();
+                                } else {
+                                    img.addEventListener('load', checkDone);
+                                    img.addEventListener('error', checkDone);
+                                }
+                            });
+                            
+                            // Timeout after 5 seconds
+                            setTimeout(resolve, 5000);
+                        });
+                    }
+                """)
+                print(f"[{retailer}] Images hydrated")
+                page.wait_for_timeout(1000)  # Final settle
             
             elif retailer == "target":
                 # Target needs extra time for hydration - wait for key elements

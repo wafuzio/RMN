@@ -55,12 +55,12 @@ function normalizeUrl(raw?: string): string {
 }
 
 function buildKey(ad: AdCardItem): string {
-  // Group by brand + message for all retailers
+  // Group by brand + message + ad_type for all retailers
   // This works better than image URL since:
   // - Instacart generates unique filenames per scrape
   // - Other retailers may have cache-busting params or CDN variations
   // - Brand + message is the actual semantic identity of the ad
-  
+
   // Normalize message: remove extra whitespace, sort words for consistency
   const normalizedMessage = (ad.message || '')
     .toLowerCase()
@@ -69,10 +69,10 @@ function buildKey(ad: AdCardItem): string {
     .filter(w => w.length > 0)
     .sort()
     .join(' ');
-  
+
   const parts = [
     ad.retailer || '',
-    ad.ad_type || '',
+    ad.ad_type || '', // Groups stay pure by ad_type
     ad.client || '',
     ad.brand || '',
     normalizedMessage,
@@ -92,29 +92,30 @@ function hashKey(s: string): string {
 }
 
 export function aggregateAds(ads: AdCardItem[]): AdGroup[] {
-  // First, deduplicate exact duplicates (same brand, message, timestamp)
+  // First, deduplicate exact duplicates (same brand, message, timestamp, ad_type)
   // This handles backend duplicates that slip through
   const dedupeMap = new Map<string, AdCardItem>();
   for (const ad of ads) {
     const dedupeKey = [
       ad.retailer,
       ad.client,
+      ad.ad_type,
       ad.brand,
       ad.message?.toLowerCase().trim(),
       ad.timestamp,
     ].join('|');
-    
+
     // Keep first occurrence, skip duplicates
     if (!dedupeMap.has(dedupeKey)) {
       dedupeMap.set(dedupeKey, ad);
     }
   }
-  
+
   const dedupedAds = Array.from(dedupeMap.values());
   console.log(`[aggregateAds] Deduped ${ads.length} → ${dedupedAds.length} ads (removed ${ads.length - dedupedAds.length} exact duplicates)`);
-  
+
   const map = new Map<string, AdGroup>();
-  
+
   for (const ad of dedupedAds) {
     const media_key = buildKey(ad);
     if (!media_key) continue;
@@ -139,16 +140,16 @@ export function aggregateAds(ads: AdCardItem[]): AdGroup[] {
       };
       map.set(media_key, group);
     }
-    
+
     group.count += 1;
     group.instances.push(ad);
     group.timestamps.push(ad.timestamp);
-    
+
     // Track unique keywords
     if (ad.keyword && !group.keywords.includes(ad.keyword)) {
       group.keywords.push(ad.keyword);
     }
-    
+
     if (!group.last_seen || ad.timestamp > group.last_seen) group.last_seen = ad.timestamp;
     if (!group.first_seen || ad.timestamp < group.first_seen) group.first_seen = ad.timestamp;
   }

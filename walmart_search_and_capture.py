@@ -713,6 +713,11 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
         '--use-angle=metal',  # Force ANGLE→Metal backend on macOS
         '--enable-gpu-rasterization',  # Prefer GPU raster
         '--ignore-gpu-blocklist',  # Don't let Chrome silently disable GPU
+        # Focus prevention - don't steal focus from user's active window
+        '--no-startup-window',
+        '--silent-launch',
+        '--disable-focus-on-load',
+        '--noerrdialogs',
     ]
     
     if profile_dir:

@@ -3,5 +3,6 @@
   "setup": "python3 -m pip install -r requirements.txt",
   "serverUrl": "http://localhost:3000",
   "authenticateProxy": false,
-  "commitMode": "commits"
+  "commitMode": "commits",
+  "autoDetectDevServer": true
 }

@@ -632,7 +632,7 @@ def search_and_capture(keyword: str, output_dir: str, *, headless: bool = False)
                             continue
                         captured += 1
                         safeframe_htmls.append(sf_html)
-                        sf_path = runs_dir / f"safeframe_{run_id}_{captured}.html"
+                        sf_path = os.path.join(runs_dir, f"safeframe_{run_id}_{captured}.html")
                         try:
                             with open(sf_path, "w", encoding="utf-8") as f:
                                 f.write(sf_html)

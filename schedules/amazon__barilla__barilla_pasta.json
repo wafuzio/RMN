@@ -1,0 +1,26 @@
+{
+  "id": "amazon_barilla_barilla_pasta_1069f9ea",
+  "retailer": "amazon",
+  "client": "barilla",
+  "keywords": [
+    "barilla pasta",
+    "boxed pasta"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "08:15",
+    "12:15"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-11-25T00:12:37Z",
+  "updated_at": "2025-11-25T04:46:44Z"
+}

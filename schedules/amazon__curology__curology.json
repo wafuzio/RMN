@@ -1,5 +1,5 @@
 {
-  "id": "amazon_curology_curology_97f1c596",
+  "id": "amazon_curology_curology_8ab37ade",
   "retailer": "amazon",
   "client": "curology",
   "keywords": [
@@ -16,12 +16,14 @@
     "wednesday"
   ],
   "times": [
-    "08:00",
-    "12:00",
-    "16:00"
+    "08:45",
+    "12:45",
+    "16:35",
+    "17:25",
+    "20:25"
   ],
   "enabled": true,
   "tz": "",
-  "created_at": "2025-11-21T06:02:59Z",
-  "updated_at": "2025-11-21T06:02:59Z"
+  "created_at": "2025-11-25T00:13:11Z",
+  "updated_at": "2025-11-25T04:46:44Z"
 }

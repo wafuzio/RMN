@@ -224,6 +224,55 @@ def _extract_brand_and_message(container):
                                 brand = cand
     except Exception:
         pass
+
+    # Try store links and href-based patterns when brand is still missing
+    if not brand:
+        try:
+            store_link = container.locator('a[href*="/stores/"], a#bylineInfo').first
+            if store_link.count() > 0:
+                cand = ""
+                txt = (store_link.inner_text() or '').strip()
+                m = re.search(r"Visit\s+the\s+(.+?)\s+Store", txt, re.IGNORECASE)
+                if m:
+                    cand = m.group(1).strip()
+                else:
+                    href = (store_link.get_attribute('href') or '').strip()
+                    m2 = re.search(r"/stores/([^/?#]+)", href)
+                    if m2:
+                        cand = m2.group(1).replace('-', ' ').replace('_', ' ').strip()
+                if cand and not re.match(r"^[0-9.,]+$", cand):
+                    if not re.search(r"\breviews?\b", cand, re.IGNORECASE) \
+                       and not re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
+                       and not re.search(r"\brated\b", cand, re.IGNORECASE):
+                        brand = cand
+        except Exception:
+            pass
+
+    if not brand:
+        try:
+            prod_link = container.locator('a[href*="/dp/"], a[href*="/gp/"]').first
+            if prod_link.count() > 0:
+                href = (prod_link.get_attribute('href') or '').strip()
+                path = href.split('?', 1)[0]
+                m = re.search(r"/([^/]+)/dp/", path)
+                if m:
+                    slug = m.group(1).replace('-', ' ').replace('_', ' ').strip()
+                    tokens = slug.split()
+                    brand_tokens = []
+                    for tok in tokens:
+                        if any(ch.isdigit() for ch in tok):
+                            break
+                        brand_tokens.append(tok)
+                        if len(brand_tokens) >= 2:
+                            break
+                    cand = " ".join(brand_tokens).strip()
+                    if cand and not re.match(r"^[0-9.,]+$", cand):
+                        if not re.search(r"\breviews?\b", cand, re.IGNORECASE) \
+                           and not re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
+                           and not re.search(r"\brated\b", cand, re.IGNORECASE):
+                            brand = cand
+        except Exception:
+            pass
     # Canonicalize brand
     brand_canon = None
     try:
@@ -537,6 +586,11 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             "--disable-blink-features=AutomationControlled",
                             "--no-default-browser-check",
                             "--disable-features=IsolateOrigins,site-per-process",
+                            # Focus prevention - don't steal focus from user's active window
+                            "--no-startup-window",
+                            "--silent-launch",
+                            "--disable-focus-on-load",
+                            "--noerrdialogs",
                         ],
                     )
                 except Exception as e:
@@ -550,6 +604,11 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             "--disable-blink-features=AutomationControlled",
                             "--no-default-browser-check",
                             "--disable-features=IsolateOrigins,site-per-process",
+                            # Focus prevention - don't steal focus from user's active window
+                            "--no-startup-window",
+                            "--silent-launch",
+                            "--disable-focus-on-load",
+                            "--noerrdialogs",
                         ],
                     )
                 page = bctx.new_page()
@@ -1806,6 +1865,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 "module_id": module_id,
                                 "type": "Sponsored_Display",
                                 "subtype": "Display_Ad",
+                                "slot": "left_rail" if slot == "left" else ("bottom" if slot == "bottom" else "top"),
                                 "brand": brand_txt or "Unknown",
                                 "brand_logo": None,
                                 "title": message or None,
@@ -2214,6 +2274,11 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         "--disable-blink-features=AutomationControlled",
                         "--no-default-browser-check",
                         "--disable-features=IsolateOrigins,site-per-process",
+                        # Focus prevention - don't steal focus from user's active window
+                        "--no-startup-window",
+                        "--silent-launch",
+                        "--disable-focus-on-load",
+                        "--noerrdialogs",
                     ],
                 )
             except Exception as e:
@@ -2227,6 +2292,11 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         "--disable-blink-features=AutomationControlled",
                         "--no-default-browser-check",
                         "--disable-features=IsolateOrigins,site-per-process",
+                        # Focus prevention - don't steal focus from user's active window
+                        "--no-startup-window",
+                        "--silent-launch",
+                        "--disable-focus-on-load",
+                        "--noerrdialogs",
                     ],
                 )
             page = bctx.new_page()
@@ -2887,6 +2957,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             "module_id": module_id,
                             "type": "Sponsored_Display",
                             "subtype": "Left_Rail_Display",
+                            "slot": "left_rail",
                             "brand": brand_txt or "Unknown",
                             "brand_canonical": brand_canon,
                             "advertisers": [brand_canon] if brand_canon else [],
@@ -2999,6 +3070,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             "module_id": module_id,
                             "type": "Sponsored_Display",
                             "subtype": "Bottom_Display",
+                            "slot": "bottom",
                             "brand": brand_txt or "Unknown",
                             "brand_canonical": brand_canon,
                             "advertisers": [brand_canon] if brand_canon else [],

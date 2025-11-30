@@ -1,0 +1,28 @@
+{
+  "id": "target_cheesy_poofs_cheese_puffs_1764becf",
+  "retailer": "target",
+  "client": "cheesy poofs",
+  "keywords": [
+    "cheese puffs"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "08:40",
+    "12:40",
+    "16:30",
+    "17:20",
+    "20:20"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-11-25T00:13:01Z",
+  "updated_at": "2025-11-25T04:46:44Z"
+}

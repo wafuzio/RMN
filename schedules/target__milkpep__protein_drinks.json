@@ -1,0 +1,28 @@
+{
+  "id": "target_milkpep_protein_drinks_4b86322d",
+  "retailer": "target",
+  "client": "MilkPEP",
+  "keywords": [
+    "protein drinks",
+    "milk",
+    "protein powder"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "08:00",
+    "12:00",
+    "16:00"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2025-11-25T04:52:37Z",
+  "updated_at": "2025-11-25T04:52:37Z"
+}

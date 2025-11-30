@@ -819,6 +819,48 @@ capture_fullpage_static_no_resize(context, page, output_path)
 
 ---
 
+## Full-page screenshot has inconsistent width (header/footer wider than body)
+
+**Cause:** Large viewport (e.g., 1920x1080) causes responsive layouts to render header/footer at full width while body content uses a narrower max-width container.
+
+**Symptoms:**
+- Header and footer extend to full viewport width
+- Body content is narrower, creating visible margins
+- Screenshot looks unprofessional with inconsistent widths
+- Gray/white margins visible on sides of body content
+
+**Fix:** Use the same viewport size as the main scraper (1280x720):
+
+```python
+# Browser args - match main scraper viewport
+browser_args = [
+    "--disable-blink-features=AutomationControlled",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--window-size=1280,720",  # ← Critical: match viewport
+    # ... other args
+]
+
+# Launch with matching viewport
+context = p.chromium.launch_persistent_context(
+    user_data_dir=profile_dir,
+    headless=False,
+    viewport={"width": 1280, "height": 720},  # ← Must match window-size
+    device_scale_factor=1.0,
+    args=browser_args,
+)
+```
+
+**Why it works:**
+- 1280px is a common breakpoint where most sites render body at full width
+- Header/footer/body all render at same width
+- Matches what main scraper uses for search results pages
+- Consistent screenshots across all retailers
+
+**Applied to:** `scripts/screenshot_front_page.py` for front page captures
+
+---
+
 ## Ads don't load (viewability gates)
 
 **Cause:** Ad creative requires dwell time in viewport (600-1000ms) before mounting.
@@ -1012,6 +1054,203 @@ ad_data["ads"].append(ad_info)
 ```
 
 **See:** `docs/ARTIFACT_TAXONOMY.md` → JSON Schema Standardization
+
+---
+
+---
+
+## Kroger image paths missing despite files existing
+
+**Cause:** Screenshot extraction succeeded but failed to update JSON with `image_path` / `toa_image_path` / `skyscraper_image_path`.
+
+**Symptoms:**
+- PNG files exist in TOA/, Skyscraper/, Carousel/ folders
+- JSON ads have `image_url` but no `image_path`
+- Dashboard shows "No image" or placeholder
+- Aggregated JSONs missing image references
+- Per-run JSONs may have paths but aggregated files don't
+
+**Root Causes:**
+1. **Extractor path-wiring bug** - `update_json_with_image_paths()` in `extractors/screenshot_ad_image.py` failed to match ads
+2. **URL mismatch** - Extractor tried to match absolute Kroger CDN URLs (`https://www.kroger.com/content/...`) but JSON had relative URLs (`/content/...`)
+3. **JSON structure mismatch** - Extractor expected flat `ads[]` array, but Kroger uses nested `results[].ads[]`
+4. **Aggregation loss** - Per-run JSONs had paths, but aggregation process didn't preserve them
+
+**Context (Nov 2025):**
+- Discovered during Kroger MilkPEP/magic_spoon/Proactiv client review
+- Hundreds of TOA/Skyscraper PNGs existed but weren't referenced in JSON
+- Manual intervention unacceptable per user requirement
+- Created automated repair tools to fix existing data and prevent future occurrences
+
+**Fix:**
+Use repair tools to backfill missing paths:
+
+```bash
+# 1. Backfill image_path where PNGs exist (matches by filename metadata)
+python tools/repair_kroger_image_paths.py
+
+# 2. Regenerate missing images from archived HTML (offline extraction)
+python tools/rebuild_kroger_images_from_archive.py
+
+# 3. Fix specific brand mislabelings from rebuild
+python tools/fix_bluey_rebuild_labels.py  # Blue Buffalo → Bluey
+python tools/repair_blue_bunny_sweet_pairings.py  # Unknown → Blue Bunny
+
+# 4. Rebuild brand index to reflect changes
+python tools/build_brand_index.py
+```
+
+**How repair tools work:**
+
+1. **repair_kroger_image_paths.py:**
+   - Scans all Kroger client directories for orphaned PNGs
+   - Parses filename metadata (retailer, advertiser, ad_type, client, keyword, timestamp)
+   - Matches PNGs to JSON ads by ad_type + client + keyword + timestamp proximity
+   - Backfills `image_path` / `toa_image_path` / `skyscraper_image_path` fields
+   - Handles both per-run and aggregated JSON structures
+
+2. **rebuild_kroger_images_from_archive.py:**
+   - Scans for run JSONs with `image_url` but no `image_path`
+   - Finds corresponding archived HTML file
+   - Re-runs screenshot extraction offline (headed-but-hidden mode)
+   - Wires new image paths back into JSON
+   - Skips runs that already have images
+
+**Prevention:**
+- Fixed `extractors/screenshot_ad_image.py` to handle both aggregated and per-run JSON shapes
+- Match ads by both absolute CDN URLs and relative `/content/...` URLs
+- Update both top-level `ads[]` and nested `results[].ads[]` structures
+- Ensure aggregation process preserves `image_path` fields
+
+**Verification:**
+```bash
+# Check if image_path exists in JSON
+cat output/kroger/<client>/runs/run_results_*.json | jq '.ads[] | select(.image_path)'
+
+# Check if PNG files exist
+find output/kroger/<client> -name "*.png" -type f
+
+# Count orphaned images (PNGs without JSON references)
+python tools/repair_kroger_image_paths.py --dry-run
+```
+
+**See:** `tools/rebuild_kroger_images_from_archive.py`, `tools/repair_kroger_image_paths.py`, `extractors/screenshot_ad_image.py`
+
+---
+
+## Brand canonicalization misclassifies similar names
+
+**Cause:** Fuzzy token matching on short generic words (e.g., "blue") incorrectly matches distinct brands.
+
+**Symptoms:**
+- "Blue Pet Foods" → "Bluey" (should be "Blue Buffalo")
+- "Blue Bunny" ads showing as "Unknown"
+- Generic words like "blue", "red", "new" causing collisions
+- Different brands with similar words getting merged
+
+**Root Cause:**
+- Fuzzy matching (`difflib.get_close_matches`) operates on individual tokens
+- Short tokens (≤4 chars) like "blue" match multiple brands with high similarity scores
+- No distinction between generic words and brand-specific terms
+- Example: "blue" in "Blue Pet Foods" matches "Bluey" (4 chars, 75% similarity)
+
+**Context (Nov 2025):**
+- Discovered during Kroger Proactiv client review
+- Blue Buffalo ads were mislabeled as "Bluey" during Nov 24 image rebuild
+- Blue Bunny "Serve Up Sweet Pairings" TOA ads showed as "Unknown"
+- User explicitly stated: "no hardcoding generic words" - need robust solution
+
+**Fix Applied:**
+
+1. **Ignore short tokens in fuzzy matching:**
+   ```python
+   # In core/brands.py, canonicalize() function
+   for token in tokens:
+       if len(token) <= 4:  # Skip short tokens to prevent collisions
+           continue
+       matches = difflib.get_close_matches(token, all_brand_tokens, n=1, cutoff=0.85)
+   ```
+
+2. **Add full-phrase synonyms to brands.json:**
+   ```json
+   {
+     "name": "Blue Buffalo",
+     "synonyms": [
+       "MSG:Save on Blue Pet Foods. Feed delicious recipes, made with real meat first.",
+       "Save on Blue Pet Foods. Feed delicious recipes, made with real meat first.",
+       "Blue Food"
+     ]
+   },
+   {
+     "name": "Blue Bunny",
+     "synonyms": [
+       "BlueBunny",
+       "Blue-Bunny",
+       "MSG:Serve Up Sweet Pairings. Top holiday treats with deliciously soft scoops. Shop Now."
+     ]
+   },
+   {
+     "name": "Bluey",
+     "synonyms": [
+       "MSG:Bluey Makes Snack Time Fun. Shop Bluey grocery, toys & more. Shop Now."
+     ]
+   }
+   ```
+
+3. **Three-tier matching strategy (in order):**
+   - **Exact match:** Direct lookup in canonical brand names
+   - **Phrase match:** Multi-word substring matching against full synonyms
+   - **Fuzzy token match:** Individual word matching (now skips short tokens)
+
+**Repair existing mislabelings:**
+```bash
+# Fix Blue Buffalo ads mislabeled as Bluey (from Nov 24 rebuild)
+python tools/fix_bluey_rebuild_labels.py
+
+# Fix Blue Bunny ads showing as Unknown
+python tools/repair_blue_bunny_sweet_pairings.py
+
+# Rebuild brand index to reflect changes
+python tools/build_brand_index.py
+```
+
+**How repair scripts work:**
+
+1. **fix_bluey_rebuild_labels.py:**
+   - Scoped to specific run date: `D2025-11-24_T15-3*` (the rebuild timestamp)
+   - Finds ads with `advertisers: ["Bluey"]` OR `image_path` containing `__bluey__`
+   - Changes `advertisers` and `brand` to "Blue Buffalo"
+   - Renames PNG files from `__bluey__` to `__blue_buffalo__`
+   - Updates `image_path` fields to match new filenames
+
+2. **repair_blue_bunny_sweet_pairings.py:**
+   - Scoped to specific message: "Serve Up Sweet Pairings. Top holiday treats..."
+   - Finds TOA ads with this exact message
+   - Sets `advertisers: ["Blue Bunny"]` and `brand: "Blue Bunny"`
+   - Renames PNG files from `__unknown__` to `__blue_bunny__`
+   - Updates `image_path` fields to match
+
+**Prevention:**
+- Use full-phrase synonyms for brands with generic words
+- Add campaign-specific messages as synonyms (prefix with `MSG:`)
+- Fuzzy matching now skips tokens ≤4 chars automatically
+- Brand Review Tool available for manual corrections
+
+**Testing brand canonicalization:**
+```python
+from core.brands import canonicalize
+
+# Should return "Blue Buffalo"
+print(canonicalize("Save on Blue Pet Foods"))
+
+# Should return "Blue Bunny"  
+print(canonicalize("Serve Up Sweet Pairings"))
+
+# Should return "Bluey"
+print(canonicalize("Bluey Makes Snack Time Fun"))
+```
+
+**See:** `core/brands.py`, `config/brands.json`, `tools/fix_bluey_rebuild_labels.py`, `tools/repair_blue_bunny_sweet_pairings.py`
 
 ---
 

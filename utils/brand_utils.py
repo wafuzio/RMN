@@ -12,45 +12,49 @@ import re
 def normalize_brand_for_matching(brand: str | None) -> str:
     """
     Normalize a brand name for case-insensitive, punctuation-insensitive matching.
-    
+
     Rules:
     - Convert to lowercase
     - Remove all punctuation (apostrophes, ampersands, periods, hyphens, etc.)
     - Remove accents/diacritics (ü → u, é → e)
     - Collapse multiple spaces to single space
     - Strip leading/trailing whitespace
-    
+
     Examples:
         "Ben & Jerry's" → "ben and jerrys"
         "L'Oréal" → "loreal"
         "Häagen-Dazs" → "haagen dazs"
         "Lay's" → "lays"
+        "Eggland's Best" → "egglands best"
+        "Cheerios" → "cheerios"
     """
     if not brand:
         return ""
-    
+
     # Convert to string if needed
     brand = str(brand)
-    
-    # Normalize unicode (decompose accents)
+
+    # Normalize unicode (decompose accents) - BEFORE case conversion
     brand = unicodedata.normalize('NFD', brand)
-    
+
     # Remove diacritics (accents)
     brand = ''.join(char for char in brand if unicodedata.category(char) != 'Mn')
-    
-    # Convert to lowercase
+
+    # Convert to lowercase (must be before punctuation removal to handle 's properly)
     brand = brand.lower()
-    
-    # Replace common separators with space
+
+    # Replace common separators with space BEFORE removing punctuation
     brand = brand.replace('&', ' and ')
     brand = brand.replace('+', ' and ')
-    
-    # Remove all punctuation except spaces
+    brand = brand.replace("'", ' ')  # Replace apostrophe with space (don't just remove)
+    brand = brand.replace('-', ' ')  # Replace hyphen with space
+
+    # Remove all remaining punctuation except spaces
     brand = re.sub(r"[^\w\s]", "", brand)
-    
+
     # Collapse multiple spaces
     brand = re.sub(r'\s+', ' ', brand)
-    
+
     # Strip
     return brand.strip()
 

@@ -82,13 +82,13 @@ export const handleVideoProxy: RequestHandler = async (req, res) => {
       size: buffer.byteLength,
       contentType,
     });
-    res.send(Buffer.from(buffer));
+    return res.send(Buffer.from(buffer));
   } catch (error) {
     console.error("[video-proxy] Error proxying request", {
       flaskUrl,
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
-    res.status(500).json({ error: "Failed to proxy video from Flask backend" });
+    return res.status(500).json({ error: "Failed to proxy video from Flask backend" });
   }
 };

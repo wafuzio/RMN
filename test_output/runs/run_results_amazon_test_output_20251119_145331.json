@@ -1,0 +1,35 @@
+{
+  "retailer": "amazon",
+  "client": "test_output",
+  "keyword": "test_keyword",
+  "search_url": "https://www.amazon.com/s?k=test_keyword&page=1",
+  "ts": "20251119_145331",
+  "html": "search_results_amazon_test_output_20251119_145331.html",
+  "ads": [
+    {
+      "id": "amazon::20251119145331::8fd7653d::0",
+      "module_id": "amazon::sponsored_display::display_ad::unknown::loom_desktop_footer_slot_ad_placements_search_btf_amazon_us_search_portal_batch_fast_btf_loom_auto_bottom_advertising_0_1002",
+      "type": "Sponsored_Display",
+      "subtype": "Display_Ad",
+      "brand": "Unknown",
+      "brand_logo": null,
+      "title": null,
+      "description": null,
+      "cta": null,
+      "href": null,
+      "image_url": null,
+      "image_path": "Sponsored_Display/amazon__unknown__Sponsored_Display__test_output__test_keyword__D2025-11-19_T14-53.31_0.png",
+      "products": [],
+      "brand_canonical": null,
+      "advertisers": [],
+      "video_path": null,
+      "message": "",
+      "product_description": "",
+      "metadata": {
+        "has_product_description": false
+      }
+    }
+  ],
+  "timestamp": "2025-11-19T20:53:53",
+  "run_id": "20251119145331"
+}

@@ -344,15 +344,32 @@ def _sanitize_name(name: str):
 
 
 def _derive_client_from_output_dir(output_dir: str):
+    """
+    Derive client name from output directory path.
+    Handles both old (output/<client>) and new (output/<retailer>/<client>) layouts.
+    """
     try:
-        # Expect output_dir like: <project>/output/<client>
+        parts = os.path.normpath(output_dir or '').split(os.sep)
+        try:
+            idx = parts.index("output")
+            # New layout: output/<retailer>/<client>
+            known_retailers = {'kroger', 'walmart', 'amazon', 'instacart', 'target', 'albertsons'}
+            if idx + 2 < len(parts) and parts[idx + 1].lower() in known_retailers:
+                client = parts[idx + 2]
+                if client and client not in ('runs', 'output', ''):
+                    return client
+            # Old layout: output/<client>
+            if idx + 1 < len(parts):
+                client = parts[idx + 1]
+                if client and client not in ('runs', 'output', ''):
+                    return client
+        except ValueError:
+            pass
+        
+        # Fallback: basename
         base = os.path.basename(os.path.normpath(output_dir or ''))
         if base and base != 'output':
             return base
-        # Fallback: parent of output_dir
-        parent = os.path.basename(os.path.dirname(os.path.normpath(output_dir or '')))
-        if parent and parent != 'output':
-            return parent
     except Exception:
         pass
     return None
@@ -393,11 +410,14 @@ def _launch_context_resilient(pw, client_name: str):
                     "--disable-backgrounding-occluded-windows",
                     "--disable-restore-session-state",
                     "--disable-ipc-flooding-protection",
-                    "--window-position=10000,10000",
                     "--window-size=1280,720",
-                    "--disable-focus-on-show",
                     "--disable-notifications",
                     "--disable-quic",
+                    # Focus prevention - don't steal focus from user's active window
+                    "--no-startup-window",
+                    "--silent-launch",
+                    "--disable-focus-on-load",
+                    "--noerrdialogs",
                 ],
             )
             print(f"   ✅ Launched persistent context using profile: {cand['user_data_dir']}")

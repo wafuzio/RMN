@@ -1,5 +1,5 @@
 {
-  "id": "kroger_milkpep_protein_drinks_e4f56475",
+  "id": "kroger_milkpep_protein_drinks_4f478200",
   "retailer": "kroger",
   "client": "MilkPEP",
   "keywords": [
@@ -17,14 +17,12 @@
     "wednesday"
   ],
   "times": [
-    "08:20",
-    "12:20",
-    "12:20",
-    "16:20",
-    "20:20"
+    "08:00",
+    "12:00",
+    "16:00"
   ],
   "enabled": true,
   "tz": "",
-  "created_at": "2025-10-24T15:31:13Z",
-  "updated_at": "2025-10-24T15:31:13Z"
+  "created_at": "2025-11-25T04:52:37Z",
+  "updated_at": "2025-11-25T04:52:37Z"
 }

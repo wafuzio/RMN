@@ -11,7 +11,9 @@ import { API_BASE } from "@/lib/api";
 import { PerformanceCard } from "@/components/PerformanceCard";
 import Index from "./pages/Index";
 import Brands from "./pages/Brands";
+import RetailSnapshot from "./pages/RetailSnapshot";
 import VideoOverlayTest from "./pages/VideoOverlayTest";
+import Experiments from "./pages/Experiments";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,6 +41,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/brands" element={<Brands />} />
+          <Route path="/retail-snapshot" element={<RetailSnapshot />} />
+          <Route path="/experiments" element={<Experiments />} />
           <Route path="/video-overlay-test" element={<VideoOverlayTest />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
