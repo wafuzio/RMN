@@ -188,6 +188,9 @@ class SchedulerDaemon:
         "amazon": "amazon_search_and_capture.py",
     }
     
+    # Retailers that support front page capture
+    FRONTPAGE_RETAILERS = ["kroger", "walmart", "target", "amazon", "instacart"]
+    
     def __init__(self):
         """Initialize the scheduler daemon"""
         # Code directory (where scripts live)
@@ -355,6 +358,215 @@ class SchedulerDaemon:
             self.logger.error(f"Failed to load client history: {e}")
             
         return []
+    
+    def run_frontpage_capture(self, retailers: list = None):
+        """Run front page screenshot capture for specified retailers.
+        
+        Args:
+            retailers: List of retailer slugs to capture. Defaults to all FRONTPAGE_RETAILERS.
+        """
+        retailers = retailers or self.FRONTPAGE_RETAILERS
+        self.execution_logger.info(f"FRONTPAGE_CAPTURE_START: retailers={retailers}")
+        
+        script_path = self.code_dir / "scripts" / "screenshot_front_page.py"
+        if not script_path.exists():
+            self.logger.error(f"Front page capture script not found: {script_path}")
+            self.execution_logger.error(f"FRONTPAGE_SCRIPT_NOT_FOUND: {script_path}")
+            return
+        
+        # Run capture for each retailer
+        for retailer in retailers:
+            if retailer not in self.FRONTPAGE_RETAILERS:
+                self.logger.warning(f"Skipping unsupported retailer for front page: {retailer}")
+                continue
+            
+            self.logger.info(f"[frontpage] Capturing {retailer} front page...")
+            self.execution_logger.info(f"FRONTPAGE_CAPTURE_RETAILER: {retailer}")
+            
+            # Use venv python if available, otherwise sys.executable
+            venv_python = self.code_dir / ".venv" / "bin" / "python"
+            python_exec = str(venv_python) if venv_python.exists() else sys.executable
+            
+            cmd = [
+                python_exec,
+                str(script_path),
+                "--retailer",
+                retailer
+            ]
+            
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    start_new_session=True,
+                    cwd=str(self.code_dir),
+                    env=self._proc_env(),
+                )
+                
+                stdout, stderr = proc.communicate(timeout=120)  # 2 min timeout per retailer
+                rc = proc.returncode
+                
+                if rc == 0:
+                    self.logger.info(f"[frontpage] SUCCESS: {retailer}")
+                    self.execution_logger.info(f"FRONTPAGE_CAPTURE_SUCCESS: {retailer}")
+                    if stdout:
+                        # Log last few lines of stdout for success confirmation
+                        last_lines = '\n'.join(stdout.strip().split('\n')[-5:])
+                        self.execution_logger.debug(f"FRONTPAGE_STDOUT: {last_lines}")
+                else:
+                    self.logger.error(f"[frontpage] FAIL: {retailer} rc={rc}")
+                    self.execution_logger.error(f"FRONTPAGE_CAPTURE_FAILED: {retailer} rc={rc}")
+                    # Log both stdout and stderr for debugging
+                    if stdout:
+                        self.logger.error(f"[frontpage] STDOUT: {stdout[:1000]}")
+                        self.execution_logger.error(f"FRONTPAGE_STDOUT: {stdout[:1000]}")
+                    if stderr:
+                        self.logger.error(f"[frontpage] STDERR: {stderr[:1000]}")
+                        self.execution_logger.error(f"FRONTPAGE_STDERR: {stderr[:1000]}")
+                        
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except Exception:
+                    pass
+                self.logger.error(f"[frontpage] TIMEOUT: {retailer}")
+                self.execution_logger.error(f"FRONTPAGE_CAPTURE_TIMEOUT: {retailer}")
+            except Exception as e:
+                self.logger.error(f"[frontpage] ERROR: {retailer} - {e}")
+                self.execution_logger.error(f"FRONTPAGE_CAPTURE_EXCEPTION: {retailer} - {e}")
+        
+        self.execution_logger.info(f"FRONTPAGE_CAPTURE_COMPLETE: {len(retailers)} retailers")
+    
+    def _frontpage_already_captured_today(self, retailers: list, date_str: str) -> bool:
+        """Check if front page screenshots already exist for today.
+        
+        Returns True if ALL retailers have at least one capture for today,
+        meaning we can skip catch-up. Returns False if any retailer is missing.
+        
+        Args:
+            retailers: List of retailer slugs to check
+            date_str: Date string in YYYY-MM-DD format
+        """
+        screen_capture_root = self.root_dir / "output" / "screen_capture"
+        
+        for retailer in retailers:
+            front_pages_dir = screen_capture_root / retailer / "front_pages"
+            if not front_pages_dir.exists():
+                return False
+            
+            # Look for files matching today's date pattern
+            # Filename format: <retailer>__front_page__D<YYYY-MM-DD>_*.png
+            date_pattern = f"{retailer}__front_page__D{date_str}_*.png"
+            matches = list(front_pages_dir.glob(date_pattern))
+            
+            if not matches:
+                self.logger.debug(f"[frontpage] No capture found for {retailer} on {date_str}")
+                return False
+        
+        self.logger.info(f"[frontpage] All {len(retailers)} retailers already captured today ({date_str})")
+        return True
+    
+    def _check_frontpage_schedule(self, now: datetime, today: str, hhmm: str):
+        """Check if front page capture is due and run it.
+        
+        Reads schedule from schedules/frontpage_capture.json or uses defaults.
+        Includes catch-up logic: if a scheduled time was missed (e.g., system was asleep),
+        run on the next wake within the same day.
+        """
+        # Load front page schedule config
+        config_path = self.root_dir / "schedules" / "frontpage_capture.json"
+        
+        # Default schedule: 8:00 AM daily
+        default_config = {
+            "enabled": True,
+            "days": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+            "times": ["08:00"],
+            "retailers": self.FRONTPAGE_RETAILERS
+        }
+        
+        if config_path.exists():
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                # Merge with defaults for missing keys
+                for key, val in default_config.items():
+                    config.setdefault(key, val)
+            except Exception as e:
+                self.logger.error(f"Failed to load frontpage config: {e}")
+                config = default_config
+        else:
+            config = default_config
+        
+        if not config.get("enabled", True):
+            return
+        
+        # Check if today matches
+        days = set(d.lower() for d in config.get("days", []))
+        if today not in days:
+            return
+        
+        now_min = now.hour * 60 + now.minute
+        times = config.get("times", [])
+        retailers = config.get("retailers", self.FRONTPAGE_RETAILERS)
+        
+        # Check each scheduled time for today
+        for scheduled_time in times:
+            scheduled_min = self._hhmm_to_min(scheduled_time)
+            
+            # Create a daily run key (not minute-specific) to track if we've run today for this slot
+            run_key = f"frontpage_{now.strftime('%Y-%m-%d')}_{scheduled_time}"
+            
+            if run_key in self.last_run_times:
+                # Already ran for this scheduled slot today
+                continue
+            
+            # Check if this scheduled time has passed (catch-up) or is within window (on-time)
+            is_within_window = self._within_window(now_min, scheduled_time, self.due_window_min)
+            is_missed = now_min > scheduled_min + self.due_window_min  # Past the window
+            
+            if is_within_window:
+                # On-time execution
+                self.last_run_times[run_key] = now
+                self.logger.info(f"→ DUE: [frontpage] Capturing {len(retailers)} retailer front pages @ {hhmm}")
+                self.execution_logger.info(f"FRONTPAGE_SCHEDULE_MATCH: {hhmm}, retailers={retailers}")
+                self._launch_frontpage_capture(retailers, run_key, scheduled_time, "on-time")
+                return  # Only run once per tick
+                
+            elif is_missed:
+                # Catch-up execution - we missed this slot
+                # But first check if we already have captures for today (prevents duplicate runs after restart)
+                date_str = now.strftime('%Y-%m-%d')
+                if self._frontpage_already_captured_today(retailers, date_str):
+                    # Mark as done so we don't check again this session
+                    self.last_run_times[run_key] = now
+                    self.logger.info(f"→ SKIP: [frontpage] Already captured today ({date_str}), skipping catch-up for {scheduled_time}")
+                    self.execution_logger.info(f"FRONTPAGE_SKIP_EXISTS: date={date_str}, scheduled={scheduled_time}")
+                    continue  # Check next scheduled time
+                
+                # No existing captures, run catch-up
+                self.last_run_times[run_key] = now
+                self.logger.info(f"→ CATCH-UP: [frontpage] Missed {scheduled_time}, capturing {len(retailers)} retailer front pages now @ {hhmm}")
+                self.execution_logger.info(f"FRONTPAGE_CATCHUP: missed={scheduled_time}, now={hhmm}, retailers={retailers}")
+                self._launch_frontpage_capture(retailers, run_key, scheduled_time, "catch-up")
+                return  # Only run once per tick
+    
+    def _launch_frontpage_capture(self, retailers: list, run_key: str, scheduled_time: str, mode: str):
+        """Launch front page capture in a background thread.
+        
+        Args:
+            retailers: List of retailer slugs to capture
+            run_key: Unique key for tracking this run
+            scheduled_time: The originally scheduled time (HH:MM)
+            mode: 'on-time' or 'catch-up'
+        """
+        def worker():
+            self.run_frontpage_capture(retailers)
+        
+        t = threading.Thread(target=worker, name=f"frontpage-{mode}-{scheduled_time}", daemon=False)
+        t.start()
+        self.inflight[run_key] = t
         
     # Legacy is_scheduled_time() removed - now using _load_schedule_config() + _now_local() in monitor loop
         
@@ -674,6 +886,9 @@ class SchedulerDaemon:
                             self.execution_logger.info(f"SCRAPE_LAUNCHED_ASYNC: [{retailer}] {client_name}")
                         else:
                             self.execution_logger.info(f"SCRAPE_NOT_STARTED: [{retailer}] {client_name} (lock or concurrency)")
+                
+                # 4) Check for front page capture schedule
+                self._check_frontpage_schedule(now, today, hhmm)
                 
                 # 5) Clean up old run time entries (keep only last 2 hours)
                 cutoff_time = now - timedelta(hours=2)

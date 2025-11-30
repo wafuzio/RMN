@@ -1,0 +1,23 @@
+{
+  "enabled": true,
+  "days": [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday"
+  ],
+  "times": [
+    "12:05"
+  ],
+  "retailers": [
+    "kroger",
+    "walmart",
+    "amazon",
+    "instacart",
+    "target"
+  ],
+  "description": "Daily front page screenshot capture"
+}
