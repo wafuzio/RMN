@@ -48,6 +48,8 @@ export interface AdCardItem {
   run_file?: string; // JSON file path for this ad
   ad_index?: number; // Index of ad within its run
   slot?: string; // "left_rail" | "bottom" | "top" for Sponsored_Display ads
+  card_format?: string; // "tile" | "banner" for Gallery Cards
+  dimensions?: { width: number; height: number }; // Image dimensions for Gallery Cards
 }
 
 export interface BrandAggregation {

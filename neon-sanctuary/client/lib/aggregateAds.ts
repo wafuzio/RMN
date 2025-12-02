@@ -12,6 +12,8 @@ export type AdCardItem = {
   timestamp: string; // ISO
   run_file?: string;
   ad_index?: number;
+  card_format?: string;
+  dimensions?: { width: number; height: number };
 };
 
 export type AdGroup = {

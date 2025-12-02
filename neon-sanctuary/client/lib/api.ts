@@ -74,7 +74,8 @@ async function http<T>(path: string, init?: RequestInit, label?: string): Promis
   const res = await timeFetch(url, { 
     ...init, 
     headers: { 
-      'Content-Type': 'application/json', 
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': '1',  // Required for ngrok tunnel
       ...init?.headers 
     } 
   }, label);

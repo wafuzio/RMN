@@ -44,6 +44,8 @@ export function AdCardGroup({
     video_url: group.cover.video_url,
     poster_url: group.cover.poster_url,
     timestamp: timestampDisplay,
+    card_format: group.cover.card_format,
+    dimensions: group.cover.dimensions,
   };
 
   return (

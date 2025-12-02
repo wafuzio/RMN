@@ -7,7 +7,7 @@ import { RetailerLogo } from "@/components/dashboard/RetailerLogo";
 import { formatLocal } from "@/lib/date";
 
 // Robust media loader component (handles both images and videos)
-function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slot, priority, mediaHeight, retailer }: { imageUrl?: string; videoUrl?: string; posterUrl?: string; alt?: string; isTOA?: boolean; isSBA?: boolean; adType?: string; slot?: string; priority?: boolean; mediaHeight?: string; retailer?: string; }) {
+function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slot, priority, mediaHeight, retailer, dimensions }: { imageUrl?: string; videoUrl?: string; posterUrl?: string; alt?: string; isTOA?: boolean; isSBA?: boolean; adType?: string; slot?: string; priority?: boolean; mediaHeight?: string; retailer?: string; dimensions?: { width: number; height: number }; }) {
   const isColumnCard = adType === "Sponsored_Brand_Card" || adType === "Sponsored_Logo";
   const isSponsoredLogo = adType === "Sponsored_Logo";
   const isLeftRailDisplay = adType === "Sponsored_Display" && slot === "left_rail";
@@ -84,8 +84,16 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slo
 
   let heightClass = mediaHeight || "h-[200px]";
   let containerClass = "";
+  let useAspectRatio = false;
+  let aspectRatio: number | undefined;
 
-  if (isLeftRailDisplay) {
+  // Gallery Cards: use actual dimensions for proper aspect ratio
+  const isGalleryCard = adType === "Gallery_Cards";
+  if (isGalleryCard && dimensions?.width && dimensions?.height) {
+    useAspectRatio = true;
+    aspectRatio = dimensions.width / dimensions.height;
+    heightClass = ""; // Let aspect-ratio control height
+  } else if (isLeftRailDisplay) {
     heightClass = "";
     containerClass = "flex-1";
   } else if (isSponsoredLogo) {
@@ -107,13 +115,14 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slo
   if (hasVideo) {
     const isSponsoredDisplay = adType === "Sponsored_Display";
     const isLeftColumnAd = mediaHeight === '280px';
+    const isGalleryCardLeftColumn = isLeftColumnAd && adType === "Gallery_Cards";
     return (
       <div id="video-frame" className={isLeftColumnAd ? "" : cn("video-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-start justify-start relative", containerClass || heightClass)} style={isLeftColumnAd ? { position: 'absolute', top: 0, left: 0, right: 0, height: mediaHeight, margin: 0, padding: 0, backgroundColor: 'rgb(243, 244, 246)' } : {}}>
         <video
           key={`${src}-${mediaKey}`}
           src={src}
-          className="h-full w-full object-cover"
-          style={{ display: error ? 'none' : 'block', objectPosition: isLeftColumnAd ? 'top left' : (isSkyscraper ? 'top center' : 'left 20%') }}
+          className={cn("h-full w-full", isGalleryCardLeftColumn ? "object-contain" : "object-cover")}
+          style={{ display: error ? 'none' : 'block', objectPosition: isGalleryCardLeftColumn ? 'center' : (isSkyscraper ? 'top center' : 'left 20%') }}
           crossOrigin="anonymous"
           controls
           preload="metadata"
@@ -142,19 +151,32 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slo
   }
 
   const isLeftColumnAd = mediaHeight === '280px';
+  const isGalleryCardLeftColumn = isLeftColumnAd && adType === "Gallery_Cards";
+  
+  // For Gallery Cards with dimensions, use simple width:100% height:auto layout
+  const useAutoHeight = isGalleryCard && useAspectRatio;
+  
+  // Build container style
+  const containerStyle: React.CSSProperties = useAutoHeight
+    ? { width: '100%' }  // Let image determine height naturally
+    : isLeftColumnAd 
+      ? { position: 'absolute', top: 0, left: 0, right: 0, height: mediaHeight, margin: 0, padding: 0, backgroundColor: 'rgb(243, 244, 246)' }
+      : useAspectRatio && aspectRatio 
+        ? { aspectRatio: aspectRatio, width: '100%' }
+        : {};
+
   return (
-    <div id="image-frame" className={isLeftColumnAd ? "" : cn("image-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-start justify-start relative", containerClass || heightClass)} style={isLeftColumnAd ? { position: 'absolute', top: 0, left: 0, right: 0, height: mediaHeight, margin: 0, padding: 0, backgroundColor: 'rgb(243, 244, 246)' } : {}}>
+    <div id="image-frame" className={useAutoHeight ? "w-full overflow-hidden rounded-t-lg" : ((isLeftColumnAd) ? "" : cn("image-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-start justify-start relative", !useAspectRatio && (containerClass || heightClass)))} style={containerStyle}>
       <img
         key={`${src}-${mediaKey}`}
         src={src}
         alt={alt || 'ad'}
-        className="h-full w-full object-cover"
-        style={{ display: error ? 'none' : 'block', objectPosition: isLeftColumnAd ? 'top left' : (isSkyscraper ? 'top center' : 'left 20%'), ...(isLeftColumnAd && { margin: 0, padding: 0 }) }}
+        className={useAutoHeight ? "w-full h-auto" : cn("w-full", useAspectRatio ? "h-auto object-contain" : "h-full object-cover")}
+        style={{ display: error ? 'none' : 'block', ...(useAutoHeight ? {} : { objectPosition: useAspectRatio ? 'center' : (isSkyscraper ? 'top center' : 'left 20%') }), ...(isLeftColumnAd && !useAutoHeight && { margin: 0, padding: 0 }) }}
         crossOrigin="anonymous"
         referrerPolicy="no-referrer"
         decoding="async"
         loading={priority ? 'eager' : 'lazy'}
-        fetchpriority={priority ? 'high' : 'low'}
         draggable={false}
         onLoad={() => {
           setLoaded(true);
@@ -207,6 +229,7 @@ const TYPE_STYLES: Record<string, string> = {
   SBA: "bg-blue-700 text-white",
   Tile_Takeover: "bg-amber-600 text-white",
   SBV: "bg-purple-700 text-white",
+  Gallery_Cards: "bg-cyan-600 text-white",
 };
 
 
@@ -221,7 +244,7 @@ export interface VideoOverlay {
 
 export interface Ad {
   id: string;
-  retailer: string; client: string; keyword: string; ad_type: string; brand: string; message: string; image_url: string; video_url?: string; video_overlay?: VideoOverlay; poster_url?: string; timestamp: string; slot?: string;
+  retailer: string; client: string; keyword: string; ad_type: string; brand: string; message: string; image_url: string; video_url?: string; video_overlay?: VideoOverlay; poster_url?: string; timestamp: string; slot?: string; card_format?: string; dimensions?: { width: number; height: number };
 }
 
 export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOverIndex, currentIndex, priority, isLeftColumn = false }: { ad: Ad; onRemove: (id: string)=>void; onOpen: (ad: Ad)=>void; draggableProps?: any; dragIndex?: number | null; dragOverIndex?: number | null; currentIndex?: number; priority?: boolean; isLeftColumn?: boolean; }) {
@@ -240,8 +263,13 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
   const isTargetListingBanner = ad.retailer?.toLowerCase() === "target" && ad.ad_type === "ListingPageBannerAd";
   // Apply 25% + 15% reduction to container height for Kroger's TOA ads
   const isKrogerTOA = ad.retailer?.toLowerCase() === "kroger" && ad.ad_type === "TOA";
-  let containerHeight = '420px';
-  if (isTargetListingBanner && isLeftColumn) {
+  const isGalleryCard = ad.ad_type === "Gallery_Cards";
+  const hasGalleryCardDimensions = isGalleryCard && ad.dimensions?.width && ad.dimensions?.height;
+  let containerHeight: string | undefined = '420px';
+  if (isGalleryCard && isLeftColumn) {
+    // For Gallery Cards with dimensions, let height be auto so it shrinks to fit image
+    containerHeight = hasGalleryCardDimensions ? undefined : '320px';
+  } else if (isTargetListingBanner && isLeftColumn) {
     containerHeight = '252px';
   } else if (isKrogerTOA && isLeftColumn) {
     containerHeight = '268px';
@@ -268,8 +296,11 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
     return retailer.toLowerCase() === 'walmart' ? 'h-11' : 'h-8';
   };
 
+  // For Gallery Cards with dimensions, use normal flow (not absolute) so content is below image
+  const useFlowLayout = hasGalleryCardDimensions && isLeftColumn;
+  
   const contentFrame = (
-    <div id="content-frame" className={cn("adcard-content-box card-text w-full flex flex-col flex-shrink-0", isColumnCard ? "p-4 gap-2" : "p-6 gap-3")} style={isLeftColumn ? { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isSponsoredLogo ? 'rgba(0, 0, 0, 0.6)' : 'rgb(255, 255, 255)', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', padding: isSponsoredLogo ? '12px 16px' : '0 16px 16px 16px' } : {}}>
+    <div id="content-frame" className={cn("adcard-content-box card-text w-full flex flex-col flex-shrink-0", isColumnCard ? "p-4 gap-2" : "p-6 gap-3")} style={isLeftColumn && !useFlowLayout ? { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isSponsoredLogo ? 'rgba(0, 0, 0, 0.6)' : 'rgb(255, 255, 255)', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', padding: isSponsoredLogo ? '12px 16px' : '0 16px 16px 16px' } : (useFlowLayout ? { backgroundColor: 'rgb(255, 255, 255)', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', padding: '12px 16px 16px 16px' } : {})}>
       {isColumnCard ? (
         <>
           <div className={cn("font-bold text-[1.1em] line-clamp-2 leading-tight", isSponsoredLogo ? "text-white" : "text-[#111827]")}>{ad.brand}</div>
@@ -344,7 +375,7 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
         ...(isDropTarget && { boxShadow: '0 20px 48px rgba(0, 0, 0, 0.25)' }),
         ...(isLeftRailDisplay && { minHeight: '1600px', display: 'flex', flexDirection: 'column' }),
         ...(isLeftColumn && isSponsoredLogo && { position: 'relative', height: '100%', width: '100%', aspectRatio: '1', display: 'flex', flexDirection: 'column', padding: 0, margin: 0, overflow: 'hidden' }),
-        ...(isLeftColumn && !isSponsoredLogo && { position: 'relative', height: containerHeight, display: 'block', padding: 0, margin: 0, overflow: 'hidden' })
+        ...(isLeftColumn && !isSponsoredLogo && { position: 'relative', height: containerHeight || 'auto', display: 'block', padding: 0, margin: 0, overflow: 'hidden' })
       }}
       onClick={isLeftColumn ? () => onOpen(ad) : undefined}
       {...enhancedDraggableProps}
@@ -360,12 +391,12 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
       </button>
       {isLeftColumn ? (
         <>
-          <AdMedia imageUrl={ad.image_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} slot={ad.slot} priority={priority} mediaHeight={isLeftColumn ? '280px' : undefined} retailer={ad.retailer} />
+          <AdMedia imageUrl={ad.image_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} slot={ad.slot} priority={priority} mediaHeight={isLeftColumn ? '280px' : undefined} retailer={ad.retailer} dimensions={ad.dimensions} />
           {contentFrame}
         </>
       ) : (
         <button onClick={() => onOpen(ad)} className={cn("text-left select-none w-full", isColumnCard || ad.ad_type === "Sponsored_Display" ? "flex flex-col h-full" : "block")} style={{ touchAction: 'none' }}>
-          <AdMedia imageUrl={ad.image_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} slot={ad.slot} priority={priority} mediaHeight={isLeftColumn ? '280px' : undefined} retailer={ad.retailer} />
+          <AdMedia imageUrl={ad.image_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} slot={ad.slot} priority={priority} mediaHeight={isLeftColumn ? '280px' : undefined} retailer={ad.retailer} dimensions={ad.dimensions} />
           {contentFrame}
         </button>
       )}

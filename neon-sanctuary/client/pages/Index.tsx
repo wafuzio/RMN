@@ -108,6 +108,10 @@ function isColumnAdType(ad: any): boolean {
   if (columnTypes.includes(ad.ad_type)) {
     return true;
   }
+  // Gallery_Cards tiles go in the column, banners stay on left
+  if (ad.ad_type === "Gallery_Cards" && ad.card_format === "tile") {
+    return true;
+  }
   // Left rail Sponsored Display ads also go in the column
   if (ad.ad_type === "Sponsored_Display" && ad.slot === "left_rail") {
     return true;
@@ -126,7 +130,14 @@ function isColumnAdGroup(group: any, ads: any[]): boolean {
   }
   // Fallback to checking just ad_type
   const columnTypes = ["Skyscraper", "Tile_Takeover", "Sponsored_Brand_Card", "Sponsored_Logo"];
-  return columnTypes.includes(group.ad_type);
+  if (columnTypes.includes(group.ad_type)) {
+    return true;
+  }
+  // Gallery_Cards tiles go in the column, banners stay on left
+  if (group.ad_type === "Gallery_Cards" && group.cover?.card_format === "tile") {
+    return true;
+  }
+  return false;
 }
 
 export default function Index() {
@@ -575,22 +586,109 @@ export default function Index() {
     retailers
   ]);
 
-  // Derive available ad types from the fetched data
-  // Use a ref to persist types across filter changes so dropdown always shows all types
-  const allSeenTypesRef = useRef<Set<string>>(new Set());
+  // Fetch available ad types WITHOUT the types filter applied
+  // This ensures dropdown shows all types available for current retailer/date/client selection
+  // even if some types aren't in the currently-filtered results
+  const typeFiltersForAvailable = useMemo(() => ({
+    term: filters.keywords?.length ? filters.keywords.join(",") : undefined,
+    start: formatLocalDate(filters.start),
+    end: formatLocalDate(filters.end),
+    tz_offset_minutes: new Date().getTimezoneOffset(),
+    search: filters.search?.trim() || undefined,
+    sort: sortBy,
+    // Deliberately omit 'types' to fetch all available types
+  }), [
+    filters.keywords?.join(","),
+    filters.start?.getTime(),
+    filters.end?.getTime(),
+    filters.search,
+    sortBy,
+  ]);
+
+  const debouncedTypeFilters = useDebouncedValue(typeFiltersForAvailable, 350);
+
+  // Queries for available types (without types filter) - used only to discover available types
+  // Use larger page size to capture all ad types across the results
+  const krogerTypesQuery = useAds({
+    retailer: isKrogerSelected ? "kroger" : undefined,
+    client: selectedClient,
+    pageSize: 500, // Large page size to discover all types
+    ...debouncedTypeFilters,
+  });
+
+  const walmartTypesQuery = useAds({
+    retailer: isWalmartSelected ? "walmart" : undefined,
+    client: selectedClient,
+    pageSize: 500,
+    ...debouncedTypeFilters,
+  });
+
+  const instacartTypesQuery = useAds({
+    retailer: isInstacartSelected ? "instacart" : undefined,
+    client: selectedClient,
+    pageSize: 500,
+    ...debouncedTypeFilters,
+  });
+
+  const amazonTypesQuery = useAds({
+    retailer: isAmazonSelected ? "amazon" : undefined,
+    client: selectedClient,
+    pageSize: 500,
+    ...debouncedTypeFilters,
+  });
+
+  const targetTypesQuery = useAds({
+    retailer: isTargetSelected ? "target" : undefined,
+    client: selectedClient,
+    pageSize: 500,
+    ...debouncedTypeFilters,
+  });
+
+  // Load all pages for type discovery to ensure we find every ad type in the period
+  // NOTE: We only trigger on retailer selection changes, not on hasNextPage changes
+  // to avoid infinite loops. The queries will auto-fetch next pages via react-query.
+  useEffect(() => {
+    const loadAllPages = async () => {
+      const queriesToLoad = [
+        ...(isKrogerSelected ? [krogerTypesQuery] : []),
+        ...(isWalmartSelected ? [walmartTypesQuery] : []),
+        ...(isInstacartSelected ? [instacartTypesQuery] : []),
+        ...(isAmazonSelected ? [amazonTypesQuery] : []),
+        ...(isTargetSelected ? [targetTypesQuery] : []),
+      ];
+
+      for (const query of queriesToLoad) {
+        // Fetch next page if available (single fetch, not loop)
+        if (query.hasNextPage && !query.isFetchingNextPage) {
+          query.fetchNextPage();
+        }
+      }
+    };
+
+    loadAllPages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isKrogerSelected,
+    isWalmartSelected,
+    isInstacartSelected,
+    isAmazonSelected,
+    isTargetSelected,
+    // Deliberately NOT including hasNextPage to avoid infinite loop
+  ]);
 
   const availableAdTypes = useMemo(() => {
     const typeSet = new Set<string>();
 
-    // Add types from current flatAds (already filtered by selected retailers)
-    for (const ad of flatAds) {
-      if (ad.ad_type?.trim()) {
-        typeSet.add(ad.ad_type.trim());
-      }
-    }
-
-    // Also add types from raw query responses for selected retailers only
-    const selectedQueriesData = [
+    // Collect types from BOTH the type-discovery queries AND the main card queries
+    // This ensures we find all ad types even if type queries haven't loaded all pages
+    const allQueriesData = [
+      // Type discovery queries (larger page size, no types filter)
+      ...(isKrogerSelected ? [krogerTypesQuery.data] : []),
+      ...(isWalmartSelected ? [walmartTypesQuery.data] : []),
+      ...(isInstacartSelected ? [instacartTypesQuery.data] : []),
+      ...(isAmazonSelected ? [amazonTypesQuery.data] : []),
+      ...(isTargetSelected ? [targetTypesQuery.data] : []),
+      // Main card queries (may have types filter applied, but still useful)
       ...(isKrogerSelected ? [krogerQuery.data] : []),
       ...(isWalmartSelected ? [walmartQuery.data] : []),
       ...(isInstacartSelected ? [instacartQuery.data] : []),
@@ -598,7 +696,7 @@ export default function Index() {
       ...(isTargetSelected ? [targetQuery.data] : []),
     ];
 
-    for (const queryData of selectedQueriesData) {
+    for (const queryData of allQueriesData) {
       if (queryData?.pages) {
         for (const page of queryData.pages) {
           for (const ad of page.cards || []) {
@@ -610,19 +708,31 @@ export default function Index() {
       }
     }
 
+    // Also collect from flatAds (already loaded cards)
+    for (const ad of flatAds) {
+      if (ad.ad_type?.trim()) {
+        typeSet.add(ad.ad_type.trim());
+      }
+    }
+
     return Array.from(typeSet).sort();
   }, [
-    flatAds,
     isKrogerSelected,
     isWalmartSelected,
     isInstacartSelected,
     isAmazonSelected,
     isTargetSelected,
+    krogerTypesQuery.data,
+    walmartTypesQuery.data,
+    instacartTypesQuery.data,
+    amazonTypesQuery.data,
+    targetTypesQuery.data,
     krogerQuery.data,
     walmartQuery.data,
     instacartQuery.data,
     amazonQuery.data,
     targetQuery.data,
+    flatAds,
   ]);
 
   // Derive available keywords from the fetched data, filtered by selected clients
@@ -792,7 +902,7 @@ export default function Index() {
   // Aggregate ads if grouping is enabled
   const adGroups = useMemo(() => {
     if (!filters.groupIdentical) return null;
-    
+
     // Convert Ad[] to AdCardItem[]
     const items: AdCardItem[] = sortedAds.map(ad => ({
       id: ad.id,
@@ -806,8 +916,10 @@ export default function Index() {
       video_url: ad.video_url,
       poster_url: ad.poster_url,
       timestamp: ad.timestamp,
+      card_format: ad.card_format,
+      dimensions: ad.dimensions,
     }));
-    
+
     return aggregateAds(items);
   }, [sortedAds, filters.groupIdentical]);
 

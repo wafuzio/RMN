@@ -1267,6 +1267,97 @@ app.get(/^\/api\/image\/([^/]+)\/([^/]+)\/(.+)$/, ...)
 
 ---
 
+## Adding New Fields to Ad Cards
+
+When adding a new field to ad cards (e.g., `dimensions`, `card_format`), you must update **all** of the following files to ensure the field flows through the entire data pipeline:
+
+### 1. Backend (Flask API)
+- **`web/builder_server_v2.py`** - Add field to card response object in `api_ads_cards()` function
+  - Look for where cards are built (around lines 1700 and 1880)
+  - Add: `"new_field": ad.get("new_field"),`
+
+### 2. Shared Types
+- **`neon-sanctuary/shared/api.ts`** - Add field to `AdCardItem` interface
+  ```typescript
+  export interface AdCardItem {
+    // ... existing fields
+    new_field?: string;  // Add your new field
+  }
+  ```
+
+### 3. Frontend Types & Components
+- **`neon-sanctuary/client/components/dashboard/AdCard.tsx`** - Add field to `Ad` interface
+  ```typescript
+  export interface Ad {
+    // ... existing fields
+    new_field?: string;
+  }
+  ```
+
+- **`neon-sanctuary/client/lib/aggregateAds.ts`** - Add field to `AdCardItem` type
+  ```typescript
+  export type AdCardItem = {
+    // ... existing fields
+    new_field?: string;
+  };
+  ```
+
+### 4. Data Flow Mappings
+- **`neon-sanctuary/client/pages/Index.tsx`** - Add field to the `AdCardItem[]` mapping in `adGroups` useMemo
+  ```typescript
+  const items: AdCardItem[] = sortedAds.map(ad => ({
+    // ... existing fields
+    new_field: ad.new_field,
+  }));
+  ```
+
+- **`neon-sanctuary/client/components/dashboard/AdCardGroup.tsx`** - Add field to the `Ad` object created from `group.cover`
+  ```typescript
+  const ad: Ad = {
+    // ... existing fields
+    new_field: group.cover.new_field,
+  };
+  ```
+
+### Checklist for New Fields
+
+```
+[ ] web/builder_server_v2.py - Flask API response
+[ ] neon-sanctuary/shared/api.ts - AdCardItem interface
+[ ] neon-sanctuary/client/components/dashboard/AdCard.tsx - Ad interface
+[ ] neon-sanctuary/client/lib/aggregateAds.ts - AdCardItem type
+[ ] neon-sanctuary/client/pages/Index.tsx - adGroups mapping
+[ ] neon-sanctuary/client/components/dashboard/AdCardGroup.tsx - Ad object from group.cover
+```
+
+### Example: Adding `dimensions` field
+
+This field was added to support dynamic Gallery Card sizing:
+
+1. **Flask API** returns `dimensions: {width: int, height: int}`
+2. **Shared types** define `dimensions?: { width: number; height: number }`
+3. **AdCard** uses `ad.dimensions` to calculate aspect ratio
+4. **AdMedia** applies CSS `aspect-ratio` based on dimensions
+
+### Layout Notes for Gallery Cards
+
+Gallery Cards with `dimensions` use a **flow layout** instead of the default absolute-positioned overlay:
+
+- **Default left-column cards**: Content frame uses `position: absolute; bottom: 0` to overlay on the image
+- **Gallery Cards with dimensions**: Content frame uses normal document flow so it appears **below** the image
+
+This is controlled by `useFlowLayout` in `AdCard.tsx`:
+```typescript
+const useFlowLayout = hasGalleryCardDimensions && isLeftColumn;
+```
+
+When `useFlowLayout` is true:
+- Image renders at its natural aspect ratio (width: 100%, height: auto)
+- Content frame flows below the image (no absolute positioning)
+- Card height adjusts automatically to fit both image and content
+
+---
+
 ## Tips & Best Practices
 
 1. **Always use the restart script** - Prevents duplicate processes
