@@ -274,9 +274,6 @@ class KeywordInputApp:
         self.history_file = os.path.join(get_base_dir(), "output", "client_history.json")
         self.schedule_file = os.path.join(get_base_dir(), "output", "schedule_config.json")
         
-        # Check for unknown brands on startup (after a short delay)
-        self.root.after(1000, self.check_and_launch_brand_review)
-        
         self.client_history = self.load_client_history()
         self.schedule_config = self.load_schedule_config()
         self.day_vars = {}  # Will store day checkbox variables
@@ -3117,18 +3114,36 @@ Captured: {timestamp_str}
         return False
     
     def launch_brand_review_tool(self):
-        """Launch the brand review tool in a separate process"""
+        """Launch the logo verifier first, then brand review tool"""
         try:
-            tool_path = os.path.join(get_base_dir(), 'brand_review_tool.py')
+            base_dir = get_base_dir()
+            
+            # 1. Launch logo verifier
+            logo_verifier_path = os.path.join(base_dir, 'tools', 'logo_verifier_gui.py')
+            if os.path.exists(logo_verifier_path):
+                subprocess.Popen([sys.executable, logo_verifier_path], cwd=base_dir)
+                logging.info("Launched logo verifier GUI")
+            else:
+                logging.warning(f"Logo verifier not found at: {logo_verifier_path}")
+            
+            # 2. Launch brand name verifier (lexicon cleanup)
+            brand_verifier_path = os.path.join(base_dir, 'tools', 'brand_name_verifier.py')
+            if os.path.exists(brand_verifier_path):
+                subprocess.Popen([sys.executable, brand_verifier_path], cwd=base_dir)
+                logging.info("Launched brand name verifier")
+            else:
+                logging.warning(f"Brand name verifier not found at: {brand_verifier_path}")
+            
+            # 3. Launch brand review tool (unknown brand correction)
+            tool_path = os.path.join(base_dir, 'brand_review_tool.py')
             if os.path.exists(tool_path):
-                # Launch in separate process so it doesn't block the main GUI
-                subprocess.Popen([sys.executable, tool_path], cwd=get_base_dir())
+                subprocess.Popen([sys.executable, tool_path], cwd=base_dir)
                 logging.info("Launched brand review tool")
             else:
                 messagebox.showerror("Error", f"Brand review tool not found at:\n{tool_path}")
         except Exception as e:
-            logging.error(f"Error launching brand review tool: {e}")
-            messagebox.showerror("Error", f"Failed to launch brand review tool:\n{str(e)}")
+            logging.error(f"Error launching brand review tools: {e}")
+            messagebox.showerror("Error", f"Failed to launch brand review tools:\n{str(e)}")
     
     def on_closing(self):
         """Handle window close event"""

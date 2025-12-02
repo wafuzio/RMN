@@ -183,5 +183,83 @@ def build_brand_index():
     print(f"   📁 {INDEX_FILE}")
 
 
+def load_index():
+    """Load existing brand index"""
+    if INDEX_FILE.exists():
+        try:
+            with open(INDEX_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return None
+
+
+def save_index(index_data):
+    """Save brand index"""
+    index_data['built_at'] = datetime.now().isoformat()
+    with open(INDEX_FILE, 'w', encoding='utf-8') as f:
+        json.dump(index_data, f, indent=2)
+
+
+def update_brand_in_index(old_brand: str, new_brand: str = None, delete: bool = False):
+    """
+    Incrementally update the brand index when a brand is renamed, merged, or deleted.
+    
+    Args:
+        old_brand: The brand name being changed
+        new_brand: The new brand name (for rename/merge), or None if deleting
+        delete: If True, just remove old_brand entries (mark ads as unknown)
+    
+    This is much faster than a full rebuild (~0.1s vs ~16s).
+    """
+    index_data = load_index()
+    if not index_data:
+        print("[INDEX] No index found, skipping incremental update")
+        return False
+    
+    index = index_data.get('index', {})
+    old_key = old_brand.strip().lower()
+    
+    if old_key not in index:
+        print(f"[INDEX] Brand '{old_brand}' not in index, nothing to update")
+        return True
+    
+    entries = index[old_key]
+    
+    if delete:
+        # Just remove the old brand entries
+        del index[old_key]
+        print(f"[INDEX] Removed '{old_brand}' ({len(entries)} entries)")
+    else:
+        # Move entries to new brand
+        new_key = new_brand.strip().lower() if new_brand else None
+        if not new_key:
+            print("[INDEX] No new brand specified for rename")
+            return False
+        
+        # Merge into existing or create new
+        if new_key in index:
+            # Merge - add entries to existing brand, avoiding duplicates
+            existing_paths = {e['json_path'] for e in index[new_key]}
+            for entry in entries:
+                if entry['json_path'] not in existing_paths:
+                    index[new_key].append(entry)
+            print(f"[INDEX] Merged '{old_brand}' into '{new_brand}' ({len(entries)} entries)")
+        else:
+            # Rename - just move the entries
+            index[new_key] = entries
+            print(f"[INDEX] Renamed '{old_brand}' to '{new_brand}' ({len(entries)} entries)")
+        
+        # Remove old key
+        del index[old_key]
+    
+    # Update stats
+    index_data['stats']['total_brands'] = len(index)
+    
+    # Save
+    save_index(index_data)
+    return True
+
+
 if __name__ == '__main__':
     build_brand_index()

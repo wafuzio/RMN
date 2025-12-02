@@ -1544,6 +1544,19 @@ class BrandReviewTool:
         # Remove only the ads that were actually updated (by index)
         old_count = len(self.unknown_ads)
         self.unknown_ads = [ad for i, ad in enumerate(self.unknown_ads) if i not in updated_indices]
+        
+        # ALSO filter out any remaining ads whose messages now match the lexicon
+        # (This catches ads with the same message that weren't in the similar_ads list)
+        if message_signal:
+            before_filter = len(self.unknown_ads)
+            self.unknown_ads = [
+                ad for ad in self.unknown_ads
+                if not self.match_message_to_lexicon((ad['ad'].get('message') or '').strip())
+            ]
+            extra_filtered = before_filter - len(self.unknown_ads)
+            if extra_filtered > 0:
+                print(f"[INFO] Filtered out {extra_filtered} additional ads with matching message")
+        
         removed_count = old_count - len(self.unknown_ads)
         if removed_count > 1:
             print(f"[INFO] Filtered out {removed_count} ads with brand '{original_uncertain_brand}' from review list")

@@ -7,11 +7,12 @@ Press 'Y' to keep, 'N' to delete, 'Q' to quit.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 from PIL import Image, ImageTk
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, simpledialog
 
 # Paths
 LOGOS_DIR = Path("output/brand_logos")
@@ -154,6 +155,15 @@ class LogoVerifier:
         )
         self.delete_btn.pack(side="left", padx=10)
         
+        # Rename button
+        self.rename_btn = ttk.Button(
+            button_frame,
+            text="✎ Rename (R)",
+            command=self.rename_brand,
+            width=15
+        )
+        self.rename_btn.pack(side="left", padx=10)
+        
         # Quit button
         self.quit_btn = ttk.Button(
             button_frame,
@@ -176,6 +186,8 @@ class LogoVerifier:
         self.root.bind('Y', lambda e: self.keep_logo())
         self.root.bind('n', lambda e: self.delete_logo())
         self.root.bind('N', lambda e: self.delete_logo())
+        self.root.bind('r', lambda e: self.rename_brand())
+        self.root.bind('R', lambda e: self.rename_brand())
         self.root.bind('q', lambda e: self.quit_app())
         self.root.bind('Q', lambda e: self.quit_app())
         self.root.bind('<Left>', lambda e: self.previous_logo())
@@ -298,6 +310,113 @@ class LogoVerifier:
         
         self.kept_count += 1
         self.next_logo()
+    
+    def rename_brand(self):
+        """Rename the brand and update lexicon + logo database"""
+        if self.current_index >= len(self.brands):
+            return
+        
+        brand_key, brand_data = self.brands[self.current_index]
+        current_name = brand_data.get("brand_name") or brand_key.replace("_", " ").title()
+        
+        # Ask for new name
+        new_name = simpledialog.askstring(
+            "Rename Brand",
+            f"Enter new name for '{current_name}':",
+            initialvalue=current_name,
+            parent=self.root
+        )
+        
+        if not new_name or new_name == current_name:
+            return
+        
+        # Create new key from new name
+        new_key = re.sub(r"[^a-z0-9]+", "_", new_name.lower()).strip("_")
+        old_key = brand_key
+        
+        print(f"✎ Renaming: {current_name} -> {new_name}")
+        
+        # Update logo database
+        if old_key in self.db["brands"]:
+            entry = self.db["brands"][old_key]
+            entry["brand_name"] = new_name
+            
+            # Rename the logo file too
+            old_logo = entry.get("logo_file", "")
+            if old_logo:
+                # Get file extension
+                old_path = LOGOS_DIR / old_logo
+                if old_path.exists():
+                    ext = old_path.suffix
+                    # Determine if in verified or unverified
+                    if "verified/" in old_logo:
+                        new_logo = f"verified/{new_key}{ext}"
+                    else:
+                        new_logo = f"unverified/{new_key}{ext}"
+                    
+                    new_path = LOGOS_DIR / new_logo
+                    try:
+                        old_path.rename(new_path)
+                        entry["logo_file"] = new_logo
+                        print(f"   Renamed file: {old_logo} -> {new_logo}")
+                    except Exception as e:
+                        print(f"   [WARN] Could not rename file: {e}")
+            
+            # Move to new key in database
+            if new_key != old_key:
+                self.db["brands"][new_key] = entry
+                del self.db["brands"][old_key]
+            
+            # Update in-memory list
+            self.brands[self.current_index] = (new_key, entry)
+        
+        # Update lexicon - add old name as synonym of new name
+        try:
+            from core.lexicon_utils import load_lexicon, save_lexicon
+            lexicon = load_lexicon()
+            
+            # Find if old brand exists in lexicon
+            old_entry = next((b for b in lexicon if b.get("name", "").lower() == current_name.lower()), None)
+            new_entry = next((b for b in lexicon if b.get("name", "").lower() == new_name.lower()), None)
+            
+            if old_entry and new_entry and old_entry != new_entry:
+                # Merge old into new
+                if current_name not in new_entry.get("synonyms", []):
+                    new_entry.setdefault("synonyms", []).append(current_name)
+                for syn in old_entry.get("synonyms", []):
+                    if syn not in new_entry.get("synonyms", []):
+                        new_entry["synonyms"].append(syn)
+                lexicon.remove(old_entry)
+                print(f"   Merged '{current_name}' into '{new_name}' in lexicon")
+            elif old_entry:
+                # Rename existing entry
+                old_entry["name"] = new_name
+                old_entry.setdefault("synonyms", []).append(current_name)
+                print(f"   Renamed in lexicon: {current_name} -> {new_name}")
+            elif not new_entry:
+                # Create new entry with old name as synonym
+                lexicon.append({
+                    "name": new_name,
+                    "synonyms": [current_name],
+                    "verified": False
+                })
+                print(f"   Added to lexicon: {new_name} (with synonym {current_name})")
+            
+            save_lexicon(lexicon)
+            
+            # Re-canonicalize ads
+            try:
+                from tools.recanon_ads import recanon_brand
+                print(f"   [RECANON] Changing '{current_name}' ads to '{new_name}'...")
+                recanon_brand(old_brand=current_name, new_brand=new_name)
+            except Exception as e:
+                print(f"   [WARN] Failed to recanon ads: {e}")
+                
+        except Exception as e:
+            print(f"   [WARN] Could not update lexicon: {e}")
+        
+        # Refresh display
+        self.show_current_logo()
     
     def delete_logo(self):
         """Delete the current logo and move to next"""
