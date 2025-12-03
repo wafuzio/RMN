@@ -11,13 +11,26 @@ import GaleLogo from "../../../web/assets/logos/GALE.svg";
 
 type Retailer = "kroger" | "amazon" | "walmart" | "instacart" | "target" | "albertsons" | "food_lion" | "gopuff" | "doordash" | "meijer" | "hyvee" | "ulta";
 
+interface CarouselBbox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface Snapshot {
   retailer: string;
   pageType: string;
   date: string;
   time: string;
+  runId?: string;
   filename: string;
   imagePath: string;
+  carousel?: {
+    slidesCount: number;
+    bbox: CarouselBbox | null;
+    slidePaths: string[];
+  };
 }
 
 const RETAILER_LABELS: Record<Retailer, string> = {
@@ -98,6 +111,9 @@ export default function RetailSnapshot() {
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [snapshotsError, setSnapshotsError] = useState<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = useState<Snapshot | null>(null);
+  const [carouselSlideIndex, setCarouselSlideIndex] = useState(0);
+  const [carouselPlaying, setCarouselPlaying] = useState(true);
+  const [expandedSlide, setExpandedSlide] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSnapshots = async () => {
@@ -135,6 +151,25 @@ export default function RetailSnapshot() {
 
     fetchSnapshots();
   }, [selectedRetailers, pageType, selectedDate]);
+
+  // Reset carousel when snapshot changes
+  useEffect(() => {
+    setCarouselSlideIndex(0);
+    setCarouselPlaying(true);
+  }, [selectedSnapshot]);
+
+  // Auto-advance carousel slides
+  useEffect(() => {
+    if (!selectedSnapshot?.carousel?.slidePaths?.length || !carouselPlaying) return;
+    
+    const interval = setInterval(() => {
+      setCarouselSlideIndex((prev) => 
+        (prev + 1) % selectedSnapshot.carousel!.slidePaths.length
+      );
+    }, 3000); // 3 seconds per slide
+    
+    return () => clearInterval(interval);
+  }, [selectedSnapshot, carouselPlaying]);
 
   const filteredKeywords = useMemo(() => {
     if (!keywordSearch.trim()) return MOCK_KEYWORDS;
@@ -450,6 +485,61 @@ export default function RetailSnapshot() {
 
               {/* Right Column: Stats */}
               <div className="space-y-4">
+                {/* Carousel Slides Section - Top of right column */}
+                {selectedSnapshot.carousel && selectedSnapshot.carousel.slidePaths.length > 0 && (
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900">
+                        Hero Carousel ({selectedSnapshot.carousel.slidePaths.length} slides)
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setCarouselPlaying(!carouselPlaying)}
+                          className={cn(
+                            "px-3 py-1 text-xs rounded-full font-medium transition-colors",
+                            carouselPlaying 
+                              ? "bg-blue-100 text-blue-800" 
+                              : "bg-gray-200 text-gray-700"
+                          )}
+                        >
+                          {carouselPlaying ? "⏸ Pause" : "▶ Play"}
+                        </button>
+                        <span className="text-xs text-gray-500">
+                          {carouselSlideIndex + 1}/{selectedSnapshot.carousel.slidePaths.length}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Current Slide */}
+                    <div className="relative">
+                      <img
+                        src={selectedSnapshot.carousel.slidePaths[carouselSlideIndex]}
+                        alt={`Carousel slide ${carouselSlideIndex + 1}`}
+                        className="w-full h-auto rounded-lg border border-gray-300 cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => setExpandedSlide(selectedSnapshot.carousel!.slidePaths[carouselSlideIndex])}
+                      />
+                    </div>
+                    
+                    {/* Slide Indicators */}
+                    <div className="flex justify-center gap-2 mt-3">
+                      {selectedSnapshot.carousel.slidePaths.map((_, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setCarouselSlideIndex(idx);
+                            setCarouselPlaying(false);
+                          }}
+                          className={cn(
+                            "w-2 h-2 rounded-full transition-colors",
+                            idx === carouselSlideIndex 
+                              ? "bg-blue-600" 
+                              : "bg-gray-300 hover:bg-gray-400"
+                          )}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                   <p className="text-xs text-gray-600 uppercase tracking-wider font-semibold">Date Captured</p>
                   <p className="text-lg font-bold text-gray-900 mt-1">{selectedSnapshot.date}</p>
@@ -492,6 +582,27 @@ export default function RetailSnapshot() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Expanded Slide Lightbox */}
+      {expandedSlide && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-90 z-[60] flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setExpandedSlide(null)}
+        >
+          <button
+            onClick={() => setExpandedSlide(null)}
+            className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors"
+          >
+            <X size={32} />
+          </button>
+          <img
+            src={expandedSlide}
+            alt="Expanded carousel slide"
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </main>

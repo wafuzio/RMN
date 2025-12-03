@@ -20,6 +20,11 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from PIL import Image, ImageTk
 
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from utils.lexicon_utils import save_lexicon
+
 # Paths
 LEXICON_PATH = Path("config/brands.json")
 LOGOS_DIR = Path("output/brand_logos")

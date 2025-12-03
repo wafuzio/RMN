@@ -16,7 +16,7 @@ import { handleProxyImage } from "./routes/proxy-image";
 import { handlePlaceholderAd } from "./routes/placeholder";
 import { handleImageProxy } from "./routes/image";
 import { handleVideoProxy } from "./routes/video";
-import { handleListSnapshots, handleGetSnapshot } from "./routes/snapshots";
+import { handleListSnapshots, handleGetSnapshot, handleGetCarouselData, handleGetCarouselSlide } from "./routes/snapshots";
 
 // Wrapper for regex route to extract ID from path
 const handlePlaceholderAdRegex: RequestHandler = (req, res, next) => {
@@ -100,6 +100,10 @@ export function createServer() {
     req.params.time = req.params[3];
     return handleGetSnapshot(req, res, next);
   });
+  
+  // Carousel API routes
+  app.get("/api/carousel/:retailer/:runId", handleGetCarouselData);
+  app.get("/api/carousel-slide/:retailer/:runId/:filename", handleGetCarouselSlide);
 
   return app;
 }

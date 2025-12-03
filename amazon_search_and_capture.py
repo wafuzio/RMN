@@ -22,7 +22,13 @@ import shutil
 import hashlib
 import re
 import time
-from core.brands import canonicalize
+from core.brands import canonicalize, add_brand
+
+# Brand logo database for centralized logo storage
+try:
+    from brand_logo_database import BrandLogoDatabase
+except ImportError:
+    BrandLogoDatabase = None
 
 # Optional helpers with safe fallbacks
 try:
@@ -195,10 +201,16 @@ def _extract_brand_and_message(container):
             ht = (head.text_content() or '').strip()
             if ht:
                 message = message or ht
-                # Extract brand from "Shop <Brand>" pattern
-                m2 = re.search(r"Shop\s+([^|\n\r]+)$", ht)
+                # Extract brand from "Shop <Brand>" or "Shop the <Brand> Store" patterns
+                # Pattern 1: "Shop the <Brand> Store" (most specific)
+                m2 = re.search(r"Shop\s+the\s+(.+?)\s+Store", ht, re.IGNORECASE)
                 if m2 and not brand:
                     brand = m2.group(1).strip()
+                # Pattern 2: "Shop <Brand>" at end of text
+                if not brand:
+                    m3 = re.search(r"Shop\s+([^|\n\r]+)$", ht)
+                    if m3:
+                        brand = m3.group(1).strip()
 
                 # Display/SBV fallback: infer brand from leading tokens of product title
                 if not brand:
@@ -237,9 +249,14 @@ def _extract_brand_and_message(container):
                     cand = m.group(1).strip()
                 else:
                     href = (store_link.get_attribute('href') or '').strip()
+                    # Match brand store URLs like /stores/BrandName or /stores/BrandName/page/...
+                    # But NOT /stores/page/UUID which is a generic store page
                     m2 = re.search(r"/stores/([^/?#]+)", href)
                     if m2:
-                        cand = m2.group(1).replace('-', ' ').replace('_', ' ').strip()
+                        segment = m2.group(1).strip()
+                        # Skip "page" - it's a URL structure element, not a brand
+                        if segment.lower() != 'page':
+                            cand = segment.replace('-', ' ').replace('_', ' ').strip()
                 if cand and not re.match(r"^[0-9.,]+$", cand):
                     if not re.search(r"\breviews?\b", cand, re.IGNORECASE) \
                        and not re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
@@ -273,11 +290,28 @@ def _extract_brand_and_message(container):
                             brand = cand
         except Exception:
             pass
+    
+    # Final fallback: search the message itself for brand patterns
+    if not brand and message:
+        # "Shop the <Brand> Store" pattern in message
+        m = re.search(r"Shop\s+the\s+(.+?)\s+Store", message, re.IGNORECASE)
+        if m:
+            brand = m.group(1).strip()
+        # "Visit the <Brand> Store" pattern
+        if not brand:
+            m = re.search(r"Visit\s+the\s+(.+?)\s+Store", message, re.IGNORECASE)
+            if m:
+                brand = m.group(1).strip()
+    
     # Canonicalize brand
     brand_canon = None
     try:
         if brand:
             brand_canon = canonicalize(brand)
+            # Add new brand to lexicon if not already there
+            if not brand_canon and brand.lower() not in ('unknown', ''):
+                add_brand(brand)
+                brand_canon = brand.strip().title()
     except Exception:
         brand_canon = None
     return brand, brand_canon, (message or "")
@@ -586,9 +620,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             "--disable-blink-features=AutomationControlled",
                             "--no-default-browser-check",
                             "--disable-features=IsolateOrigins,site-per-process",
-                            # Focus prevention - don't steal focus from user's active window
-                            "--no-startup-window",
-                            "--silent-launch",
+                            # Keep window visible but don't steal focus
                             "--disable-focus-on-load",
                             "--noerrdialogs",
                         ],
@@ -604,9 +636,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             "--disable-blink-features=AutomationControlled",
                             "--no-default-browser-check",
                             "--disable-features=IsolateOrigins,site-per-process",
-                            # Focus prevention - don't steal focus from user's active window
-                            "--no-startup-window",
-                            "--silent-launch",
+                            # Keep window visible but don't steal focus
                             "--disable-focus-on-load",
                             "--noerrdialogs",
                         ],
@@ -1320,10 +1350,22 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                     # Get brand store URL
                                     brand_store_url = logo_link.get_attribute('href') or ''
                                     
-                                    # Get brand logo image URL
+                                    # Get brand logo image URL - validate it's actually a logo, not an ad image
                                     logo_img = logo_link.locator('img[alt]')
                                     if logo_img.count() > 0:
-                                        brand_logo_url = logo_img.first.get_attribute('src') or ''
+                                        candidate_url = logo_img.first.get_attribute('src') or ''
+                                        # Validate: logos are small images, ad creatives have large dimensions in URL
+                                        # Amazon ad images have patterns like _CR0,0,1200,628_ or _SX920_ (large)
+                                        # Logos are typically under 200px and don't have these patterns
+                                        is_ad_image = any(pattern in candidate_url for pattern in [
+                                            '_SX920', '_SX800', '_SX600',  # Large scaled images
+                                            '_CR0,0,1200', '_CR0,0,800',   # Large cropped images
+                                            'al-na-',                       # Ad creative path prefix
+                                        ])
+                                        if not is_ad_image:
+                                            brand_logo_url = candidate_url
+                                        else:
+                                            log(f"sb-brands: skipping ad image as logo -> {candidate_url[:80]}...")
                                 
                                 # Method 3: Extract headline message from sb-headline element
                                 headline_link = el.locator('a[data-elementid="sb-headline"]')
@@ -1408,6 +1450,19 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 },
                             })
                             log(f"sb-themed: saved -> {fname}")
+                            
+                            # Save brand logo to centralized database
+                            if brand_logo_url and brand_canon and brand_canon != "unknown" and BrandLogoDatabase:
+                                try:
+                                    logo_db = BrandLogoDatabase()
+                                    logo_db.add_brand_logo(
+                                        brand=brand_canon,
+                                        logo_url=brand_logo_url,
+                                        retailer="amazon",
+                                        metadata={"ad_type": "Sponsored Brand", "keyword": keyword}
+                                    )
+                                except Exception as logo_err:
+                                    log(f"sb-brands: logo save error -> {logo_err}")
                         except Exception as e:
                             log(f"sb-themed: screenshot fail -> {e}")
                 except Exception as e:
@@ -1544,10 +1599,15 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                             brand_name = data_label[5:]  # Remove "Shop " prefix
                                     
                                     # Fallback to image alt if store link method fails
+                                    # NOTE: Do NOT capture brand_logo_url from SB Cards - these cards
+                                    # contain product/ad images, not brand logos. Brand logos should
+                                    # only come from Sponsored Brand ads which have dedicated logo elements.
+                                    brand_logo_url = ''
                                     if brand_name == 'unknown':
                                         brand_img = brand_li.locator('img[alt]:not([alt=""])')
                                         if brand_img.count() > 0:
                                             brand_name = brand_img.first.get_attribute('alt') or 'unknown'
+                                            # Do NOT set brand_logo_url here - card images are not logos
 
                                     # Use shared canonicalization so SB Cards align with other retailers
                                     if brand_name and brand_name.lower() != 'unknown':
@@ -1652,6 +1712,19 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                         },
                                     })
                                     log(f"sb-cards: individual card saved -> normal: {fname_normal}, hover: {fname_hover or 'failed'}")
+                                    
+                                    # Save brand logo to centralized database
+                                    if brand_logo_url and brand_canon and brand_canon != "unknown" and BrandLogoDatabase:
+                                        try:
+                                            logo_db = BrandLogoDatabase()
+                                            logo_db.add_brand_logo(
+                                                brand=brand_canon,
+                                                logo_url=brand_logo_url,
+                                                retailer="amazon",
+                                                metadata={"ad_type": "Sponsored_Brand_Card", "keyword": keyword}
+                                            )
+                                        except Exception as logo_err:
+                                            log(f"sb-cards: logo save error -> {logo_err}")
                             except Exception as e:
                                 log(f"sb-cards: individual card error -> {e}")
                 except Exception as e:
@@ -2274,9 +2347,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         "--disable-blink-features=AutomationControlled",
                         "--no-default-browser-check",
                         "--disable-features=IsolateOrigins,site-per-process",
-                        # Focus prevention - don't steal focus from user's active window
-                        "--no-startup-window",
-                        "--silent-launch",
+                        # Keep window visible but don't steal focus
                         "--disable-focus-on-load",
                         "--noerrdialogs",
                     ],
@@ -2292,9 +2363,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         "--disable-blink-features=AutomationControlled",
                         "--no-default-browser-check",
                         "--disable-features=IsolateOrigins,site-per-process",
-                        # Focus prevention - don't steal focus from user's active window
-                        "--no-startup-window",
-                        "--silent-launch",
+                        # Keep window visible but don't steal focus
                         "--disable-focus-on-load",
                         "--noerrdialogs",
                     ],

@@ -56,19 +56,31 @@ class LogoVerifier:
         # Load database
         self.db = load_database()
         
-        # Filter to only brands with existing logo files that haven't been verified
+        # Build list of logos to review from TWO sources:
+        # 1. Database entries that aren't verified yet (with existing files)
+        # 2. Files in unverified/ folder not yet in database (NEW logos to add)
+        
         all_brands = list(self.db.get("brands", {}).items())
         self.brands = []
         skipped_no_file = 0
         skipped_verified = 0
         
+        # Track which files are already in database
+        db_files = set()
+        
+        # Source 1: Unverified database entries with existing files
         for brand_key, brand_data in all_brands:
+            logo_file = brand_data.get("logo_file", "")
+            if logo_file:
+                db_files.add(logo_file)
+                # Also track without prefix
+                if logo_file.startswith("unverified/"):
+                    db_files.add(logo_file.replace("unverified/", ""))
+            
             # Skip already verified logos
             if brand_data.get("verified", False):
                 skipped_verified += 1
                 continue
-            
-            logo_file = brand_data.get("logo_file", "")
             
             # Handle both path formats
             if logo_file.startswith("brand_logos/"):
@@ -82,8 +94,37 @@ class LogoVerifier:
                 skipped_no_file += 1
                 print(f"⊘ Skipping {brand_key}: file not found ({logo_file})")
         
+        # Source 2: Scan unverified/ folder for NEW files not in database
+        unverified_dir = LOGOS_DIR / "unverified"
+        new_files = 0
+        if unverified_dir.exists():
+            for logo_file in unverified_dir.iterdir():
+                if logo_file.is_file() and logo_file.suffix.lower() in ('.png', '.jpg', '.jpeg', '.svg', '.webp'):
+                    rel_path = f"unverified/{logo_file.name}"
+                    # Check if this file is already tracked in database
+                    if rel_path not in db_files and logo_file.name not in db_files:
+                        # NEW file - create a placeholder entry for review
+                        # Derive brand name from filename (e.g., "annie_chun.png" -> "Annie Chun")
+                        brand_key = logo_file.stem.lower().replace('-', '_')
+                        brand_name = logo_file.stem.replace('_', ' ').replace('-', ' ').title()
+                        
+                        brand_data = {
+                            "brand_name": brand_name,
+                            "logo_file": rel_path,
+                            "logo_url": None,
+                            "retailers": ["amazon"],  # Default, can be edited
+                            "first_seen": self.get_timestamp(),
+                            "source": "unknown",
+                            "_is_new": True,  # Flag to indicate this needs to be added to DB
+                        }
+                        self.brands.append((brand_key, brand_data))
+                        new_files += 1
+                        print(f"➕ New file found: {logo_file.name} -> '{brand_name}'")
+        
         print(f"\n📊 Found {len(self.brands)} logos to verify")
-        print(f"   Skipped: {skipped_verified} already verified, {skipped_no_file} no file")
+        print(f"   From database: {len(self.brands) - new_files} unverified entries")
+        print(f"   New files: {new_files} (will be added to database)")
+        print(f"   Skipped: {skipped_verified} already verified, {skipped_no_file} missing files")
         
         self.current_index = 0
         self.deleted_count = 0
@@ -207,13 +248,19 @@ class LogoVerifier:
         brand_key, brand_data = self.brands[self.current_index]
         logo_file = brand_data.get("logo_file", "")
         
+        # Check if this is a NEW entry
+        is_new = brand_data.get("_is_new", False)
+        
         # Update progress
+        status = " [NEW]" if is_new else ""
         self.progress_label.config(
-            text=f"Logo {self.current_index + 1} of {len(self.brands)}"
+            text=f"Logo {self.current_index + 1} of {len(self.brands)}{status}"
         )
         
-        # Update brand name (convert key back to readable format)
-        brand_name = brand_key.replace("_", " ").title()
+        # Update brand name (use brand_name if available, else convert key)
+        brand_name = brand_data.get("brand_name") or brand_key.replace("_", " ").title()
+        if is_new:
+            brand_name = f"➕ {brand_name}"
         self.brand_label.config(text=brand_name)
         
         # Update metadata
@@ -278,36 +325,63 @@ class LogoVerifier:
         if self.current_index >= len(self.brands):
             return
         
-        # Mark as verified in database and move file into verified/ bucket
         brand_key, brand_data = self.brands[self.current_index]
-        if brand_key in self.db["brands"]:
+        
+        # Check if this is a NEW entry (from unverified folder scan)
+        is_new = brand_data.get("_is_new", False)
+        
+        if is_new:
+            # ADD new entry to database
+            new_entry = {
+                "brand_name": brand_data.get("brand_name", brand_key.replace("_", " ").title()),
+                "logo_url": brand_data.get("logo_url"),
+                "logo_file": brand_data.get("logo_file"),
+                "retailers": brand_data.get("retailers", ["amazon"]),
+                "first_seen": brand_data.get("first_seen", self.get_timestamp()),
+                "last_seen": self.get_timestamp(),
+                "source": brand_data.get("source", "unknown"),
+                "verified": True,
+                "verified_at": self.get_timestamp(),
+            }
+            self.db["brands"][brand_key] = new_entry
+            entry = new_entry
+            print(f"➕ Added new brand to database: {brand_key}")
+        elif brand_key in self.db["brands"]:
             entry = self.db["brands"][brand_key]
             entry["verified"] = True
             entry["verified_at"] = self.get_timestamp()
+        else:
+            # Shouldn't happen, but handle gracefully
+            self.kept_count += 1
+            self.next_logo()
+            return
 
-            # Normalize stored logo_file to a path relative to LOGOS_DIR
-            logo_file = (entry.get("logo_file", "") or "").strip()
-            if logo_file.startswith("brand_logos/"):
-                logo_file = logo_file[len("brand_logos/"):]
-            
-            src_path = (LOGOS_DIR / logo_file) if logo_file else None
-            filename = src_path.name if src_path else None
-            if src_path and filename and src_path.exists():
-                verified_dir = LOGOS_DIR / "verified"
-                verified_dir.mkdir(parents=True, exist_ok=True)
-                dest_rel = f"verified/{filename}"
-                dest_path = verified_dir / filename
-                if dest_path != src_path:
-                    try:
-                        src_path.rename(dest_path)
-                    except Exception:
-                        # If rename fails, keep original path
-                        dest_rel = logo_file or filename
-                # Store path relative to logo root (no brand_logos/ prefix)
-                entry["logo_file"] = dest_rel
-                # Update in-memory brand_data so subsequent operations see it
-                self.brands[self.current_index] = (brand_key, entry)
+        # Move file from unverified/ to verified/ bucket
+        logo_file = (entry.get("logo_file", "") or "").strip()
+        if logo_file.startswith("brand_logos/"):
+            logo_file = logo_file[len("brand_logos/"):]
         
+        src_path = (LOGOS_DIR / logo_file) if logo_file else None
+        filename = src_path.name if src_path else None
+        if src_path and filename and src_path.exists():
+            verified_dir = LOGOS_DIR / "verified"
+            verified_dir.mkdir(parents=True, exist_ok=True)
+            dest_rel = f"verified/{filename}"
+            dest_path = verified_dir / filename
+            if dest_path != src_path:
+                try:
+                    src_path.rename(dest_path)
+                    print(f"📁 Moved {logo_file} -> {dest_rel}")
+                except Exception as e:
+                    print(f"⚠️  Could not move file: {e}")
+                    # If rename fails, keep original path
+                    dest_rel = logo_file or filename
+            # Store path relative to logo root (no brand_logos/ prefix)
+            entry["logo_file"] = dest_rel
+            # Update in-memory brand_data so subsequent operations see it
+            self.brands[self.current_index] = (brand_key, entry)
+        
+        save_database(self.db)
         self.kept_count += 1
         self.next_logo()
     
@@ -356,6 +430,7 @@ class LogoVerifier:
                     
                     new_path = LOGOS_DIR / new_logo
                     try:
+                        new_path.parent.mkdir(parents=True, exist_ok=True)
                         old_path.rename(new_path)
                         entry["logo_file"] = new_logo
                         print(f"   Renamed file: {old_logo} -> {new_logo}")
@@ -425,6 +500,7 @@ class LogoVerifier:
         
         brand_key, brand_data = self.brands[self.current_index]
         logo_file = brand_data.get("logo_file", "")
+        is_new = brand_data.get("_is_new", False)
         
         # Strip brand_logos/ prefix if present to avoid double path
         if logo_file.startswith("brand_logos/"):
@@ -437,9 +513,10 @@ class LogoVerifier:
             logo_path.unlink()
             print(f"🗑️  Deleted: {logo_file}")
         
-        # Remove from database
-        if brand_key in self.db["brands"]:
+        # Remove from database (only if it was in there - not for new files)
+        if not is_new and brand_key in self.db["brands"]:
             del self.db["brands"][brand_key]
+            save_database(self.db)
         
         # Remove from brands list
         self.brands.pop(self.current_index)

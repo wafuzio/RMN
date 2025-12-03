@@ -17,7 +17,9 @@ Storage:
 
 import argparse
 import base64
+import json
 import os
+import random
 import sys
 import time
 from datetime import datetime
@@ -28,6 +30,325 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+
+
+# --- Profile fingerprint persistence (copied from walmart_search_and_capture.py) ---
+def _fp_paths(profile_dir):
+    if not profile_dir:
+        return None, None
+    fp_dir = os.path.join(profile_dir, "_rmn_fingerprint")
+    os.makedirs(fp_dir, exist_ok=True)
+    return os.path.join(fp_dir, "viewport.json"), os.path.join(fp_dir, "timezone.txt")
+
+def _load_or_init_profile_fingerprint(profile_dir):
+    """Load stable fingerprint for profile, or create one if missing.
+    EXACTLY copied from walmart_search_and_capture.py
+    """
+    vp_path, tz_path = _fp_paths(profile_dir)
+    if not vp_path:
+        # fallback defaults
+        return {"width": 1440, "height": 900}, "America/Chicago"
+    try:
+        with open(vp_path, "r") as f:
+            viewport = json.load(f)
+        with open(tz_path, "r") as f:
+            timezone = f.read().strip()
+        return viewport, timezone
+    except:
+        # Choose once, save, reuse
+        viewports = [
+            {'width': 1920, 'height': 1080},
+            {'width': 1366, 'height': 768},
+            {'width': 1440, 'height': 900},
+            {'width': 1536, 'height': 864},
+            {'width': 1680, 'height': 1050},
+        ]
+        timezones = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles']
+        viewport = random.choice(viewports)
+        timezone = random.choice(timezones)
+        try:
+            with open(vp_path, "w") as f:
+                json.dump(viewport, f)
+            with open(tz_path, "w") as f:
+                f.write(timezone)
+        except:
+            pass
+        return viewport, timezone
+# --- END: profile fingerprint persistence ---
+
+
+# --- Human-like behavior helpers (copied from walmart_search_and_capture.py) ---
+# These MUST match the main scraper exactly to avoid bot detection
+
+def _scroll_burst_wheel(page, lines=8):
+    """Emit a small burst of native wheel events (human-like)."""
+    for _ in range(lines):
+        page.mouse.wheel(0, random.randint(48, 140))  # mac trackpad-ish deltas
+        time.sleep(random.uniform(0.045, 0.12))
+
+
+def _drift_reading(page, seconds=2.0):
+    """Subtle mouse drift to simulate reading/scanning.
+    Copied from walmart_search_and_capture.py _drift_reading
+    """
+    end = time.time() + seconds
+    try:
+        while time.time() < end:
+            dx = random.randint(-60, 60)
+            dy = random.randint(-30, 30)
+            page.mouse.move(
+                max(100, min(1100, 600 + dx)),
+                max(100, min(600, 350 + dy)),
+                steps=random.randint(3, 8)
+            )
+            time.sleep(random.uniform(0.12, 0.35))
+    except:
+        pass
+
+
+def _backscroll_peek(page):
+    """Occasional back-scroll peek (35% chance).
+    Copied from walmart_search_and_capture.py _backscroll_peek
+    """
+    if random.random() < 0.35:
+        try:
+            page.mouse.wheel(0, random.randint(-200, -80))
+            time.sleep(random.uniform(0.4, 0.8))
+        except:
+            pass
+
+
+def micro_mouse_attention(page, around=(8, 15), jitter=10):
+    """Subtle mouse micro-movements to simulate attention.
+    Copied from walmart_search_and_capture.py micro_mouse_attention
+    """
+    try:
+        # Get current position or use center
+        cx, cy = 640, 360
+        steps = random.randint(*around)
+        for _ in range(steps):
+            nx = cx + random.randint(-jitter, jitter)
+            ny = cy + random.randint(-jitter, jitter)
+            page.mouse.move(nx, ny, steps=random.randint(2, 5))
+            time.sleep(random.uniform(0.01, 0.03))
+    except:
+        pass
+# --- End human-like behavior helpers ---
+
+
+def capture_hero_carousel(page, output_dir: Path, retailer: str, file_timestamp: str) -> list:
+    """Capture all slides from the hero carousel.
+    
+    Uses human-like timing to avoid triggering bot detection.
+    Returns list of dicts with slide info: {index, screenshot_path, content}
+    
+    Args:
+        file_timestamp: Timestamp string for canonical filenames (e.g. "2025-12-02_T23-02.26")
+    """
+    slides_captured = []
+    
+    try:
+        # Find the hero carousel container
+        carousel_selector = '[data-testid="horizontal-scroller-hp-heropov-container"]'
+        carousel = page.locator(carousel_selector)
+        
+        if carousel.count() == 0:
+            print(f"[{retailer}] carousel: no hero carousel found (selector: {carousel_selector})")
+            return slides_captured
+        
+        print(f"[{retailer}] carousel: found hero carousel")
+        
+        # Get carousel bounding box for viewer overlay positioning
+        carousel_bbox = None
+        try:
+            bbox = carousel.first.bounding_box()
+            if bbox:
+                carousel_bbox = {
+                    "x": bbox["x"],
+                    "y": bbox["y"],
+                    "width": bbox["width"],
+                    "height": bbox["height"]
+                }
+                print(f"[{retailer}] carousel: bounding box: {carousel_bbox}")
+        except Exception as e:
+            print(f"[{retailer}] carousel: failed to get bounding box: {e}")
+        
+        # Find navigation buttons
+        next_btn_selector = '[aria-label*="Next slide for hp-heropov"]'
+        next_btn = page.locator(next_btn_selector).first
+        
+        print(f"[{retailer}] carousel: looking for next button ({next_btn_selector})")
+        
+        # Count total slides from data-slide attributes
+        slide_items = carousel.locator('li[data-slide]')
+        total_slides = slide_items.count()
+        print(f"[{retailer}] carousel: detected {total_slides} total slides (from data-slide attributes)")
+        
+        if total_slides == 0:
+            # Fallback to max
+            total_slides = 10
+            print(f"[{retailer}] carousel: no data-slide found, using max={total_slides}")
+        
+        seen_content = set()
+        
+        # Scroll carousel into view first (human-like)
+        print(f"[{retailer}] carousel: scrolling into view...")
+        carousel.first.scroll_into_view_if_needed()
+        time.sleep(random.uniform(0.8, 1.2))  # Human pause after scroll
+        
+        for i in range(total_slides):
+            print(f"[{retailer}] carousel: processing iteration {i+1}/{total_slides}...")
+            
+            # Human-like pause before each action
+            if i > 0:
+                pause = random.uniform(1.5, 2.5)
+                print(f"[{retailer}] carousel: waiting {pause:.1f}s before next slide...")
+                time.sleep(pause)
+            
+            # Get current slide content for deduplication
+            try:
+                # Find ALL visible slides in the carousel (li elements with data-slide)
+                # These contain ALL content types, not just sponsored ads
+                visible_cards = carousel.locator('li[data-slide]:visible')
+                card_count = visible_cards.count()
+                print(f"[{retailer}] carousel: found {card_count} visible slides")
+                
+                if card_count == 0:
+                    print(f"[{retailer}] carousel: no cards found, stopping")
+                    break
+                
+                # Capture each visible card we haven't seen yet
+                new_cards_found = False
+                for card_idx in range(card_count):
+                    card = visible_cards.nth(card_idx)
+                    try:
+                        card_html = card.inner_html()
+                    except:
+                        continue
+                    content_hash = hash(card_html[:500])
+                    
+                    if content_hash in seen_content:
+                        print(f"[{retailer}] carousel: card {card_idx+1} already captured (hash={content_hash})")
+                        continue
+                    
+                    seen_content.add(content_hash)
+                    new_cards_found = True
+                    slide_num = len(slides_captured) + 1
+                    print(f"[{retailer}] carousel: NEW card found (hash={content_hash}), saving as slide {slide_num}")
+                    
+                    # Extract slide info
+                    slide_info = {
+                        'index': slide_num,
+                        'content': {}
+                    }
+                    
+                    # Canonical filename: {retailer}__fp_hero_slide_{N}__D{timestamp}
+                    slide_filename = f"{retailer}__fp_hero_slide_{slide_num}__D{file_timestamp}"
+                    
+                    # Save full HTML of the tile
+                    try:
+                        html_path = output_dir / f"{slide_filename}.html"
+                        with open(html_path, 'w') as f:
+                            f.write(card_html)
+                        slide_info['html_path'] = str(html_path)
+                        slide_info['html_file'] = f"{slide_filename}.html"
+                        print(f"[{retailer}] carousel: slide {slide_num} HTML saved ({len(card_html)} bytes)")
+                    except Exception as e:
+                        print(f"[{retailer}] carousel: slide {slide_num} HTML save failed: {e}")
+                    
+                    # Try to get text content
+                    try:
+                        text = card.inner_text()
+                        slide_info['content']['text'] = text.strip()[:200]
+                        print(f"[{retailer}] carousel: slide {slide_num} text: {text.strip()[:50]}...")
+                    except Exception as e:
+                        print(f"[{retailer}] carousel: slide {slide_num} text extraction failed: {e}")
+                    
+                    # Try to get image URL
+                    try:
+                        img = card.locator('img').first
+                        if img.count() > 0:
+                            slide_info['content']['image_url'] = img.get_attribute('src')
+                            print(f"[{retailer}] carousel: slide {slide_num} has image")
+                    except Exception as e:
+                        print(f"[{retailer}] carousel: slide {slide_num} image extraction failed: {e}")
+                    
+                    # Try to get link
+                    try:
+                        link = card.locator('a').first
+                        if link.count() > 0:
+                            href = link.get_attribute('href')
+                            slide_info['content']['link'] = href
+                            print(f"[{retailer}] carousel: slide {slide_num} link: {href[:50] if href else 'none'}...")
+                    except Exception as e:
+                        print(f"[{retailer}] carousel: slide {slide_num} link extraction failed: {e}")
+                    
+                    # Screenshot the individual card (not the whole carousel)
+                    screenshot_path = output_dir / f"{slide_filename}.png"
+                    try:
+                        card.screenshot(path=str(screenshot_path))
+                        slide_info['screenshot_path'] = str(screenshot_path)
+                        slide_info['screenshot_file'] = f"{slide_filename}.png"
+                        print(f"[{retailer}] carousel: ✓ captured slide {slide_num} screenshot")
+                    except Exception as e:
+                        print(f"[{retailer}] carousel: ✗ screenshot failed for slide {slide_num}: {e}")
+                    
+                    slides_captured.append(slide_info)
+                
+                # Stop conditions:
+                # 1. We've captured all slides we detected
+                # 2. OR we've looped (all visible cards already captured)
+                if len(slides_captured) >= total_slides:
+                    print(f"[{retailer}] carousel: captured all {total_slides} slides")
+                    break
+                    
+                if not new_cards_found and len(slides_captured) >= 1:
+                    print(f"[{retailer}] carousel: all {card_count} visible cards already captured - carousel has looped")
+                    print(f"[{retailer}] carousel: captured {len(slides_captured)}/{total_slides} unique slides")
+                    break
+                    
+            except Exception as e:
+                print(f"[{retailer}] carousel: error on iteration {i+1}: {e}")
+            
+            # Click next button if visible (with human-like behavior)
+            try:
+                if next_btn.is_visible(timeout=1000):
+                    print(f"[{retailer}] carousel: clicking next button...")
+                    # Small mouse movement before click (human-like)
+                    try:
+                        box = next_btn.bounding_box()
+                        if box:
+                            page.mouse.move(
+                                box['x'] + box['width']/2 + random.randint(-5, 5),
+                                box['y'] + box['height']/2 + random.randint(-5, 5),
+                                steps=random.randint(3, 6)
+                            )
+                            time.sleep(random.uniform(0.1, 0.3))
+                    except:
+                        pass
+                    next_btn.click()
+                    # Wait for animation
+                    anim_wait = random.uniform(0.8, 1.2)
+                    print(f"[{retailer}] carousel: waiting {anim_wait:.1f}s for animation...")
+                    time.sleep(anim_wait)
+                else:
+                    print(f"[{retailer}] carousel: next button not visible, stopping")
+                    break
+            except Exception as e:
+                print(f"[{retailer}] carousel: next button click failed: {e}")
+                break
+        
+        print(f"[{retailer}] carousel: ✓ captured {len(slides_captured)} slides total")
+        
+    except Exception as e:
+        print(f"[{retailer}] carousel: ERROR: {e}")
+    
+    # Return both slides and bounding box for viewer integration
+    return {
+        "slides": slides_captured,
+        "bbox": carousel_bbox,
+        "total_detected": total_slides if 'total_slides' in dir() else 0
+    }
 
 
 # Retailer homepage URLs
@@ -48,13 +369,29 @@ def _check_px_block(page) -> tuple:
     try:
         content = page.content()
         
-        # PerimeterX CAPTCHA - "Press & Hold" button
+        # PerimeterX CAPTCHA - "Press & Hold" button (multiple selectors)
         if page.locator("#px-captcha").count() > 0:
             return True, "perimeterx_captcha (Press & Hold)"
+        
+        # Check for "Press & Hold" text anywhere on page
+        if "Press & Hold" in content or "PRESS & HOLD" in content:
+            return True, "perimeterx_captcha (Press & Hold text)"
+        
+        # Check for human verification iframe
+        if page.locator('iframe[title*="Human verification"]').count() > 0:
+            return True, "perimeterx_captcha (Human verification iframe)"
+        
+        # Check for PX challenge container
+        if page.locator('[id*="px-captcha"], [class*="px-captcha"]').count() > 0:
+            return True, "perimeterx_captcha (PX container)"
         
         # "Robot or human?" text
         if "Robot or human?" in content:
             return True, "perimeterx_captcha (Robot or human)"
+        
+        # "Are you a robot?" text
+        if "Are you a robot" in content or "are you a robot" in content.lower():
+            return True, "perimeterx_captcha (Are you a robot)"
         
         # Blocked page redirect
         if "/blocked" in page.url.lower():
@@ -64,9 +401,20 @@ def _check_px_block(page) -> tuple:
         if "access denied" in content.lower():
             return True, "access_denied"
         
-        # Check for PX modal overlay
-        if page.locator('[class*="px-captcha"]').count() > 0:
-            return True, "px_modal"
+        # Check for PX modal overlay by various class patterns
+        px_selectors = [
+            '[class*="px-captcha"]',
+            '[class*="PerimeterX"]',
+            '[class*="perimeterx"]',
+            '[data-testid*="captcha"]',
+            '.captcha-container',
+        ]
+        for selector in px_selectors:
+            try:
+                if page.locator(selector).count() > 0:
+                    return True, f"px_modal ({selector})"
+            except:
+                pass
         
         return False, ""
     except Exception as e:
@@ -105,31 +453,48 @@ def get_profile_dir(retailer: str, cli_profile: str = None):
     
     chrome_profiles = Path.home() / "ChromeProfiles"
     
-    # Priority 3: For bot-protected sites, use dedicated frontpage profile
-    # These need to be seeded from the main scraper profile once to have session cookies
-    # Run: cp -r ~/ChromeProfiles/kroger_clean_profile ~/ChromeProfiles/kroger_frontpage_profile
+    # Priority 3: For bot-protected sites, use the SAME profile as the main scraper
+    # The main scraper uses profiles in PROJECT_ROOT/profiles/, NOT ~/ChromeProfiles/
     if retailer in ('kroger', 'walmart', 'target'):
-        frontpage_profile = chrome_profiles / f"{retailer}_frontpage_profile"
-        if frontpage_profile.exists():
-            return str(frontpage_profile)
-        # Fallback to main profile only if frontpage profile doesn't exist
+        # Main scraper profile location (from run_report.json: "profile_dir": ".../profiles/walmart")
+        main_scraper_profile = PROJECT_ROOT / "profiles" / retailer
+        if main_scraper_profile.exists():
+            print(f"[{retailer}] Using main scraper profile: {main_scraper_profile}")
+            return str(main_scraper_profile)
+        
+        # Fallback to ~/ChromeProfiles if project profile doesn't exist
         main_profile_names = {
             'kroger': 'kroger_clean_profile',
             'walmart': 'walmart_clean2', 
             'target': 'target_profile',
         }
         main_profile = chrome_profiles / main_profile_names.get(retailer, f"{retailer}_profile")
+        frontpage_profile = chrome_profiles / f"{retailer}_frontpage_profile"
+        
         if main_profile.exists():
-            # Auto-clone the main profile for frontpage use
+            # Always fresh-clone from main profile to get latest cookies/trust
+            # This ensures we benefit from main scraper's accumulated trust
+            # while avoiding profile lock conflicts
             import shutil
-            print(f"[{retailer}] Cloning main profile to frontpage profile...")
+            
+            # Remove old frontpage profile if it exists
+            if frontpage_profile.exists():
+                print(f"[{retailer}] Removing stale frontpage profile...")
+                shutil.rmtree(str(frontpage_profile), ignore_errors=True)
+            
+            print(f"[{retailer}] Fresh-cloning from main scraper profile...")
             shutil.copytree(str(main_profile), str(frontpage_profile), dirs_exist_ok=True)
+            
             # Remove lock files from the clone
             for lock in ['SingletonLock', 'SingletonCookie', 'SingletonSocket']:
                 lock_path = frontpage_profile / lock
                 if lock_path.exists() or lock_path.is_symlink():
-                    lock_path.unlink()
-            print(f"[{retailer}] Created frontpage profile from main profile")
+                    try:
+                        lock_path.unlink()
+                    except:
+                        pass
+            
+            print(f"[{retailer}] Using freshly cloned profile: {frontpage_profile}")
             return str(frontpage_profile)
     
     # Priority 4: ~/ChromeProfiles/<retailer>_frontpage_profile (dedicated for screenshots)
@@ -698,9 +1063,9 @@ def capture_fullpage_cdp(context, page, output_path: Path, retailer: str = None)
     return output_path
 
 
-def save_html(page, output_path: Path):
-    """Save the full HTML content of the page."""
-    html_path = output_path.with_suffix('.html')
+def save_html(page, run_dir: Path, base_filename: str):
+    """Save HTML content of the page."""
+    html_path = run_dir / f"{base_filename}.html"
     try:
         html_content = page.content()
         html_path.write_text(html_content, encoding='utf-8')
@@ -710,9 +1075,9 @@ def save_html(page, output_path: Path):
         return None
 
 
-def save_readable_text(page, output_path: Path, retailer: str = None):
+def save_readable_text(page, run_dir: Path, base_filename: str, retailer: str = None):
     """Save extracted readable text from the page."""
-    text_path = output_path.with_suffix('.txt')
+    text_path = run_dir / f"{base_filename}.txt"
     try:
         # Get page title and URL for header
         title = page.title() or "Unknown"
@@ -763,14 +1128,21 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
     url = RETAILER_URLS[retailer]
     output_root = output_root or get_output_root()
     
-    # Generate output path
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M.%S")
-    filename = f"{retailer}__front_page__D{timestamp}.png"
-    output_path = output_root / retailer / "front_pages" / filename
+    # Generate run ID and output directory (date-first structure like main scraper)
+    run_timestamp = datetime.now()
+    run_id = run_timestamp.strftime("%Y%m%d%H%M%S")
+    run_dir = output_root / retailer / "front_pages" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Canonical filename format: {retailer}__front_page__D{YYYY-MM-DD}_T{HH-MM.SS}.png
+    file_timestamp = run_timestamp.strftime("%Y-%m-%d_T%H-%M.%S")
+    base_filename = f"{retailer}__front_page__D{file_timestamp}"
+    output_path = run_dir / f"{base_filename}.png"
     
     print(f"[{retailer}] Starting capture...")
     print(f"[{retailer}] URL: {url}")
-    print(f"[{retailer}] Output will be: {output_path}")
+    print(f"[{retailer}] Run ID: {run_id}")
+    print(f"[{retailer}] Output dir: {run_dir}")
     
     # Resolve profile
     resolved_profile = get_profile_dir(retailer, profile_dir)
@@ -784,14 +1156,14 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
         print(f"[{retailer}] Initializing Playwright...", flush=True)
         
         with sync_playwright() as p:
-            # Minimal args - let Chrome be visible and work normally
-            # The --no-startup-window and --silent-launch were causing hangs
+            # CRITICAL: GPU acceleration args for proper WebGL fingerprint
+            # EXACTLY matches walmart_search_and_capture.py _launch() args
             browser_args = [
                 '--use-angle=metal',  # Force ANGLE→Metal backend on macOS
-                '--enable-gpu-rasterization',
-                '--ignore-gpu-blocklist',
-                '--no-first-run',
-                '--disable-notifications',
+                '--enable-gpu-rasterization',  # Prefer GPU raster
+                '--ignore-gpu-blocklist',  # Don't let Chrome silently disable GPU
+                '--disable-focus-on-load',  # Keep window visible but don't steal focus
+                '--noerrdialogs',
             ]
             
             if not resolved_profile:
@@ -808,14 +1180,20 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
                     except:
                         pass
             
+            # Load stable fingerprint for this profile (EXACTLY like main scraper)
+            viewport, timezone = _load_or_init_profile_fingerprint(resolved_profile)
+            print(f"[{retailer}] Fingerprint: viewport={viewport}, timezone={timezone}")
+            
+            # EXACTLY matches walmart_search_and_capture.py launch_options
             launch_options = {
                 'user_data_dir': resolved_profile,
-                'headless': False,  # ALWAYS headed
-                'viewport': {"width": 1280, "height": 720},
+                'headless': False,  # ALWAYS headed for Walmart
+                'viewport': viewport,  # STABLE per profile (not hardcoded!)
                 'locale': 'en-US',
+                'timezone_id': timezone,  # STABLE per profile
                 'args': browser_args,
                 'ignore_default_args': ['--enable-automation'],  # Prevents navigator.webdriver=true
-                'chromium_sandbox': True,  # CRITICAL: Force sandbox ON
+                'chromium_sandbox': True,  # CRITICAL: Force sandbox ON (removes banner)
             }
             
             # Use real Chrome for bot-protected sites (Walmart, Target, Kroger)
@@ -843,6 +1221,17 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
             
             page = context.pages[0] if context.pages else context.new_page()
             
+            # --- Diagnostic logging (matches main scraper) ---
+            if retailer in ('walmart', 'target'):
+                # Log cookie state (like main scraper cookies_pre)
+                try:
+                    cookies = context.cookies()
+                    cookie_names = [c['name'] for c in cookies][:12]  # First 12
+                    px_cookies = [n for n in cookie_names if n.startswith('_px')]
+                    print(f"[{retailer}] Cookies: {len(cookies)} total, PX cookies: {px_cookies}")
+                except:
+                    pass
+            
             # Navigate with retry
             max_retries = 2
             for attempt in range(max_retries):
@@ -866,6 +1255,74 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
             # Additional grace period for JS hydration
             page.wait_for_timeout(2000)
             
+            # --- Post-navigation diagnostics (matches main scraper) ---
+            if retailer in ('walmart', 'target'):
+                # Log User-Agent
+                try:
+                    ua = page.evaluate("() => navigator.userAgent")
+                    print(f"[{retailer}] UA: {ua[:80]}...")
+                except:
+                    pass
+                
+                # Log WebGL info (verify GPU isn't SwiftShader)
+                try:
+                    webgl_info = page.evaluate("""() => {
+                        const c = document.createElement('canvas');
+                        const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+                        if (!gl) return null;
+                        const ext = gl.getExtension('WEBGL_debug_renderer_info');
+                        return {
+                            vendor: gl.getParameter(gl.VENDOR),
+                            renderer: gl.getParameter(gl.RENDERER),
+                            unmaskedVendor: ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : null,
+                            unmaskedRenderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null
+                        };
+                    }""")
+                    if webgl_info:
+                        print(f"[{retailer}] WebGL: {webgl_info.get('unmaskedRenderer', 'unknown')}")
+                except:
+                    pass
+                
+                # Log navigator.webdriver (should be undefined/null)
+                try:
+                    webdriver = page.evaluate("() => navigator.webdriver")
+                    print(f"[{retailer}] navigator.webdriver: {webdriver}")
+                except:
+                    pass
+            
+            # Human-like behavior for bot-protected sites (CRITICAL for Walmart/Target)
+            # This mimics what the main scraper does before any action
+            if retailer in ('walmart', 'target'):
+                print(f"[{retailer}] Simulating human behavior...")
+                
+                # 1. Idle like a human reading the page (1-2.5 seconds)
+                idle_time = random.uniform(1.0, 2.5)
+                print(f"[{retailer}] Idle reading ({idle_time:.1f}s)...")
+                time.sleep(idle_time)
+                
+                # 2. Small mouse movement (humans don't keep mouse perfectly still)
+                try:
+                    page.mouse.move(
+                        random.randint(400, 800),
+                        random.randint(200, 400)
+                    )
+                    time.sleep(random.uniform(0.2, 0.5))
+                except:
+                    pass
+                
+                # 3. Accept cookie consent if present
+                try:
+                    accept_btn = page.locator('button:has-text("Accept")').first
+                    if accept_btn.is_visible(timeout=1000):
+                        accept_btn.click()
+                        print(f"[{retailer}] Accepted cookie consent")
+                        time.sleep(random.uniform(0.3, 0.6))
+                except:
+                    pass
+                
+                # 4. Another brief idle (humans pause after dismissing popups)
+                time.sleep(random.uniform(0.5, 1.0))
+            
             # Check for bot detection / PX block (especially Walmart/Target)
             if retailer in ('walmart', 'target'):
                 is_blocked, block_reason = _check_px_block(page)
@@ -881,7 +1338,68 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
                 print(f"[{retailer}] ✅ No bot detection triggered")
             
             # Retailer-specific handling
-            if retailer == "kroger":
+            if retailer == "walmart":
+                # EXACT same behavior as main scraper walmart_search_and_capture.py
+                # Reference: lines 3125-3165 and lines 1648-1674
+                
+                # Step 1: Idle before first scroll (line 3126: random_delay(2.2, 3.5))
+                idle_before = random.uniform(2.2, 3.5)
+                print(f"[{retailer}] Idle before scroll ({idle_before:.1f}s)...")
+                time.sleep(idle_before)
+                
+                # Step 2: First scroll - MUST use reduced params (lines 1650-1653)
+                # First scroll: bursts=2 (max), lines_min=4, lines_max=8
+                print(f"[{retailer}] First scroll (bursts=2, lines=4-8)...")
+                lines_min, lines_max = 4, 8
+                local_bursts = 2
+                
+                for b in range(local_bursts):
+                    # Each burst: 4-8 wheel events (line 1656)
+                    _scroll_burst_wheel(page, lines=random.randint(lines_min, lines_max))
+                    # Pause between bursts (line 1657: pause_min=0.25, pause_max=0.9)
+                    time.sleep(random.uniform(0.25, 0.9))
+                    
+                    # After FIRST burst only: idle 1.0-2.2s (lines 1669-1674)
+                    if b == 0:
+                        first_idle = random.uniform(1.0, 2.2)
+                        print(f"[{retailer}] Post-first-burst idle ({first_idle:.1f}s)...")
+                        time.sleep(first_idle)
+                
+                # Step 3: Exploratory behavior (lines 3133-3134)
+                _drift_reading(page, seconds=random.uniform(1.8, 3.0))
+                _backscroll_peek(page)
+                
+                # Step 4: Hover on a random product tile (lines 3137-3145)
+                try:
+                    tiles = page.locator('[data-item-id]')
+                    if tiles.count() > 0:
+                        n = random.randint(0, min(5, tiles.count()-1))
+                        tiles.nth(n).hover()
+                        time.sleep(random.uniform(0.4, 0.9))
+                except:
+                    pass
+                
+                # Step 5: Wait after interactions (line 3148)
+                time.sleep(random.uniform(0.5, 0.9))
+                
+                # Step 6: Simple mouse movement (lines 3151-3157)
+                try:
+                    page.mouse.move(
+                        random.randint(300, 800),
+                        random.randint(200, 500),
+                        steps=random.randint(8, 15)
+                    )
+                except:
+                    pass
+                
+                # Scroll back to top for screenshot
+                print(f"[{retailer}] Scrolling back to top...")
+                page.evaluate("window.scrollTo(0, 0)")
+                time.sleep(0.5)
+                
+                print(f"[{retailer}] Human behavior complete")
+            
+            elif retailer == "kroger":
                 # Close Kroger popups (store selector, newsletter, terms, etc.)
                 print(f"[{retailer}] Checking for popups...")
                 popup_selectors = [
@@ -1038,13 +1556,17 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
                 """)
                 page.wait_for_timeout(200)
                 
-                # Extra scroll to trigger lazy loading
-                page.evaluate("window.scrollTo(0, 500)")
-                page.wait_for_timeout(1000)
-                page.evaluate("window.scrollTo(0, 1500)")
-                page.wait_for_timeout(1000)
+                # Human-like scroll to trigger lazy loading (same as Walmart)
+                print(f"[{retailer}] Human-like scrolling...")
+                for _ in range(random.randint(2, 3)):
+                    _scroll_burst_wheel(page, lines=random.randint(6, 10))
+                _drift_reading(page, seconds=random.uniform(1.5, 2.5))
+                _backscroll_peek(page)
+                time.sleep(random.uniform(0.5, 0.9))
+                
+                # Scroll back to top
                 page.evaluate("window.scrollTo(0, 0)")
-                page.wait_for_timeout(1500)
+                page.wait_for_timeout(500)
                 
                 # Wait for images to load
                 page.evaluate("""
@@ -1079,11 +1601,11 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
             
             # Save HTML
             print(f"[{retailer}] Saving HTML...")
-            html_path = save_html(page, output_path)
+            html_path = save_html(page, run_dir, base_filename)
             
             # Save readable text
             print(f"[{retailer}] Extracting readable text...")
-            text_path = save_readable_text(page, output_path, retailer)
+            text_path = save_readable_text(page, run_dir, base_filename, retailer)
             
             # Get file size
             file_size_mb = output_path.stat().st_size / (1024 * 1024)
@@ -1108,6 +1630,52 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
             print(f"[{retailer}] Size: {dimensions} ({file_size_mb:.1f} MB)")
             print(f"[{retailer}] Duration: {duration:.1f}s")
             
+            # Capture hero carousel slides AFTER main screenshot (Walmart only)
+            carousel_data = {"slides": [], "bbox": None, "total_detected": 0}
+            if retailer == "walmart":
+                print(f"[{retailer}] --- Starting carousel capture (after main screenshot) ---")
+                carousel_dir = run_dir / "carousel"
+                carousel_dir.mkdir(parents=True, exist_ok=True)
+                carousel_data = capture_hero_carousel(page, carousel_dir, retailer, file_timestamp)
+                
+                # Save carousel metadata (includes bbox for viewer overlay)
+                if carousel_data["slides"]:
+                    carousel_json = carousel_dir / "slides.json"
+                    with open(carousel_json, 'w') as f:
+                        json.dump(carousel_data, f, indent=2)
+                    print(f"[{retailer}] carousel: metadata saved to {carousel_json}")
+                print(f"[{retailer}] --- Carousel capture complete ---")
+            
+            # Save capture metadata
+            capture_meta = {
+                "retailer": retailer,
+                "url": url,
+                "run_id": run_id,
+                "captured_at": run_timestamp.isoformat(),
+                "duration_seconds": round(duration, 2),
+                "files": {
+                    "screenshot": f"{base_filename}.png",
+                    "html": f"{base_filename}.html",
+                    "text": f"{base_filename}.txt"
+                },
+                "carousel": {
+                    "slides_count": len(carousel_data["slides"]),
+                    "bbox": carousel_data["bbox"]
+                },
+                "dimensions": dimensions,
+                "file_size_mb": round(file_size_mb, 2)
+            }
+            # Add fingerprint for retailers that use it
+            if retailer in ('walmart', 'target', 'kroger'):
+                capture_meta["fingerprint"] = {
+                    "viewport": viewport,
+                    "timezone": timezone
+                }
+            meta_path = run_dir / "capture_meta.json"
+            with open(meta_path, 'w') as f:
+                json.dump(capture_meta, f, indent=2)
+            print(f"[{retailer}] Metadata: {meta_path}")
+            
             # Cleanup
             context.close()
             if not resolved_profile:
@@ -1115,9 +1683,13 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
             
             return {
                 "success": True,
+                "run_id": run_id,
+                "run_dir": str(run_dir),
                 "path": str(output_path),
                 "html_path": str(html_path) if html_path else None,
                 "text_path": str(text_path) if text_path else None,
+                "carousel_slides": len(carousel_data["slides"]),
+                "carousel_bbox": carousel_data["bbox"],
                 "error": None,
                 "duration": duration
             }
