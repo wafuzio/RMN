@@ -42,11 +42,12 @@ try:
 except ImportError:
     BrandLogoDatabase = None
 
-# Import brand lexicon canonicalization
+# Import brand lexicon canonicalization and adding
 try:
-    from core.brands import canonicalize as canonicalize_brand
+    from core.brands import canonicalize as canonicalize_brand, add_brand as add_brand_to_lexicon
 except ImportError:
     canonicalize_brand = None
+    add_brand_to_lexicon = None
 # --- BEGIN: debug configuration ---
 @dataclass
 class DebugConfig:
@@ -249,6 +250,8 @@ SELECTORS = {
     "tile_takeover": '[data-testid="tile-take-over"]',  # Tile takeover
     "sbv": '[data-testid="search-video-in-grid"]',  # Sponsored Brand Video
     "marquee_banner": '[data-testid="marquee2"]',  # Onsite Display Marquee Banner
+    "gallery_cards": '[data-testid="galleryBottom"]',  # Gallery Bottom Ad Cards carousel
+    "gallery_card_iframe": 'iframe[data-ad-type^="gallerybottom"]',  # Individual card iframes
 }
 @dataclass
 class CaptureResult:
@@ -351,7 +354,7 @@ def build_ad_object(
     Build a canonical ad object with safe defaults.
     """
     # Defensive checks
-    assert ad_type in {"SBA", "SBV", "Tile_Takeover"}, f"Unexpected ad_type: {ad_type}"
+    assert ad_type in {"SBA", "SBV", "Tile_Takeover", "Gallery_Cards"}, f"Unexpected ad_type: {ad_type}"
     folder = folder_for_adtype("walmart", ad_type)
     assert validate_folder("walmart", folder), f"Invalid Walmart folder: {folder}"
 
@@ -713,9 +716,7 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
         '--use-angle=metal',  # Force ANGLE→Metal backend on macOS
         '--enable-gpu-rasterization',  # Prefer GPU raster
         '--ignore-gpu-blocklist',  # Don't let Chrome silently disable GPU
-        # Focus prevention - don't steal focus from user's active window
-        '--no-startup-window',
-        '--silent-launch',
+        # Keep window visible but don't steal focus
         '--disable-focus-on-load',
         '--noerrdialogs',
     ]
@@ -1230,6 +1231,319 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
         except Exception:
             continue
     return count, shots
+
+
+def _capture_gallery_cards(page, base_dir: str, keyword: str, meta: Dict, SL=None, client_name: str = None, client_root: str = None, timestamp: str = None, run_id: str = None, ads_list: List[Dict[str, Any]] = None) -> Tuple[int, List[str]]:
+    """
+    Capture Gallery Bottom Ad Cards (carousel of sponsored brand cards).
+    
+    These ads are in iframes with content like:
+    - #heading: headline text
+    - #subheading: subheadline/description
+    - #logo: brand logo image (alt text contains brand name)
+    - #img: hero/product image
+    - #cta: call-to-action button text
+    
+    Returns: (count, list_of_screenshot_paths)
+    """
+    from bs4 import BeautifulSoup
+    
+    shots: List[str] = []
+    cards_captured = 0
+    
+    try:
+        # Check if page is closed
+        if page.is_closed():
+            if SL: SL.log("closed_guard_trip", where="gallery_cards_start")
+            return 0, []
+        
+        # Find the gallery bottom container - try multiple selectors
+        # Primary: data-testid="galleryBottom"
+        # Fallback: id containing "zonebottom" (from DynamicAdContainer)
+        container = page.locator(SELECTORS["gallery_cards"])
+        container_found = container.count() > 0
+        
+        if not container_found:
+            # Try fallback selector for zonebottom containers
+            container = page.locator('[id*="zonebottom"]')
+            container_found = container.count() > 0
+            if container_found and SL:
+                SL.log("gallery_cards_fallback_selector", selector='[id*="zonebottom"]')
+        
+        if not container_found:
+            if SL: SL.log("gallery_cards_not_found")
+            return 0, []
+        
+        # Find all ad card iframes - try multiple patterns
+        # Primary: data-ad-type starts with "gallerybottom"
+        # Also check for any sponsored ad iframes in the container
+        iframe_selector = SELECTORS["gallery_card_iframe"]
+        iframes = page.query_selector_all(iframe_selector)
+        
+        # If no iframes found with primary selector, try broader search
+        if not iframes:
+            # Try iframes with title="Walmart Advertisement" within gallery containers
+            iframes = page.query_selector_all('[id*="zonebottom"] iframe[title="Walmart Advertisement"]')
+            if iframes and SL:
+                SL.log("gallery_cards_fallback_iframes", count=len(iframes))
+        
+        if SL: SL.log("gallery_cards_found", iframe_count=len(iframes))
+        
+        for idx, iframe_handle in enumerate(iframes, 1):
+            try:
+                # Get iframe attributes for logging and format detection
+                data_ad_type = iframe_handle.get_attribute("data-ad-type") or f"gallerybottom{idx}"
+                
+                # Get bounding box to determine actual rendered dimensions
+                try:
+                    bbox = iframe_handle.bounding_box()
+                    if bbox:
+                        iframe_width = bbox.get("width", 0)
+                        iframe_height = bbox.get("height", 0)
+                        aspect_ratio = iframe_width / iframe_height if iframe_height > 0 else 1.0
+                        # Wide banner: aspect ratio > 1.5 (e.g., 600x200 = 3.0)
+                        # Square tile: aspect ratio ~1.0 (e.g., 300x300 = 1.0)
+                        card_format = "banner" if aspect_ratio > 1.5 else "tile"
+                    else:
+                        iframe_width, iframe_height, card_format = 0, 0, "tile"
+                except Exception:
+                    iframe_width, iframe_height, card_format = 0, 0, "tile"
+                
+                # Get the content frame
+                frame = iframe_handle.content_frame()
+                if frame is None:
+                    if SL: SL.log("gallery_card_no_frame", index=idx)
+                    continue
+                
+                # Get the HTML content inside the iframe
+                try:
+                    card_html = frame.content()
+                except Exception as e:
+                    if SL: SL.log("gallery_card_content_error", index=idx, error=str(e))
+                    continue
+                
+                if not card_html:
+                    continue
+                
+                # Parse with BeautifulSoup
+                soup = BeautifulSoup(card_html, "html.parser")
+                
+                # Extract brand from logo alt text
+                # Patterns:
+                #   "image of the logo for the brand [BRAND]" - new Walmart format
+                #   "... of [brand name] logo" or "[brand name] logo" - older format
+                advertiser = None
+                logo_url = None
+                logo_elem = soup.select_one("#logo")
+                if logo_elem:
+                    logo_url = logo_elem.get("src")
+                    logo_alt = logo_elem.get("alt") or ""
+                    alt_lower = logo_alt.lower()
+                    
+                    # First, try the new Walmart format: "image of the logo for the brand [BRAND]"
+                    if "for the brand " in alt_lower:
+                        # Extract everything after "for the brand "
+                        advertiser = alt_lower.split("for the brand ")[-1].strip().title()
+                    elif " logo" in alt_lower:
+                        # Fallback to older format: extract text before "logo"
+                        # Examples: "cursive black font on white background of peach slices logo"
+                        #           "Peach Slices logo"
+                        before_logo = alt_lower.split(" logo")[0].strip()
+                        # Try to get the brand name (last few words before "logo")
+                        # Handle "of [brand]" pattern
+                        if " of " in before_logo:
+                            advertiser = before_logo.split(" of ")[-1].strip().title()
+                        else:
+                            # Just use the whole thing or last 2-3 words
+                            words = before_logo.split()
+                            if len(words) <= 3:
+                                advertiser = " ".join(words).title()
+                            else:
+                                advertiser = " ".join(words[-3:]).title()
+                    
+                    # Try lexicon canonicalization if available
+                    if advertiser and canonicalize_brand:
+                        canonical = canonicalize_brand(advertiser)
+                        if canonical:
+                            advertiser = canonical
+                
+                # Fallback: try hero image alt text
+                if not advertiser:
+                    hero_img = soup.select_one("#img")
+                    if hero_img:
+                        hero_alt = hero_img.get("alt") or ""
+                        if hero_alt and canonicalize_brand:
+                            canonical = canonicalize_brand(hero_alt)
+                            if canonical:
+                                advertiser = canonical
+                
+                # Extract ad copy
+                headline = None
+                subheadline = None
+                cta_text = None
+                hero_image_url = None
+                
+                heading_elem = soup.select_one("#heading")
+                if heading_elem:
+                    headline = heading_elem.get_text(strip=True)
+                
+                subheading_elem = soup.select_one("#subheading")
+                if subheading_elem:
+                    subheadline = subheading_elem.get_text(strip=True)
+                
+                cta_elem = soup.select_one("#cta")
+                if cta_elem:
+                    cta_text = cta_elem.get_text(strip=True)
+                
+                hero_img_elem = soup.select_one("#img")
+                if hero_img_elem:
+                    hero_image_url = hero_img_elem.get("src")
+                
+                if SL: SL.log("gallery_card_extracted", 
+                             index=idx, 
+                             advertiser=advertiser,
+                             headline=headline[:50] if headline else None,
+                             has_logo=bool(logo_url),
+                             has_hero=bool(hero_image_url))
+                
+                # Fallback advertiser
+                if not advertiser:
+                    advertiser = "unknown"
+                
+                # Add new brand to lexicon if discovered
+                if advertiser and advertiser != "unknown" and add_brand_to_lexicon:
+                    if add_brand_to_lexicon(advertiser):
+                        if SL: SL.log("gallery_card_brand_added_to_lexicon", brand=advertiser)
+                
+                # Scroll the iframe into view and take screenshot
+                try:
+                    iframe_handle.scroll_into_view_if_needed()
+                    time.sleep(0.3)  # Let it settle
+                except Exception:
+                    pass
+                
+                # Generate filename and save screenshot
+                if client_name and client_root and timestamp:
+                    # Create Gallery_Cards folder
+                    gallery_folder = os.path.join(client_root, "Gallery_Cards")
+                    os.makedirs(gallery_folder, exist_ok=True)
+                    
+                    png_filename = generate_ad_filename(
+                        retailer='walmart',
+                        ad_type='gallery_card',
+                        client=client_name,
+                        search_term=keyword,
+                        timestamp=timestamp,
+                        index=idx,
+                        extension='png',
+                        advertiser=advertiser
+                    )
+                    out_path = os.path.join(gallery_folder, png_filename)
+                else:
+                    out_path = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_gallery_card_{idx}.png"))
+                
+                # Screenshot the content INSIDE the iframe (not the iframe element itself)
+                # This captures the full ad creative without carousel CSS constraints
+                try:
+                    # Try to screenshot the tile container inside the iframe
+                    tile_container = frame.locator('#tile-container')
+                    if tile_container.count() > 0:
+                        tile_container.screenshot(path=out_path)
+                    else:
+                        # Fallback to full iframe body
+                        frame.locator('body').screenshot(path=out_path)
+                except Exception as inner_screenshot_err:
+                    # Final fallback: screenshot the iframe element from parent
+                    if SL: SL.log("gallery_card_inner_screenshot_failed", index=idx, error=str(inner_screenshot_err))
+                    iframe_handle.screenshot(path=out_path)
+                shots.append(out_path)
+                cards_captured += 1
+                
+                # Save iframe HTML for debugging/reference
+                if base_dir:
+                    try:
+                        iframe_html_path = os.path.join(base_dir, f"gallery_card_{idx}_{run_id or 'debug'}.html")
+                        with open(iframe_html_path, "w", encoding="utf-8") as f:
+                            f.write(card_html)
+                    except Exception:
+                        pass
+                
+                # Build canonical ad object
+                if run_id and ads_list is not None and client_root and client_name:
+                    try:
+                        client_root_path = Path(client_root)
+                        saved_path = Path(out_path)
+                        
+                        # Get next ad index
+                        ad_index = len(ads_list) + 1
+                        
+                        ad_obj = build_ad_object(
+                            run_id=run_id,
+                            ad_index=ad_index,
+                            ad_type="Gallery_Cards",
+                            client_root=client_root_path,
+                            saved_path=saved_path,
+                            brand_name=advertiser if advertiser != "unknown" else None,
+                            ad_title=headline,
+                            cta_text=cta_text,
+                            destination_url=None,  # Could extract from click handler if needed
+                            cdn_image_url=hero_image_url,
+                            slot_index=idx - 1,  # 0-indexed
+                        )
+                        # Add extra fields specific to gallery cards
+                        ad_obj["subheadline"] = subheadline
+                        ad_obj["logo_url"] = logo_url
+                        ad_obj["card_format"] = card_format  # "tile" or "banner"
+                        ad_obj["dimensions"] = {"width": int(iframe_width), "height": int(iframe_height)}
+                        
+                        ads_list.append(ad_obj)
+                        if SL: SL.log("gallery_card_ad_object", ad_id=ad_obj["id"], brand=advertiser, headline=headline[:30] if headline else None)
+                    except Exception as e:
+                        if SL: SL.log("gallery_card_ad_object_error", error=str(e), index=idx)
+                
+                # Store in metadata
+                meta.setdefault("gallery_cards", []).append({
+                    "index": idx,
+                    "advertiser": advertiser,
+                    "headline": headline,
+                    "subheadline": subheadline,
+                    "cta": cta_text,
+                    "logo_url": logo_url,
+                    "hero_image_url": hero_image_url,
+                    "screenshot": out_path,
+                    "card_format": card_format,  # "tile" or "banner"
+                    "dimensions": {"width": int(iframe_width), "height": int(iframe_height)}
+                })
+                
+                # Save brand logo if we have one
+                if logo_url and advertiser and advertiser != "unknown" and BrandLogoDatabase:
+                    try:
+                        logo_db = BrandLogoDatabase()
+                        logo_db.add_brand_logo(
+                            brand=advertiser,
+                            logo_url=logo_url,
+                            retailer="walmart",
+                            metadata={
+                                "ad_type": "Gallery_Cards",
+                                "keyword": keyword,
+                                "timestamp": timestamp
+                            }
+                        )
+                        if SL: SL.log("gallery_card_logo_saved", brand=advertiser)
+                    except Exception:
+                        pass
+                
+                time.sleep(random.uniform(0.15, 0.3))
+                
+            except Exception as e:
+                if SL: SL.log("gallery_card_error", index=idx, error=str(e))
+                continue
+        
+        return cards_captured, shots
+        
+    except Exception as e:
+        if SL: SL.log("gallery_cards_exception", error=str(e))
+        return 0, []
 
 
 def _search_url(keyword: str) -> str:
@@ -3097,7 +3411,51 @@ def search_and_capture(
             if vcount:
                 say("info", f"[{retailer}] SBV found (videos {vids_saved})")
             
-            # 5) Full-page screenshot to Main folder
+            # 5) Gallery Bottom Ad Cards (carousel of sponsored brand cards in iframes)
+            # These ads are at the bottom of the page and need scrolling to hydrate
+            try:
+                # First, scroll to bottom to trigger lazy loading of gallery cards
+                try:
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    time.sleep(2.0)  # Wait for iframes to start loading
+                    
+                    # Check if gallery container exists now
+                    gallery_container = page.locator(SELECTORS["gallery_cards"])
+                    if gallery_container.count() > 0:
+                        # Scroll the container into view and wait for iframes to hydrate
+                        gallery_container.first.scroll_into_view_if_needed()
+                        time.sleep(1.5)  # Additional wait for iframe content to load
+                        
+                        # Wait for at least one iframe to have content
+                        try:
+                            page.wait_for_selector(
+                                f'{SELECTORS["gallery_cards"]} iframe[data-ad-type^="gallerybottom"]',
+                                timeout=5000
+                            )
+                            time.sleep(1.0)  # Extra buffer for iframe content hydration
+                            if SL: SL.log("gallery_cards_hydrated")
+                        except Exception:
+                            if SL: SL.log("gallery_cards_iframe_timeout")
+                except Exception as scroll_err:
+                    if SL: SL.log("gallery_cards_scroll_error", error=str(scroll_err))
+                
+                n_cards, card_shots = _capture_gallery_cards(
+                    page, base_dir, keyword, meta, 
+                    SL=SL, 
+                    client_name=client_name, 
+                    client_root=client_root, 
+                    timestamp=run_timestamp, 
+                    run_id=run_id, 
+                    ads_list=ads_list
+                )
+                shots.extend(card_shots)
+                if n_cards:
+                    say("info", f"[{retailer}] Gallery Cards found ({n_cards})")
+            except Exception as e:
+                if SL: SL.log("gallery_cards_capture_error", error=str(e))
+                say("warn", f"[{retailer}] Gallery Cards capture failed: {e}")
+            
+            # 6) Full-page screenshot to Main folder
             try:
                 # Incremental scroll to load lazy images throughout the page
                 try:

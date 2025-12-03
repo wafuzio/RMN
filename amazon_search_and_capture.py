@@ -1599,15 +1599,57 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                             brand_name = data_label[5:]  # Remove "Shop " prefix
                                     
                                     # Fallback to image alt if store link method fails
-                                    # NOTE: Do NOT capture brand_logo_url from SB Cards - these cards
-                                    # contain product/ad images, not brand logos. Brand logos should
-                                    # only come from Sponsored Brand ads which have dedicated logo elements.
+                                    # SB Cards have TWO images:
+                                    # 1. Large ad creative banner (e.g., _SX920_, _CR0,0,2500,1308_) - NOT a logo
+                                    # 2. Small brand logo (e.g., _SX278_SY200_, _AC_SX278_) - THIS is the logo
                                     brand_logo_url = ''
                                     if brand_name == 'unknown':
                                         brand_img = brand_li.locator('img[alt]:not([alt=""])')
                                         if brand_img.count() > 0:
                                             brand_name = brand_img.first.get_attribute('alt') or 'unknown'
-                                            # Do NOT set brand_logo_url here - card images are not logos
+                                    
+                                    # Find the actual logo image
+                                    # Method 1: Look for semantic container with "logoContainer" in class/data attrs
+                                    # Method 2: Fall back to structural detection by rendered size
+                                    try:
+                                        # Method 1: Semantic - find container with logoContainer in any attribute
+                                        logo_container = brand_li.locator('[class*="logoContainer"], [data-testid*="logo"], [class*="Logo"]')
+                                        if logo_container.count() > 0:
+                                            logo_img = logo_container.first.locator('img[src]').first
+                                            if logo_img.count() > 0:
+                                                brand_logo_url = logo_img.get_attribute('src') or ''
+                                                if brand_logo_url:
+                                                    log(f"sb-cards: card {card_idx} found logo via logoContainer -> {brand_logo_url[:60]}...")
+                                        
+                                        # Method 2: Structural fallback - find small image by rendered size
+                                        if not brand_logo_url:
+                                            all_imgs = brand_li.locator('img[src]')
+                                            logo_candidates = []
+                                            for img_idx in range(all_imgs.count()):
+                                                img = all_imgs.nth(img_idx)
+                                                img_src = img.get_attribute('src') or ''
+                                                if not img_src:
+                                                    continue
+                                                try:
+                                                    bbox = img.bounding_box()
+                                                    if bbox:
+                                                        w, h = bbox.get('width', 0), bbox.get('height', 0)
+                                                        # Logo: 50-350px wide, height > 30px, aspect ≤ 4:1
+                                                        if 50 < w < 350 and h > 30:
+                                                            aspect = w / h if h > 0 else 999
+                                                            if aspect <= 4.0:
+                                                                logo_candidates.append((img_src, w, h, aspect))
+                                                except:
+                                                    pass
+                                            
+                                            if logo_candidates:
+                                                # Prefer squarer aspect ratios (closer to 1:1)
+                                                logo_candidates.sort(key=lambda x: abs(x[3] - 1.0))
+                                                brand_logo_url = logo_candidates[0][0]
+                                                w, h = logo_candidates[0][1], logo_candidates[0][2]
+                                                log(f"sb-cards: card {card_idx} found logo by size {w:.0f}x{h:.0f} -> {brand_logo_url[:60]}...")
+                                    except Exception as logo_err:
+                                        log(f"sb-cards: card {card_idx} logo extraction error -> {logo_err}")
 
                                     # Use shared canonicalization so SB Cards align with other retailers
                                     if brand_name and brand_name.lower() != 'unknown':
@@ -1692,7 +1734,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                         "type": "Sponsored_Brand_Card",
                                         "subtype": "Brand_Card",
                                         "brand": brand_name,
-                                        "brand_logo": None,
+                                        "brand_logo_url": brand_logo_url or None,
                                         "title": brand_name or None,
                                         "description": message or None,
                                         "cta": None,

@@ -1007,6 +1007,8 @@ LEAF_MAP = {
     "tile_takeover": "Tile_Takeover",
     "sponsored_product": "Sponsored_Product",
     "sponsored_products": "Sponsored_Product",
+    "gallery_cards": "Gallery_Cards",
+    "gallery_card": "Gallery_Cards",
 }
 
 # Extension preference order
@@ -1159,6 +1161,7 @@ def subdir_for(retailer: str, ad_type: str) -> str:
         if "sbv" in t or "video" in t: return "SBV"
         if "sba" in t or "brand" in t: return "SBA"
         if "tile" in t or "takeover" in t: return "Tile_Takeover"
+        if "gallery" in t or "card" in t: return "Gallery_Cards"
         if "top" in t or "banner" in t: return "Top_Banner"
     return ""  # fallback: let /api/image search allowed subdirs
 
@@ -1694,7 +1697,10 @@ def api_ads_cards():
                             "run_file": os.path.basename(rel),
                             "timestamp": (data.get("timestamp") or "").replace("T", " ").replace("Z", ""),
                             "featured": False,
-                            "ad_index": ad_index
+                            "ad_index": ad_index,
+                            # Gallery Cards specific fields
+                            "card_format": ad.get("card_format"),  # "tile" or "banner"
+                            "dimensions": ad.get("dimensions"),     # {"width": int, "height": int}
                         })
             except Exception as e:
                 print(f"Error loading {rel}: {e}")
@@ -1876,7 +1882,10 @@ def api_ads_cards():
                 "run_file": os.path.basename(r["json_path"]),
                 "timestamp": iso_ts,
                 "featured": False,
-                "ad_index": j
+                "ad_index": j,
+                # Gallery Cards specific fields
+                "card_format": ad.get("card_format"),  # "tile" or "banner"
+                "dimensions": ad.get("dimensions"),     # {"width": int, "height": int}
             })
 
             # Stop when we have enough cards for this page
@@ -2739,13 +2748,15 @@ def api_brands():
                             for adv in advertisers:
                                 if not adv or adv == "Unknown":
                                     continue
+                                from utils.brand_utils import normalize_brand_for_matching
                                 canonical_brand = canonicalize_brand(adv)
-                                if not canonical_brand:
-                                    canonical_brand = adv.lower()
-                                if canonical_brand not in brand_counts:
-                                    brand_case_map[canonical_brand] = canonical_brand
-                                    brand_counts[canonical_brand] = 0
-                                brand_counts[canonical_brand] += 1
+                                display_name = canonical_brand if canonical_brand else adv
+                                # Use normalized key for grouping (handles case/punctuation variations)
+                                norm_key = normalize_brand_for_matching(display_name)
+                                if norm_key not in brand_counts:
+                                    brand_case_map[norm_key] = display_name
+                                    brand_counts[norm_key] = 0
+                                brand_counts[norm_key] += 1
                     
                     except Exception as e:
                         print(f"[brands] Error processing {fp}: {e}")
@@ -2823,13 +2834,15 @@ def api_brands():
                 for adv in advertisers:
                     if not adv or adv == "Unknown":
                         continue
+                    from utils.brand_utils import normalize_brand_for_matching
                     canonical_brand = canonicalize_brand(adv)
-                    if not canonical_brand:
-                        canonical_brand = adv.lower()
-                    if canonical_brand not in brand_counts:
-                        brand_case_map[canonical_brand] = canonical_brand
-                        brand_counts[canonical_brand] = 0
-                    brand_counts[canonical_brand] += 1
+                    display_name = canonical_brand if canonical_brand else adv
+                    # Use normalized key for grouping (handles case/punctuation variations)
+                    norm_key = normalize_brand_for_matching(display_name)
+                    if norm_key not in brand_counts:
+                        brand_case_map[norm_key] = display_name
+                        brand_counts[norm_key] = 0
+                    brand_counts[norm_key] += 1
         
         # Build response
         total = sum(brand_counts.values())

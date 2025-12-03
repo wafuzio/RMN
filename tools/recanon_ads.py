@@ -103,6 +103,17 @@ def find_brand_in_json(data, old_brand, old_slug):
     # Check ads array
     if 'ads' in data and isinstance(data['ads'], list):
         for i, ad in enumerate(data['ads']):
+            # Check brand field directly
+            brand = ad.get('brand', '')
+            if brand and brand.lower() == old_lower:
+                matches.append({'type': 'brand_field', 'ad_index': i, 'value': brand})
+            
+            # Check brand_canonical field
+            brand_canon = ad.get('brand_canonical', '')
+            if brand_canon and brand_canon.lower() == old_lower:
+                matches.append({'type': 'brand_canonical', 'ad_index': i, 'value': brand_canon})
+            
+            # Check advertisers array
             advertisers = ad.get('advertisers', [])
             if isinstance(advertisers, list):
                 for j, adv in enumerate(advertisers):
@@ -113,6 +124,16 @@ def find_brand_in_json(data, old_brand, old_slug):
             screenshot = ad.get('screenshot_path', '')
             if old_slug in screenshot.lower():
                 matches.append({'type': 'screenshot_path', 'ad_index': i, 'path': screenshot})
+            
+            # Check image_path for brand slug
+            image_path = ad.get('image_path', '')
+            if image_path and old_slug in image_path.lower():
+                matches.append({'type': 'image_path', 'ad_index': i, 'path': image_path})
+            
+            # Check video_path for brand slug
+            video_path = ad.get('video_path', '')
+            if video_path and old_slug in video_path.lower():
+                matches.append({'type': 'video_path_ad', 'ad_index': i, 'path': video_path})
     
     # Check videos array
     if 'videos' in data and isinstance(data['videos'], list):
@@ -143,12 +164,38 @@ def update_json_brand(data, matches, old_brand, new_brand):
             data['ads'][ad_idx]['advertisers'][adv_idx] = new_brand
             changes.append(f"ads[{ad_idx}].advertisers[{adv_idx}]: {old_val} -> {new_brand}")
         
+        elif match['type'] == 'brand_field':
+            ad_idx = match['ad_index']
+            old_val = data['ads'][ad_idx]['brand']
+            data['ads'][ad_idx]['brand'] = new_brand
+            changes.append(f"ads[{ad_idx}].brand: {old_val} -> {new_brand}")
+        
+        elif match['type'] == 'brand_canonical':
+            ad_idx = match['ad_index']
+            old_val = data['ads'][ad_idx]['brand_canonical']
+            data['ads'][ad_idx]['brand_canonical'] = new_brand.lower()
+            changes.append(f"ads[{ad_idx}].brand_canonical: {old_val} -> {new_brand.lower()}")
+        
         elif match['type'] == 'screenshot_path':
             ad_idx = match['ad_index']
             old_path = data['ads'][ad_idx]['screenshot_path']
             new_path = old_path.replace(old_slug, new_slug)
             data['ads'][ad_idx]['screenshot_path'] = new_path
             changes.append(f"ads[{ad_idx}].screenshot_path: slug {old_slug} -> {new_slug}")
+        
+        elif match['type'] == 'image_path':
+            ad_idx = match['ad_index']
+            old_path = data['ads'][ad_idx]['image_path']
+            new_path = old_path.replace(old_slug, new_slug)
+            data['ads'][ad_idx]['image_path'] = new_path
+            changes.append(f"ads[{ad_idx}].image_path: slug {old_slug} -> {new_slug}")
+        
+        elif match['type'] == 'video_path_ad':
+            ad_idx = match['ad_index']
+            old_path = data['ads'][ad_idx]['video_path']
+            new_path = old_path.replace(old_slug, new_slug)
+            data['ads'][ad_idx]['video_path'] = new_path
+            changes.append(f"ads[{ad_idx}].video_path: slug {old_slug} -> {new_slug}")
         
         elif match['type'] == 'video_path':
             idx = match['index']

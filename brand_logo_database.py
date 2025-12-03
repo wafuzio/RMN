@@ -25,9 +25,9 @@ class BrandLogoDatabase:
             base_dir: Base directory for the project (defaults to script directory)
         """
         if base_dir is None:
-            # Default to project root (two levels up from this file) so that
+            # Default to project root (directory containing this file) so that
             # logos live under output/brand_logos like the rest of the stack.
-            base_dir = Path(__file__).resolve().parents[1]
+            base_dir = Path(__file__).resolve().parent
         else:
             base_dir = Path(base_dir)
         
@@ -261,7 +261,7 @@ class BrandLogoDatabase:
     
     def list_all_brands(self) -> list:
         """Get list of all brands in database"""
-        return [info["brand_name"] for info in self.database["brands"].values()]
+        return [info.get("brand_name", key) for key, info in self.database["brands"].items()]
     
     def get_frontend_map(self) -> Dict[str, str]:
         """
@@ -271,8 +271,9 @@ class BrandLogoDatabase:
             Dictionary mapping brand names to logo file paths
         """
         frontend_map = {
-            info["brand_name"]: info["logo_file"]
-            for info in self.database["brands"].values()
+            info.get("brand_name", key): info.get("logo_file", "")
+            for key, info in self.database["brands"].items()
+            if info.get("logo_file")
         }
         
         return frontend_map

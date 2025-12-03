@@ -215,7 +215,7 @@ export const handleGetSnapshot: RequestHandler = (req, res) => {
     const flatFiles = fs.readdirSync(pageTypeDir).filter((file) => {
       return (
         file.endsWith(".png") &&
-        file.includes(`D${date}_${time}`) &&
+        file.includes(`D${date}_T${time}`) &&
         file.startsWith(retailer + "__")
       );
     });
@@ -232,7 +232,7 @@ export const handleGetSnapshot: RequestHandler = (req, res) => {
           const runFiles = fs.readdirSync(runDir).filter((file) => {
             return (
               file.endsWith(".png") &&
-              file.includes(`D${date}_${time}`) &&
+              file.includes(`D${date}_T${time}`) &&
               file.startsWith(retailer + "__")
             );
           });

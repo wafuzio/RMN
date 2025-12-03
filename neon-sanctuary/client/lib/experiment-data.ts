@@ -21,7 +21,7 @@ export const BRANDS = [
 export type Brand = typeof BRANDS[number];
 
 // Ad types from the scraper
-export const AD_TYPES = ["TOA", "Skyscraper", "Carousel", "SBV", "SP"] as const;
+export const AD_TYPES = ["TOA", "Skyscraper", "Carousel", "SBV", "SP", "SBA", "Tile_Takeover", "Gallery_Cards"] as const;
 export type AdType = typeof AD_TYPES[number];
 
 // Placements

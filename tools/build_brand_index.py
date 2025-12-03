@@ -218,7 +218,7 @@ def update_brand_in_index(old_brand: str, new_brand: str = None, delete: bool = 
         return False
     
     index = index_data.get('index', {})
-    old_key = old_brand.strip().lower()
+    old_key = old_brand.strip()
     
     if old_key not in index:
         print(f"[INDEX] Brand '{old_brand}' not in index, nothing to update")

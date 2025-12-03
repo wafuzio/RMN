@@ -7,7 +7,7 @@ This is a post-processing tool. It scans:
 
 For each ad:
 - Picks a brand name (prefer brand_canonical, then brand)
-- Picks a logo/image URL (prefer brand_logo_url, then product_image_url, then image_url)
+- Uses brand_logo_url ONLY (product/ad images are NOT logos)
 - Calls BrandLogoDatabase.add_brand_logo(brand, logo_url, retailer="amazon", metadata=...)
 
 Usage:
@@ -16,8 +16,12 @@ Usage:
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from brand_logo_database import BrandLogoDatabase
 
@@ -61,17 +65,14 @@ def pick_brand(ad: Dict[str, Any]) -> Optional[str]:
 
 
 def pick_logo_url(ad: Dict[str, Any]) -> Optional[str]:
-    """Choose the best available logo/image URL for a brand.
+    """Choose the brand logo URL for a brand.
 
-    Priority:
-    - brand_logo_url (explicit SB brand logo)
-    - product_image_url (SBV product image)
-    - image_url (generic image field, if ever populated)
+    IMPORTANT: Only use brand_logo_url - other image fields (product_image_url,
+    image_url) are product/ad images, NOT brand logos.
     """
-    for key in ("brand_logo_url", "product_image_url", "image_url"):
-        val = ad.get(key)
-        if isinstance(val, str) and val.strip():
-            return val.strip()
+    val = ad.get("brand_logo_url")
+    if isinstance(val, str) and val.strip():
+        return val.strip()
     return None
 
 

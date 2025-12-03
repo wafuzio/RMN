@@ -29,6 +29,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 from filename_utils import generate_ad_filename
 from utils.path_taxonomy import ensure_subdir
+from core.brands import canonicalize, add_brand
 
 try:
     from utils.time_utils import now_iso_z
@@ -115,6 +116,11 @@ def _resolve_brand_from_href(ctx, href: str, timeout_ms: int = 8000) -> Optional
             if lower.startswith("shop all"):
                 text = text[len("shop all") :].strip()
             if text:
+                # Canonicalize and add to lexicon if new
+                canon = canonicalize(text)
+                if canon:
+                    return canon
+                add_brand(text)
                 return text
 
         # Fallback: page title element if present.
@@ -123,6 +129,12 @@ def _resolve_brand_from_href(ctx, href: str, timeout_ms: int = 8000) -> Optional
             return None
         text = h1.inner_text() or ""
         text = text.strip()
+        if text:
+            # Canonicalize and add to lexicon if new
+            canon = canonicalize(text)
+            if canon:
+                return canon
+            add_brand(text)
         return text or None
     except Exception:
         return None

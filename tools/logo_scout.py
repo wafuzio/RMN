@@ -50,6 +50,8 @@ HEADERS = {
 
 def ensure_dirs():
     LOGOS_DIR.mkdir(parents=True, exist_ok=True)
+    (LOGOS_DIR / "unverified").mkdir(exist_ok=True)
+    (LOGOS_DIR / "verified").mkdir(exist_ok=True)
 
 
 def load_database():
@@ -212,8 +214,8 @@ def normalize_ext_from_ctype(ctype):
 
 
 def safe_write_logo(brand_key, raw_bytes, ext):
-    """Write logo file to output/brand_logos/"""
-    outp = LOGOS_DIR / f"{brand_key}{ext}"
+    """Write logo file to output/brand_logos/unverified/ for review"""
+    outp = LOGOS_DIR / "unverified" / f"{brand_key}{ext}"
     outp.write_bytes(raw_bytes)
     return outp
 
@@ -225,7 +227,8 @@ def add_logo_to_database(db, brand, logo_path, source_info, retailer):
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     
     db["brands"][brand_key] = {
-        "logo_file": logo_path.name,
+        "brand_name": brand,
+        "logo_file": f"unverified/{logo_path.name}",
         "retailers": [retailer],
         "first_seen": timestamp,
         "last_seen": timestamp,

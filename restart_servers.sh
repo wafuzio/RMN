@@ -112,6 +112,10 @@ echo ""
 echo "🔄 Harvesting Amazon brand logos..."
 python3 tools/harvest_amazon_brand_logos.py || echo "⚠️ Amazon logo harvest failed (continuing startup)"
 
+echo ""
+echo "🔄 Syncing verified logos to database..."
+python3 tools/sync_verified_logos.py || echo "⚠️ Logo sync failed (continuing startup)"
+
 # ============================================
 # Step 3: Start servers
 # ============================================

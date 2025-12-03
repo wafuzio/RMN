@@ -359,6 +359,42 @@ class SchedulerDaemon:
             
         return []
     
+    def _cleanup_orphaned_chrome(self, profile_pattern: str = None):
+        """Kill any orphaned Chrome/Chromium processes using scraper profiles.
+        
+        Args:
+            profile_pattern: Optional pattern to match specific profile (e.g., 'walmart')
+        """
+        try:
+            import subprocess
+            # Find Chrome processes using ChromeProfiles
+            result = subprocess.run(
+                ['pgrep', '-f', 'ChromeProfiles'],
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                return  # No matching processes
+            
+            pids = result.stdout.strip().split('\n')
+            if not pids or pids == ['']:
+                return
+                
+            for pid in pids:
+                try:
+                    # Check if this PID matches our profile pattern
+                    proc_info = subprocess.run(
+                        ['ps', '-p', pid, '-o', 'args='],
+                        capture_output=True, text=True
+                    )
+                    if 'ChromeProfiles' in proc_info.stdout:
+                        if profile_pattern is None or profile_pattern in proc_info.stdout:
+                            os.kill(int(pid), signal.SIGTERM)
+                            self.logger.debug(f"Cleaned up orphaned Chrome PID {pid}")
+                except (ValueError, ProcessLookupError, PermissionError):
+                    pass
+        except Exception as e:
+            self.logger.debug(f"Chrome cleanup failed: {e}")
+    
     def run_frontpage_capture(self, retailers: list = None):
         """Run front page screenshot capture for specified retailers.
         
@@ -375,10 +411,21 @@ class SchedulerDaemon:
             return
         
         # Run capture for each retailer
+        today_str = datetime.now().strftime("D%Y-%m-%d")
+        
         for retailer in retailers:
             if retailer not in self.FRONTPAGE_RETAILERS:
                 self.logger.warning(f"Skipping unsupported retailer for front page: {retailer}")
                 continue
+            
+            # Check if we already captured this retailer today
+            frontpage_dir = self.code_dir / "output" / "screen_capture" / retailer / "front_pages"
+            if frontpage_dir.exists():
+                existing_today = list(frontpage_dir.glob(f"*__{today_str}_*.png"))
+                if existing_today:
+                    self.logger.info(f"[frontpage] SKIP: {retailer} already captured today ({existing_today[0].name})")
+                    self.execution_logger.info(f"FRONTPAGE_SKIP_ALREADY_CAPTURED: {retailer} file={existing_today[0].name}")
+                    continue
             
             self.logger.info(f"[frontpage] Capturing {retailer} front page...")
             self.execution_logger.info(f"FRONTPAGE_CAPTURE_RETAILER: {retailer}")
@@ -395,12 +442,12 @@ class SchedulerDaemon:
             ]
             
             try:
+                # Run as normal foreground process - Chrome needs real display session
                 proc = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    start_new_session=True,
                     cwd=str(self.code_dir),
                     env=self._proc_env(),
                 )
@@ -428,7 +475,7 @@ class SchedulerDaemon:
                         
             except subprocess.TimeoutExpired:
                 try:
-                    os.killpg(proc.pid, signal.SIGKILL)
+                    proc.kill()
                 except Exception:
                     pass
                 self.logger.error(f"[frontpage] TIMEOUT: {retailer}")
@@ -644,13 +691,12 @@ class SchedulerDaemon:
                 try:
                     self.execution_logger.debug(f"SUBPROCESS_START: {script} for '{keyword}'")
                     
-                    # Launch in its own process group so we can kill all children on timeout
+                    # Run as normal foreground process - Chrome needs real display session
                     proc = subprocess.Popen(
                         cmd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
-                        start_new_session=True,  # puts child in a new process group
                         cwd=str(self.code_dir),
                         env=self._proc_env(),
                     )
@@ -673,20 +719,24 @@ class SchedulerDaemon:
                         self.execution_logger.error(f"KEYWORD_SCRAPE_FAILED: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', rc={rc}")
                         
                 except subprocess.TimeoutExpired:
-                    # Kill the whole process group (the scraper and any Chromium children)
+                    # Kill the process and clean up orphaned Chrome
                     try:
-                        os.killpg(proc.pid, signal.SIGKILL)
+                        proc.kill()
                     except Exception:
                         pass
                     try:
                         stdout, stderr = proc.communicate()
                     except:
                         pass
+                    # Clean up any orphaned Chrome for this retailer
+                    self._cleanup_orphaned_chrome(retailer)
                     self.logger.error(f"[{retailer}] TIMEOUT keyword '{keyword}' for {client_name} after {self.keyword_timeout}s")
                     self.execution_logger.error(f"KEYWORD_SCRAPE_TIMEOUT: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', Timeout={self.keyword_timeout}s")
                 except Exception as e:
                     self.logger.error(f"[{retailer}] ERROR keyword '{keyword}' for {client_name}: {e}")
                     self.execution_logger.error(f"KEYWORD_SCRAPE_EXCEPTION: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', Error={e}")
+                    # Clean up any orphaned Chrome for this retailer
+                    self._cleanup_orphaned_chrome(retailer)
                     
             # Skip post-processing if no successful scrapes
             if success_count == 0:
@@ -864,8 +914,14 @@ class SchedulerDaemon:
                             self.execution_logger.warning(f"NO_KEYWORDS_FOUND: [{retailer}] {client_name}")
                             continue
                         
-                        # Create run key for duplicate prevention
-                        run_key = f"{s.id}_{check_time.strftime('%Y-%m-%d%H:%M')}"
+                        # Create run key for duplicate prevention using SCHEDULED time, not current time
+                        # This ensures the same scheduled slot produces the same key across the window
+                        matching_time = next((t for t in s.times if self._within_window(now_min, t, self.due_window_min)), None)
+                        if matching_time:
+                            run_key = f"{s.id}_{check_time.strftime('%Y-%m-%d')}_{matching_time}"
+                        else:
+                            run_key = f"{s.id}_{check_time.strftime('%Y-%m-%d%H:%M')}"
+                        
                         if run_key in self.last_run_times:
                             self.execution_logger.debug(f"DUPLICATE_RUN_PREVENTED: {run_key}")
                             continue

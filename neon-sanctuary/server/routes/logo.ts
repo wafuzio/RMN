@@ -13,7 +13,7 @@ export const handleBrandLogo: RequestHandler = async (req, res) => {
   }
 
   try {
-    const brandLogoDir = path.join(process.cwd(), "..", "output", "brand_logos");
+    const brandLogoDir = path.join(process.cwd(), "..", "output", "brand_logos", "Verified");
 
     const files = await fs.readdir(brandLogoDir).catch(() => []);
 
@@ -72,6 +72,8 @@ export const handleBrandLogo: RequestHandler = async (req, res) => {
 
     // For raster images, resize if width parameter provided
     let imageBuffer = await fs.readFile(logoPath);
+    const fileStats = await fs.stat(logoPath);
+    const mtime = fileStats.mtime.getTime(); // Include mtime in hash for cache busting on file changes
     
     if (width && width > 0 && width <= 1000) {
       // Resize image using sharp
@@ -83,16 +85,16 @@ export const handleBrandLogo: RequestHandler = async (req, res) => {
         .webp({ quality: 85 }) // Convert to WebP for better compression
         .toBuffer();
       
-      // Generate ETag from resized content
+      // Generate ETag from resized content + mtime for cache busting
       const hash = crypto.createHash('md5').update(imageBuffer).digest('hex');
-      const etag = `"${hash}-${width}"`;
+      const etag = `"${hash}-${width}-${mtime}"`;
 
       if (req.headers['if-none-match'] === etag) {
         return res.status(304).end();
       }
 
       res.set("Content-Type", "image/webp");
-      res.set("Cache-Control", "public, max-age=31536000, immutable");
+      res.set("Cache-Control", "public, max-age=86400"); // 1 day, not immutable
       res.set("ETag", etag);
       res.set("Vary", "Accept");
       res.set("Access-Control-Allow-Origin", "*");
@@ -100,9 +102,8 @@ export const handleBrandLogo: RequestHandler = async (req, res) => {
     }
 
     // No resize requested, serve original
-    const fileStats = await fs.stat(logoPath);
     const hash = crypto.createHash('md5').update(imageBuffer).digest('hex');
-    const etag = `"${hash}"`;
+    const etag = `"${hash}-${mtime}"`;
 
     if (req.headers['if-none-match'] === etag) {
       return res.status(304).end();
@@ -117,9 +118,9 @@ export const handleBrandLogo: RequestHandler = async (req, res) => {
     };
 
     res.set("Content-Type", mimeTypes[ext] || "application/octet-stream");
-    res.set("Cache-Control", "public, max-age=31536000, immutable");
+    res.set("Cache-Control", "public, max-age=86400"); // 1 day, not immutable
     res.set("ETag", etag);
-    res.set("Last-Modified", fileStats.mtime.toUTCString());
+    res.set("Last-Modified", new Date(mtime).toUTCString());
     res.set("Access-Control-Allow-Origin", "*");
     res.send(imageBuffer);
   } catch (error) {

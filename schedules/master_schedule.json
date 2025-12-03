@@ -233,13 +233,17 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/curology"
     },
     {
-      "id": "amazon_milkpep_protein_drinks_8087a657",
+      "id": "amazon_milkpep_protein_drinks_7251a0f7",
       "retailer": "amazon",
       "client": "MilkPEP",
       "keywords": [
         "protein drinks",
         "milk",
-        "protein powder"
+        "protein powder",
+        "sports drinks",
+        "bottled water",
+        "gatorade",
+        "non-dairy milk"
       ],
       "days": [
         "monday",
@@ -251,14 +255,14 @@
         "sunday"
       ],
       "times": [
+        "00:00",
         "08:00",
-        "12:00",
         "16:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T04:52:37Z",
-      "updated_at": "2025-11-25T04:52:37Z",
+      "created_at": "2025-12-01T19:55:05Z",
+      "updated_at": "2025-12-01T19:55:05Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__milkpep__protein_drinks.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/milkpep"
     },
@@ -679,13 +683,17 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/magic_spoon"
     },
     {
-      "id": "instacart_milkpep_protein_drinks_08a1c584",
+      "id": "instacart_milkpep_protein_drinks_fcb410e3",
       "retailer": "instacart",
       "client": "MilkPEP",
       "keywords": [
         "protein drinks",
         "milk",
-        "protein powder"
+        "protein powder",
+        "sports drinks",
+        "bottled water",
+        "gatorade",
+        "non-dairy milk"
       ],
       "days": [
         "monday",
@@ -697,14 +705,14 @@
         "sunday"
       ],
       "times": [
+        "00:00",
         "08:00",
-        "12:00",
         "16:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T04:52:37Z",
-      "updated_at": "2025-11-25T04:52:37Z",
+      "created_at": "2025-12-01T19:55:05Z",
+      "updated_at": "2025-12-01T19:55:05Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__milkpep__protein_drinks.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/milkpep"
     },
@@ -1181,13 +1189,17 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/magic_spoon"
     },
     {
-      "id": "kroger_milkpep_protein_drinks_4f478200",
+      "id": "kroger_milkpep_protein_drinks_af7aced5",
       "retailer": "kroger",
       "client": "MilkPEP",
       "keywords": [
         "protein drinks",
         "milk",
-        "protein powder"
+        "protein powder",
+        "sports drinks",
+        "bottled water",
+        "gatorade",
+        "non-dairy milk"
       ],
       "days": [
         "monday",
@@ -1199,14 +1211,14 @@
         "sunday"
       ],
       "times": [
+        "00:00",
         "08:00",
-        "12:00",
         "16:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T04:52:37Z",
-      "updated_at": "2025-11-25T04:52:37Z",
+      "created_at": "2025-12-01T19:55:05Z",
+      "updated_at": "2025-12-01T19:55:05Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__milkpep__protein_drinks.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/milkpep"
     },
@@ -1558,13 +1570,17 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/curology"
     },
     {
-      "id": "target_milkpep_protein_drinks_4b86322d",
+      "id": "target_milkpep_protein_drinks_d0f1e62c",
       "retailer": "target",
       "client": "MilkPEP",
       "keywords": [
         "protein drinks",
         "milk",
-        "protein powder"
+        "protein powder",
+        "sports drinks",
+        "bottled water",
+        "gatorade",
+        "non-dairy milk"
       ],
       "days": [
         "monday",
@@ -1576,14 +1592,14 @@
         "sunday"
       ],
       "times": [
+        "00:00",
         "08:00",
-        "12:00",
         "16:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T04:52:37Z",
-      "updated_at": "2025-11-25T04:52:37Z",
+      "created_at": "2025-12-01T19:55:05Z",
+      "updated_at": "2025-12-01T19:55:05Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__milkpep__protein_drinks.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/milkpep"
     },
@@ -1976,13 +1992,17 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/magic_spoon"
     },
     {
-      "id": "walmart_milkpep_protein_drinks_15bba397",
+      "id": "walmart_milkpep_protein_drinks_0888b8de",
       "retailer": "walmart",
       "client": "MilkPEP",
       "keywords": [
         "protein drinks",
         "milk",
-        "protein powder"
+        "protein powder",
+        "sports drinks",
+        "bottled water",
+        "gatorade",
+        "non-dairy milk"
       ],
       "days": [
         "monday",
@@ -1994,14 +2014,14 @@
         "sunday"
       ],
       "times": [
+        "00:00",
         "08:00",
-        "12:00",
         "16:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T04:52:37Z",
-      "updated_at": "2025-11-25T04:52:37Z",
+      "created_at": "2025-12-01T19:55:05Z",
+      "updated_at": "2025-12-01T19:55:05Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__milkpep__protein_drinks.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/milkpep"
     },

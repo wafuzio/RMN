@@ -24,7 +24,15 @@ from browser_lock import single_browser_lock
 from playwright._impl._errors import Error as PWError
 from kroger_login import save_cookies  # Removed load_cookies as it's redundant with user_data_dir
 from filename_utils import generate_ad_filename
-from core.brands import canonicalize
+from core.brands import canonicalize, add_brand
+
+# Brand logo database for centralized logo storage
+# Note: Kroger TOA ads are product carousels without brand logos.
+# This import is for future use if Kroger adds banner ads with logos.
+try:
+    from brand_logo_database import BrandLogoDatabase
+except ImportError:
+    BrandLogoDatabase = None
 
 # Constants for file paths
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -413,9 +421,7 @@ def _launch_context_resilient(pw, client_name: str):
                     "--window-size=1280,720",
                     "--disable-notifications",
                     "--disable-quic",
-                    # Focus prevention - don't steal focus from user's active window
-                    "--no-startup-window",
-                    "--silent-launch",
+                    # Keep window visible but don't steal focus
                     "--disable-focus-on-load",
                     "--noerrdialogs",
                 ],
@@ -776,6 +782,10 @@ def search_and_capture(search_term=None, output_dir=None):
                                             if brand:
                                                 advertiser = brand
                                                 print(f"📋 Extracted brand from header: {advertiser}")
+                                
+                                # Add new brand to lexicon if we found one
+                                if advertiser and advertiser != "unknown":
+                                    add_brand(advertiser)
                                 
                                 # Client slug derived from output_dir (e.g., bomb_pop)
                                 client_slug = os.path.basename(os.path.normpath(output_dir))

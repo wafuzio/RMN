@@ -6,7 +6,7 @@ from pathlib import Path
 # Canonical allowed folders per retailer (documentation-aligned)
 ALLOWED_FOLDERS: Dict[str, Set[str]] = {
     "kroger": {"TOA", "Skyscraper", "Carousel", "Display_Ads", "Main", "runs"},
-    "walmart": {"SBA", "SBV", "Tile_Takeover", "Main", "runs"},  # No Top_Banner; legacy allowed to exist but not used
+    "walmart": {"SBA", "SBV", "Tile_Takeover", "Gallery_Cards", "Main", "runs"},  # No Top_Banner; legacy allowed to exist but not used
     "instacart": {"Shoppable_Display_Ads", "Shoppable_Video_Ads", "Shoppable_Recipe_Ads", "Display_Ads", "Main", "runs"},
     "amazon": {"Sponsored_Brand", "Sponsored_Product", "Sponsored_Display", "Main", "runs"},
     # Target taxonomy aligned to actual ad types: Listing page banners + Sponsored Logo

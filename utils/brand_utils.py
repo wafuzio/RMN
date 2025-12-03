@@ -46,7 +46,7 @@ def normalize_brand_for_matching(brand: str | None) -> str:
     # Replace common separators with space BEFORE removing punctuation
     brand = brand.replace('&', ' and ')
     brand = brand.replace('+', ' and ')
-    brand = brand.replace("'", ' ')  # Replace apostrophe with space (don't just remove)
+    brand = brand.replace("'", '')   # Remove apostrophes entirely (Lay's → Lays)
     brand = brand.replace('-', ' ')  # Replace hyphen with space
 
     # Remove all remaining punctuation except spaces

@@ -14,7 +14,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from filename_utils import generate_ad_filename
 from brand_logo_database import BrandLogoDatabase
-from core.brands import canonicalize
+from core.brands import canonicalize, add_brand
 
 # ============================================================================
 # Canonical Schema Helpers for Instacart
@@ -69,21 +69,35 @@ def normalize_rel_from_client(image_path: str, client_root: Path) -> str | None:
 def pick_brand(ad: dict) -> str | None:
     """
     Pick a brand from advertisers[] or brand/text fields; then canonicalize using lexicon.
+    If brand is new, add it to the lexicon.
     """
+    raw_brand = None
+    
     # 1) advertisers array
     advs = ad.get("advertisers")
     if isinstance(advs, list) and advs:
-        b = canonicalize(str(advs[0]))
+        raw_brand = str(advs[0])
+        b = canonicalize(raw_brand)
         if b: return b
     # 2) brand field
-    b = canonicalize(ad.get("brand"))
-    if b: return b
+    if ad.get("brand"):
+        raw_brand = ad.get("brand")
+        b = canonicalize(raw_brand)
+        if b: return b
     # 3) fallback from title/message if present
     for key in ("title", "message"):
         v = ad.get(key)
         if isinstance(v, str) and v.strip():
-            b = canonicalize(v.strip())
+            raw_brand = v.strip()
+            b = canonicalize(raw_brand)
             if b: return b
+    
+    # If we found a raw brand but couldn't canonicalize, add it to lexicon
+    if raw_brand and raw_brand.lower() not in ('unknown', ''):
+        add_brand(raw_brand)
+        # Return the raw brand (title-cased) since it's now in lexicon
+        return raw_brand.strip().title()
+    
     return None
 
 def build_ad_object(run_id: str, idx: int, ad: dict, retailer: str, client: str, keyword: str, run_iso: str, client_root: Path) -> dict:
@@ -168,7 +182,7 @@ def save_run_artifacts(client_root: Path, run_id: str, payload: dict, html_conte
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
     if html_content:
         safe_kw = re.sub(r"[^A-Za-z0-9]+", "_", html_keyword).strip("_") or "search"
-        (run_dir / f"search_results_{safe_kw}_{run_id}.html").write_text(html_content)
+        (run_dir / f"search_results_{safe_kw}_{run_id}.html").write_text(html_content, encoding='utf-8')
     return json_path
 
 
@@ -543,9 +557,7 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     '--window-size=1920,1080',  # Force initial outer window size
                     '--force-device-scale-factor=1',  # Force DPR
                     '--high-dpi-support=1',
-                    # Focus prevention - don't steal focus from user's active window
-                    '--no-startup-window',
-                    '--silent-launch',
+                    # Keep window visible but don't steal focus
                     '--disable-focus-on-load',
                     '--noerrdialogs',
                 ],

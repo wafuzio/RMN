@@ -260,6 +260,10 @@ def harvest_walmart_brand_logo(
     """
     _ensure_dirs(db_path, logos_dir)
     
+    # Ensure unverified subfolder exists
+    unverified_dir = os.path.join(logos_dir, "unverified")
+    os.makedirs(unverified_dir, exist_ok=True)
+    
     # Canonicalize brand
     brand_canonical = canonicalize_brand(brand_keyword) if SCRAPER_IMPORTS_OK else brand_keyword
     brand_slug = brand_canonical.lower().replace(' ', '_').replace('-', '_').replace("'", "")
@@ -424,18 +428,18 @@ def harvest_walmart_brand_logo(
                                                     ext = ".jpg"
                                                 
                                                 logo_filename = f"{brand_slug}{ext}"
-                                                logo_path = os.path.join(logos_dir, logo_filename)
+                                                logo_path = os.path.join(unverified_dir, logo_filename)
                                                 with open(logo_path, 'wb') as f:
                                                     f.write(response.content)
                                                 
-                                                print(f"    ✅ Saved SBA logo: {logo_filename}")
+                                                print(f"    ✅ Saved SBA logo: unverified/{logo_filename}")
                                                 
-                                                # Update database
+                                                # Update database - store path relative to logos_dir
                                                 _update_brand_logo_db(
                                                     db_path=db_path,
                                                     brand=brand_canonical,
                                                     logo_url=logo_src,
-                                                    logo_file=logo_filename,
+                                                    logo_file=f"unverified/{logo_filename}",
                                                     retailer=retailer,
                                                     metadata={"source": "walmart_sba", "matched_text": text_content}
                                                 )
@@ -591,21 +595,49 @@ def harvest_walmart_brand_logo(
                     "reason": "no_logo_img"
                 }
             
-            # Prefer advertising.walmart.com CDN
-            logo_img = None
+            # Filter logos by aspect ratio - reject banner-style images
+            # Real logos are typically 1:1 to 3:1 aspect ratio
+            # Banner images are often 6:1 or wider (e.g., 1200x158 = 7.6:1)
+            MAX_ASPECT_RATIO = 4.0  # Reject anything wider than 4:1
+            
+            valid_logos = []
             for img in logos:
                 try:
-                    src = img.get_attribute("src") or ""
-                    if "advertising.walmart.com" in src:
-                        logo_img = img
-                        break
+                    bbox = img.bounding_box()
+                    if bbox and bbox.get("width") and bbox.get("height"):
+                        w, h = bbox["width"], bbox["height"]
+                        if h > 0:
+                            aspect = w / h
+                            src = img.get_attribute("src") or ""
+                            if aspect <= MAX_ASPECT_RATIO:
+                                valid_logos.append((img, src, aspect))
+                                print(f"  ✓ Valid logo candidate: {w:.0f}x{h:.0f} (aspect {aspect:.1f}:1)")
+                            else:
+                                print(f"  ✗ Skipping banner image: {w:.0f}x{h:.0f} (aspect {aspect:.1f}:1 > {MAX_ASPECT_RATIO}:1)")
                 except Exception:
                     continue
             
-            if not logo_img:
-                logo_img = logos[0]
+            if not valid_logos:
+                return {
+                    "ok": False,
+                    "brand": brand_canonical,
+                    "logo_file": None,
+                    "logo_url": None,
+                    "reason": "no_valid_logo_aspect_ratio"
+                }
             
-            src = logo_img.get_attribute("src") or ""
+            # Prefer advertising.walmart.com CDN among valid logos
+            logo_img = None
+            src = None
+            for img, img_src, aspect in valid_logos:
+                if "advertising.walmart.com" in img_src:
+                    logo_img = img
+                    src = img_src
+                    break
+            
+            if not logo_img:
+                logo_img, src, _ = valid_logos[0]
+            
             if not src:
                 return {
                     "ok": False,
@@ -615,11 +647,11 @@ def harvest_walmart_brand_logo(
                     "reason": "logo_src_missing"
                 }
             
-            # Download logo
+            # Download logo to unverified folder
             slug = _brand_slug(brand_canonical)
             ext = _ext_from_url(src)
             logo_filename = f"{slug}{ext}"
-            logo_path = os.path.join(logos_dir, logo_filename)
+            logo_path = os.path.join(unverified_dir, logo_filename)
             
             print(f"  Downloading logo: {src}")
             ua = BROWSER_UA.get("ua", "Mozilla/5.0")
@@ -634,7 +666,7 @@ def harvest_walmart_brand_logo(
                     "reason": "download_failed"
                 }
             
-            # Update database
+            # Update database - store path relative to logos_dir
             metadata = {
                 "source": "walmart_brand_store",
                 "keyword": brand_keyword,
@@ -642,9 +674,9 @@ def harvest_walmart_brand_logo(
                 "store_url": store_url,
             }
             
-            _update_brand_logo_db(db_path, brand_canonical, src, logo_filename, retailer, metadata)
+            _update_brand_logo_db(db_path, brand_canonical, src, f"unverified/{logo_filename}", retailer, metadata)
             
-            print(f"  ✅ Logo saved: {logo_filename}")
+            print(f"  ✅ Logo saved: unverified/{logo_filename}")
             return {
                 "ok": True,
                 "brand": brand_canonical,

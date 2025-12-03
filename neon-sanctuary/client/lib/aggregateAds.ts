@@ -56,6 +56,18 @@ function normalizeUrl(raw?: string): string {
   }
 }
 
+function normalizeBrand(brand: string): string {
+  // Normalize brand for grouping: lowercase, remove punctuation, collapse whitespace
+  return (brand || '')
+    .toLowerCase()
+    .replace(/[''`]/g, '')      // Remove apostrophes/quotes (Campbell's → campbells)
+    .replace(/[^\w\s]/g, ' ')   // Replace other punctuation with space
+    .trim()
+    .split(/\s+/)
+    .filter(w => w.length > 0)
+    .join(' ');
+}
+
 function buildKey(ad: AdCardItem): string {
   // Group by brand + message + ad_type for all retailers
   // This works better than image URL since:
@@ -76,7 +88,7 @@ function buildKey(ad: AdCardItem): string {
     ad.retailer || '',
     ad.ad_type || '', // Groups stay pure by ad_type
     ad.client || '',
-    ad.brand || '',
+    normalizeBrand(ad.brand),
     normalizedMessage,
     // NOTE: keyword is NOT included - we want to group same ad across different keywords
   ];
