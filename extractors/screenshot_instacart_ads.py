@@ -80,7 +80,8 @@ def screenshot_instacart_ads(json_path: str, html_path: str, output_dir: str, pr
     # Clean up stale lock file if it exists
     if profile_dir and os.path.isdir(profile_dir):
         lock_file = os.path.join(profile_dir, 'SingletonLock')
-        if os.path.exists(lock_file):
+        # Use lexists() instead of exists() to catch broken symlinks
+        if os.path.lexists(lock_file):
             try:
                 os.remove(lock_file)
                 print(f"   Removed stale lock file")

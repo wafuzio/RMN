@@ -676,8 +676,16 @@ class SchedulerDaemon:
                         "--output-dir",
                         str(client_dir)
                     ]
+                elif retailer == "amazon":
+                    # Amazon uses positional args only (no --output-dir flag)
+                    cmd = [
+                        sys.executable,
+                        str(script_path),
+                        keyword,
+                        str(client_dir)
+                    ]
                 else:
-                    # Instacart, Walmart, Amazon use positional keyword arg
+                    # Instacart, Walmart use positional keyword arg + --output-dir flag
                     cmd = [
                         sys.executable,
                         str(script_path),

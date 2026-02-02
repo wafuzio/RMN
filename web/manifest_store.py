@@ -41,6 +41,22 @@ def daily_totals() -> Dict[str, Any]:
     return _load().get("daily_totals", {})
 
 
+def brands() -> Dict[str, List[Dict[str, Any]]]:
+    """Get pre-computed brand counts by retailer.
+    
+    Returns: {retailer: [{brand, count, percentage}, ...], ...}
+    """
+    return _load().get("brands", {})
+
+
+def brands_by_client() -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+    """Get pre-computed brand counts by retailer and client.
+    
+    Returns: {retailer: {client: [{brand, count, percentage}, ...], ...}, ...}
+    """
+    return _load().get("brands_by_client", {})
+
+
 def built_at() -> str | None:
     """Get manifest build timestamp."""
     return _load().get("built_at")

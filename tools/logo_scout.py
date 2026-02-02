@@ -3,12 +3,14 @@
 LogoScout: fetch brand logos for your ad cards.
 
 Strategy (per brand):
-1) Wikidata:
+1) Official website header scrape:
+   - Try {brand}.com and look for logo in header (a.logo img, header img, etc.)
+   - Fast and gets the actual brand logo as displayed on their site
+2) Wikidata:
    - Find entity via wbsearchentities
    - Get P856 (official website) [domain]
    - Get P154 (logo image file) → fetch from Wikimedia Commons if present
-2) Clearbit (no API key): https://logo.clearbit.com/<domain> (PNG)
-3) (Optional TODO fallback) simple web search for /logo.(svg|png) on the official site
+3) Clearbit (no API key): https://logo.clearbit.com/<domain> (PNG)
 
 Outputs:
 - Saves logo to output/brand_logos/<brand-slug>.svg or .png
@@ -250,6 +252,181 @@ def extract_domain(url):
         return None
 
 
+def scrape_header_logo(brand, domain=None):
+    """
+    Scrape brand's official website for a logo in the header using Playwright.
+    
+    STRICT validation:
+    - Must have semantic confirmation (alt text, class, or parent with "logo")
+    - Must have reasonable aspect ratio (1:1 to 5:1)
+    - Must be reasonable size (not tiny icon, not huge banner)
+    
+    Returns (raw_bytes, content_type, source_url) or (None, None, None)
+    """
+    from playwright.sync_api import sync_playwright
+    from PIL import Image
+    from io import BytesIO
+    
+    # Build candidate domains to try
+    slug = slugify(brand).replace("-", "")
+    candidates = []
+    if domain:
+        candidates.append(domain)
+    candidates.extend([
+        f"{slug}.com",
+        f"www.{slug}.com",
+        f"{slug.replace('_', '')}.com",
+    ])
+    
+    brand_lower = brand.lower()
+    
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 800},
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        )
+        page = context.new_page()
+        
+        for dom in candidates:
+            try:
+                url = f"https://{dom}"
+                print(f"    → trying {url} ...", end=" ", flush=True)
+                
+                try:
+                    page.goto(url, timeout=15000, wait_until="domcontentloaded")
+                    page.wait_for_timeout(2000)  # Let JS render
+                except Exception as e:
+                    print(f"({e})")
+                    continue
+                
+                # Find all images with logo indicators
+                candidates_found = []
+                
+                # Get all img elements
+                imgs = page.locator("img").all()
+                
+                for img in imgs:
+                    try:
+                        src = img.get_attribute("src") or img.get_attribute("data-src") or ""
+                        if not src:
+                            continue
+                        
+                        # Skip obvious non-logos
+                        src_lower = src.lower()
+                        if any(skip in src_lower for skip in [
+                            "favicon", "icon", "social", "facebook", "twitter", 
+                            "instagram", "1x1", "pixel", "tracking", "analytics",
+                            "banner", "hero", "slide", "product", "cart"
+                        ]):
+                            continue
+                        
+                        # --- SEMANTIC VALIDATION ---
+                        semantic_score = 0
+                        
+                        # Check img attributes
+                        alt = (img.get_attribute("alt") or "").lower()
+                        img_class = (img.get_attribute("class") or "").lower()
+                        
+                        # Alt text contains "logo" or brand name
+                        if "logo" in alt:
+                            semantic_score += 3
+                        if brand_lower in alt:
+                            semantic_score += 2
+                        
+                        # Class contains "logo"
+                        if "logo" in img_class:
+                            semantic_score += 3
+                        
+                        # Check if inside header or logo container
+                        try:
+                            # Check ancestors for logo/header indicators
+                            in_header = img.locator("xpath=ancestor::header").count() > 0
+                            in_nav = img.locator("xpath=ancestor::nav").count() > 0
+                            in_logo_container = img.locator("xpath=ancestor::*[contains(@class, 'logo')]").count() > 0
+                            in_home_link = img.locator("xpath=ancestor::a[@href='/']").count() > 0
+                            
+                            if in_header:
+                                semantic_score += 1
+                            if in_nav:
+                                semantic_score += 1
+                            if in_logo_container:
+                                semantic_score += 2
+                            if in_home_link:
+                                semantic_score += 1
+                        except:
+                            pass
+                        
+                        # Must have minimum semantic confidence
+                        if semantic_score < 2:
+                            continue
+                        
+                        # Get bounding box for size validation
+                        bbox = img.bounding_box()
+                        if bbox:
+                            w, h = bbox["width"], bbox["height"]
+                            # Too small = icon
+                            if w < 50 or h < 20:
+                                continue
+                            # Too large = probably not a logo
+                            if w > 500 or h > 300:
+                                continue
+                            # Aspect ratio check (0.5:1 to 5:1)
+                            aspect = w / h if h > 0 else 999
+                            if aspect < 0.5 or aspect > 5.0:
+                                continue
+                        
+                        candidates_found.append((img, src, semantic_score, bbox))
+                        
+                    except Exception:
+                        continue
+                
+                # Sort by semantic score (highest first)
+                candidates_found.sort(key=lambda x: x[2], reverse=True)
+                
+                for img, src, score, bbox in candidates_found:
+                    # Normalize URL
+                    if src.startswith("//"):
+                        src = "https:" + src
+                    elif src.startswith("/"):
+                        src = f"https://{dom}{src}"
+                    elif not src.startswith("http"):
+                        src = f"https://{dom}/{src}"
+                    
+                    # Fetch the image
+                    try:
+                        img_resp = requests.get(src, headers=HEADERS, timeout=8)
+                        if img_resp.status_code != 200:
+                            continue
+                        
+                        ctype = img_resp.headers.get("Content-Type", "")
+                        raw = img_resp.content
+                        
+                        # Validate it's an image
+                        if not ("image" in ctype or src.endswith((".png", ".jpg", ".jpeg", ".svg", ".webp"))):
+                            continue
+                        
+                        size_kb = len(raw) / 1024
+                        dims = f"{bbox['width']:.0f}x{bbox['height']:.0f}" if bbox else "?"
+                        print(f"✓ found (score={score}, {dims}, {size_kb:.1f}KB)")
+                        
+                        browser.close()
+                        return raw, ctype, src
+                        
+                    except Exception:
+                        pass
+                
+                print("no valid logo found")
+                
+            except Exception as e:
+                print(f"error: {e}")
+                continue
+        
+        browser.close()
+    
+    return None, None, None
+
+
 def check_existing_logo(db, brand):
     """Check if brand already exists in database"""
     brand_key = normalize_brand_key(brand)
@@ -437,7 +614,22 @@ def fetch_logo_for_brand(db, brand, retailer="instacart"):
     
     slug = slugify(brand)
 
-    # 1) Wikidata → official site + logo image
+    # 1) Try brand's official website header first
+    print(f"  [1] Checking {brand}.com header...")
+    raw, ctype, src_url = scrape_header_logo(brand)
+    if raw:
+        ext = normalize_ext_from_ctype(ctype or "image/png")
+        logo_path = safe_write_logo(brand_key, raw, ext)
+        source_info = {
+            "source": "official-website",
+            "url": src_url,
+            "ctype": ctype,
+        }
+        add_logo_to_database(db, brand, logo_path, source_info, retailer)
+        return logo_path, source_info
+
+    # 2) Wikidata → official site + logo image
+    print(f"  [2] Checking Wikidata...")
     qid = wikidata_search_entity(brand)
     official_domain = None
     if qid:
@@ -463,8 +655,9 @@ def fetch_logo_for_brand(db, brand, retailer="instacart"):
                 add_logo_to_database(db, brand, logo_path, source_info, retailer)
                 return logo_path, source_info
 
-    # 2) Clearbit (requires domain)
+    # 3) Clearbit (requires domain)
     if official_domain:
+        print(f"  [3] Trying Clearbit for {official_domain}...")
         raw, ctype = clearbit_logo(official_domain)
         if raw:
             ext = normalize_ext_from_ctype(ctype or "image/png")
@@ -477,7 +670,7 @@ def fetch_logo_for_brand(db, brand, retailer="instacart"):
             add_logo_to_database(db, brand, logo_path, source_info, retailer)
             return logo_path, source_info
 
-    # 3) Walmart harvester (checks SBA first, then brand store)
+    # 4) Walmart harvester (checks SBA first, then brand store)
     # Check Walmart harvester
     walmart_failed = db.get("failed_searches", {}).get(brand_key, {}).get("walmart", False)
     

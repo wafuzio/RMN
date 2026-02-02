@@ -15,6 +15,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 from filename_utils import generate_ad_filename
 from brand_logo_database import BrandLogoDatabase
 from core.brands import canonicalize, add_brand
+from scripts.auto_detect_video_overlay import detect_instacart_video_bounds
 
 # ============================================================================
 # Canonical Schema Helpers for Instacart
@@ -124,12 +125,14 @@ def build_ad_object(run_id: str, idx: int, ad: dict, retailer: str, client: str,
                 rel_img = normalize_rel_from_client(v, client_root)
                 if rel_img: break
 
-    # Optional: if ad holds a local video file path set by extractor (rare)
+    # Check for local video file path - either directly set or derived from video_url
     video_rel = None
-    v_url = ad.get("video_url") or ad.get("image_url")
-    if isinstance(v_url, str) and v_url.lower().endswith(".mp4"):
-        # if extractor saved to disk, it should have put a relative path in ad["video_path"]
+    if ad.get("video_path"):
+        # Direct video_path set by capture code
         video_rel = normalize_rel_from_client(ad.get("video_path"), client_root)
+    elif ad.get("video_url") and isinstance(ad.get("video_url"), str) and ad.get("video_url").lower().endswith(".mp4"):
+        # Fallback: video_url points to a local .mp4 file
+        video_rel = normalize_rel_from_client(ad.get("video_url"), client_root)
 
     # Build canonical object
     can = {
@@ -158,6 +161,10 @@ def build_ad_object(run_id: str, idx: int, ad: dict, retailer: str, client: str,
     # Preserve advertisers array for filtering
     if ad.get("advertisers"):
         can["advertisers"] = ad["advertisers"]
+    
+    # Include video overlay metadata if captured at screenshot time
+    if ad.get("video_overlay"):
+        can["video_overlay"] = ad["video_overlay"]
     
     return can
 
@@ -507,8 +514,9 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
         logo_db = None
     
     # Clean up stale lock file if it exists
+    # Use lexists() instead of exists() to catch broken symlinks
     lock_file = os.path.join(profile_dir, 'SingletonLock')
-    if os.path.exists(lock_file):
+    if os.path.lexists(lock_file):
         try:
             os.remove(lock_file)
             print(f"   Removed stale lock file: {lock_file}")
@@ -521,7 +529,7 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
     client_root = Path(output_dir)
     
     # Also create timestamp string for filename generation (YYYYMMDD_HHMMSS format)
-    timestamp = run_id[:8] + "_" + run_id[8:10] + "-" + run_id[10:12] + "-" + run_id[12:14]
+    timestamp = run_id[:8] + "_" + run_id[8:14]  # e.g., 20251205_060144
     
     log(f"Run ID: {run_id}")
     log(f"Timestamp: {run_iso}")
@@ -998,16 +1006,62 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             except Exception as e:
                 log(f"   ⚠️ Full page screenshot failed: {e}")
             
+            # Track seen video URLs to avoid downloading duplicates
+            seen_video_urls = {}  # video_src -> saved video_rel_path
+            
             # Screenshot each ad
             for idx, (ad_type, elem) in enumerate(elements):
                 log(f"\n📸 Screenshot {idx + 1}/{len(elements)}")
                 try:
                     # Determine actual ad type (check for video)
-                    is_video = elem.query_selector('video') is not None
+                    video_elem = elem.query_selector('video')
+                    is_video = video_elem is not None
                     actual_ad_type = 'Shoppable Video Ad' if is_video else 'Shoppable Display Ad'
                     output_folder = shoppable_video_dir if is_video else shoppable_display_dir
                     ad_type_slug = 'shoppable_video_ad' if is_video else 'shoppable_display_ad'
                     log(f"   Ad type: {actual_ad_type} (video={is_video})")
+                    
+                    # Capture video bounding box for overlay positioning
+                    video_overlay = None
+                    video_src = None
+                    if is_video and video_elem:
+                        try:
+                            elem_box = elem.bounding_box()
+                            video_box = video_elem.bounding_box()
+                            if elem_box and video_box:
+                                # Get border-radius from computed styles
+                                border_radius = 8  # Default for Instacart videos
+                                try:
+                                    br_str = video_elem.evaluate("el => getComputedStyle(el).borderRadius")
+                                    if br_str:
+                                        # Parse "8px" -> 8
+                                        br_val = int(''.join(filter(str.isdigit, br_str.split()[0])) or '8')
+                                        border_radius = br_val
+                                except Exception:
+                                    pass
+                                
+                                video_overlay = {
+                                    "x": round(video_box["x"] - elem_box["x"]),
+                                    "y": round(video_box["y"] - elem_box["y"]),
+                                    "width": round(video_box["width"]),
+                                    "height": round(video_box["height"]),
+                                    "image_width": round(elem_box["width"]),
+                                    "image_height": round(elem_box["height"]),
+                                    "border_radius": border_radius,
+                                }
+                                log(f"   Video overlay: {video_overlay}")
+                            
+                            # Get video source URL for MP4 download
+                            video_src = video_elem.get_attribute('src')
+                            if not video_src:
+                                # Try source tags
+                                source_elem = video_elem.query_selector('source')
+                                if source_elem:
+                                    video_src = source_elem.get_attribute('src')
+                            if video_src:
+                                log(f"   Video src: {video_src[:80]}...")
+                        except Exception as e:
+                            log(f"   ⚠️ Video overlay capture failed: {e}")
                     
                     # Extract advertiser from ad data if available
                     advertiser = "unknown"  # Default to "unknown" instead of None
@@ -1045,10 +1099,80 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     else:
                         log(f"   ⚠️ Screenshot file not found: {screenshot_path}")
                     
-                    # Add screenshot path to ad_info (relative to client root)
+                    # Download MP4 video if available (with deduplication)
+                    video_rel_path = None
+                    if is_video and video_src and video_src.startswith('http'):
+                        # Check if we've already downloaded this video
+                        if video_src in seen_video_urls:
+                            video_rel_path = seen_video_urls[video_src]
+                            log(f"   ♻️ MP4 reused (same video): {video_rel_path}")
+                        else:
+                            video_filename = screenshot_filename.replace('.png', '.mp4')
+                            video_path = os.path.join(output_folder, video_filename)
+                            video_rel_path = str(Path(video_path).relative_to(client_root))
+                            
+                            try:
+                                # Check if it's HLS (.m3u8) or direct video
+                                if video_src.endswith('.m3u8'):
+                                    # HLS stream - try to download with ffmpeg if available
+                                    log(f"   🎥 Video is HLS stream (.m3u8)")
+                                    try:
+                                        import subprocess
+                                        import shutil
+                                        # Find ffmpeg - check common locations
+                                        ffmpeg_path = shutil.which('ffmpeg') or '/opt/homebrew/bin/ffmpeg'
+                                        if not os.path.exists(ffmpeg_path):
+                                            raise FileNotFoundError(f"ffmpeg not found at {ffmpeg_path}")
+                                        result = subprocess.run(
+                                            [ffmpeg_path, '-i', video_src, '-c', 'copy', '-bsf:a', 'aac_adtstoasc', video_path],
+                                            capture_output=True,
+                                            timeout=30
+                                        )
+                                        if result.returncode == 0:
+                                            seen_video_urls[video_src] = video_rel_path
+                                            log(f"   ✅ HLS video downloaded: {video_filename}")
+                                        else:
+                                            log(f"   ⚠️ HLS download failed (ffmpeg error): {result.stderr.decode()[:200]}")
+                                            video_rel_path = None
+                                    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                                        log(f"   ⚠️ HLS download failed (ffmpeg not available or timeout): {e}")
+                                        video_rel_path = None
+                                else:
+                                    # Direct video file - download it
+                                    import requests
+                                    r = requests.get(video_src, timeout=30)
+                                    if r.ok:
+                                        with open(video_path, 'wb') as f:
+                                            f.write(r.content)
+                                        seen_video_urls[video_src] = video_rel_path
+                                        log(f"   ✅ MP4 saved: {video_filename} ({len(r.content)} bytes)")
+                                    else:
+                                        log(f"   ⚠️ MP4 download failed: HTTP {r.status_code}")
+                                        video_rel_path = None
+                            except Exception as e:
+                                log(f"   ⚠️ MP4 download error: {e}")
+                                video_rel_path = None
+                    
+                    # Add screenshot path and video overlay to ad_info (relative to client root)
                     if idx < len(raw_ads):
                         rel_path_str = str(Path(screenshot_path).relative_to(client_root))
                         raw_ads[idx]['image_path'] = rel_path_str
+                        raw_ads[idx]['type'] = actual_ad_type  # Update type based on video detection
+                        
+                        # Use CV-based detection for video overlay (more accurate than DOM bounding boxes)
+                        if is_video and os.path.exists(screenshot_path):
+                            try:
+                                cv_overlay = detect_instacart_video_bounds(screenshot_path)
+                                if cv_overlay and cv_overlay.get('detection_method') == 'auto_instacart':
+                                    video_overlay = cv_overlay
+                                    log(f"   Video overlay (CV): x={cv_overlay['x']}, y={cv_overlay['y']}")
+                            except Exception as e:
+                                log(f"   ⚠️ CV video overlay detection failed: {e}")
+                        
+                        if video_overlay:
+                            raw_ads[idx]['video_overlay'] = video_overlay
+                        if video_rel_path:
+                            raw_ads[idx]['video_path'] = video_rel_path
                         log(f"   Added to JSON: {rel_path_str}")
                         
                 except Exception as e:

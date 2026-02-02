@@ -8,6 +8,7 @@ RETAILER_URLS = {
     "walmart": "https://www.walmart.com/",
     "instacart": "https://www.instacart.com/store/publix",  # Default to Publix for initial setup
     "target": "https://www.target.com/",
+    "tiktokshop": "https://www.tiktok.com/shop",
 }
 
 def ensure_profile(retailer: str, profile_dir: str, channel="chrome"):
@@ -24,29 +25,41 @@ def ensure_profile(retailer: str, profile_dir: str, channel="chrome"):
         page.goto(RETAILER_URLS[retailer], wait_until="domcontentloaded")
         print(f"Login to {retailer} in the opened browser, complete 2FA if prompted.")
         print("Leave the page logged in, then close the window to save the profile.")
-        while True:
+        
+        # TikTok Shop: wait for manual close (auto-detection is too aggressive)
+        if retailer == "tiktokshop":
+            print("\n*** MANUAL CLOSE REQUIRED ***")
+            print("Close the browser window when you are fully logged in.")
             try:
-                content = page.content().lower()
-                # Heuristic: "Hello" account link appears for logged-in US accounts
-                if retailer == "amazon" and ("hello" in content or "nav-link-accountlist" in content):
-                    break
-                if retailer == "kroger" and ("my account" in content or "sign out" in content):
-                    break
-                if retailer == "instacart" and ("log out" in content or "sign out" in content):
-                    break
-                if retailer == "walmart" and ("account" in content or "sign out" in content):
-                    break
-                if retailer == "target" and ("account" in content or "sign out" in content or "my target" in content):
-                    break
+                # Wait indefinitely for browser to close
+                page.wait_for_event("close", timeout=0)
             except Exception:
                 pass
-            time.sleep(3)
-        ctx.close()
+        else:
+            # Other retailers: auto-detect login
+            while True:
+                try:
+                    content = page.content().lower()
+                    # Heuristic: "Hello" account link appears for logged-in US accounts
+                    if retailer == "amazon" and ("hello" in content or "nav-link-accountlist" in content):
+                        break
+                    if retailer == "kroger" and ("my account" in content or "sign out" in content):
+                        break
+                    if retailer == "instacart" and ("log out" in content or "sign out" in content):
+                        break
+                    if retailer == "walmart" and ("account" in content or "sign out" in content):
+                        break
+                    if retailer == "target" and ("account" in content or "sign out" in content or "my target" in content):
+                        break
+                except Exception:
+                    pass
+                time.sleep(3)
+            ctx.close()
         print(f"✅ Saved profile at: {profile_dir}")
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--retailer", required=True, choices=["kroger","amazon","walmart","instacart","target"])
+    ap.add_argument("--retailer", required=True, choices=["kroger","amazon","walmart","instacart","target","tiktokshop"])
     ap.add_argument("--profile-dir", required=True, help="Path to persistent Chrome profile dir")
     args = ap.parse_args()
     ensure_profile(args.retailer, args.profile_dir)

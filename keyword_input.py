@@ -156,6 +156,7 @@ import retailers.amazon.adapter  # noqa: F401
 import retailers.instacart.adapter  # noqa: F401
 import retailers.walmart.adapter  # noqa: F401
 import retailers.target.adapter  # noqa: F401
+import retailers.tiktokshop.adapter  # noqa: F401
 
 # Optional: try eager imports; if they fail, globals stay None and the lazy path runs later
 try:

@@ -162,7 +162,7 @@ def parse_output_segments(p: Path) -> tuple[Optional[str], Optional[str]]:
     
     return retailer, client
 
-def extract_toa_images(json_file, html_file=None, client_name=None, output_override=None):
+def extract_toa_images(json_file, html_file=None, client_name=None, output_override=None, headless=False):
     """
     Extract TOA images using screenshot_toa_image.py
     
@@ -170,6 +170,7 @@ def extract_toa_images(json_file, html_file=None, client_name=None, output_overr
         json_file (str): Path to the JSON file with TOA data
         html_file (str, optional): Path to specific HTML file to process
         client_name (str): Client name for organizing output
+        headless (bool): Run browser in headless mode (no visible window)
         
         bool: True if successful, False otherwise
     """
@@ -208,6 +209,10 @@ def extract_toa_images(json_file, html_file=None, client_name=None, output_overr
         # Add client name if provided (helps prevent incorrect derivation from paths)
         if client_name:
             cmd.extend(["--client", client_name])
+        
+        # Add headless flag if requested (no visible browser window)
+        if headless:
+            cmd.append("--headless")
 
         print(f"\n📷 Extracting TOA images using extractors/screenshot_toa_image.py...")
         try:
@@ -280,7 +285,7 @@ def extract_toa_images(json_file, html_file=None, client_name=None, output_overr
         print(f"❌ Error starting TOA image extraction: {e}")
         return False
 
-def process_specific_html_files(files, output_dir=None, force_images: bool = False):
+def process_specific_html_files(files, output_dir=None, force_images: bool = False, headless: bool = False):
     """Process only the specified HTML files.
 
     Args:
@@ -288,6 +293,7 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
         output_dir (str | None): Optional client/output directory override.
         force_images (bool): When True, always run the screenshot extractor even if
             existing TOA/Skyscraper images are detected.
+        headless (bool): Run browser in headless mode (no visible window).
     """
     output_dir = output_dir or DEFAULT_DIR
     # Normalize file list and filter to existing files
@@ -538,7 +544,7 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
         target_html = result.get('source_file') or html_file
         client_root = compute_client_root_local(retailer, client, output_dir)
         # Pass client explicitly to prevent incorrect derivation from path
-        extract_toa_images(results_path, target_html, client_name=client, output_override=client_root)
+        extract_toa_images(results_path, target_html, client_name=client, output_override=client_root, headless=headless)
     
     print(f"✅ Processed {processed} specific file(s)")
     return True
@@ -1065,11 +1071,12 @@ if __name__ == "__main__":
     parser.add_argument("--missing-gap-minutes", type=int, default=2, help="Max allowed gap in minutes between consecutive files to group as one run (default: 2)")
     parser.add_argument("--files", "-F", nargs="+", help="Specific HTML file(s) to process")
     parser.add_argument("--force-images", action="store_true", help="Bypass all 'already exists' checks and always generate fresh TOA/Skyscraper images")
+    parser.add_argument("--headless", action="store_true", help="Run browser in headless mode (no visible window)")
     args = parser.parse_args()
     
     # Process HTML files
     if args.files:
-        success = process_specific_html_files(args.files, args.output_dir, force_images=args.force_images)
+        success = process_specific_html_files(args.files, args.output_dir, force_images=args.force_images, headless=args.headless)
     elif args.latest_run:
         # Search root defaults to input-dir if provided, else DEFAULT_DIR
         search_root = args.input_dir or DEFAULT_DIR

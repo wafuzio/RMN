@@ -8,9 +8,17 @@ import json
 import glob
 import os
 import re
+import sys
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from core.brands import get_brand_from_ad
 
 def check_ad(ad, json_file):
     """Check if an ad should be flagged as unknown"""
+    # Use consistent brand extraction (checks 'brand' first, then 'advertisers')
+    brand = get_brand_from_ad(ad)
     advertisers = ad.get('advertisers', [])
     ad_type = ad.get('type', 'unknown')
     
@@ -21,21 +29,25 @@ def check_ad(ad, json_file):
     # Check various unknown conditions
     reasons = []
     
-    # Empty or missing advertisers
-    if not advertisers:
-        reasons.append("Empty/missing advertisers")
+    # No valid brand found from either field
+    if not brand:
+        reasons.append("No valid brand (checked 'brand' and 'advertisers')")
     
-    # Explicitly unknown
+    # Explicitly unknown in brand field
+    if ad.get('brand', '').lower() == 'unknown':
+        reasons.append("brand field is 'unknown'")
+    
+    # Explicitly unknown in advertisers
     if advertisers == ['unknown'] or advertisers == ['Unknown']:
-        reasons.append("Explicitly 'unknown'")
+        reasons.append("advertisers is ['unknown']")
     
-    # Contains unknown
+    # Contains unknown in advertisers
     if any(adv and adv.lower() == 'unknown' for adv in advertisers):
-        reasons.append("Contains 'unknown'")
+        reasons.append("advertisers contains 'unknown'")
     
     # Check for None values
     if advertisers and any(adv is None for adv in advertisers):
-        reasons.append("Contains None values")
+        reasons.append("advertisers contains None values")
     
     # NEW: Check if image path exists and if actual file has __unknown__
     image_path = None

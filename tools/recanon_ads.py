@@ -134,6 +134,11 @@ def find_brand_in_json(data, old_brand, old_slug):
             video_path = ad.get('video_path', '')
             if video_path and old_slug in video_path.lower():
                 matches.append({'type': 'video_path_ad', 'ad_index': i, 'path': video_path})
+            
+            # Check video_url for brand slug (local video references)
+            video_url = ad.get('video_url', '')
+            if video_url and old_slug in video_url.lower() and not video_url.startswith('http'):
+                matches.append({'type': 'video_url_ad', 'ad_index': i, 'path': video_url})
     
     # Check videos array
     if 'videos' in data and isinstance(data['videos'], list):
@@ -197,6 +202,13 @@ def update_json_brand(data, matches, old_brand, new_brand):
             data['ads'][ad_idx]['video_path'] = new_path
             changes.append(f"ads[{ad_idx}].video_path: slug {old_slug} -> {new_slug}")
         
+        elif match['type'] == 'video_url_ad':
+            ad_idx = match['ad_index']
+            old_path = data['ads'][ad_idx]['video_url']
+            new_path = old_path.replace(old_slug, new_slug)
+            data['ads'][ad_idx]['video_url'] = new_path
+            changes.append(f"ads[{ad_idx}].video_url: slug {old_slug} -> {new_slug}")
+        
         elif match['type'] == 'video_path':
             idx = match['index']
             old_path = data['videos'][idx]
@@ -207,37 +219,63 @@ def update_json_brand(data, matches, old_brand, new_brand):
     return changes
 
 
-def rename_files(json_file, old_brand, new_brand, dry_run=False):
-    """Rename associated image/video files."""
+def rename_files_for_brand(old_brand, new_brand, dry_run=False):
+    """Rename ALL files globally that match the old brand slug.
+    
+    IMPORTANT: Only renames files that follow the canonical naming convention
+    with double-underscore delimiters (e.g., kroger__brand__toa__...).
+    Files without this pattern (like search_results_*.png) are skipped to
+    prevent accidental corruption from simple string replacement.
+    
+    This searches the entire output/ directory tree for matching files.
+    """
     old_slug = slugify(old_brand)
     new_slug = slugify(new_brand)
     renamed = []
     
-    # Find files in same directory and subdirectories
-    json_path = Path(json_file)
-    search_dirs = [json_path.parent]
+    # Safety check: don't process very short slugs that could match unintended substrings
+    if len(old_slug) < 3:
+        print(f"[WARN] Skipping file renames - old_slug '{old_slug}' is too short (< 3 chars)")
+        return renamed
     
-    # Also check common subdirectories
-    for subdir in ['SBV', 'SBA', 'SP', 'images', 'screenshots']:
-        subdir_path = json_path.parent.parent / subdir
-        if subdir_path.exists():
-            search_dirs.append(subdir_path)
+    # Search entire output directory
+    output_dir = Path(__file__).resolve().parents[1] / "output"
+    if not output_dir.exists():
+        return renamed
     
-    for search_dir in search_dirs:
-        for ext in ['*.png', '*.jpg', '*.jpeg', '*.mp4', '*.webm']:
-            for file_path in search_dir.glob(ext):
-                if old_slug in file_path.name.lower():
-                    new_name = file_path.name.replace(old_slug, new_slug)
-                    new_path = file_path.parent / new_name
-                    
-                    if dry_run:
-                        renamed.append(f"[DRY RUN] {file_path.name} -> {new_name}")
-                    else:
-                        try:
-                            file_path.rename(new_path)
-                            renamed.append(f"{file_path.name} -> {new_name}")
-                        except Exception as e:
-                            renamed.append(f"[ERROR] {file_path.name}: {e}")
+    # Find all media files recursively
+    for ext in ['*.png', '*.jpg', '*.jpeg', '*.mp4', '*.webm']:
+        for file_path in output_dir.rglob(ext):
+            filename = file_path.name
+            
+            # Only process files with canonical naming (double-underscore delimiters)
+            # Format: retailer__brand__adtype__client__searchterm__timestamp.ext
+            if '__' not in filename:
+                continue
+            
+            parts = filename.split('__')
+            if len(parts) < 2:
+                continue
+            
+            # The brand slug is in the second segment (parts[1])
+            # Only rename if the brand segment matches exactly
+            brand_segment = parts[1].lower()
+            if brand_segment != old_slug:
+                continue
+            
+            # Replace only the brand segment (not arbitrary substrings)
+            parts[1] = new_slug
+            new_name = '__'.join(parts)
+            new_path = file_path.parent / new_name
+            
+            if dry_run:
+                renamed.append(f"[DRY RUN] {filename} -> {new_name}")
+            else:
+                try:
+                    file_path.rename(new_path)
+                    renamed.append(f"{filename} -> {new_name}")
+                except Exception as e:
+                    renamed.append(f"[ERROR] {filename}: {e}")
     
     return renamed
 
@@ -287,12 +325,6 @@ def recanon_brand(old_brand, new_brand=None, delete=False, auto=False, dry_run=F
             print(f"   ✏️  {change}")
             total_changes += 1
         
-        # Rename files
-        renames = rename_files(json_file, old_brand, new_brand, dry_run=dry_run)
-        for rename in renames:
-            print(f"   📁 {rename}")
-            total_renames += 1
-        
         # Save JSON
         if not dry_run and changes:
             try:
@@ -304,7 +336,14 @@ def recanon_brand(old_brand, new_brand=None, delete=False, auto=False, dry_run=F
         
         print()
     
-    print(f"{'='*60}")
+    # Rename files globally (once, not per-JSON)
+    print(f"\n📁 Renaming files globally...")
+    renames = rename_files_for_brand(old_brand, new_brand, dry_run=dry_run)
+    for rename in renames:
+        print(f"   {rename}")
+        total_renames += 1
+    
+    print(f"\n{'='*60}")
     print(f"Summary:")
     print(f"  JSON changes: {total_changes}")
     print(f"  Files renamed: {total_renames}")

@@ -518,8 +518,9 @@ def search_and_capture(keyword: str, output_dir: str, *, headless: bool = False)
         return False
 
     # Clean up stale Chromium lock file if present (mirrors Instacart pattern)
+    # Use lexists() instead of exists() to catch broken symlinks
     lock_file = os.path.join(profile_dir, "SingletonLock")
-    if os.path.exists(lock_file):
+    if os.path.lexists(lock_file):
         try:
             os.remove(lock_file)
             print(f"   Removed stale lock file: {lock_file}")

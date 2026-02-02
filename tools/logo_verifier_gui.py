@@ -6,6 +6,12 @@ Shows each logo with its brand name and metadata.
 Press 'Y' to keep, 'N' to delete, 'Q' to quit.
 """
 
+import os
+# Set library path for cairo (needed for SVG rendering on macOS)
+# Must be done before importing svglib/reportlab
+if 'DYLD_LIBRARY_PATH' not in os.environ:
+    os.environ['DYLD_LIBRARY_PATH'] = '/opt/homebrew/lib:/usr/local/lib'
+
 import json
 import re
 import sys
@@ -13,10 +19,13 @@ from pathlib import Path
 from PIL import Image, ImageTk
 import tkinter as tk
 from tkinter import ttk, simpledialog
+from difflib import SequenceMatcher
 
-# Paths
-LOGOS_DIR = Path("output/brand_logos")
-LOGOS_DB = Path("output/brand_logos/brand_logo_database.json")
+# Paths - use absolute paths relative to project root
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LOGOS_DIR = PROJECT_ROOT / "output/brand_logos"
+LOGOS_DB = PROJECT_ROOT / "output/brand_logos/brand_logo_database.json"
+BRANDS_LEXICON = PROJECT_ROOT / "config/brands.json"
 
 
 def load_database():
@@ -42,6 +51,47 @@ def save_database(db):
     LOGOS_DB.write_text(json.dumps(db, indent=2, ensure_ascii=False))
 
 
+def load_lexicon():
+    """Load the brand lexicon"""
+    if BRANDS_LEXICON.exists():
+        try:
+            return json.loads(BRANDS_LEXICON.read_text())
+        except Exception:
+            pass
+    return []
+
+
+def find_similar_brands(brand_name, lexicon, threshold=0.6):
+    """Find similar brands in lexicon using fuzzy matching"""
+    similar = []
+    brand_lower = brand_name.lower()
+    
+    for brand in lexicon:
+        lex_name = brand.get('name', '')
+        lex_lower = lex_name.lower()
+        
+        # Check exact substring match
+        if brand_lower in lex_lower or lex_lower in brand_lower:
+            similar.append((lex_name, 1.0, 'substring'))
+            continue
+        
+        # Check synonyms
+        for syn in brand.get('synonyms', []):
+            syn_lower = syn.lower()
+            if brand_lower in syn_lower or syn_lower in brand_lower:
+                similar.append((lex_name, 0.95, 'synonym'))
+                break
+        
+        # Fuzzy match on name
+        ratio = SequenceMatcher(None, brand_lower, lex_lower).ratio()
+        if ratio >= threshold:
+            similar.append((lex_name, ratio, 'fuzzy'))
+    
+    # Sort by score descending
+    similar.sort(key=lambda x: x[1], reverse=True)
+    return similar[:5]  # Return top 5 matches
+
+
 class LogoVerifier:
     def get_timestamp(self):
         """Get current timestamp in ISO format"""
@@ -51,10 +101,11 @@ class LogoVerifier:
     def __init__(self, root):
         self.root = root
         self.root.title("Logo Verifier")
-        self.root.geometry("800x900")
+        self.root.geometry("800x950")
         
-        # Load database
+        # Load database and lexicon
         self.db = load_database()
+        self.lexicon = load_lexicon()
         
         # Build list of logos to review from TWO sources:
         # 1. Database entries that aren't verified yet (with existing files)
@@ -99,7 +150,7 @@ class LogoVerifier:
         new_files = 0
         if unverified_dir.exists():
             for logo_file in unverified_dir.iterdir():
-                if logo_file.is_file() and logo_file.suffix.lower() in ('.png', '.jpg', '.jpeg', '.svg', '.webp'):
+                if logo_file.is_file() and logo_file.suffix.lower() in ('.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif', '.bin'):
                     rel_path = f"unverified/{logo_file.name}"
                     # Check if this file is already tracked in database
                     if rel_path not in db_files and logo_file.name not in db_files:
@@ -174,6 +225,20 @@ class LogoVerifier:
         self.retailers_label = ttk.Label(self.metadata_frame, text="", font=("Arial", 10))
         self.retailers_label.pack(anchor="w")
         
+        # Similar brands frame
+        self.similar_frame = ttk.LabelFrame(self.root, text="Similar Existing Brands", padding=10)
+        self.similar_frame.pack(pady=10, fill="x", padx=20)
+        
+        self.similar_text = tk.Text(
+            self.similar_frame,
+            height=4,
+            width=70,
+            font=("Arial", 10),
+            wrap="word",
+            state="disabled"
+        )
+        self.similar_text.pack()
+        
         # Button frame
         button_frame = ttk.Frame(self.root)
         button_frame.pack(pady=20)
@@ -205,6 +270,15 @@ class LogoVerifier:
         )
         self.rename_btn.pack(side="left", padx=10)
         
+        # Merge button
+        self.merge_btn = ttk.Button(
+            button_frame,
+            text="⇄ Merge (M)",
+            command=self.merge_with_existing,
+            width=15
+        )
+        self.merge_btn.pack(side="left", padx=10)
+        
         # Quit button
         self.quit_btn = ttk.Button(
             button_frame,
@@ -229,6 +303,8 @@ class LogoVerifier:
         self.root.bind('N', lambda e: self.delete_logo())
         self.root.bind('r', lambda e: self.rename_brand())
         self.root.bind('R', lambda e: self.rename_brand())
+        self.root.bind('m', lambda e: self.merge_with_existing())
+        self.root.bind('M', lambda e: self.merge_with_existing())
         self.root.bind('q', lambda e: self.quit_app())
         self.root.bind('Q', lambda e: self.quit_app())
         self.root.bind('<Left>', lambda e: self.previous_logo())
@@ -271,6 +347,10 @@ class LogoVerifier:
         self.path_label.config(text=f"File: {logo_file}")
         self.retailers_label.config(text=f"Retailers: {retailers}")
         
+        # Find and display similar brands
+        similar_brands = find_similar_brands(brand_name.replace("➕ ", ""), self.lexicon)
+        self.display_similar_brands(similar_brands)
+        
         # Update stats
         self.stats_label.config(
             text=f"Kept: {self.kept_count} | Deleted: {self.deleted_count}"
@@ -284,8 +364,57 @@ class LogoVerifier:
         logo_path = LOGOS_DIR / logo_file
         if logo_path.exists():
             try:
-                # Load image
-                img = Image.open(logo_path)
+                # Handle SVG files specially (PIL doesn't support SVG)
+                if logo_path.suffix.lower() == '.svg':
+                    try:
+                        from svglib.svglib import svg2rlg
+                        from reportlab.graphics import renderPM
+                        from io import BytesIO
+                        # Convert SVG to PNG in memory
+                        drawing = svg2rlg(str(logo_path))
+                        if drawing:
+                            # Scale to fit
+                            scale = min(580 / drawing.width, 380 / drawing.height) if drawing.width and drawing.height else 1
+                            drawing.width *= scale
+                            drawing.height *= scale
+                            drawing.scale(scale, scale)
+                            png_data = renderPM.drawToString(drawing, fmt="PNG")
+                            img = Image.open(BytesIO(png_data))
+                        else:
+                            raise ValueError("Could not parse SVG")
+                    except ImportError:
+                        # svglib not installed - show placeholder
+                        self.canvas.delete("all")
+                        self.canvas.create_text(
+                            300, 200,
+                            text=f"SVG file (install svglib to preview)\n{logo_path.name}",
+                            font=("Arial", 12),
+                            fill="orange"
+                        )
+                        return
+                    except Exception as svg_err:
+                        # SVG parsing failed - show error
+                        self.canvas.delete("all")
+                        self.canvas.create_text(
+                            300, 200,
+                            text=f"SVG preview error:\n{svg_err}\n{logo_path.name}",
+                            font=("Arial", 10),
+                            fill="orange"
+                        )
+                        return
+                else:
+                    # Load regular image
+                    img = Image.open(logo_path)
+                
+                # Handle RGBA images - composite onto a light gray background
+                # so transparent logos are visible
+                if img.mode == 'RGBA':
+                    # Create a light gray background (checkerboard pattern for transparency)
+                    bg = Image.new('RGB', img.size, (240, 240, 240))
+                    bg.paste(img, mask=img.split()[3])  # Use alpha channel as mask
+                    img = bg
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
                 
                 # Resize to fit canvas while maintaining aspect ratio
                 max_width, max_height = 580, 380
@@ -384,6 +513,30 @@ class LogoVerifier:
         save_database(self.db)
         self.kept_count += 1
         self.next_logo()
+    
+    def display_similar_brands(self, similar_brands):
+        """Display similar brands in the UI"""
+        self.similar_text.config(state="normal")
+        self.similar_text.delete("1.0", "end")
+        
+        if not similar_brands:
+            self.similar_text.insert("1.0", "No similar brands found in lexicon.")
+        else:
+            lines = []
+            for i, (name, score, match_type) in enumerate(similar_brands, 1):
+                score_pct = int(score * 100)
+                match_label = {"substring": "⊂", "synonym": "≈", "fuzzy": "~"}[match_type]
+                
+                # Check if this brand has a logo
+                brand_key = name.lower().replace(" ", "_").replace("'", "")
+                has_logo = "✓" if (LOGOS_DIR / f"verified/{brand_key}.png").exists() or \
+                                   (LOGOS_DIR / f"verified/{brand_key}.jpg").exists() else "○"
+                
+                lines.append(f"{i}. {has_logo} {name} ({score_pct}% {match_label})")
+            
+            self.similar_text.insert("1.0", "\n".join(lines))
+        
+        self.similar_text.config(state="disabled")
     
     def rename_brand(self):
         """Rename the brand and update lexicon + logo database"""
@@ -512,6 +665,8 @@ class LogoVerifier:
         if logo_path.exists():
             logo_path.unlink()
             print(f"🗑️  Deleted: {logo_file}")
+        else:
+            print(f"⚠️  File not found: {logo_path}")
         
         # Remove from database (only if it was in there - not for new files)
         if not is_new and brand_key in self.db["brands"]:
@@ -525,6 +680,105 @@ class LogoVerifier:
         
         # Show next logo (don't increment index since we removed current)
         self.show_current_logo()
+    
+    def merge_with_existing(self):
+        """Merge current logo with an existing brand from lexicon"""
+        if self.current_index >= len(self.brands):
+            return
+        
+        brand_key, brand_data = self.brands[self.current_index]
+        current_name = brand_data.get("brand_name", brand_key.replace("_", " ").title())
+        
+        # Get similar brands
+        similar_brands = find_similar_brands(current_name, self.lexicon)
+        
+        if not similar_brands:
+            tk.messagebox.showinfo("No Matches", "No similar brands found in lexicon to merge with.")
+            return
+        
+        # Show dialog with options
+        choices = [f"{name} ({int(score*100)}%)" for name, score, _ in similar_brands]
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Merge with Existing Brand")
+        dialog.geometry("500x400")
+        
+        ttk.Label(
+            dialog,
+            text=f"Merge '{current_name}' with which existing brand?",
+            font=("Arial", 12, "bold")
+        ).pack(pady=10)
+        
+        listbox = tk.Listbox(dialog, font=("Arial", 11), height=10)
+        for choice in choices:
+            listbox.insert("end", choice)
+        listbox.pack(pady=10, fill="both", expand=True, padx=20)
+        
+        selected_brand = [None]
+        
+        def on_select():
+            selection = listbox.curselection()
+            if selection:
+                idx = selection[0]
+                selected_brand[0] = similar_brands[idx][0]
+                dialog.destroy()
+        
+        ttk.Button(dialog, text="Merge", command=on_select).pack(pady=5)
+        ttk.Button(dialog, text="Cancel", command=dialog.destroy).pack(pady=5)
+        
+        dialog.wait_window()
+        
+        if selected_brand[0]:
+            # Merge: move logo to verified with the existing brand's name
+            existing_name = selected_brand[0]
+            existing_key = existing_name.lower().replace(" ", "_").replace("'", "")
+            
+            # Get current logo file
+            logo_file = brand_data.get("logo_file", "")
+            if logo_file.startswith("brand_logos/"):
+                logo_file = logo_file.replace("brand_logos/", "")
+            
+            src_path = LOGOS_DIR / logo_file
+            
+            if src_path.exists():
+                # Determine extension
+                ext = src_path.suffix
+                dest_path = LOGOS_DIR / f"verified/{existing_key}{ext}"
+                
+                # Copy to verified with existing brand's name
+                import shutil
+                shutil.copy2(src_path, dest_path)
+                
+                # Update database
+                if existing_key not in self.db["brands"]:
+                    self.db["brands"][existing_key] = {
+                        "brand_name": existing_name,
+                        "verified": True,
+                        "verified_at": self.get_timestamp(),
+                        "logo_file": f"verified/{existing_key}{ext}",
+                        "retailers": brand_data.get("retailers", []),
+                        "source": brand_data.get("source", "unknown"),
+                        "first_seen": self.get_timestamp(),
+                        "last_seen": self.get_timestamp()
+                    }
+                else:
+                    # Update existing entry
+                    self.db["brands"][existing_key]["verified"] = True
+                    self.db["brands"][existing_key]["verified_at"] = self.get_timestamp()
+                    self.db["brands"][existing_key]["logo_file"] = f"verified/{existing_key}{ext}"
+                
+                # Remove old entry if it was in database
+                if brand_key in self.db["brands"] and brand_key != existing_key:
+                    del self.db["brands"][brand_key]
+                
+                # Delete source file
+                src_path.unlink()
+                
+                save_database(self.db)
+                
+                print(f"✓ Merged '{current_name}' → '{existing_name}'")
+                self.kept_count += 1
+                self.next_logo()
     
     def next_logo(self):
         """Move to next logo"""

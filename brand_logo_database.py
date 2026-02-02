@@ -100,6 +100,20 @@ class BrandLogoDatabase:
         
         return max(numbers) + 1 if numbers else 1
     
+    def _detect_image_type(self, content: bytes) -> str:
+        """Detect image type from magic bytes (file signature)"""
+        if content[:8] == b'\x89PNG\r\n\x1a\n':
+            return 'png'
+        elif content[:3] == b'\xff\xd8\xff':
+            return 'jpg'
+        elif content[:6] in (b'GIF87a', b'GIF89a'):
+            return 'gif'
+        elif content[:4] == b'RIFF' and content[8:12] == b'WEBP':
+            return 'webp'
+        elif content[:4] == b'<svg' or b'<svg' in content[:100]:
+            return 'svg'
+        return 'png'  # Default fallback
+
     def _download_logo(self, url: str, brand_key: str) -> Optional[str]:
         """Download logo from URL and save to logos directory
         
@@ -121,20 +135,14 @@ class BrandLogoDatabase:
             # Hash the actual image content for deduplication
             content_hash = hashlib.md5(response.content).hexdigest()
             
-            # Determine file extension from URL or content-type
-            ext = "png"  # Default
+            # Determine file extension - prefer magic bytes detection, then URL, then content-type
+            ext = self._detect_image_type(response.content)
+            
+            # Override with URL extension if it looks valid
             if url.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
-                ext = url.split('.')[-1].split('?')[0]
-            elif 'content-type' in response.headers:
-                content_type = response.headers['content-type']
-                if 'jpeg' in content_type:
-                    ext = 'jpg'
-                elif 'png' in content_type:
-                    ext = 'png'
-                elif 'gif' in content_type:
-                    ext = 'gif'
-                elif 'webp' in content_type:
-                    ext = 'webp'
+                url_ext = url.split('.')[-1].split('?')[0].lower()
+                if url_ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
+                    ext = url_ext if url_ext != 'jpeg' else 'jpg'
             
             # Check if this exact image content already exists for this brand
             existing_files = list(self.logos_dir.rglob(f"{brand_key}*.{ext}"))
@@ -197,6 +205,13 @@ class BrandLogoDatabase:
         # Check if we already have this logo
         if brand_key in self.database["brands"]:
             existing = self.database["brands"][brand_key]
+
+            # Backward-compat / data hygiene: older records may not have a
+            # retailers field (or it may not be a list). Normalize in-memory.
+            retailers_val = existing.get("retailers")
+            if not isinstance(retailers_val, list):
+                existing["retailers"] = []
+
             # If same URL, just update metadata
             if existing.get("logo_url") == logo_url:
                 if retailer not in existing.get("retailers", []):

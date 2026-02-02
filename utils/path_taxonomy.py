@@ -7,10 +7,12 @@ from pathlib import Path
 ALLOWED_FOLDERS: Dict[str, Set[str]] = {
     "kroger": {"TOA", "Skyscraper", "Carousel", "Display_Ads", "Main", "runs"},
     "walmart": {"SBA", "SBV", "Tile_Takeover", "Gallery_Cards", "Main", "runs"},  # No Top_Banner; legacy allowed to exist but not used
-    "instacart": {"Shoppable_Display_Ads", "Shoppable_Video_Ads", "Shoppable_Recipe_Ads", "Display_Ads", "Main", "runs"},
+    "instacart": {"Shoppable_Display_Ads", "Shoppable_Video_Ads", "Shoppable_Display_Ad", "Shoppable_Video_Ad", "Shoppable_Recipe_Ads", "Display_Ads", "Main", "runs"},
     "amazon": {"Sponsored_Brand", "Sponsored_Product", "Sponsored_Display", "Main", "runs"},
     # Target taxonomy aligned to actual ad types: Listing page banners + Sponsored Logo
     "target": {"ListingPageBannerAd", "Sponsored_Logo", "Main", "runs"},
+    # TikTok Shop - product catalog scraper (not traditional ads)
+    "tiktokshop": {"Products", "Featured_Brands", "Main", "runs"},
 }
 
 # JSON ad.type → folder mapping only where they differ

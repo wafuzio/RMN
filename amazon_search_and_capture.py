@@ -545,14 +545,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
     print(f"Using profile: {profile_dir}")
 
     client = os.path.basename(output_dir.rstrip('/')) or "unknown"
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_id = datetime.now().strftime("%Y%m%d%H%M%S")
+    run_id = datetime.now().strftime("%Y%m%d%H%M%S")  # Canonical 14-digit format
     runs_dir = os.path.join(output_dir, "runs")
     os.makedirs(runs_dir, exist_ok=True)
 
-    html_path = os.path.join(runs_dir, f"search_results_amazon_{client}_{ts}.html")
-    json_path = os.path.join(runs_dir, f"run_results_amazon_{client}_{ts}.json")
-    debug_log = os.path.join(runs_dir, f"capture_debug_{ts}.log")
+    html_path = os.path.join(runs_dir, f"search_results_amazon_{client}_{run_id}.html")
+    json_path = os.path.join(runs_dir, f"run_results_amazon_{client}_{run_id}.json")
+    debug_log = os.path.join(runs_dir, f"capture_debug_{run_id}.log")
     project_root = Path(__file__).resolve().parent
     central_asin_dir = project_root / "assets" / "amazon" / "ASIN_Images"
     try:
@@ -1149,6 +1148,26 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 fname = _std_filename("amazon", brand_canon or "unknown", "Sponsored_Brand_Video", client, keyword, run_id, sbv_idx, ".png")
                                 fpath = os.path.join(output_dir, "Sponsored_Brand_Video", fname)
                                 
+                                # Capture video bounding box BEFORE screenshot for accurate overlay positioning
+                                video_overlay = None
+                                try:
+                                    video_el = sbv_container.locator('video').first
+                                    if video_el.count() > 0:
+                                        container_box = sbv_container.bounding_box()
+                                        video_box = video_el.bounding_box()
+                                        if container_box and video_box:
+                                            video_overlay = {
+                                                "x": round(video_box["x"] - container_box["x"]),
+                                                "y": round(video_box["y"] - container_box["y"]),
+                                                "width": round(video_box["width"]),
+                                                "height": round(video_box["height"]),
+                                                "image_width": round(container_box["width"]),
+                                                "image_height": round(container_box["height"]),
+                                            }
+                                            log(f"sbv: video_overlay captured -> {video_overlay}")
+                                except Exception as e:
+                                    log(f"sbv: video_overlay capture error -> {e}")
+                                
                                 # Ensure directory exists and path is string
                                 os.makedirs(os.path.dirname(fpath), exist_ok=True)
                                 sbv_container.screenshot(path=str(fpath), timeout=4000)
@@ -1182,7 +1201,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 
                                 # Add to ads array
                                 module_id, eid = _build_ids("Sponsored_Brand_Video", "Video_Single_Product", brand_canon, "sbv", run_id, sbv_idx)
-                                ads.append({
+                                ad_obj = {
                                     "id": eid,
                                     "module_id": module_id,
                                     "type": "Sponsored_Brand_Video",
@@ -1199,6 +1218,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                     "brand_canonical": brand_canon,
                                     "advertisers": [brand_canon] if brand_canon else [],
                                     "video_path": video_rel,
+                                    "video_url": video_rel,  # Also set video_url for API consistency
                                     "message": message,
                                     "product_title": product_info.get("product_title", ""),
                                     "product_description": product_info.get("product_description", ""),
@@ -1210,7 +1230,21 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                         "has_product_title": bool(product_info.get("product_title")),
                                         "sbv_structure_detected": True
                                     },
-                                })
+                                }
+                                # Add video overlay - prefer Playwright capture, fallback to OpenCV detection
+                                if video_overlay:
+                                    ad_obj["video_overlay"] = video_overlay
+                                else:
+                                    # Fallback: use OpenCV auto-detection on the saved screenshot
+                                    try:
+                                        from scripts.auto_detect_video_overlay import auto_detect_video_bounds
+                                        detected_overlay = auto_detect_video_bounds(Path(fpath), "amazon", "sbv")
+                                        if detected_overlay:
+                                            ad_obj["video_overlay"] = detected_overlay
+                                            log(f"sbv: video_overlay detected via OpenCV -> {detected_overlay}")
+                                    except Exception as cv_err:
+                                        log(f"sbv: OpenCV detection error -> {cv_err}")
+                                ads.append(ad_obj)
                                 log(f"sbv: saved -> {fname}")
                                 processed_count += 1
                             except Exception as e:
@@ -1355,17 +1389,18 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                     if logo_img.count() > 0:
                                         candidate_url = logo_img.first.get_attribute('src') or ''
                                         # Validate: logos are small images, ad creatives have large dimensions in URL
-                                        # Amazon ad images have patterns like _CR0,0,1200,628_ or _SX920_ (large)
-                                        # Logos are typically under 200px and don't have these patterns
-                                        is_ad_image = any(pattern in candidate_url for pattern in [
+                                        # Amazon product images use /images/I/ path
+                                        # Brand logos use /images/S/al-na- path (these ARE logos, don't exclude)
+                                        # Large ad creatives have patterns like _SX920_ (large scaled)
+                                        is_product_image = '/images/I/' in candidate_url
+                                        is_oversized = any(pattern in candidate_url for pattern in [
                                             '_SX920', '_SX800', '_SX600',  # Large scaled images
                                             '_CR0,0,1200', '_CR0,0,800',   # Large cropped images
-                                            'al-na-',                       # Ad creative path prefix
                                         ])
-                                        if not is_ad_image:
+                                        if not is_product_image and not is_oversized:
                                             brand_logo_url = candidate_url
                                         else:
-                                            log(f"sb-brands: skipping ad image as logo -> {candidate_url[:80]}...")
+                                            log(f"sb-brands: skipping product/oversized image as logo -> {candidate_url[:80]}...")
                                 
                                 # Method 3: Extract headline message from sb-headline element
                                 headline_link = el.locator('a[data-elementid="sb-headline"]')
@@ -1622,6 +1657,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                                     log(f"sb-cards: card {card_idx} found logo via logoContainer -> {brand_logo_url[:60]}...")
                                         
                                         # Method 2: Structural fallback - find small image by rendered size
+                                        # IMPORTANT: Exclude product images (images/I/) - only use brand assets (images/S/al-na-)
                                         if not brand_logo_url:
                                             all_imgs = brand_li.locator('img[src]')
                                             logo_candidates = []
@@ -1629,6 +1665,10 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                                 img = all_imgs.nth(img_idx)
                                                 img_src = img.get_attribute('src') or ''
                                                 if not img_src:
+                                                    continue
+                                                # Skip product images - they use /images/I/ path
+                                                # Brand logos use /images/S/al-na- path
+                                                if '/images/I/' in img_src:
                                                     continue
                                                 try:
                                                     bbox = img.bounding_box()
@@ -3427,10 +3467,9 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
             "client": client,
             "keyword": keyword,
             "search_url": _search_url(keyword),
-            "ts": ts,
             "html": os.path.basename(html_path),
             "ads": ads,
-            "timestamp": datetime.utcnow().isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             "run_id": run_id,
         }
         try:

@@ -125,8 +125,9 @@ def main() -> None:
             ok = db.add_brand_logo(brand, logo_url, retailer=retailer, metadata=meta)
             if ok:
                 total_added += 1
+                print(f"  + {brand}: {logo_url[:60]}...")
 
-    print("=== Amazon Brand Logo Harvest ===")
+    print("\n=== Amazon Brand Logo Harvest ===")
     print(f"Scanned run_results files: {total_files}")
     print(f"Ads inspected: {total_ads_seen}")
     print(f"Logos added/updated: {total_added}")

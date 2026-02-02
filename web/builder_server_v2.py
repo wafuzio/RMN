@@ -2901,21 +2901,25 @@ def api_brands():
                         brand_display[norm_key] = b["brand"]
                     brand_counts[norm_key] += b["count"]
         
-        # Build response
-        total = sum(brand_counts.values())
-        brands_list = []
-        for norm_key, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True):
-            brands_list.append({
-                "brand": brand_display[norm_key],
-                "count": count,
-                "percentage": round((count / total) * 100, 1) if total > 0 else 0
-            })
-        
-        result = {"brands": brands_list}
-        _set_cache(cache_key, result)
-        client_info = f" (clients: {len(clients)})" if clients else ""
-        print(f"[brands] FAST PATH: {len(brands_list)} brands from manifest{client_info}")
-        return jsonify(result)
+        # Only use fast path if we got data, otherwise fall through to slow path
+        if brand_counts:
+            # Build response
+            total = sum(brand_counts.values())
+            brands_list = []
+            for norm_key, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True):
+                brands_list.append({
+                    "brand": brand_display[norm_key],
+                    "count": count,
+                    "percentage": round((count / total) * 100, 1) if total > 0 else 0
+                })
+            
+            result = {"brands": brands_list}
+            _set_cache(cache_key, result)
+            client_info = f" (clients: {len(clients)})" if clients else ""
+            print(f"[brands] FAST PATH: {len(brands_list)} brands from manifest{client_info}")
+            return jsonify(result)
+        else:
+            print(f"[brands] FAST PATH: No precomputed data, falling back to slow path")
 
     try:
         # Use brand index for advertiser-filtered queries

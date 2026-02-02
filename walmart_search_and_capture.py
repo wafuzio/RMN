@@ -25,8 +25,8 @@ from utils.time_utils import now_iso_z
 # Folder mapping/validation
 from utils.path_taxonomy import folder_for_adtype, validate_folder
 
-# Brand canonicalization
-from core.brands import canonicalize
+# Brand canonicalization and blacklist
+from core.brands import canonicalize, is_blacklisted
 
 # Import standardized filename generation
 try:
@@ -364,6 +364,12 @@ def build_ad_object(
     # Canonicalize brand name using lexicon
     raw_brand = _ensure_str_or_none(brand_name)
     canon_brand = canonicalize(raw_brand) if raw_brand else None
+    
+    # Skip blacklisted brands (house ads, retailer brands)
+    final_brand = canon_brand or raw_brand
+    if is_blacklisted(final_brand):
+        print(f"⚠️ Skipping blacklisted brand: {final_brand}")
+        return None
 
     ad_obj: Dict[str, Any] = {
         "id": ad_id,
@@ -1213,6 +1219,13 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                         cdn_image_url=None,  # TODO: extract CDN URL when available
                         slot_index=i,  # grid position
                     )
+                    if ad_obj is None:
+                        # Blacklisted brand - delete the saved image
+                        try:
+                            saved_path.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+                        continue
                     ads_list.append(ad_obj)
                     if SL: SL.log("ad_object_built", ad_id=ad_obj["id"], type=ad_obj["type"], brand=ad_obj["brand"])
                 except Exception as e:
@@ -1445,13 +1458,19 @@ def _capture_gallery_cards(page, base_dir: str, keyword: str, meta: Dict, SL=Non
                 # Screenshot the content INSIDE the iframe (not the iframe element itself)
                 # This captures the full ad creative without carousel CSS constraints
                 try:
-                    # Try to screenshot the tile container inside the iframe
-                    tile_container = frame.locator('#tile-container')
-                    if tile_container.count() > 0:
-                        tile_container.screenshot(path=out_path)
+                    # Screenshot #tile (the actual card) not #tile-container (which has shadow padding)
+                    # #tile-container adds extra margin/padding for box-shadow which creates white borders
+                    tile_elem = frame.locator('#tile')
+                    if tile_elem.count() > 0:
+                        tile_elem.screenshot(path=out_path)
                     else:
-                        # Fallback to full iframe body
-                        frame.locator('body').screenshot(path=out_path)
+                        # Fallback to tile-container if #tile not found
+                        tile_container = frame.locator('#tile-container')
+                        if tile_container.count() > 0:
+                            tile_container.screenshot(path=out_path)
+                        else:
+                            # Final fallback to full iframe body
+                            frame.locator('body').screenshot(path=out_path)
                 except Exception as inner_screenshot_err:
                     # Final fallback: screenshot the iframe element from parent
                     if SL: SL.log("gallery_card_inner_screenshot_failed", index=idx, error=str(inner_screenshot_err))
@@ -1490,6 +1509,13 @@ def _capture_gallery_cards(page, base_dir: str, keyword: str, meta: Dict, SL=Non
                             cdn_image_url=hero_image_url,
                             slot_index=idx - 1,  # 0-indexed
                         )
+                        if ad_obj is None:
+                            # Blacklisted brand - delete the saved image
+                            try:
+                                saved_path.unlink(missing_ok=True)
+                            except Exception:
+                                pass
+                            continue
                         # Add extra fields specific to gallery cards
                         ad_obj["subheadline"] = subheadline
                         ad_obj["logo_url"] = logo_url
@@ -3339,21 +3365,36 @@ def search_and_capture(
                         # Fallback to old naming
                         out = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_sbv_{i+1}.png"))
                     
+                    # Capture video bounding box BEFORE screenshot for accurate overlay positioning
+                    video_overlay = None
+                    video_url = None
+                    try:
+                        v = mod.locator("video").first
+                        if v.count() > 0:
+                            video_url = v.get_attribute("src") or None
+                            # Get video element's bounding box relative to the module container
+                            mod_box = mod.bounding_box()
+                            video_box = v.bounding_box()
+                            if mod_box and video_box:
+                                # Calculate video position relative to the module (screenshot area)
+                                video_overlay = {
+                                    "x": round(video_box["x"] - mod_box["x"]),
+                                    "y": round(video_box["y"] - mod_box["y"]),
+                                    "width": round(video_box["width"]),
+                                    "height": round(video_box["height"]),
+                                    "image_width": round(mod_box["width"]),
+                                    "image_height": round(mod_box["height"]),
+                                }
+                                if SL: SL.log("sbv_video_overlay_captured", overlay=video_overlay)
+                    except Exception as e:
+                        if SL: SL.log("sbv_video_overlay_error", error=str(e))
+                    
                     mod.screenshot(path=out)
                     shots.append(out)
                     
                     # Build and append canonical ad object for SBV
                     if run_id and ads_list is not None and client_root and client_name:
                         try:
-                            # Extract video URL
-                            video_url = None
-                            try:
-                                v = mod.locator("video").first
-                                if v.count() > 0:
-                                    video_url = v.get_attribute("src") or None
-                            except Exception:
-                                pass
-                            
                             ad_index = len(ads_list) + 1
                             saved_path = Path(out)
                             client_root_path = Path(client_root)
@@ -3371,6 +3412,22 @@ def search_and_capture(
                                 cdn_image_url=video_url,  # Store video URL in image_url for now
                                 slot_index=i,
                             )
+                            if ad_obj is None:
+                                # Blacklisted brand - delete the saved image
+                                try:
+                                    saved_path.unlink(missing_ok=True)
+                                except Exception:
+                                    pass
+                                continue
+                            
+                            # Add video overlay metadata if captured
+                            if video_overlay:
+                                ad_obj["video_overlay"] = video_overlay
+                            # Add video_url path (relative to client folder)
+                            if video_url:
+                                mp4_rel = f"SBV/{generate_ad_filename(retailer='walmart', ad_type='sbv', client=client_name, search_term=keyword, timestamp=run_timestamp, index=i+1, extension='mp4', advertiser=advertiser)}"
+                                ad_obj["video_url"] = mp4_rel
+                            
                             ads_list.append(ad_obj)
                             if SL: SL.log("ad_object_built", ad_id=ad_obj["id"], type=ad_obj["type"], brand=ad_obj["brand"])
                         except Exception as e:
