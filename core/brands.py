@@ -12,11 +12,15 @@ from pathlib import Path
 # Resolve /config/brands.json next to repository root
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BRANDS_PATH = PROJECT_ROOT / "config" / "brands.json"
+PARENT_COMPANIES_PATH = PROJECT_ROOT / "config" / "parent_companies.json"
+BLACKLIST_PATH = PROJECT_ROOT / "config" / "brand_blacklist.json"
 
 _CACHE: list[dict] | None = None
+_BLACKLIST: set[str] | None = None  # Lowercase brand names to skip
 _SYNONYM_TO_CANON: dict[str, str] = {}
 _NORMALIZED_TO_CANON: dict[str, str] = {}
 _AMBIGUOUS_BRANDS: set[str] = set()  # Brands that need manual approval when matched
+_PARENT_COMPANY_CACHE: dict[str, dict] | None = None  # brand_name_lower -> company info
 
 def _normalize_brand(brand: str | None) -> str:
     """
@@ -40,17 +44,51 @@ def _normalize_brand(brand: str | None) -> str:
     # Replace common separators with space
     brand = brand.replace('&', ' and ')
     brand = brand.replace('+', ' and ')
-    brand = brand.replace("'", ' ')  # Replace apostrophe with space
+    brand = brand.replace("'", '')   # Remove apostrophe (Nellie's -> Nellies)
+    brand = brand.replace("'", '')   # Remove curly apostrophe too
+    brand = brand.replace('.', '')   # Remove periods (Dr. Pepper -> Dr Pepper)
     brand = brand.replace('-', ' ')  # Replace hyphen with space
+    brand = brand.replace('_', ' ')  # Replace underscore with space
 
-    # Remove all remaining punctuation except spaces
+    # Remove all remaining punctuation except spaces and alphanumerics
     brand = re.sub(r"[^\w\s]", "", brand)
+    
+    # Remove underscores that survived (since \w includes underscore)
+    brand = brand.replace('_', ' ')
 
     # Collapse multiple spaces
     brand = re.sub(r'\s+', ' ', brand)
 
     # Strip
     return brand.strip()
+
+
+def _load_blacklist() -> set[str]:
+    """Load blacklisted brand names (case-insensitive)."""
+    global _BLACKLIST
+    if _BLACKLIST is not None:
+        return _BLACKLIST
+    try:
+        with open(BLACKLIST_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        _BLACKLIST = {b.lower().strip() for b in data.get("brands", [])}
+    except Exception:
+        _BLACKLIST = set()
+    return _BLACKLIST
+
+
+def is_blacklisted(brand_name: str | None) -> bool:
+    """
+    Check if a brand name is blacklisted (house ads, retailer brands, etc.).
+    Case-insensitive matching.
+    
+    Use this to skip saving/displaying ads for blacklisted brands.
+    """
+    if not brand_name:
+        return False
+    blacklist = _load_blacklist()
+    return brand_name.lower().strip() in blacklist
+
 
 def _load():
     global _CACHE, _SYNONYM_TO_CANON, _NORMALIZED_TO_CANON, _AMBIGUOUS_BRANDS
@@ -100,7 +138,13 @@ def canonicalize(text: str | None, mark_ambiguous: bool = True) -> str | None:
     _load()
     if not text:
         return None
-    low = text.strip().lower()
+    
+    # Reject URLs and other invalid brand patterns
+    text_stripped = text.strip()
+    if text_stripped.startswith(('http://', 'https://', 'www.')) or '.com' in text_stripped.lower():
+        return None
+    
+    low = text_stripped.lower()
     if low in _SYNONYM_TO_CANON:
         brand = _SYNONYM_TO_CANON[low]
         if mark_ambiguous and brand in _AMBIGUOUS_BRANDS:
@@ -218,4 +262,131 @@ def add_brand(brand_name: str) -> bool:
         return True
     except Exception as e:
         print(f"Warning: Could not add brand to lexicon: {e}")
+        return False
+
+
+def get_brand_from_ad(ad: dict) -> str | None:
+    """
+    Extract brand from an ad object using consistent field priority.
+    
+    Checks canonical 'brand' field first, then falls back to 'advertisers' array.
+    This ensures consistent behavior across all tools regardless of which
+    field the scraper populated.
+    
+    Args:
+        ad: Ad dictionary from JSON
+        
+    Returns:
+        Brand name string, or None if no valid brand found
+    """
+    # Primary: canonical 'brand' field
+    brand = ad.get('brand')
+    if brand and isinstance(brand, str) and brand.lower() not in ('unknown', ''):
+        return brand
+    
+    # Fallback: first advertiser from array
+    advertisers = ad.get('advertisers', [])
+    if advertisers and isinstance(advertisers, list) and len(advertisers) > 0:
+        first_adv = advertisers[0]
+        if first_adv and isinstance(first_adv, str) and first_adv.lower() not in ('unknown', ''):
+            return first_adv
+    
+    return None
+
+
+def _load_parent_companies() -> dict[str, dict]:
+    """Load parent company database and build brand->company lookup cache."""
+    global _PARENT_COMPANY_CACHE
+    
+    if _PARENT_COMPANY_CACHE is not None:
+        return _PARENT_COMPANY_CACHE
+    
+    _PARENT_COMPANY_CACHE = {}
+    
+    if not PARENT_COMPANIES_PATH.exists():
+        return _PARENT_COMPANY_CACHE
+    
+    try:
+        with open(PARENT_COMPANIES_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        for company in data.get('companies', []):
+            company_info = {
+                'id': company.get('id'),
+                'name': company.get('name')
+            }
+            for brand in company.get('brands', []):
+                _PARENT_COMPANY_CACHE[brand.lower()] = company_info
+    except Exception as e:
+        print(f"Warning: Could not load parent companies: {e}")
+    
+    return _PARENT_COMPANY_CACHE
+
+
+def get_parent_company(brand_name: str) -> dict | None:
+    """
+    Get the parent company for a brand.
+    
+    Args:
+        brand_name: The brand name to look up
+        
+    Returns:
+        Dict with 'id' and 'name' of parent company, or None if not found
+    """
+    if not brand_name:
+        return None
+    
+    cache = _load_parent_companies()
+    return cache.get(brand_name.lower())
+
+
+def get_all_parent_companies() -> list[dict]:
+    """Get list of all parent companies."""
+    if not PARENT_COMPANIES_PATH.exists():
+        return []
+    
+    try:
+        with open(PARENT_COMPANIES_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data.get('companies', [])
+    except Exception:
+        return []
+
+
+def get_brands_by_parent(parent_id: str) -> list[str]:
+    """Get all brands owned by a parent company."""
+    companies = get_all_parent_companies()
+    for company in companies:
+        if company.get('id') == parent_id:
+            return company.get('brands', [])
+    return []
+
+
+def add_brand_to_parent(brand_name: str, parent_id: str) -> bool:
+    """Add a brand to a parent company's brand list."""
+    global _PARENT_COMPANY_CACHE
+    
+    if not PARENT_COMPANIES_PATH.exists():
+        return False
+    
+    try:
+        with open(PARENT_COMPANIES_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        for company in data.get('companies', []):
+            if company.get('id') == parent_id:
+                if brand_name not in company.get('brands', []):
+                    company.setdefault('brands', []).append(brand_name)
+                    
+                    with open(PARENT_COMPANIES_PATH, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, indent=2, ensure_ascii=False)
+                    
+                    # Invalidate cache
+                    _PARENT_COMPANY_CACHE = None
+                    return True
+                return False  # Already exists
+        
+        return False  # Parent not found
+    except Exception as e:
+        print(f"Warning: Could not add brand to parent: {e}")
         return False

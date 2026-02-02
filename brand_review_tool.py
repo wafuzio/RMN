@@ -43,7 +43,12 @@ class BrandReviewTool:
         # Track delete-armed state for double-click delete behavior
         self.delete_armed_index = None
         self.lexicon_path = "config/brands.json"
+        self.blacklist_path = "config/brand_blacklist.json"
         self.lexicon_brands = []  # Cache lexicon in memory
+        self.blacklisted_brands = set()  # Brands to never show again
+        
+        # Load blacklist
+        self.load_blacklist()
         
         # Initialize logo database
         if LOGO_DB_AVAILABLE:
@@ -68,9 +73,31 @@ class BrandReviewTool:
         # Setup UI
         self.setup_ui()
         
-        # Load unknown brands
-        self.load_unknown_brands()
+        # Load unknown brands in background thread to prevent UI freeze
+        self.loading_complete = False
+        import threading
         
+        def load_in_background():
+            self.load_unknown_brands()
+            self.loading_complete = True
+            # Schedule UI update on main thread
+            self.root.after(0, self.on_loading_complete)
+        
+        thread = threading.Thread(target=load_in_background, daemon=True)
+        thread.start()
+        
+        # Update progress label periodically during loading
+        self.update_loading_progress()
+    
+    def update_loading_progress(self):
+        """Update the loading progress in the UI"""
+        if not self.loading_complete:
+            count = len(self.unknown_ads)
+            self.progress_label.config(text=f"Loading... ({count} ads found)")
+            self.root.after(500, self.update_loading_progress)
+    
+    def on_loading_complete(self):
+        """Called when background loading is complete"""
         if self.unknown_ads:
             self.show_current_ad()
         else:
@@ -96,6 +123,21 @@ class BrandReviewTool:
         
         self.image_label = ttk.Label(left_frame)
         self.image_label.pack(fill=tk.BOTH, expand=True)
+        
+        # Image path label (clickable to open in Finder)
+        self.image_path_label = tk.Label(
+            left_frame,
+            text="",
+            font=("Arial", 12, "underline"),
+            fg="blue",
+            cursor="hand2",
+            wraplength=600,
+            justify="left",
+            anchor="w"
+        )
+        self.image_path_label.pack(pady=(10, 5), fill="x")
+        self.image_path_label.bind("<Button-1>", self.open_image_in_finder)
+        self.current_image_path = None
         
         # Right side - Ad details and input
         right_frame = ttk.Frame(content_frame)
@@ -269,6 +311,44 @@ class BrandReviewTool:
             print(f"[WARN] Failed to load lexicon: {e}")
             self.lexicon_brands = []
     
+    def load_blacklist(self):
+        """Load blacklisted brands that should never be shown again"""
+        try:
+            if os.path.exists(self.blacklist_path):
+                with open(self.blacklist_path, 'r') as f:
+                    data = json.load(f)
+                # Normalize to lowercase for case-insensitive matching
+                self.blacklisted_brands = set(b.lower() for b in data.get('brands', []))
+                print(f"[INFO] Loaded {len(self.blacklisted_brands)} blacklisted brands")
+            else:
+                self.blacklisted_brands = set()
+        except Exception as e:
+            print(f"[WARN] Failed to load blacklist: {e}")
+            self.blacklisted_brands = set()
+    
+    def save_blacklist(self):
+        """Save blacklisted brands to disk"""
+        try:
+            os.makedirs(os.path.dirname(self.blacklist_path), exist_ok=True)
+            with open(self.blacklist_path, 'w') as f:
+                json.dump({'brands': sorted(list(self.blacklisted_brands))}, f, indent=2)
+        except Exception as e:
+            print(f"[WARN] Failed to save blacklist: {e}")
+    
+    def add_to_blacklist(self, brand_name):
+        """Add a brand name to the blacklist"""
+        if brand_name and brand_name.strip():
+            normalized = brand_name.strip().lower()
+            self.blacklisted_brands.add(normalized)
+            self.save_blacklist()
+            print(f"[BLACKLIST] Added '{brand_name}' to blacklist")
+    
+    def is_blacklisted(self, brand_name):
+        """Check if a brand name is blacklisted"""
+        if not brand_name:
+            return False
+        return brand_name.strip().lower() in self.blacklisted_brands
+    
     def is_brand_in_lexicon(self, brand):
         """Check if a brand exists in the lexicon (uses cached data)"""
         from utils.brand_utils import normalize_brand_for_matching
@@ -321,11 +401,11 @@ class BrandReviewTool:
         """Load all ads with unknown or uncertain brands"""
         print("Scanning for unknown brands...")
         
-        # Scan all retailer JSON files (Kroger, Walmart, Instacart, etc.)
+        # Scan all retailer JSON files (Kroger, Walmart, Instacart, Amazon, Target, etc.)
         json_files = []
         
-        # Kroger/Instacart: output/retailer/client/runs/*.json
-        for retailer in ['kroger', 'instacart']:
+        # Kroger/Target: output/retailer/client/runs/*.json
+        for retailer in ['kroger', 'target']:
             pattern = f'output/{retailer}/*/runs/*.json'
             retailer_files = glob.glob(pattern)
             # Filter out malformed paths where "runs" is treated as a client
@@ -333,6 +413,23 @@ class BrandReviewTool:
             json_files.extend(retailer_files)
             if retailer_files:
                 print(f"  Found {len(retailer_files)} {retailer} files")
+        
+        # Instacart: output/instacart/client/runs/TIMESTAMP/run_results_*.json
+        instacart_pattern = 'output/instacart/*/runs/*/run_results_*.json'
+        instacart_files = glob.glob(instacart_pattern)
+        json_files.extend(instacart_files)
+        if instacart_files:
+            print(f"  Found {len(instacart_files)} instacart files")
+        
+        # Amazon: output/amazon/client/runs/*.json OR output/amazon/client/runs/TIMESTAMP/*.json
+        amazon_pattern1 = 'output/amazon/*/runs/*.json'
+        amazon_pattern2 = 'output/amazon/*/runs/*/*.json'
+        amazon_files = glob.glob(amazon_pattern1) + glob.glob(amazon_pattern2)
+        amazon_files = [f for f in amazon_files if '/runs/runs/' not in f]
+        amazon_files = list(set(amazon_files))
+        json_files.extend(amazon_files)
+        if amazon_files:
+            print(f"  Found {len(amazon_files)} amazon files")
         
         # Walmart: output/walmart/client/TIMESTAMP/run_results_*.json (new structure)
         #          output/walmart/client/runs/run_results_*.json (legacy structure)
@@ -379,6 +476,13 @@ class BrandReviewTool:
                             if matched_brand:
                                 print(f"✓ Auto-skipping ad with known message: '{message[:60]}...' -> {matched_brand}")
                                 continue
+                            
+                            # ALSO check if this exact message is blacklisted (already reviewed)
+                            # Blacklist stores messages with "MSG:" prefix
+                            message_key = f"MSG:{message.strip()}"
+                            if self.is_blacklisted(message_key):
+                                print(f"✓ Skipping blacklisted message: '{message[:60]}...'")
+                                continue
                         
                         advertisers = ad.get('advertisers', [])
                         
@@ -398,86 +502,21 @@ class BrandReviewTool:
                         # This catches cases where JSON has a brand but screenshot failed to match it
                         is_unknown_in_filename = False
                         
-                        # ADDITIONAL CHECK: If find_ad_image returned a path but it doesn't match the expected path from JSON,
-                        # treat it as if no image was found and run the fallback search
+                        # STRICT MODE: Verify that the found image matches what JSON expects
+                        # This prevents showing wrong images due to fuzzy matching
                         if image_path:
                             expected_path = self.expected_image_path_from_json(ad, json_file)
                             if expected_path and os.path.basename(image_path) != os.path.basename(expected_path):
                                 # The found image has a different filename than what JSON specifies
-                                # This means find_ad_image found a different file (wrong timestamp or wrong brand)
-                                print(f"[WARN] find_ad_image returned different file than JSON specifies")
-                                print(f"[WARN]   Expected: {os.path.basename(expected_path)}")
-                                print(f"[WARN]   Found: {os.path.basename(image_path)}")
-                                image_path = None  # Treat as not found to trigger fallback search
+                                # This is a MISMATCH - do NOT show the wrong image
+                                print(f"[STRICT] Rejecting mismatched image")
+                                print(f"[STRICT]   Expected: {os.path.basename(expected_path)}")
+                                print(f"[STRICT]   Found: {os.path.basename(image_path)}")
+                                image_path = None  # Show "no image" rather than wrong image
                         
-                        # FIX #2: If we couldn't resolve an image, but the JSON points somewhere,
-                        # try to find the actual file in the same folder ignoring just the brand slug
-                        if not image_path:
-                            expected_path = self.expected_image_path_from_json(ad, json_file)
-                            if expected_path and not os.path.exists(expected_path):
-                                alt = self.find_existing_image_ignoring_brand(expected_path)
-                                if alt:
-                                    image_path = alt
-                                    # Force a filename mismatch flag — JSON brand (advertisers) vs file brand slug
-                                    is_unknown_in_filename = True
-                                    print(f"[WARN] JSON image path not found: {expected_path}")
-                                    print(f"[WARN] Found existing file with different brand slug: {alt}")
-                        
-                        # CRITICAL FIX: If the path from JSON doesn't exist, we need to search for what actually exists
-                        # This handles cases where JSON was updated with a brand name but the file was never renamed
-                        if image_path and not os.path.exists(image_path):
-                            # Try to find an unknown file with similar timestamp
-                            # Handle nested timestamp dirs (Walmart: runs/TIMESTAMP/file.json)
-                            base_dir = os.path.dirname(os.path.dirname(json_file))
-                            # If base_dir ends with a timestamp pattern, go up one more level
-                            if re.match(r'\d{14}$', os.path.basename(base_dir)):
-                                base_dir = os.path.dirname(base_dir)
-                            
-                            ad_type = ad.get('type')
-                            # Map ad types to subfolders
-                            # NOTE: This legacy recovery step only finds files with "__unknown__" in the name.
-                            # The newer find_existing_image_ignoring_brand() (Fix #2 above) is more comprehensive
-                            # as it finds files with ANY brand slug mismatch, not just "unknown".
-                            type_to_folder = {
-                                'TOA': 'TOA',
-                                'Skyscraper': 'Skyscraper',
-                                'CuratedCarousel': 'Carousel',
-                                'sba': 'SBA',
-                                'sbv': 'SBV',
-                                'tile_takeover': 'Tile',
-                                'top_banner': 'Banner',
-                                # Instacart types
-                                'display_ad': 'DisplayAd',
-                                'shoppable_recipe_ad': 'ShoppableRecipe',
-                                'main': 'Main'
-                            }
-                            subfolder = type_to_folder.get(ad_type)
-                            
-                            if subfolder:
-                                search_dir = os.path.join(base_dir, subfolder)
-                                if os.path.exists(search_dir):
-                                    # Look for unknown files (legacy fallback - only finds "__unknown__" in filename)
-                                    for filename in os.listdir(search_dir):
-                                        if '__unknown__' in filename:
-                                            # Check if timestamp matches roughly (date + hour + minute, ignore seconds)
-                                            stored_filename = os.path.basename(image_path)
-                                            # Extract timestamp from both (date and hour-minute only)
-                                            import re
-                                            stored_ts = re.search(r'D(\d{4}-\d{2}-\d{2}_T\d{2}-\d{2})', stored_filename)
-                                            unknown_ts = re.search(r'D(\d{4}-\d{2}-\d{2}_T\d{2}-\d{2})', filename)
-                                            
-                                            # Match if date+hour+minute are the same (ignore seconds)
-                                            if stored_ts and unknown_ts:
-                                                stored_dt = stored_ts.group(1)  # e.g., 2025-10-24_T02-58
-                                                unknown_dt = unknown_ts.group(1)
-                                                if stored_dt == unknown_dt:
-                                                    # Found matching unknown file
-                                                    image_path = os.path.join(search_dir, filename)
-                                                    is_unknown_in_filename = True
-                                                    print(f"[WARN] JSON path doesn't exist, found unknown file instead")
-                                                    print(f"      Advertisers in JSON: {advertisers}")
-                                                    print(f"      Unknown file: {filename}")
-                                                    break
+                        # NOTE: Fuzzy fallback search REMOVED to prevent mismatches
+                        # If JSON specifies a path but file doesn't exist, we show "no image"
+                        # This is better than showing the WRONG image which causes confusion
                         
                         # Also check if the existing path looks like a campaign-code brand segment
                         if image_path and os.path.exists(image_path):
@@ -513,6 +552,20 @@ class BrandReviewTool:
                         
                         # Flag as unknown if EITHER condition is true
                         if is_unknown_in_json or is_unknown_in_filename:
+                            current_brand = advertisers[0] if advertisers else 'unknown'
+                            
+                            # Skip if brand is blacklisted
+                            if self.is_blacklisted(current_brand):
+                                print(f"✓ Skipping blacklisted brand: '{current_brand}'")
+                                continue
+                            
+                            # Skip if brand is already verified in lexicon (even if image is missing)
+                            # These don't need manual review - we already know the brand is correct
+                            if current_brand and current_brand.lower() != 'unknown':
+                                if self.is_brand_in_lexicon(current_brand):
+                                    print(f"✓ Skipping verified brand: '{current_brand}' (in lexicon)")
+                                    continue
+                            
                             print(f"[FLAGGED] Ad type={ad.get('type')}, advertisers={advertisers}")
                             print(f"[FLAGGED]   is_unknown_in_json={is_unknown_in_json}, is_unknown_in_filename={is_unknown_in_filename}")
                             print(f"[FLAGGED]   image_path={image_path}")
@@ -520,7 +573,7 @@ class BrandReviewTool:
                                 'json_file': json_file,
                                 'ad': ad,
                                 'image_path': image_path,
-                                'current_brand': advertisers[0] if advertisers else 'unknown'
+                                'current_brand': current_brand
                             })
             except (json.JSONDecodeError, KeyError) as e:
                 print(f"Error reading {json_file}: {e}")
@@ -539,12 +592,12 @@ class BrandReviewTool:
     def is_kroji_house_ad(self, ad):
         """Check if ad is a Kroger house ad (Kroji mascot)"""
         # Check message field for "Kroji"
-        message = ad.get('message', '')
+        message = ad.get('message') or ''
         if 'kroji' in message.lower():
             return True
         
         # Check header field
-        header = ad.get('header', '')
+        header = ad.get('header') or ''
         if 'kroji' in header.lower():
             return True
         
@@ -774,8 +827,12 @@ class BrandReviewTool:
             # Try absolute path
             if os.path.exists(image_path_from_json):
                 return image_path_from_json
+            # STRICT MODE: If JSON specifies a path but file doesn't exist, return None
+            # Do NOT fall back to fuzzy search - this causes mismatches
+            print(f"[STRICT] JSON specifies path but file not found: {image_path_from_json}")
+            return None
         
-        # Fallback: search by pattern in the appropriate subfolder
+        # Only use fallback search if JSON has NO path specified
         subfolder = type_to_folder.get(ad_type)
         if subfolder:
             search_dir = os.path.join(base_dir, subfolder)
@@ -986,11 +1043,13 @@ class BrandReviewTool:
                 has_stored_path = True
             
             if not has_stored_path:
-                self.image_path_label.config(text=f"⚠️ Image: {filename} (may not match - path not in JSON)", foreground="orange")
+                self.image_path_label.config(text=f"⚠️ 📁 {ad_data['image_path']} (may not match)", foreground="orange")
             else:
-                self.image_path_label.config(text=f"Image: {filename}", foreground="blue")
+                self.image_path_label.config(text=f"📁 {ad_data['image_path']}", foreground="blue")
+            self.current_image_path = ad_data['image_path']
         else:
-            self.image_path_label.config(text="Image: Not found")
+            self.image_path_label.config(text="Image: Not found", foreground="gray")
+            self.current_image_path = None
         
         # Load and display image
         if ad_data['image_path'] and os.path.exists(ad_data['image_path']):
@@ -1082,6 +1141,24 @@ class BrandReviewTool:
             self.image_label.image = photo  # Keep a reference
         except Exception as e:
             self.image_label.config(text=f"Error loading image:\n{str(e)}", image='')
+    
+    def open_image_in_finder(self, event=None):
+        """Open the current image file location in Finder"""
+        if not self.current_image_path:
+            return
+        
+        try:
+            import subprocess
+            
+            file_path = os.path.abspath(self.current_image_path)
+            
+            if os.path.exists(file_path):
+                # Open Finder and select the file
+                subprocess.run(["open", "-R", file_path])
+            else:
+                print(f"File not found: {file_path}")
+        except Exception as e:
+            print(f"Error opening in Finder: {e}")
     
     def display_brand_logo(self, brand_name):
         """Display brand logo thumbnail if available"""
@@ -1371,8 +1448,8 @@ class BrandReviewTool:
         except Exception as e:
             print(f"[WARN] Failed to sync logo brands to lexicon: {e}")
     
-    def update_lexicon(self, corrected_brand, old_brand, message_signal=None):
-        """Add corrected brand to lexicon and add old brand + message as aliases"""
+    def update_lexicon(self, corrected_brand, old_brand, message_signal=None, header_signal=None):
+        """Add corrected brand to lexicon and add old brand + header + message as aliases"""
         # NEVER add "unknown" to lexicon
         if corrected_brand.lower() == 'unknown':
             print(f"[LEXICON] Skipping - 'unknown' cannot be added to lexicon")
@@ -1399,9 +1476,51 @@ class BrandReviewTool:
         synonyms_to_add = []
         if old_brand.lower() != 'unknown':
             synonyms_to_add.append(old_brand)
-        if message_signal and message_signal.strip():
-            # Add message as a synonym (for future scraper matching)
-            synonyms_to_add.append(f"MSG:{message_signal.strip()}")
+        
+        # Generic phrases that should NOT be added as synonyms
+        generic_phrases = {
+            'shop now', 'buy now', 'add to cart', 'learn more', 'see more',
+            'featured', 'sponsored', 'ad', 'advertisement', 'new', 'sale',
+            'save', 'deal', 'deals', 'offer', 'offers', 'discount', 'free',
+            'best seller', 'top rated', 'popular', 'trending', 'recommended',
+            'shop', 'buy', 'get', 'try', 'discover', 'explore', 'view',
+            'click here', 'order now', 'subscribe', 'sign up', 'join',
+        }
+        
+        def is_substantial_text(text):
+            """Check if text is substantial enough to be a useful synonym"""
+            if not text:
+                return False
+            text_lower = text.lower().strip()
+            # Too short
+            if len(text_lower) < 5:
+                return False
+            # Is a generic phrase
+            if text_lower in generic_phrases:
+                return False
+            # Only 1-2 common words
+            words = text_lower.split()
+            if len(words) <= 2 and all(w in generic_phrases for w in words):
+                return False
+            return True
+        
+        # Add header as a synonym (this is often the brand display text from the ad)
+        if header_signal and is_substantial_text(header_signal):
+            header_clean = header_signal.strip()
+            # Don't add if it's the same as the corrected brand or old brand
+            if header_clean.lower() != corrected_brand.lower() and header_clean.lower() != old_brand.lower():
+                synonyms_to_add.append(header_clean)
+                print(f"[LEXICON] Adding header '{header_clean}' as synonym")
+        
+        # Add message as a synonym only if substantial
+        if message_signal and is_substantial_text(message_signal):
+            msg_clean = message_signal.strip()
+            # Don't add if same as brand, old brand, or header
+            if (msg_clean.lower() != corrected_brand.lower() and 
+                msg_clean.lower() != old_brand.lower() and
+                msg_clean.lower() != (header_signal or '').lower().strip()):
+                synonyms_to_add.append(f"MSG:{msg_clean}")
+                print(f"[LEXICON] Adding message '{msg_clean}' as synonym")
         
         if existing_brand:
             # Add synonyms if not already there
@@ -1433,6 +1552,13 @@ class BrandReviewTool:
     def apply_to_all_similar(self, auto_confirm=False):
         """Apply the corrected brand(s) to all similar ads with the same message/header/URL"""
         print(f"[DEBUG] apply_to_all_similar called, auto_confirm={auto_confirm}")
+        
+        # Bounds check - make sure we have ads to process
+        if not self.unknown_ads or self.current_index >= len(self.unknown_ads):
+            print(f"[DEBUG] No ads to process (index={self.current_index}, len={len(self.unknown_ads)})")
+            messagebox.showinfo("Complete", "All ads have been reviewed!")
+            return
+        
         corrected_brands = self.get_all_brands()
         print(f"[DEBUG] Corrected brands in apply_to_all_similar: {corrected_brands}")
         
@@ -1445,6 +1571,21 @@ class BrandReviewTool:
         if any(brand.lower() == 'unknown' for brand in corrected_brands):
             messagebox.showerror("Invalid Brand", "'unknown' cannot be used as a brand name.\n\nPlease enter the actual brand name.")
             return
+        
+        # Check if any brand is blacklisted and warn user
+        from core.brands import is_blacklisted
+        blacklisted_brands = [b for b in corrected_brands if is_blacklisted(b)]
+        if blacklisted_brands:
+            response = messagebox.askyesno(
+                "Blacklisted Brand Warning",
+                f"The following brand(s) are in the blacklist:\n\n"
+                f"{', '.join(blacklisted_brands)}\n\n"
+                f"Blacklisted brands are filtered from the frontend.\n"
+                f"Did you mean to use 'Mark as House Ad' instead?\n\n"
+                f"Continue anyway?"
+            )
+            if not response:
+                return
         
         ad_data = self.unknown_ads[self.current_index]
         current_ad = ad_data['ad']
@@ -1530,14 +1671,16 @@ class BrandReviewTool:
                 print(f"[ERROR] Failed to update ad {idx}: {e}")
                 error_count += 1
         
-        # Update lexicon for each brand with the original uncertain brand and message signal
+        # Update lexicon for each brand with the original uncertain brand, header, and message signal
         try:
-            # Get message from current ad as a signal
             current_ad = ad_data['ad']
             message_signal = (current_ad.get('message') or '').strip()
+            header_signal = (current_ad.get('header') or '').strip()
             
             for brand in corrected_brands:
-                self.update_lexicon(brand, original_uncertain_brand, message_signal=message_signal)
+                self.update_lexicon(brand, original_uncertain_brand, 
+                                   message_signal=message_signal,
+                                   header_signal=header_signal)
         except Exception as e:
             print(f"[ERROR] Failed to update lexicon: {e}")
         
@@ -1597,6 +1740,19 @@ class BrandReviewTool:
         ad_data = self.unknown_ads[self.current_index]
         json_file = ad_data.get('json_file')
         target_ad = ad_data.get('ad') or {}
+        
+        # Add the current brand to blacklist so it won't be shown again
+        current_brand = ad_data.get('current_brand') or target_ad.get('brand')
+        if current_brand and current_brand.lower() != 'unknown':
+            self.add_to_blacklist(current_brand)
+        
+        # ALSO blacklist the message text if present (for house ads)
+        # This prevents the same message from appearing again in future runs
+        message = target_ad.get('message', '').strip()
+        if message:
+            message_key = f"MSG:{message}"
+            self.add_to_blacklist(message_key)
+            print(f"[BLACKLIST] Also blacklisted message: '{message[:60]}...')")
 
         # Capture content signature for bulk-deleting identical ads without images
         base_header = (target_ad.get('header') or '').strip()
@@ -1800,15 +1956,27 @@ class BrandReviewTool:
         # Get retailer from current ad's JSON file path
         ad_data = self.unknown_ads[self.current_index]
         json_file = ad_data['json_file']
+        target_ad = ad_data.get('ad') or {}
         
         # Determine retailer from path
-        retailer = "Kroger"  # Default
+        retailer = "unknown"  # Default - don't assume Kroger
         if '/walmart/' in json_file:
             retailer = "Walmart"
         elif '/kroger/' in json_file:
             retailer = "Kroger"
         elif '/instacart/' in json_file:
             retailer = "Instacart"
+        elif '/target/' in json_file:
+            retailer = "Target"
+        elif '/amazon/' in json_file:
+            retailer = "Amazon"
+        
+        # Blacklist the message text so this exact house ad won't appear again
+        message = target_ad.get('message', '').strip()
+        if message:
+            message_key = f"MSG:{message}"
+            self.add_to_blacklist(message_key)
+            print(f"[HOUSE AD] Blacklisted message: '{message[:60]}...'")
         
         # Clear all co-brand fields
         while len(self.brand_entries) > 1:

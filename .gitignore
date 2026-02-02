@@ -47,4 +47,4 @@ node_modules/
 .cache/
 
 # Builder conflict prevention
-app.py
+app.pycache/

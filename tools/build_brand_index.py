@@ -23,16 +23,41 @@ from collections import defaultdict
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Import brand canonicalization from core
+# Import brand canonicalization and blacklist from core
 try:
-    from core.brands import canonicalize
+    from core.brands import canonicalize, is_blacklisted
     USE_BRAND_CANONICALIZATION = True
 except ImportError:
     print("⚠️  core/brands.py not found, using basic lowercase canonicalization")
     USE_BRAND_CANONICALIZATION = False
+    def is_blacklisted(brand):
+        return False
 
 OUTPUT_ROOT = Path(__file__).parent.parent / "output"
 INDEX_FILE = OUTPUT_ROOT / "brand_index.json"
+
+
+def normalize_brand_key(brand: str) -> str:
+    """Normalize brand name to a consistent key for grouping.
+    
+    Collapses minor variations like:
+    - "Dr. Pepper" vs "Dr Pepper" vs "dr pepper"
+    - "Lay's" vs "Lays"
+    - "Ben & Jerry's" vs "Ben and Jerrys"
+    """
+    if not brand:
+        return ""
+    
+    s = brand.strip().lower()
+    # Remove periods (Dr. -> Dr)
+    s = s.replace(".", "")
+    # Normalize apostrophes and quotes
+    s = s.replace("'", "").replace("'", "").replace("`", "")
+    # Normalize ampersands
+    s = s.replace(" & ", " and ").replace("&", " and ")
+    # Collapse multiple spaces
+    s = " ".join(s.split())
+    return s
 
 
 def canonicalize_brand(brand: str) -> str:
@@ -40,14 +65,14 @@ def canonicalize_brand(brand: str) -> str:
     if not brand:
         return ""
     
-    # Use core/brands.py if available
+    # Use core/brands.py if available (checks lexicon)
     if USE_BRAND_CANONICALIZATION:
         canonical = canonicalize(brand)
         if canonical:
-            return canonical.lower()
+            return normalize_brand_key(canonical)
     
-    # Fallback to basic lowercase
-    return brand.strip().lower()
+    # Fallback: normalize to collapse minor variations
+    return normalize_brand_key(brand)
 
 
 def build_brand_index():
@@ -116,7 +141,8 @@ def build_brand_index():
                         brand = ad.get('brand') or ''
                         if brand and brand.lower() != 'unknown':
                             canonical_brand = canonicalize_brand(brand)
-                            if canonical_brand:
+                            # Skip blacklisted brands (house ads, retailer brands)
+                            if canonical_brand and not is_blacklisted(canonical_brand):
                                 brand_ads[canonical_brand].append(idx)
                                 brands_for_ad.add(canonical_brand)
                         
@@ -125,7 +151,8 @@ def build_brand_index():
                         for advertiser in advertisers:
                             if advertiser and advertiser.strip():
                                 canonical_advertiser = canonicalize_brand(advertiser)
-                                if canonical_advertiser:
+                                # Skip blacklisted brands (house ads, retailer brands)
+                                if canonical_advertiser and not is_blacklisted(canonical_advertiser):
                                     brand_ads[canonical_advertiser].append(idx)
                                     brands_for_ad.add(canonical_advertiser)
                         
@@ -140,13 +167,33 @@ def build_brand_index():
                     rel_path = str(json_file.relative_to(OUTPUT_ROOT))
                     
                     for canonical_brand, indices in brand_ads.items():
+                        # Get the first ad's image path for sample display
+                        first_ad_idx = indices[0] if indices else 0
+                        first_ad = ads[first_ad_idx] if first_ad_idx < len(ads) else {}
+                        
+                        # Extract image path from the ad (try various fields)
+                        sample_image_rel = (
+                            first_ad.get('image_path') or
+                            first_ad.get('toa_image_path') or
+                            first_ad.get('skyscraper_image_path') or
+                            first_ad.get('carousel_image_path') or
+                            None
+                        )
+                        
+                        # Make sample_image path relative to output root (include retailer/client)
+                        sample_image = None
+                        if sample_image_rel:
+                            sample_image = f"{retailer}/{client}/{sample_image_rel}"
+                        
                         brand_index[canonical_brand].append({
                             'retailer': retailer,
                             'client': client,
                             'json_path': rel_path,
                             'ad_indices': indices,
                             'run_id': data.get('run_id'),
-                            'timestamp': data.get('timestamp')
+                            'timestamp': data.get('timestamp'),
+                            'sample_image': sample_image,  # Full path from output root
+                            'sample_ad_type': first_ad.get('type')  # Ad type for context
                         })
                 
                 except Exception as e:

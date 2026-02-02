@@ -30,9 +30,100 @@ import re
 from datetime import datetime, timezone, timedelta
 from time import perf_counter, time
 from utils.path_taxonomy import allowed_subdirs, ADTYPE_TO_FOLDER
-from core.brands import canonicalize
+from core.brands import canonicalize, is_blacklisted
 import hashlib
-from web.manifest_store import runs as mf_runs, daily_totals as mf_daily
+from web.manifest_store import runs as mf_runs, daily_totals as mf_daily, brands as mf_brands, brands_by_client as mf_brands_by_client
+
+# ============================================================================
+# Thumbnail Generation
+# ============================================================================
+
+from PIL import Image
+import io
+
+# Get project root for cache directory
+SCRAPER_HOME = os.environ.get("SCRAPER_HOME") or project_root
+
+# Thumbnail cache directory
+THUMBNAIL_CACHE = Path(SCRAPER_HOME) / "cache" / "thumbnails"
+THUMBNAIL_CACHE.mkdir(parents=True, exist_ok=True)
+
+# Track thumbnail cache statistics
+_thumbnail_stats = {
+    'hits': 0,      # Served from cache
+    'misses': 0,    # Generated new
+    'errors': 0     # Failed to generate
+}
+
+def get_thumbnail_stats():
+    """Get thumbnail cache statistics."""
+    total = _thumbnail_stats['hits'] + _thumbnail_stats['misses']
+    hit_rate = (_thumbnail_stats['hits'] / total * 100) if total > 0 else 0
+    return {
+        **_thumbnail_stats,
+        'total': total,
+        'hit_rate': f"{hit_rate:.1f}%"
+    }
+
+def generate_thumbnail(source_path: Path, max_width: int = 800, quality: int = 85) -> Path:
+    """
+    Generate and cache a thumbnail for an image.
+    
+    Args:
+        source_path: Path to original image
+        max_width: Maximum width in pixels (default: 800)
+        quality: JPEG quality 1-100 (default: 85)
+    
+    Returns:
+        Path to cached thumbnail
+    """
+    # Create cache filename: original_name_800.jpg
+    cache_filename = f"{source_path.stem}_{max_width}.jpg"
+    cache_path = THUMBNAIL_CACHE / cache_filename
+    
+    # Return cached thumbnail if it exists and is newer than source
+    if cache_path.exists():
+        cache_mtime = cache_path.stat().st_mtime
+        source_mtime = source_path.stat().st_mtime
+        if cache_mtime >= source_mtime:
+            _thumbnail_stats['hits'] += 1  # Cache hit
+            return cache_path
+    
+    # Generate new thumbnail
+    _thumbnail_stats['misses'] += 1  # Cache miss
+    
+    try:
+        # Open image
+        img = Image.open(source_path)
+        
+        # Convert RGBA to RGB (for PNG with transparency)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            # Create white background
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # Resize if needed
+        if img.width > max_width:
+            ratio = max_width / img.width
+            new_height = int(img.height * ratio)
+            img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Save as optimized JPEG
+        img.save(cache_path, 'JPEG', quality=quality, optimize=True)
+        
+        print(f"✅ Generated thumbnail: {cache_filename} ({cache_path.stat().st_size / 1024:.1f}KB)")
+        return cache_path
+        
+    except Exception as e:
+        _thumbnail_stats['errors'] += 1  # Error
+        print(f"❌ Thumbnail generation failed for {source_path.name}: {e}")
+        # Return original if thumbnail generation fails
+        return source_path
 
 
 def _canon_brand_key(s: str | None) -> str | None:
@@ -811,18 +902,29 @@ def build_media_urls_for_ad(retailer: str, client: str, ad: dict) -> dict:
                         if video_f:
                             media["video_url"] = f"/api/video/{retailer}/{client}/{video_r}"
 
-    # Video fallback by CDN filename (optional convenience)
+    # Video fallback: prioritize local video_path over CDN video_url
     if "video_url" not in media:
-        cdn_v = ad.get("video_url") or ad.get("image_url")
-        if isinstance(cdn_v, str) and is_video_filename(cdn_v):
-            name = Path(cdn_v.split("?")[0]).name
-            f, r = find_image_file(retailer, client, name)
+        # First try video_path (local file path)
+        local_v = ad.get("video_path")
+        if isinstance(local_v, str) and local_v.strip():
+            f, r = find_image_file(retailer, client, local_v)
             if f:
                 media["video_url"] = f"/api/video/{retailer}/{client}/{r}"
-                # Try a poster
                 poster_rel = find_poster_for_video(retailer, client, r)
                 if poster_rel:
                     media["poster_url"] = f"/api/image/{retailer}/{client}/{poster_rel}"
+        
+        # Then try CDN video_url or image_url as filename hint
+        if "video_url" not in media:
+            cdn_v = ad.get("video_url") or ad.get("image_url")
+            if isinstance(cdn_v, str) and is_video_filename(cdn_v):
+                name = Path(cdn_v.split("?")[0]).name
+                f, r = find_image_file(retailer, client, name)
+                if f:
+                    media["video_url"] = f"/api/video/{retailer}/{client}/{r}"
+                    poster_rel = find_poster_for_video(retailer, client, r)
+                    if poster_rel:
+                        media["poster_url"] = f"/api/image/{retailer}/{client}/{poster_rel}"
 
     # Last resort: proxy CDN URL if no local file found
     # This handles Kroger TOA/Skyscraper ads that only have remote URLs
@@ -1524,9 +1626,68 @@ def api_ads_count():
     })
 
 
+@app.route("/api/ads/types", methods=["GET"])
+def api_ads_types():
+    """
+    Fast endpoint to get distinct ad types for a retailer/client.
+    Uses run manifest metadata - no JSON file loading required.
+    
+    Query params:
+    - retailer (required): Retailer name
+    - client (optional): Client name or "all"
+    - start (optional): Start date YYYY-MM-DD
+    - end (optional): End date YYYY-MM-DD
+    
+    Returns: {"types": ["SBV", "TOA", ...], "retailer": str, "client": str}
+    """
+    retailer = (request.args.get("retailer") or "").strip().lower()
+    clients = _parse_clients(request)
+    start = request.args.get("start") or None
+    end = request.args.get("end") or None
+    
+    if not retailer:
+        return jsonify({"error": "retailer is required"}), 400
+    
+    # Build cache key
+    client_key = _norm_clients_for_cache(clients)
+    cache_key = f"types:{retailer}:{client_key}:{start}:{end}"
+    cached = _get_cached(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+    
+    # Collect distinct ad types from run manifest (fast - no file I/O)
+    ad_types = set()
+    
+    for r in mf_runs():
+        if r["retailer"] != retailer:
+            continue
+        if clients and r["client"] not in clients:
+            continue
+        if start and r["day"] < start:
+            continue
+        if end and r["day"] > end:
+            continue
+        
+        # Get ad types from manifest's brands_by_type keys
+        brands_by_type = r.get("brands_by_type", {})
+        ad_types.update(brands_by_type.keys())
+    
+    # Sort alphabetically for consistent ordering
+    types_list = sorted(ad_types)
+    
+    result = {
+        "types": types_list,
+        "retailer": retailer,
+        "client": client_key,
+        "filters": {"start": start, "end": end}
+    }
+    
+    _set_cache(cache_key, result)
+    return jsonify(result)
+
+
 @app.route("/api/ads/cards", methods=["GET"])
 def api_ads_cards():
-    print(f"🔍 [FLASK DEBUG] api_ads_cards called with args: {dict(request.args)}")
     """
     Get ad cards with filtering and pagination
 
@@ -1665,10 +1826,21 @@ def api_ads_cards():
                         # Build card (simplified, no complex brand extraction)
                         brand = ad.get("brand") or "Unknown"
                         advertisers = ad.get("advertisers") or []
+                        
+                        # Skip ads where ALL advertisers are blacklisted (house ads)
+                        if advertisers and all(is_blacklisted(adv) for adv in advertisers if adv):
+                            continue
+                        
                         message = ad.get("title") or ad.get("message") or ad.get("description") or ""
 
                         # Build image URL (always returns non-empty URL)
                         image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, ad)
+
+                        # Build video URL using the same logic that finds companion .mp4 files
+                        # This handles Instacart where video_path is not in JSON but .mp4 exists alongside .png
+                        media_urls = build_media_urls_for_ad(file_retailer, file_client, ad)
+                        video_url_api = media_urls.get("video_url")
+                        print(f"[API DEBUG] {file_retailer}/{file_client} ad_type={ad_type} media_urls={media_urls}")
 
                         # Extract slot field, with fallback for legacy Sponsored_Display scrapes
                         slot = ad.get("slot")
@@ -1693,7 +1865,8 @@ def api_ads_cards():
                             "advertisers": advertisers,
                             "message": message,
                             "image_url": image_url,
-                            "video_url": ad.get("video_url"),
+                            "video_url": video_url_api,
+                            "video_overlay": ad.get("video_overlay"),  # Include overlay metadata
                             "run_file": os.path.basename(rel),
                             "timestamp": (data.get("timestamp") or "").replace("T", " ").replace("Z", ""),
                             "featured": False,
@@ -1838,6 +2011,10 @@ def api_ads_cards():
                 if ad_brand:
                     advertisers = [ad_brand]
 
+            # Skip ads where ALL advertisers are blacklisted (house ads)
+            if advertisers and all(is_blacklisted(adv) for adv in advertisers if adv):
+                continue
+
             # Build brand display string from advertisers
             brand = ' + '.join(advertisers) if advertisers else "Unknown"
 
@@ -1864,6 +2041,11 @@ def api_ads_cards():
             # Build image URL (always returns non-empty URL)
             image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, ad)
 
+            # Build video URL using the same logic that finds companion .mp4 files
+            # This handles Instacart where video_path is not in JSON but .mp4 exists alongside .png
+            media_urls = build_media_urls_for_ad(file_retailer, file_client, ad)
+            video_url_api = media_urls.get("video_url")
+
             # Normalize timestamp to ISO Z
             raw_ts = data.get("timestamp") or ""
             iso_ts = raw_ts if raw_ts.endswith("Z") else raw_ts.replace(" ", "T") + "Z" if raw_ts else ""
@@ -1878,7 +2060,8 @@ def api_ads_cards():
                 "advertisers": advertisers,
                 "message": message,
                 "image_url": image_url,
-                "video_url": ad.get("video_url"),
+                "video_url": video_url_api,
+                "video_overlay": ad.get("video_overlay"),  # Include overlay metadata
                 "run_file": os.path.basename(r["json_path"]),
                 "timestamp": iso_ts,
                 "featured": False,
@@ -2683,6 +2866,57 @@ def api_brands():
     else:
         retailers_to_query = [r.strip() for r in retailers_param.split(",")]
 
+    # FAST PATH: Use pre-computed brands from manifest when only retailer/client filters
+    # (no date, term, advertiser, or types filters)
+    has_complex_filters = bool(advertiser or start_date or end_date or term or types_filter)
+    if not has_complex_filters:
+        from utils.brand_utils import normalize_brand_for_matching
+        
+        # Merge brands across requested retailers (and optionally filter by clients)
+        brand_counts = {}
+        brand_display = {}
+        
+        if clients:
+            # Use client-level pre-computed data
+            precomputed_by_client = mf_brands_by_client()
+            for retailer in retailers_to_query:
+                retailer_data = precomputed_by_client.get(retailer, {})
+                for client in clients:
+                    client_brands = retailer_data.get(client, [])
+                    for b in client_brands:
+                        norm_key = normalize_brand_for_matching(b["brand"])
+                        if norm_key not in brand_counts:
+                            brand_counts[norm_key] = 0
+                            brand_display[norm_key] = b["brand"]
+                        brand_counts[norm_key] += b["count"]
+        else:
+            # Use retailer-level pre-computed data
+            precomputed = mf_brands()
+            for retailer in retailers_to_query:
+                retailer_brands = precomputed.get(retailer, [])
+                for b in retailer_brands:
+                    norm_key = normalize_brand_for_matching(b["brand"])
+                    if norm_key not in brand_counts:
+                        brand_counts[norm_key] = 0
+                        brand_display[norm_key] = b["brand"]
+                    brand_counts[norm_key] += b["count"]
+        
+        # Build response
+        total = sum(brand_counts.values())
+        brands_list = []
+        for norm_key, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True):
+            brands_list.append({
+                "brand": brand_display[norm_key],
+                "count": count,
+                "percentage": round((count / total) * 100, 1) if total > 0 else 0
+            })
+        
+        result = {"brands": brands_list}
+        _set_cache(cache_key, result)
+        client_info = f" (clients: {len(clients)})" if clients else ""
+        print(f"[brands] FAST PATH: {len(brands_list)} brands from manifest{client_info}")
+        return jsonify(result)
+
     try:
         # Use brand index for advertiser-filtered queries
         if advertiser:
@@ -2777,9 +3011,91 @@ def api_brands():
             print(f"[brands] Brand-filtered: {len(brands_list)} brands, {total} ads")
             return jsonify(result)
         
-        # Use manifest for general queries
-        # Filter runs by criteria
-        rows = []
+        # FAST PATH: Use manifest runs with per-run brand lists (no file I/O)
+        # This handles date/client/term/types filtering without opening JSON files
+        # NOTE: Brands in manifest are already canonicalized during build, so we
+        # skip expensive canonicalize_brand() calls here for speed
+        from utils.brand_utils import normalize_brand_for_matching
+        
+        # If types_filter is set, use brands_by_type from manifest (still fast - no file I/O)
+        if types_filter:
+            types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
+            brand_counts = {}
+            brand_case_map = {}
+            runs_matched = 0
+            
+            for r in mf_runs():
+                # Filter by retailer
+                if r["retailer"] not in retailers_to_query:
+                    continue
+                
+                # Filter by client set
+                if clients and r["client"] not in clients:
+                    continue
+                
+                # Filter by date range
+                if start_date and r["day"] < start_date:
+                    continue
+                if end_date and r["day"] > end_date:
+                    continue
+                
+                # Filter by term
+                if term and r.get("keyword", "").lower() != term:
+                    continue
+                
+                runs_matched += 1
+                
+                # Use brands_by_type from manifest (no file I/O!)
+                brands_by_type = r.get("brands_by_type", {})
+                
+                # Match requested types against available types in this run
+                for ad_type, type_brands in brands_by_type.items():
+                    ad_type_normalized = ad_type.lower().replace("_", " ").replace("-", " ")
+                    
+                    # Check if this ad type matches any requested type
+                    type_matches = False
+                    for req_type in types_list:
+                        req_type_normalized = req_type.lower().replace("_", " ").replace("-", " ")
+                        if (req_type_normalized == ad_type_normalized or 
+                            req_type_normalized in ad_type_normalized or 
+                            ad_type_normalized in req_type_normalized):
+                            type_matches = True
+                            break
+                    
+                    if not type_matches:
+                        continue
+                    
+                    # Count brands for this matching type
+                    for brand_name in type_brands:
+                        if not brand_name or brand_name == "Unknown":
+                            continue
+                        # Brands are already canonicalized in manifest
+                        norm_key = normalize_brand_for_matching(brand_name)
+                        if norm_key not in brand_counts:
+                            brand_case_map[norm_key] = brand_name
+                            brand_counts[norm_key] = 0
+                        brand_counts[norm_key] += 1
+            
+            # Build response
+            total = sum(brand_counts.values())
+            brands_list = []
+            for norm_brand, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True):
+                brands_list.append({
+                    "brand": brand_case_map[norm_brand],
+                    "count": count,
+                    "percentage": round((count / total) * 100, 1) if total > 0 else 0
+                })
+            
+            result = {"brands": brands_list}
+            _set_cache(cache_key, result)
+            print(f"[brands] Type-filtered FAST: {len(brands_list)} brands, {total} ads, {runs_matched} runs (no file I/O)")
+            return jsonify(result)
+        
+        # No types filter - use fast path with manifest brand lists
+        brand_counts = {}
+        brand_case_map = {}
+        runs_matched = 0
+        
         for r in mf_runs():
             # Filter by retailer
             if r["retailer"] not in retailers_to_query:
@@ -2799,50 +3115,19 @@ def api_brands():
             if term and r.get("keyword", "").lower() != term:
                 continue
             
-            rows.append(r)
-        
-        # Collect brands from filtered runs
-        brand_counts = {}
-        brand_case_map = {}
-        
-        for r in rows:
-            fp = OUTPUT_ROOT / r["json_path"]
-            try:
-                with open(fp, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-            except Exception as e:
-                print(f"[brands] Error loading {fp}: {e}")
-                continue
+            runs_matched += 1
             
-            # Get ads
-            ads = data.get("ads") or []
-
-            for ad in ads:
-                # Apply types filter if specified
-                types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()] if types_filter else []
-                if not _matches_ad_type_filter(ad, types_list):
+            # Use per-run brand list from manifest (already canonicalized during build!)
+            run_brands = r.get("brands", [])
+            for brand_name in run_brands:
+                if not brand_name or brand_name == "Unknown":
                     continue
-
-                # Extract advertisers
-                advertisers = ad.get("advertisers") or []
-                if not advertisers:
-                    ad_brand = ad.get("brand") or ad.get("advertiser")
-                    if ad_brand:
-                        advertisers = [ad_brand]
-
-                # Count each advertiser
-                for adv in advertisers:
-                    if not adv or adv == "Unknown":
-                        continue
-                    from utils.brand_utils import normalize_brand_for_matching
-                    canonical_brand = canonicalize_brand(adv)
-                    display_name = canonical_brand if canonical_brand else adv
-                    # Use normalized key for grouping (handles case/punctuation variations)
-                    norm_key = normalize_brand_for_matching(display_name)
-                    if norm_key not in brand_counts:
-                        brand_case_map[norm_key] = display_name
-                        brand_counts[norm_key] = 0
-                    brand_counts[norm_key] += 1
+                # Skip canonicalize_brand() - brands are pre-canonicalized in manifest
+                norm_key = normalize_brand_for_matching(brand_name)
+                if norm_key not in brand_counts:
+                    brand_case_map[norm_key] = brand_name
+                    brand_counts[norm_key] = 0
+                brand_counts[norm_key] += 1
         
         # Build response
         total = sum(brand_counts.values())
@@ -2856,7 +3141,7 @@ def api_brands():
         
         result = {"brands": brands_list}
         _set_cache(cache_key, result)
-        print(f"[brands] Manifest-based: {len(brands_list)} brands, {total} ads, {len(rows)} runs")
+        print(f"[brands] MANIFEST FAST: {len(brands_list)} brands, {total} ads, {runs_matched} runs (no file I/O)")
         return jsonify(result)
     except Exception as e:
         print(f"[brands] Error fetching brands: {str(e)}")
@@ -3647,6 +3932,9 @@ def api_image(retailer, client, filename):
     1. Exact match under client_root
     2. Exact match under nested runs/<run_id>/ (Walmart)
     3. Fuzzy match by filename across all allowed folders
+    
+    Query Parameters:
+    - thumbnail: "true" (default) or "false" - serve thumbnail or full-size
     """
     # Normalize
     retailer = (retailer or "").lower()
@@ -3659,9 +3947,37 @@ def api_image(retailer, client, filename):
     if not fpath or not fpath.is_file():
         return jsonify({"error": "image not found", "requested": filename}), 404
 
-    # Content type
-    ctype = mimetypes.guess_type(str(fpath))[0] or "application/octet-stream"
-    return send_file(str(fpath), mimetype=ctype, as_attachment=False, conditional=True)
+    # Check if thumbnail requested (default: true for grid view)
+    thumbnail_param = request.args.get('thumbnail', 'true').lower()
+    use_thumbnail = thumbnail_param in ('true', '1', 'yes')
+    
+    # Generate thumbnail for image files if requested
+    if use_thumbnail and fpath.suffix.lower() in ['.png', '.jpg', '.jpeg', '.webp']:
+        try:
+            thumbnail_path = generate_thumbnail(fpath, max_width=800, quality=85)
+            fpath = thumbnail_path
+            ctype = 'image/jpeg'  # Thumbnails are always JPEG
+        except Exception as e:
+            print(f"⚠️  Thumbnail generation failed, serving original: {e}")
+            # Continue with original file
+            ctype = mimetypes.guess_type(str(fpath))[0] or "application/octet-stream"
+    else:
+        # Serve original file
+        ctype = mimetypes.guess_type(str(fpath))[0] or "application/octet-stream"
+    
+    # Serve the file (original or thumbnail)
+    resp = make_response(send_file(str(fpath), mimetype=ctype, as_attachment=False, conditional=True))
+    
+    # CORS/CORP hardening for images
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    
+    # Aggressive caching for immutable assets
+    # Images are immutable (filename includes timestamp)
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    resp.headers["ETag"] = f'"{fpath.stat().st_mtime}-{fpath.stat().st_size}"'
+    
+    return resp
 
 @app.route("/api/video/<retailer>/<client>/<path:req_relpath>", methods=["GET"])
 def api_video(retailer, client, req_relpath):
@@ -4157,6 +4473,22 @@ def not_found(e):
     return jsonify({"error": "not found"}), 404
 
 # ============================================================================
+# Thumbnail Stats Endpoint
+# ============================================================================
+
+@app.route("/api/thumbnail/stats", methods=["GET"])
+def api_thumbnail_stats():
+    """Get thumbnail cache statistics."""
+    stats = get_thumbnail_stats()
+    cache_size = sum(f.stat().st_size for f in THUMBNAIL_CACHE.glob("*.jpg"))
+    
+    return jsonify({
+        **stats,
+        'cache_size_mb': round(cache_size / 1024 / 1024, 2),
+        'cache_files': len(list(THUMBNAIL_CACHE.glob("*.jpg")))
+    })
+
+# ============================================================================
 # Main
 # ============================================================================
 
@@ -4177,4 +4509,6 @@ if __name__ == '__main__':
     print("Starting server on http://0.0.0.0:5006")
     print("=" * 60)
     
-    app.run(host='0.0.0.0', port=5006, debug=True)
+    # Note: debug=True with threaded=True can cause issues
+    # Using use_reloader=False to prevent double-loading issues
+    app.run(host='0.0.0.0', port=5006, debug=False, threaded=True)

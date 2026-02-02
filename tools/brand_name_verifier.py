@@ -27,9 +27,59 @@ from utils.lexicon_utils import save_lexicon
 
 # Paths
 LEXICON_PATH = Path("config/brands.json")
+BLACKLIST_PATH = Path("config/brand_blacklist.json")
 LOGOS_DIR = Path("output/brand_logos")
 LOGOS_DB = Path("output/brand_logos/brand_logo_database.json")
 OUTPUT_DIR = Path("output")
+BRAND_INDEX_PATH = Path("output/brand_index.json")
+
+
+def load_blacklist():
+    """Load the brand blacklist"""
+    if BLACKLIST_PATH.exists():
+        try:
+            return json.loads(BLACKLIST_PATH.read_text())
+        except Exception:
+            pass
+    return {"brands": [], "metadata": {"description": "Brands that should never be added to the lexicon"}}
+
+
+def save_blacklist(blacklist):
+    """Save the brand blacklist"""
+    BLACKLIST_PATH.parent.mkdir(exist_ok=True)
+    # Sort brands alphabetically
+    blacklist["brands"] = sorted(set(blacklist["brands"]), key=str.lower)
+    BLACKLIST_PATH.write_text(json.dumps(blacklist, indent=2))
+
+
+def add_to_blacklist(brand_name):
+    """Add a brand to the blacklist"""
+    blacklist = load_blacklist()
+    normalized = brand_name.strip().lower()
+    if normalized not in [b.lower() for b in blacklist["brands"]]:
+        blacklist["brands"].append(brand_name.strip())
+        save_blacklist(blacklist)
+        return True
+    return False
+
+
+def remove_from_blacklist(brand_name):
+    """Remove a brand from the blacklist"""
+    blacklist = load_blacklist()
+    normalized = brand_name.strip().lower()
+    original_len = len(blacklist["brands"])
+    blacklist["brands"] = [b for b in blacklist["brands"] if b.lower() != normalized]
+    if len(blacklist["brands"]) < original_len:
+        save_blacklist(blacklist)
+        return True
+    return False
+
+
+def is_blacklisted(brand_name):
+    """Check if a brand is blacklisted"""
+    blacklist = load_blacklist()
+    normalized = brand_name.strip().lower()
+    return normalized in [b.lower() for b in blacklist["brands"]]
 
 
 def normalize_for_matching(name):
@@ -110,6 +160,43 @@ def load_logo_database():
     return {"brands": {}}
 
 
+def save_logo_database(logo_db):
+    """Save the brand logo database"""
+    from datetime import datetime, timezone
+    logo_db["metadata"] = logo_db.get("metadata", {})
+    logo_db["metadata"]["last_updated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    logo_db["metadata"]["total_brands"] = len(logo_db.get("brands", {}))
+    
+    # Sort brands alphabetically
+    sorted_brands = dict(sorted(logo_db.get("brands", {}).items(), key=lambda x: x[0].lower()))
+    logo_db["brands"] = sorted_brands
+    
+    LOGOS_DB.write_text(json.dumps(logo_db, indent=2, ensure_ascii=False))
+
+
+def get_logo_db_key(brand_name):
+    """Get the database key for a brand name"""
+    return re.sub(r"[^a-z0-9]+", "_", brand_name.lower()).strip("_")
+
+
+def get_logo_info(brand_name, logo_db):
+    """Get logo info (key, data, path) for a brand if it exists"""
+    brand_key_underscore = get_logo_db_key(brand_name)
+    brand_key_no_space = normalize_for_matching(brand_name)
+    
+    # Try both key formats
+    for brand_key in [brand_key_underscore, brand_key_no_space]:
+        brand_data = logo_db.get("brands", {}).get(brand_key)
+        if brand_data:
+            logo_file = brand_data.get("logo_file", "")
+            if logo_file:
+                logo_path = LOGOS_DIR / logo_file
+                if logo_path.exists():
+                    return {"key": brand_key, "data": brand_data, "path": logo_path}
+    
+    return None
+
+
 def get_logo_path(brand_name, logo_db):
     """Get logo path for a brand if it exists"""
     # Try multiple key formats since database uses underscores but normalize strips them
@@ -155,6 +242,80 @@ def load_lexicon():
     return []
 
 
+def load_brand_index():
+    """Load the brand index for sample ad lookup, building it if missing"""
+    # Check if index exists and is recent (less than 24 hours old)
+    needs_rebuild = False
+    
+    if not BRAND_INDEX_PATH.exists():
+        print("⚠️  Brand index not found")
+        needs_rebuild = True
+    else:
+        # Check age
+        import time
+        age_hours = (time.time() - BRAND_INDEX_PATH.stat().st_mtime) / 3600
+        if age_hours > 24:
+            print(f"⚠️  Brand index is {age_hours:.1f} hours old")
+            needs_rebuild = True
+    
+    if needs_rebuild:
+        print("🔨 Building brand index (this may take 15-30 seconds)...")
+        try:
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, "tools/build_brand_index.py"],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            if result.returncode == 0:
+                print("✅ Brand index built successfully")
+            else:
+                print(f"⚠️  Brand index build had issues: {result.stderr[:200]}")
+        except Exception as e:
+            print(f"⚠️  Could not build brand index: {e}")
+    
+    if BRAND_INDEX_PATH.exists():
+        try:
+            return json.loads(BRAND_INDEX_PATH.read_text())
+        except Exception as e:
+            print(f"Error loading brand index: {e}")
+    
+    return {"index": {}}
+
+
+def get_sample_ad_for_brand(brand_name, brand_index):
+    """Get the first sample ad image path for a brand from the index.
+    
+    Returns tuple of (full_image_path, retailer, ad_type) or (None, None, None) if not found.
+    """
+    if not brand_index or "index" not in brand_index:
+        return None, None, None
+    
+    # Normalize brand name for lookup (same as build_brand_index.py)
+    brand_key = brand_name.strip().lower()
+    brand_key = brand_key.replace(".", "")
+    brand_key = brand_key.replace("'", "").replace("'", "").replace("`", "")
+    brand_key = brand_key.replace(" & ", " and ").replace("&", " and ")
+    brand_key = " ".join(brand_key.split())
+    
+    entries = brand_index.get("index", {}).get(brand_key, [])
+    
+    for entry in entries:
+        sample_image = entry.get("sample_image")
+        if sample_image:
+            # sample_image is already relative to OUTPUT_DIR (includes retailer/client)
+            retailer = entry.get("retailer", "")
+            ad_type = entry.get("sample_ad_type", "")
+            
+            # Build full path: OUTPUT_DIR / sample_image
+            full_path = OUTPUT_DIR / sample_image
+            if full_path.exists():
+                return str(full_path), retailer, ad_type
+    
+    return None, None, None
+
+
 def save_lexicon(lexicon):
     """Save the brand lexicon"""
     # Sort alphabetically by name
@@ -162,15 +323,244 @@ def save_lexicon(lexicon):
     LEXICON_PATH.write_text(json.dumps(lexicon, indent=2, ensure_ascii=False))
 
 
+class LogoMergeDialog(tk.Toplevel):
+    """Dialog to handle logo merging when merging brands"""
+    
+    def __init__(self, parent, source_name, target_name, source_logo_info, target_logo_info):
+        super().__init__(parent)
+        self.title("Merge Logos")
+        self.geometry("600x400")
+        self.transient(parent)
+        self.grab_set()
+        
+        self.result = None  # Will be: "source", "target", "keep_both", or "none"
+        self.source_name = source_name
+        self.target_name = target_name
+        self.source_logo_info = source_logo_info
+        self.target_logo_info = target_logo_info
+        
+        # Keep references to prevent garbage collection
+        self.source_photo = None
+        self.target_photo = None
+        
+        self.setup_ui()
+        
+        # Center on parent
+        self.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() - self.winfo_width()) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - self.winfo_height()) // 2
+        self.geometry(f"+{x}+{y}")
+    
+    def setup_ui(self):
+        # Title
+        ttk.Label(
+            self, 
+            text="Choose which logo to keep for the merged brand:",
+            font=("Arial", 12, "bold")
+        ).pack(pady=10)
+        
+        # Logos frame
+        logos_frame = ttk.Frame(self)
+        logos_frame.pack(fill="both", expand=True, padx=20)
+        
+        # Source logo (left)
+        source_frame = ttk.LabelFrame(logos_frame, text=f"From: {self.source_name}", padding=10)
+        source_frame.pack(side="left", fill="both", expand=True, padx=5)
+        
+        source_canvas = tk.Canvas(source_frame, width=200, height=200, bg="white")
+        source_canvas.pack()
+        
+        if self.source_logo_info:
+            try:
+                img = Image.open(self.source_logo_info["path"])
+                img.thumbnail((190, 190), Image.Resampling.LANCZOS)
+                self.source_photo = ImageTk.PhotoImage(img)
+                source_canvas.create_image(100, 100, image=self.source_photo, anchor="center")
+            except Exception:
+                source_canvas.create_text(100, 100, text="Error loading", fill="red")
+            
+            ttk.Button(
+                source_frame, 
+                text="Use This Logo",
+                command=lambda: self.select("source")
+            ).pack(pady=10)
+        else:
+            source_canvas.create_text(100, 100, text="No logo", fill="gray")
+        
+        # Target logo (right)
+        target_frame = ttk.LabelFrame(logos_frame, text=f"To: {self.target_name}", padding=10)
+        target_frame.pack(side="right", fill="both", expand=True, padx=5)
+        
+        target_canvas = tk.Canvas(target_frame, width=200, height=200, bg="white")
+        target_canvas.pack()
+        
+        if self.target_logo_info:
+            try:
+                img = Image.open(self.target_logo_info["path"])
+                img.thumbnail((190, 190), Image.Resampling.LANCZOS)
+                self.target_photo = ImageTk.PhotoImage(img)
+                target_canvas.create_image(100, 100, image=self.target_photo, anchor="center")
+            except Exception:
+                target_canvas.create_text(100, 100, text="Error loading", fill="red")
+            
+            ttk.Button(
+                target_frame, 
+                text="Use This Logo",
+                command=lambda: self.select("target")
+            ).pack(pady=10)
+        else:
+            target_canvas.create_text(100, 100, text="No logo", fill="gray")
+        
+        # Bottom buttons
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(pady=15)
+        
+        ttk.Button(
+            btn_frame, 
+            text="Skip Logo Merge",
+            command=lambda: self.select("none")
+        ).pack(side="left", padx=10)
+        
+        ttk.Button(
+            btn_frame, 
+            text="Cancel Merge",
+            command=self.cancel
+        ).pack(side="left", padx=10)
+    
+    def select(self, choice):
+        self.result = choice
+        self.destroy()
+    
+    def cancel(self):
+        self.result = None
+        self.destroy()
+
+
+def merge_logos(source_name, target_name, logo_db, choice, source_logo_info, target_logo_info):
+    """
+    Merge logo data when merging brands.
+    
+    Args:
+        source_name: Brand being merged (will be deleted)
+        target_name: Brand being merged into (will keep)
+        logo_db: The logo database dict
+        choice: "source" (use source logo), "target" (keep target logo), or "none" (skip)
+        source_logo_info: Logo info dict for source brand
+        target_logo_info: Logo info dict for target brand
+    
+    Returns:
+        True if logo database was modified
+    """
+    if choice == "none":
+        return False
+    
+    target_key = get_logo_db_key(target_name)
+    modified = False
+    
+    if choice == "source" and source_logo_info:
+        source_key = source_logo_info["key"]
+        source_data = source_logo_info["data"].copy()
+        
+        # Update brand_name to target
+        source_data["brand_name"] = target_name
+        
+        # If target already has a logo, we're replacing it
+        if target_logo_info:
+            # Delete old target logo file if different
+            old_target_path = target_logo_info["path"]
+            new_source_path = source_logo_info["path"]
+            if old_target_path != new_source_path and old_target_path.exists():
+                try:
+                    old_target_path.unlink()
+                    print(f"🗑️ Deleted old logo: {old_target_path.name}")
+                except Exception as e:
+                    print(f"⚠️ Could not delete old logo: {e}")
+        
+        # Rename source logo file to target key
+        source_path = source_logo_info["path"]
+        new_filename = f"{target_key}{source_path.suffix}"
+        new_path = source_path.parent / new_filename
+        
+        if source_path != new_path:
+            try:
+                source_path.rename(new_path)
+                # Update logo_file in data
+                rel_path = str(new_path.relative_to(LOGOS_DIR))
+                source_data["logo_file"] = rel_path
+                print(f"📁 Renamed logo: {source_path.name} -> {new_filename}")
+            except Exception as e:
+                print(f"⚠️ Could not rename logo file: {e}")
+        
+        # Remove source entry from database
+        if source_key in logo_db.get("brands", {}):
+            del logo_db["brands"][source_key]
+        
+        # Add/update target entry
+        logo_db["brands"][target_key] = source_data
+        modified = True
+        print(f"✓ Logo merged: using {source_name}'s logo for {target_name}")
+    
+    elif choice == "target" and target_logo_info:
+        # Keep target logo, just remove source logo entry
+        if source_logo_info:
+            source_key = source_logo_info["key"]
+            if source_key in logo_db.get("brands", {}):
+                del logo_db["brands"][source_key]
+                modified = True
+            
+            # Optionally delete source logo file
+            source_path = source_logo_info["path"]
+            if source_path.exists():
+                try:
+                    source_path.unlink()
+                    print(f"🗑️ Deleted source logo: {source_path.name}")
+                except Exception as e:
+                    print(f"⚠️ Could not delete source logo: {e}")
+        
+        print(f"✓ Logo merged: keeping {target_name}'s logo")
+    
+    elif choice == "source" and source_logo_info and not target_logo_info:
+        # Target has no logo, adopt source logo
+        source_key = source_logo_info["key"]
+        source_data = source_logo_info["data"].copy()
+        source_data["brand_name"] = target_name
+        
+        # Rename source logo file to target key
+        source_path = source_logo_info["path"]
+        new_filename = f"{target_key}{source_path.suffix}"
+        new_path = source_path.parent / new_filename
+        
+        if source_path != new_path:
+            try:
+                source_path.rename(new_path)
+                rel_path = str(new_path.relative_to(LOGOS_DIR))
+                source_data["logo_file"] = rel_path
+                print(f"📁 Renamed logo: {source_path.name} -> {new_filename}")
+            except Exception as e:
+                print(f"⚠️ Could not rename logo file: {e}")
+        
+        # Remove source entry
+        if source_key in logo_db.get("brands", {}):
+            del logo_db["brands"][source_key]
+        
+        # Add target entry
+        logo_db["brands"][target_key] = source_data
+        modified = True
+        print(f"✓ Logo adopted: {target_name} now has {source_name}'s logo")
+    
+    return modified
+
+
 class BrandNameVerifier:
     def __init__(self, root):
         self.root = root
         self.root.title("Brand Name Verifier")
-        self.root.geometry("900x700")
+        self.root.geometry("1000x800")
         
-        # Load lexicon and logo database
+        # Load lexicon, logo database, and brand index
         self.lexicon = load_lexicon()
         self.logo_db = load_logo_database()
+        self.brand_index = load_brand_index()
         
         # Filter to only unverified brands
         self.brands_to_review = [
@@ -241,17 +631,37 @@ class BrandNameVerifier:
         logo_frame = ttk.LabelFrame(left_frame, text="Logo", padding=10)
         logo_frame.pack(fill="x")
         
-        self.logo_canvas = tk.Canvas(logo_frame, width=200, height=150, bg="white")
+        self.logo_canvas = tk.Canvas(logo_frame, width=150, height=100, bg="white")
         self.logo_canvas.pack()
         
         self.logo_status_label = ttk.Label(logo_frame, text="", font=("Arial", 9))
         self.logo_status_label.pack(pady=5)
         
-        # NOTE: Sample Ads section REMOVED
-        # Sample ads were showing ads by filename match, which caused confusion
-        # (e.g., showing Hamburger Helper ads for "Barilla" because filename contained "barilla")
-        # Ad mapping verification should be done in the Brand Review Tool, not here.
-        # This tool is for lexicon verification only (brand names, logos, synonyms).
+        # Sample Ad section - shows the actual ad that led to this brand being added
+        sample_frame = ttk.LabelFrame(left_frame, text="Sample Ad (from scraper)", padding=10)
+        sample_frame.pack(fill="x", pady=(10, 0))
+        
+        self.sample_ad_canvas = tk.Canvas(sample_frame, width=500, height=300, bg="#f0f0f0", cursor="hand2")
+        self.sample_ad_canvas.pack()
+        
+        # Bind click to show full-size image
+        self.sample_ad_canvas.bind("<Button-1>", self.show_fullsize_sample_ad)
+        self.current_sample_path = None  # Track current sample image path
+        
+        self.sample_ad_label = ttk.Label(sample_frame, text="", font=("Arial", 9), wraplength=500)
+        self.sample_ad_label.pack(pady=5)
+        
+        # File path label (clickable to open in Finder)
+        self.sample_path_label = ttk.Label(
+            sample_frame, 
+            text="", 
+            font=("Arial", 8), 
+            foreground="blue",
+            cursor="hand2",
+            wraplength=500
+        )
+        self.sample_path_label.pack(pady=(0, 5))
+        self.sample_path_label.bind("<Button-1>", self.open_sample_in_finder)
         
         # Right side - Brand info
         info_frame = ttk.Frame(content_frame)
@@ -277,6 +687,18 @@ class BrandNameVerifier:
             justify="left"
         )
         self.synonyms_label.pack(anchor="w")
+        
+        # Parent company frame
+        self.parent_frame = ttk.LabelFrame(info_frame, text="Parent Company", padding=10)
+        self.parent_frame.pack(pady=5, fill="x")
+        
+        self.parent_label = ttk.Label(
+            self.parent_frame,
+            text="",
+            font=("Arial", 10),
+            foreground="blue"
+        )
+        self.parent_label.pack(anchor="w")
         
         # Conflict frame (brand exists as synonym elsewhere) - RED warning
         self.conflict_frame = ttk.LabelFrame(info_frame, text="⚠️ CONFLICT: This brand is a synonym of another!", padding=10)
@@ -305,7 +727,7 @@ class BrandNameVerifier:
         
         # Button frame
         button_frame = ttk.Frame(self.root)
-        button_frame.pack(pady=30)
+        button_frame.pack(pady=10)
         
         # Approve button
         self.approve_btn = ttk.Button(
@@ -345,7 +767,7 @@ class BrandNameVerifier:
         
         # Navigation frame
         nav_frame = ttk.Frame(self.root)
-        nav_frame.pack(pady=10)
+        nav_frame.pack(pady=5)
         
         self.prev_btn = ttk.Button(
             nav_frame,
@@ -370,6 +792,15 @@ class BrandNameVerifier:
             width=12
         )
         self.quit_btn.pack(side="left", padx=10)
+        
+        # Blacklist button
+        self.blacklist_btn = ttk.Button(
+            nav_frame,
+            text="📋 Blacklist",
+            command=self.show_blacklist_editor,
+            width=12
+        )
+        self.blacklist_btn.pack(side="left", padx=10)
     
     def show_current_brand(self):
         """Display the current brand"""
@@ -392,6 +823,9 @@ class BrandNameVerifier:
         # Update logo
         self.show_logo(brand_name)
         
+        # Update sample ad from brand index
+        self.show_sample_ad(brand_name)
+        
         # Update synonyms
         if synonyms:
             syn_text = "\n".join(f"• {s}" for s in synonyms[:10])
@@ -400,6 +834,17 @@ class BrandNameVerifier:
             self.synonyms_label.config(text=syn_text)
         else:
             self.synonyms_label.config(text="(none)")
+        
+        # Update parent company
+        try:
+            from core.brands import get_parent_company
+            parent = get_parent_company(brand_name)
+            if parent:
+                self.parent_label.config(text=f"🏢 {parent['name']}")
+            else:
+                self.parent_label.config(text="(not assigned)")
+        except Exception:
+            self.parent_label.config(text="(not assigned)")
         
         # Check for conflicts (this brand name is a synonym of another brand)
         self.show_conflicts(brand_name)
@@ -442,6 +887,127 @@ class BrandNameVerifier:
         else:
             self.logo_canvas.create_text(100, 75, text="No logo", fill="gray")
             self.logo_status_label.config(text="")
+    
+    def show_sample_ad(self, brand_name):
+        """Display a sample ad from the brand index"""
+        self.sample_ad_canvas.delete("all")
+        self.current_sample_image = None  # Keep reference to prevent garbage collection
+        
+        sample_path, retailer, ad_type = get_sample_ad_for_brand(brand_name, self.brand_index)
+        
+        if sample_path:
+            try:
+                img = Image.open(sample_path)
+                
+                # Handle RGBA images - composite onto gray background
+                if img.mode == 'RGBA':
+                    bg = Image.new('RGB', img.size, (240, 240, 240))
+                    bg.paste(img, mask=img.split()[3])
+                    img = bg
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Store the full path for click handler
+                self.current_sample_path = sample_path
+                
+                # Resize to fit canvas while maintaining aspect ratio
+                img.thumbnail((580, 430), Image.Resampling.LANCZOS)
+                self.current_sample_image = ImageTk.PhotoImage(img)
+                
+                # Center image on canvas
+                self.sample_ad_canvas.create_image(300, 225, image=self.current_sample_image, anchor="center")
+                
+                # Show info
+                info = f"{retailer} • {ad_type}" if retailer and ad_type else "Sample ad"
+                self.sample_ad_label.config(text=info)
+                
+                # Show file path (clickable)
+                self.sample_path_label.config(text=f"📁 {sample_path}")
+            except Exception as e:
+                self.sample_ad_canvas.create_text(300, 225, text="Error loading", fill="red")
+                self.sample_ad_label.config(text=str(e)[:40])
+                self.sample_path_label.config(text="")
+                self.current_sample_path = None
+        else:
+            self.sample_ad_canvas.create_text(300, 225, text="No sample ad\nin brand index", fill="gray", justify="center")
+            self.sample_ad_label.config(text="Run: python3 tools/build_brand_index.py")
+            self.sample_path_label.config(text="")
+            self.current_sample_path = None
+    
+    def open_sample_in_finder(self, event=None):
+        """Open the sample ad file location in Finder"""
+        if not self.current_sample_path:
+            return
+        
+        try:
+            import subprocess
+            import os
+            
+            # Get the directory containing the file
+            file_path = os.path.abspath(self.current_sample_path)
+            
+            if os.path.exists(file_path):
+                # Open Finder and select the file
+                subprocess.run(["open", "-R", file_path])
+            else:
+                print(f"File not found: {file_path}")
+        except Exception as e:
+            print(f"Error opening in Finder: {e}")
+    
+    def show_fullsize_sample_ad(self, event=None):
+        """Show full-size sample ad in a popup window"""
+        if not self.current_sample_path:
+            return
+        
+        try:
+            # Create popup window
+            popup = tk.Toplevel(self.root)
+            popup.title("Sample Ad - Full Size")
+            
+            # Load full-size image
+            img = Image.open(self.current_sample_path)
+            
+            # Handle RGBA images
+            if img.mode == 'RGBA':
+                bg = Image.new('RGB', img.size, (240, 240, 240))
+                bg.paste(img, mask=img.split()[3])
+                img = bg
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Get screen dimensions
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+            
+            # Scale image if larger than 90% of screen
+            max_width = int(screen_width * 0.9)
+            max_height = int(screen_height * 0.9)
+            
+            if img.width > max_width or img.height > max_height:
+                img.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+            
+            photo = ImageTk.PhotoImage(img)
+            
+            # Create canvas and display image
+            canvas = tk.Canvas(popup, width=img.width, height=img.height)
+            canvas.pack()
+            canvas.create_image(0, 0, anchor="nw", image=photo)
+            
+            # Keep reference to prevent garbage collection
+            canvas.image = photo
+            
+            # Center popup on screen
+            popup.update_idletasks()
+            x = (screen_width - popup.winfo_width()) // 2
+            y = (screen_height - popup.winfo_height()) // 2
+            popup.geometry(f"+{x}+{y}")
+            
+            # Close on click or Escape
+            popup.bind("<Button-1>", lambda e: popup.destroy())
+            popup.bind("<Escape>", lambda e: popup.destroy())
+            
+        except Exception as e:
+            print(f"Error showing full-size image: {e}")
     
     def show_conflicts(self, brand_name):
         """Show conflicts where this brand name is a synonym of another brand"""
@@ -533,6 +1099,40 @@ class BrandNameVerifier:
         lexicon_idx, brand = self.brands_to_review[self.current_index]
         current_name = brand.get("name", "")
         
+        # Check for logos on both brands
+        source_logo_info = get_logo_info(current_name, self.logo_db)
+        target_logo_info = get_logo_info(target_name, self.logo_db)
+        
+        # Determine if we need to show logo merge dialog
+        logo_choice = None
+        if source_logo_info and target_logo_info:
+            # Both have logos - show dialog to choose
+            dialog = LogoMergeDialog(
+                self.root, 
+                current_name, 
+                target_name, 
+                source_logo_info, 
+                target_logo_info
+            )
+            self.root.wait_window(dialog)
+            
+            if dialog.result is None:
+                # User cancelled the merge
+                return
+            logo_choice = dialog.result
+            
+        elif source_logo_info and not target_logo_info:
+            # Only source has logo - ask if they want to adopt it
+            if messagebox.askyesno(
+                "Adopt Logo?",
+                f"'{current_name}' has a logo but '{target_name}' does not.\n\n"
+                f"Would you like to use '{current_name}'s logo for '{target_name}'?"
+            ):
+                logo_choice = "source"
+            else:
+                logo_choice = "none"
+        
+        # Now confirm the merge
         if messagebox.askyesno("Confirm Merge", 
                                f"Merge '{current_name}' into '{target_name}'?\n\n"
                                f"'{current_name}' will be added as a synonym of '{target_name}'.\n"
@@ -550,20 +1150,37 @@ class BrandNameVerifier:
                     if syn not in target.get("synonyms", []):
                         target["synonyms"].append(syn)
                 
-                # Mark current for deletion
+                # Mark current for deletion and apply immediately
                 self.deleted_indices.add(lexicon_idx)
                 self.lexicon = [b for i, b in enumerate(self.lexicon) if i not in self.deleted_indices]
+                self.deleted_indices.clear()  # Clear after applying to prevent stale indices
                 self.edited_count += 1
                 
                 save_lexicon(self.lexicon)
                 
-                # Re-canonicalize ads - change old brand to target brand
-                try:
-                    from tools.recanon_ads import recanon_brand
-                    print(f"[RECANON] Changing '{current_name}' ads to '{target_name}'...")
-                    recanon_brand(old_brand=current_name, new_brand=target_name)
-                except Exception as e:
-                    print(f"[WARN] Failed to recanon ads: {e}")
+                # Handle logo merging
+                if logo_choice and logo_choice != "none":
+                    if merge_logos(current_name, target_name, self.logo_db, logo_choice, 
+                                   source_logo_info, target_logo_info):
+                        save_logo_database(self.logo_db)
+                elif source_logo_info and not target_logo_info and logo_choice is None:
+                    # Edge case: source has logo, target doesn't, and we haven't asked yet
+                    # This shouldn't happen with the flow above, but handle it just in case
+                    pass
+                
+                # Re-canonicalize ads in background thread to prevent UI freeze
+                def recanon_merge_in_background():
+                    try:
+                        from tools.recanon_ads import recanon_brand
+                        print(f"[RECANON] Changing '{current_name}' ads to '{target_name}'...")
+                        recanon_brand(old_brand=current_name, new_brand=target_name)
+                        print(f"[RECANON] Complete for '{current_name}' -> '{target_name}'")
+                    except Exception as e:
+                        print(f"[WARN] Failed to recanon ads: {e}")
+                
+                import threading
+                thread = threading.Thread(target=recanon_merge_in_background, daemon=True)
+                thread.start()
                 
                 # Rebuild list (brand was merged/deleted)
                 self.rebuild_review_list()
@@ -652,10 +1269,55 @@ class BrandNameVerifier:
             recanon_target = None
             
             if new_name and new_name != old_name:
+                # Check if new name is blacklisted
+                from core.brands import is_blacklisted
+                if is_blacklisted(new_name):
+                    response = messagebox.askyesno(
+                        "Blacklisted Brand Warning",
+                        f"'{new_name}' is in the brand blacklist.\n\n"
+                        f"Blacklisted brands are filtered from the frontend.\n"
+                        f"This is typically used for retailer house ads.\n\n"
+                        f"Continue anyway?"
+                    )
+                    if not response:
+                        return
+                
                 # Check if new name already exists
                 existing = next((b for b in self.lexicon if b.get("name", "").lower() == new_name.lower()), None)
                 
                 if existing and existing != brand:
+                    # Check for logos before merging
+                    source_logo_info = get_logo_info(old_name, self.logo_db)
+                    target_logo_info = get_logo_info(new_name, self.logo_db)
+                    
+                    logo_choice = None
+                    if source_logo_info and target_logo_info:
+                        # Both have logos - show dialog to choose
+                        dialog = LogoMergeDialog(
+                            self.root, 
+                            old_name, 
+                            new_name, 
+                            source_logo_info, 
+                            target_logo_info
+                        )
+                        self.root.wait_window(dialog)
+                        
+                        if dialog.result is None:
+                            # User cancelled
+                            return
+                        logo_choice = dialog.result
+                        
+                    elif source_logo_info and not target_logo_info:
+                        # Only source has logo - ask if they want to adopt it
+                        if messagebox.askyesno(
+                            "Adopt Logo?",
+                            f"'{old_name}' has a logo but '{new_name}' does not.\n\n"
+                            f"Would you like to use '{old_name}'s logo for '{new_name}'?"
+                        ):
+                            logo_choice = "source"
+                        else:
+                            logo_choice = "none"
+                    
                     # Merge into existing brand
                     if keep_as_synonym:
                         if old_name not in existing.get("synonyms", []):
@@ -667,6 +1329,12 @@ class BrandNameVerifier:
                             existing.setdefault("synonyms", []).append(syn)
                     
                     existing["verified"] = True
+                    
+                    # Handle logo merging
+                    if logo_choice and logo_choice != "none":
+                        if merge_logos(old_name, new_name, self.logo_db, logo_choice, 
+                                       source_logo_info, target_logo_info):
+                            save_logo_database(self.logo_db)
                     
                     # Mark for deletion
                     self.deleted_indices.add(lexicon_idx)
@@ -693,26 +1361,34 @@ class BrandNameVerifier:
                 brand["verified"] = True
                 self.approved_count += 1
             
-            # Clean up deleted brands
-            self.lexicon = [b for i, b in enumerate(self.lexicon) if i not in self.deleted_indices]
+            # Clean up deleted brands (only if there are any to delete)
+            if self.deleted_indices:
+                self.lexicon = [b for i, b in enumerate(self.lexicon) if i not in self.deleted_indices]
+                self.deleted_indices.clear()  # Clear after applying to prevent stale indices
             
             save_lexicon(self.lexicon)
             
-            # Re-canonicalize ads if brand was renamed/merged
+            # Re-canonicalize ads in background thread to prevent UI freeze
             if should_recanon and recanon_target:
-                try:
-                    from tools.recanon_ads import recanon_brand
-                    print(f"[RECANON] Changing '{old_name}' ads to '{recanon_target}'...")
-                    recanon_brand(old_brand=old_name, new_brand=recanon_target)
-                except Exception as e:
-                    print(f"[WARN] Failed to recanon ads: {e}")
+                def recanon_edit_in_background():
+                    try:
+                        from tools.recanon_ads import recanon_brand
+                        print(f"[RECANON] Changing '{old_name}' ads to '{recanon_target}'...")
+                        recanon_brand(old_brand=old_name, new_brand=recanon_target)
+                        print(f"[RECANON] Complete for '{old_name}' -> '{recanon_target}'")
+                    except Exception as e:
+                        print(f"[WARN] Failed to recanon ads: {e}")
+                
+                import threading
+                thread = threading.Thread(target=recanon_edit_in_background, daemon=True)
+                thread.start()
             
             # Rebuild list (brand was verified/merged/deleted)
             self.rebuild_review_list()
             self.show_current_brand()
     
     def delete_brand(self):
-        """Delete the current brand from lexicon (no confirmation, use undo)"""
+        """Delete the current brand from lexicon and add to blacklist"""
         if self.current_index >= len(self.brands_to_review):
             return
         
@@ -726,19 +1402,33 @@ class BrandNameVerifier:
             "index": self.current_index
         }))
         
+        # Add to blacklist (prevents re-adding from scraped data)
+        add_to_blacklist(brand_name)
+        # Also blacklist synonyms
+        for syn in brand.get("synonyms", []):
+            add_to_blacklist(syn)
+        
         # Remove from lexicon
         self.lexicon = [b for b in self.lexicon if b.get("name") != brand_name]
         self.deleted_count += 1
         
         save_lexicon(self.lexicon)
         
-        # Re-canonicalize ads - change this brand to "unknown"
-        try:
-            from tools.recanon_ads import recanon_brand
-            print(f"[RECANON] Changing '{brand_name}' ads to 'unknown'...")
-            recanon_brand(old_brand=brand_name, delete=True)
-        except Exception as e:
-            print(f"[WARN] Failed to recanon ads: {e}")
+        # Re-canonicalize ads in background thread to prevent UI freeze
+        def recanon_in_background():
+            try:
+                from tools.recanon_ads import recanon_brand
+                print(f"[RECANON] Changing '{brand_name}' ads to 'unknown'...")
+                recanon_brand(old_brand=brand_name, delete=True)
+                print(f"[RECANON] Complete for '{brand_name}'")
+            except Exception as e:
+                print(f"[WARN] Failed to recanon ads: {e}")
+        
+        import threading
+        thread = threading.Thread(target=recanon_in_background, daemon=True)
+        thread.start()
+        
+        print(f"[BLACKLIST] Added '{brand_name}' to blacklist")
         
         # Rebuild list (brand was deleted)
         self.rebuild_review_list()
@@ -765,6 +1455,13 @@ class BrandNameVerifier:
             brand = data["brand"]
             self.lexicon.append(brand)
             self.deleted_count -= 1
+            
+            # Remove from blacklist
+            brand_name = brand.get("name", "")
+            remove_from_blacklist(brand_name)
+            for syn in brand.get("synonyms", []):
+                remove_from_blacklist(syn)
+            print(f"[BLACKLIST] Removed '{brand_name}' from blacklist (undo)")
             
             save_lexicon(self.lexicon)
             
@@ -798,6 +1495,125 @@ class BrandNameVerifier:
         print(f"   Skipped: {self.skipped_count}")
         
         self.root.destroy()
+    
+    def show_blacklist_editor(self):
+        """Show the blacklist editor dialog"""
+        dialog = BlacklistEditorDialog(self.root)
+        self.root.wait_window(dialog.top)
+
+
+class BlacklistEditorDialog:
+    """Dialog for viewing and editing the brand blacklist"""
+    
+    def __init__(self, parent):
+        self.top = tk.Toplevel(parent)
+        self.top.title("Brand Blacklist Editor")
+        self.top.geometry("500x600")
+        self.top.transient(parent)
+        self.top.grab_set()
+        
+        # Center on parent
+        self.top.geometry(f"+{parent.winfo_x() + 50}+{parent.winfo_y() + 50}")
+        
+        # Title
+        ttk.Label(
+            self.top, 
+            text="Brand Blacklist", 
+            font=("Arial", 16, "bold")
+        ).pack(pady=10)
+        
+        ttk.Label(
+            self.top, 
+            text="Brands on this list will never be auto-added to the lexicon.",
+            font=("Arial", 10)
+        ).pack(pady=(0, 10))
+        
+        # Listbox with scrollbar
+        list_frame = ttk.Frame(self.top)
+        list_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.listbox = tk.Listbox(
+            list_frame, 
+            font=("Arial", 12),
+            yscrollcommand=scrollbar.set,
+            selectmode=tk.EXTENDED
+        )
+        self.listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self.listbox.yview)
+        
+        # Button frame
+        btn_frame = ttk.Frame(self.top)
+        btn_frame.pack(pady=10)
+        
+        ttk.Button(
+            btn_frame,
+            text="Add Brand",
+            command=self.add_brand,
+            width=15
+        ).pack(side="left", padx=5)
+        
+        ttk.Button(
+            btn_frame,
+            text="Remove Selected",
+            command=self.remove_selected,
+            width=15
+        ).pack(side="left", padx=5)
+        
+        ttk.Button(
+            btn_frame,
+            text="Close",
+            command=self.top.destroy,
+            width=15
+        ).pack(side="left", padx=5)
+        
+        # Count label (must be created before refresh_list)
+        self.count_label = ttk.Label(self.top, text="", font=("Arial", 10))
+        self.count_label.pack(pady=5)
+        
+        # Load blacklist (after count_label is created)
+        self.refresh_list()
+    
+    def refresh_list(self):
+        """Refresh the listbox from blacklist file"""
+        self.listbox.delete(0, tk.END)
+        blacklist = load_blacklist()
+        for brand in sorted(blacklist["brands"], key=str.lower):
+            self.listbox.insert(tk.END, brand)
+        self.update_count()
+    
+    def update_count(self):
+        """Update the count label"""
+        count = self.listbox.size()
+        self.count_label.config(text=f"{count} brands blacklisted")
+    
+    def add_brand(self):
+        """Add a brand to the blacklist"""
+        brand = simpledialog.askstring(
+            "Add to Blacklist",
+            "Enter brand name to blacklist:",
+            parent=self.top
+        )
+        if brand and brand.strip():
+            if add_to_blacklist(brand.strip()):
+                self.refresh_list()
+            else:
+                messagebox.showinfo("Already Exists", f"'{brand}' is already blacklisted.")
+    
+    def remove_selected(self):
+        """Remove selected brands from blacklist"""
+        selected = self.listbox.curselection()
+        if not selected:
+            return
+        
+        brands_to_remove = [self.listbox.get(i) for i in selected]
+        
+        for brand in brands_to_remove:
+            remove_from_blacklist(brand)
+        
+        self.refresh_list()
 
 
 class EditBrandDialog:
@@ -889,7 +1705,31 @@ class EditBrandDialog:
         self.top.destroy()
 
 
+def sync_missing_brands():
+    """Auto-add missing brands from brand_index to lexicon before review"""
+    print("🔄 Syncing new brands from scraper data...")
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["python3", "tools/lexicon_gap_report.py", "--auto-add", "--exclude-unknown"],
+            capture_output=True,
+            text=True,
+            cwd=str(Path(__file__).resolve().parents[1])
+        )
+        # Print output (shows what was added)
+        if result.stdout:
+            for line in result.stdout.strip().split('\n'):
+                if line.startswith('✅') or line.startswith('🚫') or line.startswith('⏭️'):
+                    print(f"   {line}")
+    except Exception as e:
+        print(f"   ⚠️ Sync failed: {e}")
+    print()
+
+
 def main():
+    # Sync missing brands before launching UI
+    sync_missing_brands()
+    
     root = tk.Tk()
     app = BrandNameVerifier(root)
     root.mainloop()
