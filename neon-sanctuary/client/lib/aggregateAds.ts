@@ -8,6 +8,15 @@ export type AdCardItem = {
   message: string;
   image_url?: string;
   video_url?: string;
+  video_overlay?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    image_width: number;
+    image_height: number;
+    border_radius?: number;
+  };
   poster_url?: string;
   timestamp: string; // ISO
   run_file?: string;

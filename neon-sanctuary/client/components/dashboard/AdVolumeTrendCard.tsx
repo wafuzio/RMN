@@ -43,8 +43,12 @@ export function AdVolumeTrendCard({ timestamps }: { timestamps: string[] }) {
     // Group by day
     const format = (d: Date) => d.toISOString().slice(0, 10);
     const grouped = groupBy(dates, format);
-    
+
+    // Exclude today's date
+    const today = new Date().toISOString().slice(0, 10);
+
     const result = Array.from(grouped.entries())
+      .filter(([k]) => k !== today)
       .map(([k, vals]) => ({ label: k, count: vals.length, date: vals[0] }))
       .sort((a, b) => +a.date - +b.date);
 

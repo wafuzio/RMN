@@ -58,6 +58,12 @@ const PAGE_TYPES = [
   { value: "seasonal", label: "Seasonal Section" },
 ];
 
+const getYesterdayDate = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 1);
+  return date.toISOString().split('T')[0];
+};
+
 const HOLIDAYS_AND_EVENTS = [
   { week: 1, name: "New Year", color: "#ef4444" },
   { week: 6, name: "Valentine's Day", color: "#ec4899" },
@@ -105,7 +111,7 @@ export default function RetailSnapshot() {
   ]);
   const [pageType, setPageType] = useState("home");
   const [dateRange, setDateRange] = useState<"day" | "week" | "month" | "quarter" | "year">("day");
-  const [selectedDate, setSelectedDate] = useState("2025-11-29");
+  const [selectedDate, setSelectedDate] = useState(getYesterdayDate());
   const [keywordSearch, setKeywordSearch] = useState("");
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
@@ -138,7 +144,18 @@ export default function RetailSnapshot() {
         const filtered = data.snapshots.filter((snap: Snapshot) =>
           selectedRetailers.some((r) => r === snap.retailer)
         );
-        setSnapshots(filtered);
+
+        // Keep only the first snapshot for each retailer
+        const seenRetailers = new Set<string>();
+        const deduped = filtered.filter((snap: Snapshot) => {
+          if (seenRetailers.has(snap.retailer)) {
+            return false;
+          }
+          seenRetailers.add(snap.retailer);
+          return true;
+        });
+
+        setSnapshots(deduped);
       } catch (error) {
         console.error("Error fetching snapshots:", error);
         setSnapshotsError(
@@ -298,7 +315,7 @@ export default function RetailSnapshot() {
         {/* Screenshot Grid */}
         <section className="card-surface p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            📸 Retailer Top-of-Fold Snapshots
+            Front Page Snapshots
           </h2>
 
           {selectedRetailers.length === 0 ? (

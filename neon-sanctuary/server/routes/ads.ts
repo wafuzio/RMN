@@ -87,6 +87,14 @@ export const handleAds: RequestHandler = (req, res) => {
     );
   }
 
+  const brands = req.query.brands as string | undefined;
+  if (brands) {
+    const brandList = brands.split(",").map((b) => b.trim());
+    filtered = filtered.filter((ad) =>
+      brandList.includes(ad.brand)
+    );
+  }
+
   const startDate = req.query.start as string | undefined;
   const endDate = req.query.end as string | undefined;
 

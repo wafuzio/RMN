@@ -15,6 +15,8 @@ interface StatCardProps {
 export function StatCard({ value, label, hint, trend, className, brandName, onClick }: StatCardProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const logoUrlRef = useRef<string | null>(null);
+  const valueRef = useRef<HTMLDivElement>(null);
+  const [fontSize, setFontSize] = useState<number>(56);
 
   useEffect(() => {
     // Sanitize brand name - skip if empty, null, or looks like an ad type
@@ -77,6 +79,45 @@ export function StatCard({ value, label, hint, trend, className, brandName, onCl
     };
   }, [brandName]);
 
+  useEffect(() => {
+    if (!valueRef.current) return;
+
+    const resizeText = () => {
+      const element = valueRef.current;
+      if (!element) return;
+
+      const maxWidth = element.parentElement?.clientWidth || 300;
+      const padding = 32; // account for padding
+      const availableWidth = maxWidth - padding;
+      let currentFontSize = 56;
+
+      // Reset to initial size for measurement
+      element.style.fontSize = `${currentFontSize}px`;
+      element.style.whiteSpace = 'nowrap';
+
+      while (element.scrollWidth > availableWidth && currentFontSize > 24) {
+        currentFontSize -= 2;
+        element.style.fontSize = `${currentFontSize}px`;
+      }
+
+      element.style.whiteSpace = '';
+      setFontSize(currentFontSize);
+    };
+
+    // Run on mount and when value changes
+    resizeText();
+
+    // Handle window resize
+    const resizeObserver = new ResizeObserver(resizeText);
+    if (valueRef.current.parentElement) {
+      resizeObserver.observe(valueRef.current.parentElement);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [value]);
+
   return (
     <div
       className={cn(
@@ -91,7 +132,13 @@ export function StatCard({ value, label, hint, trend, className, brandName, onCl
       aria-label={`${label} statistic`}
     >
       <div className="w-1/2 flex flex-col">
-        <div className="text-xl leading-tight font-extrabold bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent line-clamp-2">{formatCompactNumber(value)}</div>
+        <div
+          ref={valueRef}
+          className="leading-tight font-extrabold bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent line-clamp-2 overflow-hidden"
+          style={{ fontSize: `${fontSize}px` }}
+        >
+          {formatCompactNumber(value)}
+        </div>
         <div className="mt-3 text-sm text-[#6b7280]">{label}</div>
         {hint && <div className="mt-1 text-xs text-[#6b7280]">{hint}</div>}
         {trend && (

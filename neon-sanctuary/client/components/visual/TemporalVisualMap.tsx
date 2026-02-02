@@ -253,40 +253,77 @@ export function TemporalVisualMap({ ads, allTimestamps, height=300, onRangeChang
   
   // Lazy load ads for visible bins when zoomed in
   useEffect(() => {
-    if (!retailer || !client) return; // Need filter params to fetch
-    
+    // Validate required parameters
+    const retailerStr = (retailer || "").toString().trim();
+    const clientStr = (client || "").toString().trim();
+
+    if (!retailerStr || !clientStr) {
+      return; // Need both filter params to fetch
+    }
+
     const binPx = granularityMs(g) * pxPerMs;
     const showImages = binPx > 60;
-    
+
     if (showImages) {
       // When zoomed in, fetch ads for visible bins that don't have loaded ads
       const visibleBins = bins.filter(b => {
         const x = ((+b.start - +minDate) * pxPerMs) + state.offsetX;
         return x > -200 && x < width + 200; // Visible + buffer
       });
-      
+
       for (const bin of visibleBins) {
         if (bin.ads.length === 0 && bin.count > 0) {
           // This bin has ads but they're not loaded - fetch them
           const rangeKey = `${+bin.start}-${+bin.end}`;
           if (!loadingRef.current.has(rangeKey)) {
             loadingRef.current.add(rangeKey);
-            
+
             // Format dates for API
             const startStr = bin.start.toISOString().split('T')[0];
             const endStr = bin.end.toISOString().split('T')[0];
-            
-            // Fetch ads for this date range
-            fetch(`/api/ads/cards?retailer=${retailer}&client=${client}${term ? `&term=${term}` : ''}&start=${startStr}&end=${endStr}&page_size=100`)
-              .then(r => r.json())
+
+            // Build query string with proper encoding
+            const queryParams = new URLSearchParams();
+            queryParams.set("retailer", retailerStr);
+            queryParams.set("client", clientStr);
+            if (term && term.trim()) {
+              queryParams.set("term", term.trim());
+            }
+            queryParams.set("start", startStr);
+            queryParams.set("end", endStr);
+            queryParams.set("page_size", "100");
+
+            const fetchUrl = `/api/ads/cards?${queryParams.toString()}`;
+
+            // Fetch ads for this date range with timeout and better error handling
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+            fetch(fetchUrl, { signal: controller.signal })
+              .then(r => {
+                clearTimeout(timeoutId);
+                if (!r.ok) {
+                  throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+                }
+                return r.json();
+              })
               .then(data => {
-                if (data.cards && data.cards.length > 0) {
+                if (data && data.cards && Array.isArray(data.cards) && data.cards.length > 0) {
                   setLazyLoadedAds(prev => new Map(prev).set(rangeKey, data.cards));
                 }
                 loadingRef.current.delete(rangeKey);
               })
               .catch(err => {
-                console.error('[TemporalVisualMap] Failed to lazy load ads:', err);
+                clearTimeout(timeoutId);
+                const errorMsg = err instanceof Error ? err.message : String(err);
+                console.error('[TemporalVisualMap] Failed to lazy load ads for range', {
+                  range: rangeKey,
+                  retailer: retailerStr,
+                  client: clientStr,
+                  start: startStr,
+                  end: endStr,
+                  error: errorMsg,
+                });
                 loadingRef.current.delete(rangeKey);
               });
           }
@@ -310,6 +347,8 @@ export function TemporalVisualMap({ ads, allTimestamps, height=300, onRangeChang
     }
   }, [bins.length, minDate, maxDate, width, hasCentered]);
 
+  // COMMENTED OUT: Image prefetching disabled
+  /*
   useEffect(() => {
     // light prefetch for smoother zoom: first 2 images per bin
     const toPrefetch: string[] = [];
@@ -323,6 +362,7 @@ export function TemporalVisualMap({ ads, allTimestamps, height=300, onRangeChang
     }
     toPrefetch.forEach(u => { getImage(u).catch(()=>{}); });
   }, [bins]);
+  */
 
   const draw = useCallback(async () => {
     const canvas = canvasRef.current; if (!canvas) return;
@@ -394,22 +434,27 @@ export function TemporalVisualMap({ ads, allTimestamps, height=300, onRangeChang
         ctx.fillRect(x, y, w-1, h);
       } else {
         // draw images mosaic within column
+        // COMMENTED OUT: Image loading disabled
+        /*
         if (b.ads.length > 0) {
           // We have loaded ads for this period - show images
+          // LIMIT: Only load first 20 images per bin to prevent browser freeze
+          const MAX_IMAGES_PER_BIN = 20;
           const colWidth = Math.max(56, w-2);
           const thumbH = 80; const gap = 4; let y = 6; let row = 0; let col = 0;
-          for (let i=0;i<b.ads.length;i++) {
+          const adsToShow = Math.min(b.ads.length, MAX_IMAGES_PER_BIN);
+          for (let i=0;i<adsToShow;i++) {
             const ad = b.ads[i];
             const url = (ad as any).image_url_full || ad.image_url; // fallback
             try {
               const full = toLocalImageUrl(url);
               const img = await getImage(full);
-              
+
               // Check if this draw is still current (not superseded by a new draw)
               if (drawIdRef.current !== currentDrawId) {
                 return; // Abort - a new draw has started
               }
-              
+
               const aspect = img.width / Math.max(1,img.height);
               const thumbW = Math.min(colWidth, Math.round(thumbH * aspect));
               const drawX = x + (col * (colWidth + gap));
@@ -432,13 +477,22 @@ export function TemporalVisualMap({ ads, allTimestamps, height=300, onRangeChang
               ctx.fillStyle = "#e5e7eb"; ctx.fillRect(x, y, colWidth, thumbH); y += thumbH + gap;
             }
           }
+          // Show "+N more" indicator if there are more ads than shown
+          if (b.ads.length > MAX_IMAGES_PER_BIN) {
+            const remaining = b.ads.length - MAX_IMAGES_PER_BIN;
+            ctx.fillStyle = "rgba(99, 102, 241, 0.8)";
+            ctx.font = "bold 11px system-ui";
+            ctx.textAlign = "center";
+            ctx.fillText(`+${remaining} more`, x + colWidth/2, height - 28);
+            ctx.textAlign = "left";
+          }
         } else if (c > 0) {
           // We know there are ads here (from count) but they're not loaded
           // Show a placeholder message
           const colWidth = Math.max(56, w-2);
           ctx.fillStyle = "rgba(99, 102, 241, 0.1)";
           ctx.fillRect(x, 6, colWidth, height - 36);
-          
+
           ctx.fillStyle = "#6366f1";
           ctx.font = "12px system-ui";
           ctx.textAlign = "center";
@@ -448,6 +502,7 @@ export function TemporalVisualMap({ ads, allTimestamps, height=300, onRangeChang
           ctx.fillText("(not loaded)", x + colWidth/2, height/2 + 5);
           ctx.textAlign = "left";
         }
+        */
       }
     }
     ctx.restore(); // Restore from clip region

@@ -1,13 +1,80 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn, normalizeAdType } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toLocalImageUrl } from "@/utils/imageUrl";
 import { RetailerLogo } from "@/components/dashboard/RetailerLogo";
 import { formatLocal } from "@/lib/date";
+import { useInViewport } from "@/hooks/useInViewport";
+
+export interface VideoOverlay {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  image_width: number;
+  image_height: number;
+  border_radius?: number;
+}
+
+// Video overlay player component - handles autoplay properly
+function VideoOverlayPlayer({ videoUrl, videoOverlay }: { videoUrl: string; videoOverlay: VideoOverlay }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  
+  // Debug: log the overlay positioning
+  console.log('[VideoOverlayPlayer] Positioning:', {
+    videoOverlay,
+    borderRadius: videoOverlay.border_radius,
+    borderRadiusStyle: videoOverlay.border_radius ? `${videoOverlay.border_radius}px` : 'none',
+    calculated: {
+      top: `${(videoOverlay.y / videoOverlay.image_height) * 100}%`,
+      left: `${(videoOverlay.x / videoOverlay.image_width) * 100}%`,
+      width: `${(videoOverlay.width / videoOverlay.image_width) * 100}%`,
+      height: `${(videoOverlay.height / videoOverlay.image_height) * 100}%`,
+    }
+  });
+  
+  useEffect(() => {
+    const video = videoRef.current;
+    console.log('[VideoOverlay] Mount:', { videoUrl, video: !!video, muted: video?.muted, readyState: video?.readyState });
+    if (!video) return;
+    
+    // Ensure muted is set (required for autoplay)
+    video.muted = true;
+    
+    // Programmatically play to ensure autoplay works
+    const playPromise = video.play();
+    if (playPromise) {
+      playPromise
+        .then(() => console.log('[VideoOverlay] Playing:', videoUrl))
+        .catch((err) => console.warn('[VideoOverlay] Autoplay failed:', err.name, err.message, videoUrl));
+    }
+  }, [videoUrl]);
+  
+  return (
+    <video
+      ref={videoRef}
+      src={toLocalImageUrl(videoUrl) || undefined}
+      className="absolute pointer-events-none"
+      style={{
+        top: `${(videoOverlay.y / videoOverlay.image_height) * 100}%`,
+        left: `${(videoOverlay.x / videoOverlay.image_width) * 100}%`,
+        width: `${(videoOverlay.width / videoOverlay.image_width) * 100}%`,
+        height: `${(videoOverlay.height / videoOverlay.image_height) * 100}%`,
+        borderRadius: videoOverlay.border_radius ? `${videoOverlay.border_radius}px` : undefined,
+        objectFit: 'cover',
+      }}
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="auto"
+    />
+  );
+}
 
 // Robust media loader component (handles both images and videos)
-function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slot, priority, mediaHeight, retailer, dimensions }: { imageUrl?: string; videoUrl?: string; posterUrl?: string; alt?: string; isTOA?: boolean; isSBA?: boolean; adType?: string; slot?: string; priority?: boolean; mediaHeight?: string; retailer?: string; dimensions?: { width: number; height: number }; }) {
+function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slot, priority, mediaHeight, retailer, dimensions, videoOverlay, showVideoOverlay }: { imageUrl?: string; videoUrl?: string; posterUrl?: string; alt?: string; isTOA?: boolean; isSBA?: boolean; adType?: string; slot?: string; priority?: boolean; mediaHeight?: string; retailer?: string; dimensions?: { width: number; height: number }; videoOverlay?: VideoOverlay; showVideoOverlay?: boolean; }) {
   const isColumnCard = adType === "Sponsored_Brand_Card" || adType === "Sponsored_Logo";
   const isSponsoredLogo = adType === "Sponsored_Logo";
   const isLeftRailDisplay = adType === "Sponsored_Display" && slot === "left_rail";
@@ -43,7 +110,9 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slo
   }
 
   // Prefer video if available, otherwise use image, then poster (for Skyscraper ads)
-  const hasVideo = !!videoUrl;
+  // BUT: if showVideoOverlay is true AND we have overlay data, use image as base and overlay video on top
+  // If showVideoOverlay is true but no overlay data exists, fall back to regular video playback
+  const hasVideo = !!videoUrl && !(showVideoOverlay && !!videoOverlay);
   const relUrl = hasVideo ? videoUrl : (imageUrl || posterUrl || null);
 
   if (!relUrl) {
@@ -57,19 +126,20 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slo
     return <div className="fallback-text text-gray-400 text-sm">No media</div>;
   }
   
-  // Add thumbnail sizing for images (not videos) to reduce transfer size
+  // Add thumbnail parameter for images (not videos) to reduce transfer size
+  // Grid view uses thumbnails by default
   if (!hasVideo && src) {
     try {
       // This handles both absolute and relative URLs
       const u = new URL(src, window.location.origin);
-      // Only set if not already specified
-      if (!u.searchParams.has('w')) {
-        u.searchParams.set('w', '600');
+      // Set thumbnail=true for grid view (default)
+      if (!u.searchParams.has('thumbnail')) {
+        u.searchParams.set('thumbnail', 'true');
       }
       src = u.toString();
     } catch {
       // Fallback for very odd paths where URL() might fail
-      src = src.includes('?') ? `${src}&w=600` : `${src}?w=600`;
+      src = src.includes('?') ? `${src}&thumbnail=true` : `${src}?thumbnail=true`;
     }
   }
   const [loaded, setLoaded] = useState(false);
@@ -89,10 +159,15 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slo
 
   // Gallery Cards: use actual dimensions for proper aspect ratio
   const isGalleryCard = adType === "Gallery_Cards";
+  const isSBACard = adType === "SBA" && mediaHeight === '280px';
   if (isGalleryCard && dimensions?.width && dimensions?.height) {
     useAspectRatio = true;
     aspectRatio = dimensions.width / dimensions.height;
     heightClass = ""; // Let aspect-ratio control height
+  } else if (isSBACard) {
+    // SBA cards in left column - let image determine height
+    heightClass = "";
+    containerClass = "";
   } else if (isLeftRailDisplay) {
     heightClass = "";
     containerClass = "flex-1";
@@ -152,27 +227,69 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slo
 
   const isLeftColumnAd = mediaHeight === '280px';
   const isGalleryCardLeftColumn = isLeftColumnAd && adType === "Gallery_Cards";
-  
+  const isSBALeftColumn = isLeftColumnAd && adType === "SBA";
+
   // For Gallery Cards with dimensions, use simple width:100% height:auto layout
-  const useAutoHeight = isGalleryCard && useAspectRatio;
+  const useAutoHeight = (isGalleryCard && useAspectRatio) || isSBALeftColumn;
   
-  // Build container style
+  // SPECIAL CASE: Video overlay - use simple layout where image determines size
+  // This ensures the video overlay percentages align correctly with the image
+  if (showVideoOverlay && videoOverlay && videoUrl) {
+    const imgSrc = toLocalImageUrl(imageUrl || posterUrl || '');
+    return (
+      <div className="w-full overflow-hidden rounded-t-lg relative">
+        <img
+          key={`overlay-${imgSrc}-${mediaKey}`}
+          src={imgSrc || undefined}
+          alt={alt || 'ad'}
+          className="w-full h-auto"
+          style={{ display: error ? 'none' : 'block' }}
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
+          decoding="async"
+          loading={priority ? 'eager' : 'lazy'}
+          draggable={false}
+          onLoad={() => {
+            setLoaded(true);
+            setError(false);
+          }}
+          onError={() => {
+            setLoaded(false);
+            setError(true);
+          }}
+        />
+        {loaded && !error && (
+          <VideoOverlayPlayer
+            videoUrl={videoUrl}
+            videoOverlay={videoOverlay}
+          />
+        )}
+        {!loaded && !error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+            <div className="fallback-text text-gray-400 text-sm">Loading...</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+  
+  // Build container style for non-overlay cases
   const containerStyle: React.CSSProperties = useAutoHeight
-    ? { width: '100%' }  // Let image determine height naturally
-    : isLeftColumnAd 
+    ? { width: '100%', display: 'flex', flexDirection: 'column' }  // Let image determine height naturally, full width
+    : isLeftColumnAd
       ? { position: 'absolute', top: 0, left: 0, right: 0, height: mediaHeight, margin: 0, padding: 0, backgroundColor: 'rgb(243, 244, 246)' }
-      : useAspectRatio && aspectRatio 
+      : useAspectRatio && aspectRatio
         ? { aspectRatio: aspectRatio, width: '100%' }
         : {};
 
   return (
-    <div id="image-frame" className={useAutoHeight ? "w-full overflow-hidden rounded-t-lg" : ((isLeftColumnAd) ? "" : cn("image-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-start justify-start relative", !useAspectRatio && (containerClass || heightClass)))} style={containerStyle}>
+    <div id="image-frame" className={useAutoHeight ? "w-full overflow-hidden rounded-t-lg relative" : ((isLeftColumnAd) ? "relative" : cn("image-frame w-full overflow-hidden rounded-t-lg bg-gray-100 flex items-start justify-start relative", !useAspectRatio && (containerClass || heightClass)))} style={{...containerStyle, ...(useAutoHeight && { display: 'flex', flexDirection: 'column', width: '100%', margin: 0, padding: 0 }), ...(isGalleryCard && !isLeftColumnAd && { margin: 0, padding: 0, width: '100%' })}}>
       <img
         key={`${src}-${mediaKey}`}
         src={src}
         alt={alt || 'ad'}
-        className={useAutoHeight ? "w-full h-auto" : cn("w-full", useAspectRatio ? "h-auto object-contain" : "h-full object-cover")}
-        style={{ display: error ? 'none' : 'block', ...(useAutoHeight ? {} : { objectPosition: useAspectRatio ? 'center' : (isSkyscraper ? 'top center' : 'left 20%') }), ...(isLeftColumnAd && !useAutoHeight && { margin: 0, padding: 0 }) }}
+        className={useAutoHeight ? "w-full h-auto" : cn("w-full", isGalleryCard ? "h-full object-cover" : (useAspectRatio ? "h-auto object-contain" : "h-full object-cover"))}
+        style={{ display: error ? 'none' : 'block', margin: 0, padding: 0, ...(useAutoHeight ? { width: '100%', height: 'auto' } : { objectPosition: isGalleryCard ? 'center' : (useAspectRatio ? 'center' : (isSkyscraper ? 'top center' : 'left 20%')) }), ...(isLeftColumnAd && !useAutoHeight && { margin: 0, padding: 0 }) }}
         crossOrigin="anonymous"
         referrerPolicy="no-referrer"
         decoding="async"
@@ -232,16 +349,6 @@ const TYPE_STYLES: Record<string, string> = {
   Gallery_Cards: "bg-cyan-600 text-white",
 };
 
-
-export interface VideoOverlay {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  image_width: number;
-  image_height: number;
-}
-
 export interface Ad {
   id: string;
   retailer: string; client: string; keyword: string; ad_type: string; brand: string; message: string; image_url: string; video_url?: string; video_overlay?: VideoOverlay; poster_url?: string; timestamp: string; slot?: string; card_format?: string; dimensions?: { width: number; height: number };
@@ -250,6 +357,18 @@ export interface Ad {
 export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOverIndex, currentIndex, priority, isLeftColumn = false }: { ad: Ad; onRemove: (id: string)=>void; onOpen: (ad: Ad)=>void; draggableProps?: any; dragIndex?: number | null; dragOverIndex?: number | null; currentIndex?: number; priority?: boolean; isLeftColumn?: boolean; }) {
   const [hidden, setHidden] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Use viewport detection for lazy-loading video overlays
+  const [cardRef, isInViewport] = useInViewport<HTMLDivElement>();
+  
+  // Only show video overlay if ad has video_overlay data and is in viewport
+  const hasVideoOverlay = !!(ad.video_url && ad.video_overlay);
+  const showVideoOverlay = hasVideoOverlay && isInViewport;
+  
+  // Debug logging for video overlay
+  if (ad.video_url) {
+    console.log('[AdCard] Video ad:', { brand: ad.brand, hasVideoOverlay, isInViewport, showVideoOverlay, video_url: ad.video_url, video_overlay: ad.video_overlay });
+  }
 
   const isBeingDragged = dragIndex === currentIndex;
   const isDropTarget = dragOverIndex === currentIndex;
@@ -264,9 +383,24 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
   // Apply 25% + 15% reduction to container height for Kroger's TOA ads
   const isKrogerTOA = ad.retailer?.toLowerCase() === "kroger" && ad.ad_type === "TOA";
   const isGalleryCard = ad.ad_type === "Gallery_Cards";
+  const isSBA = ad.ad_type === "SBA";
+  const isShoppableDisplayAd = ad.ad_type === "Shoppable_Display_Ads";
   const hasGalleryCardDimensions = isGalleryCard && ad.dimensions?.width && ad.dimensions?.height;
+  // Video overlay ads - use image dimensions to calculate proper height
+  const hasVideoOverlayDimensions = hasVideoOverlay && ad.video_overlay?.image_width && ad.video_overlay?.image_height;
+  // Shoppable Display Ads - use auto height like Gallery Cards
+  const hasShoppableDisplayDimensions = isShoppableDisplayAd;
   let containerHeight: string | undefined = '420px';
-  if (isGalleryCard && isLeftColumn) {
+  if (hasVideoOverlayDimensions && isLeftColumn) {
+    // For video overlay ads, let height be auto so image determines size
+    containerHeight = undefined;
+  } else if (hasShoppableDisplayDimensions && isLeftColumn) {
+    // For Shoppable Display Ads, let height be auto so image determines size
+    containerHeight = undefined;
+  } else if (isSBA && isLeftColumn) {
+    // For SBA ads, let height be auto so image determines size
+    containerHeight = undefined;
+  } else if (isGalleryCard && isLeftColumn) {
     // For Gallery Cards with dimensions, let height be auto so it shrinks to fit image
     containerHeight = hasGalleryCardDimensions ? undefined : '320px';
   } else if (isTargetListingBanner && isLeftColumn) {
@@ -296,8 +430,8 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
     return retailer.toLowerCase() === 'walmart' ? 'h-11' : 'h-8';
   };
 
-  // For Gallery Cards with dimensions, use normal flow (not absolute) so content is below image
-  const useFlowLayout = hasGalleryCardDimensions && isLeftColumn;
+  // For Gallery Cards, video overlay ads, SBA ads, and Shoppable Display Ads with dimensions, use normal flow (not absolute) so content is below image
+  const useFlowLayout = (hasGalleryCardDimensions || hasVideoOverlayDimensions || hasShoppableDisplayDimensions || (isSBA && isLeftColumn)) && isLeftColumn;
   
   const contentFrame = (
     <div id="content-frame" className={cn("adcard-content-box card-text w-full flex flex-col flex-shrink-0", isColumnCard ? "p-4 gap-2" : "p-6 gap-3")} style={isLeftColumn && !useFlowLayout ? { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isSponsoredLogo ? 'rgba(0, 0, 0, 0.6)' : 'rgb(255, 255, 255)', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', padding: isSponsoredLogo ? '12px 16px' : '0 16px 16px 16px' } : (useFlowLayout ? { backgroundColor: 'rgb(255, 255, 255)', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', padding: '12px 16px 16px 16px' } : {})}>
@@ -360,6 +494,7 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
 
   return (
     <div
+      ref={cardRef}
       id="ad-card-outer"
       className={cn(
         "content-frame break-inside-avoid relative w-full transition-all duration-100 user-select-none",
@@ -391,12 +526,12 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
       </button>
       {isLeftColumn ? (
         <>
-          <AdMedia imageUrl={ad.image_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} slot={ad.slot} priority={priority} mediaHeight={isLeftColumn ? '280px' : undefined} retailer={ad.retailer} dimensions={ad.dimensions} />
+          <AdMedia imageUrl={ad.image_url} videoUrl={ad.video_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} slot={ad.slot} priority={priority} mediaHeight={isLeftColumn ? '280px' : undefined} retailer={ad.retailer} dimensions={ad.dimensions} videoOverlay={ad.video_overlay} showVideoOverlay={showVideoOverlay} />
           {contentFrame}
         </>
       ) : (
-        <button onClick={() => onOpen(ad)} className={cn("text-left select-none w-full", isColumnCard || ad.ad_type === "Sponsored_Display" ? "flex flex-col h-full" : "block")} style={{ touchAction: 'none' }}>
-          <AdMedia imageUrl={ad.image_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} slot={ad.slot} priority={priority} mediaHeight={isLeftColumn ? '280px' : undefined} retailer={ad.retailer} dimensions={ad.dimensions} />
+        <button onClick={() => onOpen(ad)} className={cn("text-left select-none w-full p-0", isColumnCard || ad.ad_type === "Sponsored_Display" ? "flex flex-col h-full" : "block")} style={{ touchAction: 'none' }}>
+          <AdMedia imageUrl={ad.image_url} videoUrl={ad.video_url} alt={`${ad.brand} ad`} isTOA={ad.ad_type === "TOA"} isSBA={ad.ad_type === "SBA"} adType={ad.ad_type} slot={ad.slot} priority={priority} mediaHeight={isLeftColumn ? '280px' : undefined} retailer={ad.retailer} dimensions={ad.dimensions} videoOverlay={ad.video_overlay} showVideoOverlay={showVideoOverlay} />
           {contentFrame}
         </button>
       )}

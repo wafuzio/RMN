@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useRetailers, useClients, useAds, useAdCount } from "@/hooks/useRetailAds";
+import { useRetailers, useClients, useAds, useAdCount, useAdTypes } from "@/hooks/useRetailAds";
 import { useBrands } from "@/hooks/useBrands";
 import type { Retailer } from "@/lib/api";
 import { useTimeline } from "@/hooks/useTimeline";
@@ -20,6 +20,7 @@ import { SkeletonGrid } from "@/components/dashboard/SkeletonGrid";
 import { TemporalVisualMap } from "@/components/visual/TemporalVisualMap";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { aggregateAds, AdGroup, AdCardItem } from "@/lib/aggregateAds";
@@ -196,6 +197,7 @@ export default function Index() {
       types: urlTypes || [],
       search: "",
       keywords: urlKeywords || [],
+      brands: [],
       start,
       end,
       datePreset,
@@ -205,6 +207,9 @@ export default function Index() {
   const [leftFilters, setLeftFilters] = useState<FiltersState | null>(null);
   const [rightFilters, setRightFilters] = useState<FiltersState | null>(null);
   const [sortBy, setSortBy] = useState<"latest" | "oldest" | "name">("latest");
+
+  // Track if user had "All" clients selected to auto-select new ones when retailers change
+  const hadAllClientsSelected = useRef(false);
 
   // Fetch clients for ALL selected retailers and merge them
   // NOTE: We fetch for each selected retailer and combine the results
@@ -320,20 +325,46 @@ export default function Index() {
     } catch {}
   }, [retailers, filters]);
 
+  // Track when user selects "All" clients through the UI
+  useEffect(() => {
+    if (!allClientsList.length || !filters.clients?.length) {
+      hadAllClientsSelected.current = false;
+      return;
+    }
+
+    const availableSet = new Set(allClientsList);
+    const isAllClientSelected = filters.clients.length === allClientsList.length &&
+      filters.clients.every(c => availableSet.has(c));
+
+    hadAllClientsSelected.current = isAllClientSelected;
+  }, [filters.clients, allClientsList]);
+
   // Auto-filter clients when available clients change (retailer selection changes)
-  // Removes clients that are no longer available in selected retailers
+  // If "All" was selected, auto-select all new available clients
+  // Otherwise, removes clients that are no longer available in selected retailers
   useEffect(() => {
     if (!filters.clients?.length) return;
 
     const availableSet = new Set(allClientsList);
-    const validClients = filters.clients.filter(c => availableSet.has(c));
+    const allCurrentClientsStillAvailable = filters.clients.every(c => availableSet.has(c));
 
-    // Only update if some clients were filtered out
-    if (validClients.length !== filters.clients.length) {
+    // If user had "All" selected and available list grew, auto-select all new clients
+    if (hadAllClientsSelected.current && allCurrentClientsStillAvailable && allClientsList.length > filters.clients.length) {
+      // User had all clients available selected, and new clients were added from new retailer
+      // Auto-select all new available clients
       setFilters(prev => ({
         ...prev,
-        clients: validClients.length > 0 ? validClients : []
+        clients: allClientsList.slice()
       }));
+    } else if (!allCurrentClientsStillAvailable) {
+      // Some clients are no longer available, remove them
+      const validClients = filters.clients.filter(c => availableSet.has(c));
+      if (validClients.length !== filters.clients.length) {
+        setFilters(prev => ({
+          ...prev,
+          clients: validClients.length > 0 ? validClients : []
+        }));
+      }
     }
   }, [allClientsList]);
 
@@ -368,6 +399,7 @@ export default function Index() {
       end: formatLocalDate(filters.end),
       tz_offset_minutes: new Date().getTimezoneOffset(), // e.g., -360 for UTC-6
       types: dedupSorted(filters.types),
+      brands: dedupSorted(filters.brands),
       search: filters.search?.trim() || undefined,
       sort: sortBy,
     };
@@ -378,6 +410,7 @@ export default function Index() {
     filters.start?.getTime(),     // Use epoch for date comparison
     filters.end?.getTime(),
     filters.types?.join(","),     // Stable string representation
+    filters.brands?.join(","),    // Stable string representation
     filters.search,
     sortBy,
   ]);
@@ -554,6 +587,11 @@ export default function Index() {
       const uniq = new Map<string, Ad>();
       for (let i = 0; i < allCards.length; i++) {
         const c = allCards[i] as any;
+        
+        // Debug: log video ads with overlay data
+        if (c.video_url && i < 3) {
+          console.log('[flatAds] Raw card from API:', { brand: c.brand, video_overlay: c.video_overlay });
+        }
 
         // Skip ads without valid images (has_image: false or missing image_url)
         // Exception: Allow Sponsored_Logo ads through even with placeholder images
@@ -607,108 +645,62 @@ export default function Index() {
 
   const debouncedTypeFilters = useDebouncedValue(typeFiltersForAvailable, 350);
 
-  // Queries for available types (without types filter) - used only to discover available types
-  // Use larger page size to capture all ad types across the results
-  const krogerTypesQuery = useAds({
+  // Use lightweight /api/ads/types endpoint instead of fetching 500 cards
+  // This is MUCH faster - uses manifest metadata, no JSON file loading
+  const krogerTypesQuery = useAdTypes({
     retailer: isKrogerSelected ? "kroger" : undefined,
     client: selectedClient,
-    pageSize: 500, // Large page size to discover all types
-    ...debouncedTypeFilters,
+    start: debouncedTypeFilters.start,
+    end: debouncedTypeFilters.end,
   });
 
-  const walmartTypesQuery = useAds({
+  const walmartTypesQuery = useAdTypes({
     retailer: isWalmartSelected ? "walmart" : undefined,
     client: selectedClient,
-    pageSize: 500,
-    ...debouncedTypeFilters,
+    start: debouncedTypeFilters.start,
+    end: debouncedTypeFilters.end,
   });
 
-  const instacartTypesQuery = useAds({
+  const instacartTypesQuery = useAdTypes({
     retailer: isInstacartSelected ? "instacart" : undefined,
     client: selectedClient,
-    pageSize: 500,
-    ...debouncedTypeFilters,
+    start: debouncedTypeFilters.start,
+    end: debouncedTypeFilters.end,
   });
 
-  const amazonTypesQuery = useAds({
+  const amazonTypesQuery = useAdTypes({
     retailer: isAmazonSelected ? "amazon" : undefined,
     client: selectedClient,
-    pageSize: 500,
-    ...debouncedTypeFilters,
+    start: debouncedTypeFilters.start,
+    end: debouncedTypeFilters.end,
   });
 
-  const targetTypesQuery = useAds({
+  const targetTypesQuery = useAdTypes({
     retailer: isTargetSelected ? "target" : undefined,
     client: selectedClient,
-    pageSize: 500,
-    ...debouncedTypeFilters,
+    start: debouncedTypeFilters.start,
+    end: debouncedTypeFilters.end,
   });
-
-  // Load all pages for type discovery to ensure we find every ad type in the period
-  // NOTE: We only trigger on retailer selection changes, not on hasNextPage changes
-  // to avoid infinite loops. The queries will auto-fetch next pages via react-query.
-  useEffect(() => {
-    const loadAllPages = async () => {
-      const queriesToLoad = [
-        ...(isKrogerSelected ? [krogerTypesQuery] : []),
-        ...(isWalmartSelected ? [walmartTypesQuery] : []),
-        ...(isInstacartSelected ? [instacartTypesQuery] : []),
-        ...(isAmazonSelected ? [amazonTypesQuery] : []),
-        ...(isTargetSelected ? [targetTypesQuery] : []),
-      ];
-
-      for (const query of queriesToLoad) {
-        // Fetch next page if available (single fetch, not loop)
-        if (query.hasNextPage && !query.isFetchingNextPage) {
-          query.fetchNextPage();
-        }
-      }
-    };
-
-    loadAllPages();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    isKrogerSelected,
-    isWalmartSelected,
-    isInstacartSelected,
-    isAmazonSelected,
-    isTargetSelected,
-    // Deliberately NOT including hasNextPage to avoid infinite loop
-  ]);
 
   const availableAdTypes = useMemo(() => {
     const typeSet = new Set<string>();
 
-    // Collect types from BOTH the type-discovery queries AND the main card queries
-    // This ensures we find all ad types even if type queries haven't loaded all pages
-    const allQueriesData = [
-      // Type discovery queries (larger page size, no types filter)
-      ...(isKrogerSelected ? [krogerTypesQuery.data] : []),
-      ...(isWalmartSelected ? [walmartTypesQuery.data] : []),
-      ...(isInstacartSelected ? [instacartTypesQuery.data] : []),
-      ...(isAmazonSelected ? [amazonTypesQuery.data] : []),
-      ...(isTargetSelected ? [targetTypesQuery.data] : []),
-      // Main card queries (may have types filter applied, but still useful)
-      ...(isKrogerSelected ? [krogerQuery.data] : []),
-      ...(isWalmartSelected ? [walmartQuery.data] : []),
-      ...(isInstacartSelected ? [instacartQuery.data] : []),
-      ...(isAmazonSelected ? [amazonQuery.data] : []),
-      ...(isTargetSelected ? [targetQuery.data] : []),
+    // Collect types from the lightweight /api/ads/types endpoint responses
+    const typesResponses = [
+      ...(isKrogerSelected && krogerTypesQuery.data?.types ? krogerTypesQuery.data.types : []),
+      ...(isWalmartSelected && walmartTypesQuery.data?.types ? walmartTypesQuery.data.types : []),
+      ...(isInstacartSelected && instacartTypesQuery.data?.types ? instacartTypesQuery.data.types : []),
+      ...(isAmazonSelected && amazonTypesQuery.data?.types ? amazonTypesQuery.data.types : []),
+      ...(isTargetSelected && targetTypesQuery.data?.types ? targetTypesQuery.data.types : []),
     ];
 
-    for (const queryData of allQueriesData) {
-      if (queryData?.pages) {
-        for (const page of queryData.pages) {
-          for (const ad of page.cards || []) {
-            if (ad.ad_type?.trim()) {
-              typeSet.add(ad.ad_type.trim());
-            }
-          }
-        }
+    for (const adType of typesResponses) {
+      if (adType?.trim()) {
+        typeSet.add(adType.trim());
       }
     }
 
-    // Also collect from flatAds (already loaded cards)
+    // Also collect from flatAds (already loaded cards) as fallback
     for (const ad of flatAds) {
       if (ad.ad_type?.trim()) {
         typeSet.add(ad.ad_type.trim());
@@ -722,16 +714,11 @@ export default function Index() {
     isInstacartSelected,
     isAmazonSelected,
     isTargetSelected,
-    krogerTypesQuery.data,
-    walmartTypesQuery.data,
-    instacartTypesQuery.data,
-    amazonTypesQuery.data,
-    targetTypesQuery.data,
-    krogerQuery.data,
-    walmartQuery.data,
-    instacartQuery.data,
-    amazonQuery.data,
-    targetQuery.data,
+    krogerTypesQuery.data?.types,
+    walmartTypesQuery.data?.types,
+    instacartTypesQuery.data?.types,
+    amazonTypesQuery.data?.types,
+    targetTypesQuery.data?.types,
     flatAds,
   ]);
 
@@ -850,8 +837,9 @@ export default function Index() {
   ]);
   
   // Get brand aggregations from dedicated brands endpoint with current filters
+  // Use the same selectedClient logic as the ads queries
   const brandsFilters = {
-    client: filters.clients?.join(','),
+    client: selectedClient || "all",
     start: debouncedFilters.start,
     end: debouncedFilters.end,
     term: debouncedFilters.term,
@@ -914,6 +902,7 @@ export default function Index() {
       message: ad.message,
       image_url: ad.image_url,
       video_url: ad.video_url,
+      video_overlay: ad.video_overlay,
       poster_url: ad.poster_url,
       timestamp: ad.timestamp,
       card_format: ad.card_format,
@@ -997,35 +986,51 @@ export default function Index() {
 
             <Timeline timestamps={timestamps} onRangeChange={(from, to) => setFilters(v => ({ ...v, start: from, end: to, datePreset: { type: "custom" } }))} />
 
-            <div className="card-surface">
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 cursor-pointer" onClick={() => setShowVisualMap(!showVisualMap)}>
-                <h3 className="text-sm font-semibold text-gray-700">Visual Timeline</h3>
-                <button className="p-1 hover:bg-gray-100 rounded transition" aria-label={showVisualMap ? "Collapse visual timeline" : "Expand visual timeline"}>
-                  <svg className={`w-5 h-5 text-gray-600 transition-transform ${showVisualMap ? '' : '-rotate-90'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                </button>
-              </div>
-              {showVisualMap && (
-                <div className="p-2">
-                  <TemporalVisualMap 
-                    ads={ads} 
-                    allTimestamps={timestamps} 
-                    onRangeChange={(from,to)=> setFilters(v=>({ ...v, start: from, end: to }))} 
-                    onAdClick={setModalAd}
-                    retailer={primaryRetailer}
-                    client={filters.clients?.join(',')}
-                    term={debouncedFilters.term}
-                  />
+            {topBrands.length > 0 && (
+              <div className="card-surface p-3">
+                <div className="text-sm text-[#111827] font-medium mb-3">Top Brands</div>
+                <div className="flex flex-wrap gap-2">
+                  {topBrands.slice(0, 8).map(brandObj => {
+                    const brandName = brandObj.brand;
+                    const isSelected = filters.brands?.includes(brandName) || false;
+                    return (
+                      <button
+                        key={brandName}
+                        onClick={() => {
+                          setFilters(v => ({
+                            ...v,
+                            brands: isSelected
+                              ? (v.brands || []).filter(b => b !== brandName)
+                              : [...(v.brands || []), brandName]
+                          }));
+                        }}
+                        className={cn(
+                          "px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                          isSelected
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-200 text-[#111827] hover:bg-gray-300"
+                        )}
+                      >
+                        {brandName}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="card-surface p-3 flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <Checkbox checked={selected.size === ads.length && ads.length>0} onCheckedChange={(v)=> v ? selectAll() : setSelected(new Set())} aria-label="Select all" />
                 <span className="text-sm text-[#111827]">Select All</span>
               </div>
+              <Input
+                type="text"
+                placeholder="Search by brand or keyword..."
+                value={filters.search || ""}
+                onChange={(e) => setFilters(v => ({ ...v, search: e.target.value }))}
+                className="h-9 w-64 bg-white border-gray-300"
+              />
               <Button variant="outline" onClick={hideSelected}>Hide Selected</Button>
               <div className="ml-auto flex items-center gap-3">
                 <div className="flex items-center gap-2">

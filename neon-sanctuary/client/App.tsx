@@ -12,6 +12,7 @@ import { PerformanceCard } from "@/components/PerformanceCard";
 import Index from "./pages/Index";
 import Brands from "./pages/Brands";
 import RetailSnapshot from "./pages/RetailSnapshot";
+import { TemporalVisualMapPage } from "./pages/TemporalVisualMapPage";
 import VideoOverlayTest from "./pages/VideoOverlayTest";
 import Experiments from "./pages/Experiments";
 import NotFound from "./pages/NotFound";
@@ -42,6 +43,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/brands" element={<Brands />} />
           <Route path="/retail-snapshot" element={<RetailSnapshot />} />
+          <Route path="/temporal-visual-map" element={<TemporalVisualMapPage />} />
           <Route path="/experiments" element={<Experiments />} />
           <Route path="/video-overlay-test" element={<VideoOverlayTest />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

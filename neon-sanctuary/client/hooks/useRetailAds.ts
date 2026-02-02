@@ -45,11 +45,12 @@ export function useAds(params: {
   start?: string;
   end?: string;
   types?: string[];
+  brands?: string[];
   search?: string;
   pageSize?: number;
   sort?: "latest" | "oldest" | "name";
 }) {
-  const { retailer, client, term, advertiser, start, end, types, search, pageSize = 48, sort } = params;
+  const { retailer, client, term, advertiser, start, end, types, brands, search, pageSize = 48, sort } = params;
 
   // Guard: don't fire query until both retailer and client are present AND non-empty
   const enabled = Boolean(retailer && client && retailer.trim() && client.trim());
@@ -63,6 +64,7 @@ export function useAds(params: {
     start,
     end,
     types,
+    brands,
     search,
     sort,
     pageSize
@@ -77,6 +79,7 @@ export function useAds(params: {
     start,
     end,
     types,
+    brands,
     search,
     sort,
     pageSize
@@ -101,6 +104,7 @@ export function useAds(params: {
         start,
         end,
         types,
+        brands,
         search,
         sort,
         page: pageParam as number,
@@ -125,9 +129,10 @@ export function useAdCount(params: {
   start?: string;
   end?: string;
   types?: string[];
+  brands?: string[];
   search?: string;
 }) {
-  const { retailer, client, term, advertiser, start, end, types, search } = params;
+  const { retailer, client, term, advertiser, start, end, types, brands, search } = params;
 
   // Guard: don't fire query until both retailer and client are present AND non-empty
   const enabled = Boolean(retailer && client && retailer.trim() && client.trim());
@@ -141,6 +146,7 @@ export function useAdCount(params: {
     start,
     end,
     types,
+    brands,
     search,
   });
 
@@ -159,6 +165,7 @@ export function useAdCount(params: {
         start,
         end,
         types,
+        brands,
         search,
       });
     },
@@ -168,5 +175,47 @@ export function useAdCount(params: {
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     retry: false, // Don't retry failed requests - fail fast
+  });
+}
+
+export function useAdTypes(params: {
+  retailer?: string;
+  client?: string;
+  start?: string;
+  end?: string;
+}) {
+  const { retailer, client, start, end } = params;
+
+  // Guard: don't fire query until both retailer and client are present AND non-empty
+  const enabled = Boolean(retailer && client && retailer.trim() && client.trim());
+
+  // Normalize params for stable query key
+  const normalized = normalizeParams({
+    retailer,
+    client,
+    start,
+    end,
+  });
+
+  return useQuery<{ types: string[]; retailer: string; client: string }>({
+    queryKey: ["adTypes", normalized],
+    queryFn: () => {
+      // TypeScript knows these are non-null because enabled=true
+      if (!retailer || !client) {
+        throw new Error('retailer and client are required');
+      }
+      return api.getAdTypes({
+        retailer,
+        client,
+        start,
+        end,
+      });
+    },
+    enabled,
+    staleTime: 10 * 60 * 1000, // 10 minutes cache - types rarely change
+    gcTime: 30 * 60 * 1000, // 30 minutes in memory
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: false,
   });
 }

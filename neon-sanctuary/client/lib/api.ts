@@ -40,7 +40,7 @@ function inflightKey(url: string): string {
 async function timeFetch(input: RequestInfo, init?: RequestInit, label?: string): Promise<Response> {
   const url = typeof input === 'string' ? input : (input as Request).url;
   const key = inflightKey(url);
-  
+
   // Abort any identical in-flight request (last write wins)
   const prev = inflight.get(key);
   if (prev) {
@@ -50,7 +50,7 @@ async function timeFetch(input: RequestInfo, init?: RequestInit, label?: string)
 
   const ctrl = new AbortController();
   inflight.set(key, ctrl);
-  
+
   try {
     const t0 = performance.now();
     const res = await fetch(input, { ...init, signal: ctrl.signal });
@@ -61,7 +61,15 @@ async function timeFetch(input: RequestInfo, init?: RequestInit, label?: string)
   } catch (err: any) {
     // Don't log aborted requests as errors (they're expected from deduplication)
     if (err.name !== 'AbortError') {
-      console.error(`[timeFetch] Error for ${label}:`, err);
+      const isTypeError = err instanceof TypeError;
+      const errorDetails = {
+        label,
+        urlPath: url.split('?')[0],
+        errorName: err.name || 'unknown',
+        errorMessage: err.message || String(err),
+        isNetworkError: isTypeError && err.message === 'Failed to fetch',
+      };
+      console.error(`[timeFetch] Error for ${label}:`, errorDetails, err);
     }
     throw err;
   } finally {
@@ -71,17 +79,31 @@ async function timeFetch(input: RequestInfo, init?: RequestInit, label?: string)
 
 async function http<T>(path: string, init?: RequestInit, label?: string): Promise<T> {
   const url = `${API_BASE}${path}`;
-  const res = await timeFetch(url, { 
-    ...init, 
-    headers: { 
+  const res = await timeFetch(url, {
+    ...init,
+    headers: {
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': '1',  // Required for ngrok tunnel
-      ...init?.headers 
-    } 
+      ...init?.headers
+    }
   }, label);
+
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    let errorBody = '';
+    try {
+      errorBody = await res.text();
+    } catch {
+      errorBody = '(unable to read response)';
+    }
+    const errorMsg = `HTTP ${res.status}: ${res.statusText}`;
+    console.error(`[http] Request failed for ${label || path}`, {
+      status: res.status,
+      statusText: res.statusText,
+      bodyPreview: errorBody.substring(0, 200),
+    });
+    throw new Error(errorMsg);
   }
+
   return res.json();
 }
 
@@ -96,6 +118,7 @@ type GetAdsOpts = {
   end?: string;
   tz_offset_minutes?: number;  // User's timezone offset for correct date filtering (e.g., -360 for UTC-6)
   types?: string[];
+  brands?: string[];
   search?: string;
   sort?: "latest" | "oldest" | "name";  // Sorting applied on backend before pagination
 };
@@ -116,7 +139,7 @@ export const api = {
     return http<{ brands: Array<{ brand: string; count: number; percentage: number }> }>(`/api/brands?${params.toString()}`, undefined, 'brands');
   },
   getAdCount: (params: Omit<GetAdsOpts, 'page' | 'pageSize'>) => {
-    const { retailer, client, term, advertiser, start, end, tz_offset_minutes, types, search } = params;
+    const { retailer, client, term, advertiser, start, end, tz_offset_minutes, types, brands, search } = params;
 
     if (!retailer) throw new Error('getAdCount: retailer is required');
     if (!client) throw new Error('getAdCount: client is required');
@@ -131,6 +154,7 @@ export const api = {
     if (typeof tz_offset_minutes === 'number') q.set('tz_offset_minutes', String(tz_offset_minutes));
     if (search?.trim()) q.set('search', search.trim());
     if (types?.length) q.set('types', types.join(','));
+    if (brands?.length) q.set('brands', brands.join(','));
 
     const url = `/api/ads/count?${q.toString()}`;
     console.debug('📡 getAdCount request:', { retailer, client, start, end, tz_offset_minutes });
@@ -140,8 +164,23 @@ export const api = {
       return response;
     });
   },
+  getAdTypes: (params: { retailer: string; client: string; start?: string; end?: string }) => {
+    const { retailer, client, start, end } = params;
+    
+    if (!retailer) throw new Error('getAdTypes: retailer is required');
+    if (!client) throw new Error('getAdTypes: client is required');
+    
+    const q = new URLSearchParams();
+    q.set('retailer', retailer);
+    q.set('client', client);
+    if (start?.trim()) q.set('start', start.trim());
+    if (end?.trim()) q.set('end', end.trim());
+    
+    const url = `/api/ads/types?${q.toString()}`;
+    return http<{ types: string[]; retailer: string; client: string }>( url, undefined, 'ads-types');
+  },
   getAds: (params: GetAdsOpts) => {
-    const { retailer, client, term, advertiser, page = 1, pageSize = 24, start, end, tz_offset_minutes, types, search, sort } = params;
+    const { retailer, client, term, advertiser, page = 1, pageSize = 24, start, end, tz_offset_minutes, types, brands, search, sort } = params;
 
     // Validate required params
     if (!retailer) throw new Error('getAds: retailer is required');
@@ -162,6 +201,7 @@ export const api = {
     if (typeof tz_offset_minutes === 'number') q.set('tz_offset_minutes', String(tz_offset_minutes));
     if (search?.trim()) q.set('search', search.trim());
     if (types?.length) q.set('types', types.join(','));
+    if (brands?.length) q.set('brands', brands.join(','));
     if (sort) q.set('sort', sort);
 
     const url = `/api/ads/cards?${q.toString()}`;

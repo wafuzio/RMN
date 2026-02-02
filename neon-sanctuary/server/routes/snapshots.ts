@@ -143,7 +143,7 @@ export const handleListSnapshots: RequestHandler = (req, res) => {
                 time: parseTime,
                 runId,
                 filename: file,
-                imagePath: `/api/snapshot/${parseRetailer.toLowerCase()}/${pType.toLowerCase()}/${snapshotDate}/T${parseTime}`,
+                imagePath: `/api/snapshot/${parseRetailer.toLowerCase()}/${pType.toLowerCase()}/${snapshotDate}/${parseTime}`,
                 carousel: carouselInfo,
               });
             }

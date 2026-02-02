@@ -9,12 +9,13 @@ import { cn } from "@/lib/utils";
 import { useAds } from "@/hooks/useRetailAds";
 
 // Ad type groups configuration
+// NOTE: These must match the exact ad_type values from the backend
 const AD_TYPE_GROUPS = {
   "Video Ads": ["SBV", "Sponsored_Brand_Video", "Shoppable_Video_Ad"],
-  "Banner Ads": ["TOA", "Listing_Page_Banner_Ad", "Shoppable_Display_Ad"],
+  "Banner Ads": ["TOA", "SBA", "ListingPageBannerAd", "Shoppable_Display_Ad", "Sponsored_Brand"],
   "Display Ads": ["Sponsored_Display"],
-  "Carousel Ads": ["Sponsored_Carousel", "Curated_Carousel"],
-  "Ad Tiles": ["Sponsored_Brand_Cards", "Skyscraper", "Tile_Takeover"],
+  "Carousel Ads": ["Sponsored_Carousel", "CuratedCarousel", "Carousel"],
+  "Ad Tiles": ["Sponsored_Brand_Card", "Skyscraper", "Tile_Takeover", "Sponsored_Logo", "Gallery_Cards"],
 } as const;
 
 // Create reverse mapping: ad type -> group name
@@ -83,6 +84,7 @@ export interface FiltersState {
   types: string[];
   search?: string;
   keywords?: string[];
+  brands?: string[];
   datePreset?: { type: DatePresetType; days?: number; months?: number };
   groupIdentical?: boolean;
 }
@@ -381,12 +383,7 @@ export function Filters({
                       {/* Group header - clickable to select/deselect all in group */}
                       <label className="flex items-center gap-2 p-2 rounded hover:bg-blue-50 cursor-pointer bg-gray-50 border-l-2 border-gray-300">
                         <Checkbox
-                          checked={isGroupFullySelected}
-                          ref={(el) => {
-                            if (el && isGroupPartiallySelected) {
-                              el.indeterminate = true;
-                            }
-                          }}
+                          checked={isGroupPartiallySelected ? "indeterminate" : isGroupFullySelected}
                           onCheckedChange={(checked) => {
                             const next = new Set(value.types);
                             if (checked) {

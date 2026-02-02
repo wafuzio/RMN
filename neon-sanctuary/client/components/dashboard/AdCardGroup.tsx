@@ -42,6 +42,7 @@ export function AdCardGroup({
     message: group.cover.message || '',
     image_url: group.cover.image_url || '',
     video_url: group.cover.video_url,
+    video_overlay: group.cover.video_overlay,
     poster_url: group.cover.poster_url,
     timestamp: timestampDisplay,
     card_format: group.cover.card_format,
