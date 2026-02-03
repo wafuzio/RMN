@@ -3,7 +3,7 @@ import { RequestHandler } from "express";
 const FLASK_BASE_URL = process.env.FLASK_BASE_URL || "http://localhost:5006";
 
 export const handleAdsProxy: RequestHandler = async (req, res) => {
-  const { retailer, client, page, page_size, term, advertiser, start, end, types, search } = req.query;
+  const { retailer, client, page, page_size, term, advertiser, start, end, types, search, brands, sort } = req.query;
 
   // Validate required parameters
   const retailerStr = (retailer || "").toString().trim();
@@ -28,6 +28,8 @@ export const handleAdsProxy: RequestHandler = async (req, res) => {
   if (end && String(end).trim()) params.set("end", String(end).trim());
   if (types && String(types).trim()) params.set("types", String(types).trim());
   if (search && String(search).trim()) params.set("search", String(search).trim());
+  if (brands && String(brands).trim()) params.set("brands", String(brands).trim());
+  if (sort && String(sort).trim()) params.set("sort", String(sort).trim());
 
   const flaskUrl = `${FLASK_BASE_URL}/api/ads/cards?${params.toString()}`;
 

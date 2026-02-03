@@ -2018,6 +2018,15 @@ def api_ads_cards():
             # Build brand display string from advertisers
             brand = ' + '.join(advertisers) if advertisers else "Unknown"
 
+            # Apply brands filter if specified
+            if brands_filter:
+                brands_list = [b.strip().lower() for b in brands_filter.split(',') if b.strip()]
+                if brands_list:
+                    # Check if any advertiser matches any brand in the filter
+                    ad_brands_lower = [adv.lower() for adv in advertisers if adv]
+                    if not any(ab in brands_list for ab in ad_brands_lower):
+                        continue  # Skip this ad, doesn't match brand filter
+
             # Track unique brands
             for adv in advertisers:
                 if adv and adv != "Unknown":
