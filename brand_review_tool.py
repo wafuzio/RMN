@@ -1423,9 +1423,17 @@ class BrandReviewTool:
         ranked = []
         seen_normalized = set()
         
+        # Generic words that should never be suggested as brand names
+        skip_words = {
+            'brand', 'sponsored', 'shop', 'save', 'deal', 'free', 'best',
+            'from', 'with', 'your', 'more', 'less', 'huge', 'sale', 'new',
+        }
+        
         def _add(raw_name):
             """Add a suggestion, resolving to canonical name if in lexicon."""
             if not raw_name or len(raw_name) < 2:
+                return
+            if raw_name.lower() in skip_words:
                 return
             norm = normalize_brand_for_matching(raw_name)
             if norm in seen_normalized or not norm:
@@ -1493,11 +1501,10 @@ class BrandReviewTool:
                     if len(word) > 3:
                         _add(word)
         
-        # --- Source 6: Companion HTML file ---
-        if json_file:
-            html_brands = self.extract_brands_from_html(json_file)
-            for brand_name, is_verified in html_brands:
-                _add(brand_name)
+        # NOTE: HTML companion file extraction removed from suggestions.
+        # HTML contains brands from OTHER ads on the same page, not the current ad.
+        # It adds noise (e.g., suggesting GE/Moon Cheese for a Liquid Death ad).
+        # HTML extraction is still used by the batch script where slot-matching is possible.
         
         # Sort: verified first, then alphabetical
         ranked.sort(key=lambda x: (not x[2], x[0]))
