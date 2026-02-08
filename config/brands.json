@@ -40,12 +40,22 @@
     "verified": true
   },
   {
+    "name": "Ahava",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Alani Nu",
     "synonyms": [],
     "verified": true
   },
   {
     "name": "All Sport",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Allday",
     "synonyms": [],
     "verified": true
   },
@@ -68,6 +78,16 @@
   },
   {
     "name": "Amara",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "American Lung Association",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Anastasia Beverly Hills",
     "synonyms": [],
     "verified": true
   },
@@ -155,12 +175,19 @@
   {
     "name": "Baked",
     "synonyms": [],
-    "verified": false
+    "verified": true
+  },
+  {
+    "name": "Band-Aid",
+    "synonyms": [
+      "Band-Aid_first_aid"
+    ],
+    "verified": true
   },
   {
     "name": "Banquet",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Bar-S",
@@ -183,24 +210,36 @@
     "verified": true
   },
   {
+    "name": "Bays",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Belgian Boys",
     "synonyms": [],
     "verified": true
   },
   {
     "name": "Ben And Jerrys",
+    "synonyms": [
+      "Jerrys"
+    ],
+    "verified": true
+  },
+  {
+    "name": "Benebone",
     "synonyms": [],
     "verified": true
   },
   {
     "name": "Bertolli",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Better Than Gravy",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Betty Crocker",
@@ -242,7 +281,8 @@
   },
   {
     "name": "Bliss",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Bloom",
@@ -337,7 +377,7 @@
   {
     "name": "Brea Co",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Breathe Right",
@@ -385,6 +425,11 @@
     "verified": true
   },
   {
+    "name": "Butterball",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Butterfinger",
     "synonyms": [],
     "verified": true
@@ -401,6 +446,11 @@
   },
   {
     "name": "Cacique Foods",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Califia Farms",
     "synonyms": [],
     "verified": true
   },
@@ -519,11 +569,6 @@
     "verified": true
   },
   {
-    "name": "Chips And Dips",
-    "synonyms": [],
-    "verified": false
-  },
-  {
     "name": "Chobani",
     "synonyms": [],
     "verified": true
@@ -545,7 +590,8 @@
   },
   {
     "name": "Cicatricure",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Claussen",
@@ -603,11 +649,6 @@
     "verified": true
   },
   {
-    "name": "Colgate-Palmolive",
-    "synonyms": [],
-    "verified": false
-  },
-  {
     "name": "Columbus Craft Meats",
     "synonyms": [],
     "verified": true
@@ -616,10 +657,6 @@
     "name": "Contour Next Brand",
     "synonyms": [],
     "verified": true
-  },
-  {
-    "name": "Core",
-    "synonyms": []
   },
   {
     "name": "Core Power",
@@ -662,12 +699,22 @@
     "verified": true
   },
   {
+    "name": "CyberPower",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Dairy Farmers Of America",
     "synonyms": [],
     "verified": true
   },
   {
     "name": "Dairy West",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Danimals",
     "synonyms": [],
     "verified": true
   },
@@ -709,11 +756,12 @@
     "verified": true
   },
   {
-    "name": "Depology",
-    "synonyms": []
+    "name": "Dermalogy By Neogenlab",
+    "synonyms": [],
+    "verified": true
   },
   {
-    "name": "Dermalogy By Neogenlab",
+    "name": "Designs for Health",
     "synonyms": [],
     "verified": true
   },
@@ -729,7 +777,13 @@
   },
   {
     "name": "Disaur",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Disney+",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Dole",
@@ -821,9 +875,16 @@
     "verified": true
   },
   {
+    "name": "Dymatize",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "e.l.f.",
     "synonyms": [
-      "MSG:Say hello to your next holy grails. Shop e.l.f. Cosmetics."
+      "MSG:Say hello to your next holy grails. Shop e.l.f. Cosmetics.",
+      "e_l_f",
+      "e.l.f. Cosmetics"
     ],
     "verified": true
   },
@@ -927,6 +988,11 @@
     "verified": true
   },
   {
+    "name": "Eyean",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Fabuloso",
     "synonyms": [],
     "verified": true
@@ -942,11 +1008,19 @@
     "name": "Family Feeling",
     "synonyms": [
       "Family_feeling"
-    ]
+    ],
+    "verified": true
   },
   {
     "name": "Farm Rich",
     "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Feel Good Foods",
+    "synonyms": [
+      "Good Foods"
+    ],
     "verified": true
   },
   {
@@ -1040,7 +1114,8 @@
   },
   {
     "name": "Fullfamous",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Funpops",
@@ -1069,13 +1144,10 @@
   },
   {
     "name": "Gatorade",
-    "synonyms": [],
+    "synonyms": [
+      "Gatorlyte Hydration"
+    ],
     "verified": true
-  },
-  {
-    "name": "Gatorlyte Hydration",
-    "synonyms": [],
-    "verified": false
   },
   {
     "name": "GE",
@@ -1142,14 +1214,9 @@
     "verified": true
   },
   {
-    "name": "Good Foods",
-    "synonyms": [],
-    "verified": false
-  },
-  {
     "name": "Good Humor",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Good Molecules",
@@ -1238,7 +1305,9 @@
   },
   {
     "name": "Halo Top",
-    "synonyms": [],
+    "synonyms": [
+      "Top"
+    ],
     "verified": true
   },
   {
@@ -1317,11 +1386,12 @@
     "verified": true
   },
   {
-    "name": "Hersheys",
+    "name": "Hershey's",
     "synonyms": [
-      "Hershey"
+      "Hershey",
+      "Hersheys"
     ],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Hidden Valley",
@@ -1358,7 +1428,7 @@
   {
     "name": "Honey Maid",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Honey Mamas",
@@ -1372,6 +1442,11 @@
   },
   {
     "name": "Honey Stinger",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Hoover",
     "synonyms": [],
     "verified": true
   },
@@ -1406,11 +1481,8 @@
     "name": "Huggies",
     "synonyms": [
       "MSG:A good nights sleep starts with the right nighttime diapers"
-    ]
-  },
-  {
-    "name": "Huggies, Pull-Ups & Goodnites",
-    "synonyms": []
+    ],
+    "verified": true
   },
   {
     "name": "Huntsinger Farms",
@@ -1454,12 +1526,10 @@
   },
   {
     "name": "Ithaca",
-    "synonyms": [],
+    "synonyms": [
+      "Ithacahummus"
+    ],
     "verified": true
-  },
-  {
-    "name": "Jar",
-    "synonyms": []
   },
   {
     "name": "Jecson",
@@ -1503,11 +1573,19 @@
   },
   {
     "name": "Joycat",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Juanitas Foods",
     "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Just Ingredients",
+    "synonyms": [
+      "Just_ingredients"
+    ],
     "verified": true
   },
   {
@@ -1586,7 +1664,8 @@
   },
   {
     "name": "Kikizye",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Kimberly Clark",
@@ -1605,6 +1684,11 @@
   },
   {
     "name": "Kodiak",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Koia",
     "synonyms": [],
     "verified": true
   },
@@ -1693,6 +1777,11 @@
     "verified": true
   },
   {
+    "name": "Laughing Cow",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Lavazza",
     "synonyms": [],
     "verified": true
@@ -1709,6 +1798,11 @@
   },
   {
     "name": "Lego",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Lehoo",
     "synonyms": [],
     "verified": true
   },
@@ -1792,7 +1886,7 @@
   {
     "name": "Little Farmer",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Livaclean",
@@ -1831,7 +1925,8 @@
   },
   {
     "name": "Ma&Baby",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Madegood",
@@ -1848,7 +1943,7 @@
   {
     "name": "Magnum",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Maison Perrier",
@@ -1872,13 +1967,10 @@
   },
   {
     "name": "Marie Callenders",
-    "synonyms": [],
+    "synonyms": [
+      "Maries Products"
+    ],
     "verified": true
-  },
-  {
-    "name": "Maries Products",
-    "synonyms": [],
-    "verified": false
   },
   {
     "name": "Marketside",
@@ -1887,14 +1979,11 @@
   },
   {
     "name": "Mars",
-    "synonyms": [],
-    "verified": true
-  },
-  {
-    "name": "Mars Wrigley",
     "synonyms": [
+      "Mars Wrigley",
       "MSG:Mars Wrigley Holiday. Shop Now."
-    ]
+    ],
+    "verified": true
   },
   {
     "name": "Martinelli's",
@@ -1951,7 +2040,7 @@
   {
     "name": "Mighty Life Cereal",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Milk Magic",
@@ -1986,7 +2075,7 @@
   {
     "name": "Miss Vickies",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Mission",
@@ -2019,6 +2108,11 @@
   },
   {
     "name": "Motts",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Mountain Dew",
     "synonyms": [],
     "verified": true
   },
@@ -2074,8 +2168,11 @@
     "verified": true
   },
   {
-    "name": "Nano",
-    "synonyms": []
+    "name": "NANO FIT",
+    "synonyms": [
+      "Nano"
+    ],
+    "verified": true
   },
   {
     "name": "National Pork Board",
@@ -2094,7 +2191,8 @@
   },
   {
     "name": "Natural Outcome",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Natural Vitality",
@@ -2123,6 +2221,16 @@
   },
   {
     "name": "Natures Truth",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Naturium",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Naväge",
     "synonyms": [],
     "verified": true
   },
@@ -2169,6 +2277,11 @@
     "verified": true
   },
   {
+    "name": "Nex",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Nexcare",
     "synonyms": [],
     "verified": true
@@ -2179,7 +2292,17 @@
     "verified": true
   },
   {
+    "name": "Niceful",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Nido",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Nissan",
     "synonyms": [],
     "verified": true
   },
@@ -2200,6 +2323,11 @@
   },
   {
     "name": "Nora",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Nordic Naturals",
     "synonyms": [],
     "verified": true
   },
@@ -2361,6 +2489,11 @@
     "verified": true
   },
   {
+    "name": "Ouai",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Outlaw Snax",
     "synonyms": [
       "Outlaw Snax Space"
@@ -2397,7 +2530,8 @@
   },
   {
     "name": "Palmini",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Pancho's",
@@ -2422,6 +2556,11 @@
   },
   {
     "name": "Parmalat",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Pataday",
     "synonyms": [],
     "verified": true
   },
@@ -2466,6 +2605,11 @@
   },
   {
     "name": "Pen+Gear Elevated",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Pendaflex",
     "synonyms": [],
     "verified": true
   },
@@ -2532,6 +2676,11 @@
     "verified": true
   },
   {
+    "name": "Plum",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Poise",
     "synonyms": [],
     "verified": true
@@ -2567,9 +2716,14 @@
     "verified": true
   },
   {
+    "name": "Premier Protein",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Prequel",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Preservision",
@@ -2651,8 +2805,11 @@
     "verified": true
   },
   {
-    "name": "Purito Seoul",
-    "synonyms": []
+    "name": "Purito",
+    "synonyms": [
+      "Purito Seoul"
+    ],
+    "verified": true
   },
   {
     "name": "Quaker",
@@ -2676,7 +2833,7 @@
   {
     "name": "Quilted Northern",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Quiyum",
@@ -2692,7 +2849,8 @@
   },
   {
     "name": "Rael",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Raos",
@@ -2707,7 +2865,7 @@
   {
     "name": "Raw Nutrition",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Red Baron",
@@ -2716,7 +2874,9 @@
   },
   {
     "name": "Red Bull",
-    "synonyms": [],
+    "synonyms": [
+      "Bull"
+    ],
     "verified": true
   },
   {
@@ -2797,8 +2957,16 @@
     "verified": true
   },
   {
-    "name": "Rule",
-    "synonyms": []
+    "name": "RUGGEDBUTTS",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Rule 1",
+    "synonyms": [
+      "Rule"
+    ],
+    "verified": true
   },
   {
     "name": "Rummo",
@@ -2885,6 +3053,11 @@
     "verified": true
   },
   {
+    "name": "Seattle's Best",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Sejardin",
     "synonyms": [
       "Sejardin Baby Clothes",
@@ -2893,7 +3066,17 @@
     "verified": true
   },
   {
+    "name": "Sensodyne",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Serenity Kids",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Seveclotree",
     "synonyms": [],
     "verified": true
   },
@@ -2920,6 +3103,11 @@
     "synonyms": [
       "Siggis1"
     ],
+    "verified": true
+  },
+  {
+    "name": "Signature Design by Ashley",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -2993,10 +3181,22 @@
   {
     "name": "So Delicious",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Softsoap",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "SOLY HUX",
+    "synonyms": [
+      "Soly"
+    ],
+    "verified": true
+  },
+  {
+    "name": "SOME BY MI",
     "synonyms": [],
     "verified": true
   },
@@ -3036,11 +3236,6 @@
     "verified": true
   },
   {
-    "name": "Star",
-    "synonyms": [],
-    "verified": false
-  },
-  {
     "name": "Starbucks",
     "synonyms": [],
     "verified": true
@@ -3061,14 +3256,9 @@
     "verified": true
   },
   {
-    "name": "Stok",
-    "synonyms": [],
-    "verified": false
-  },
-  {
     "name": "Stone And Skillet",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Stonewall Kitchen",
@@ -3138,7 +3328,12 @@
   {
     "name": "Swiss Miss",
     "synonyms": [],
-    "verified": false
+    "verified": true
+  },
+  {
+    "name": "Swissmar",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Swisspers",
@@ -3177,7 +3372,8 @@
   },
   {
     "name": "Tasteless",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Taylor Farms",
@@ -3206,7 +3402,9 @@
   },
   {
     "name": "The Children'S Place",
-    "synonyms": [],
+    "synonyms": [
+      "Trending styles"
+    ],
     "verified": true
   },
   {
@@ -3233,7 +3431,8 @@
   },
   {
     "name": "Threshold Designed W/Studio Mcgee",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Tide",
@@ -3293,10 +3492,6 @@
     "verified": true
   },
   {
-    "name": "Trendy",
-    "synonyms": []
-  },
-  {
     "name": "Trolli",
     "synonyms": [],
     "verified": true
@@ -3316,6 +3511,11 @@
     "verified": true
   },
   {
+    "name": "True Lemon",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "TruHeight",
     "synonyms": [],
     "verified": true
@@ -3326,17 +3526,17 @@
     "verified": true
   },
   {
-    "name": "Trutein",
-    "synonyms": [],
-    "verified": false
-  },
-  {
     "name": "Truvia",
     "synonyms": [],
     "verified": true
   },
   {
     "name": "Tsomtto",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Tuttorosso",
     "synonyms": [],
     "verified": true
   },
@@ -3363,7 +3563,7 @@
   {
     "name": "Udim",
     "synonyms": [],
-    "verified": false
+    "verified": true
   },
   {
     "name": "Uncle Matt's Organic",
@@ -3453,6 +3653,11 @@
     "verified": true
   },
   {
+    "name": "VOCIC",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Volpi Foods",
     "synonyms": [],
     "verified": true
@@ -3483,6 +3688,11 @@
     "verified": true
   },
   {
+    "name": "Wall Street Journal",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Waterloo Sparkling Water",
     "synonyms": [],
     "verified": true
@@ -3494,6 +3704,11 @@
   },
   {
     "name": "Welch'S",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Weleda",
     "synonyms": [],
     "verified": true
   },

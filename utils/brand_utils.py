@@ -48,6 +48,7 @@ def normalize_brand_for_matching(brand: str | None) -> str:
     brand = brand.replace('+', ' and ')
     brand = brand.replace("'", '')   # Remove apostrophes entirely (Lay's → Lays)
     brand = brand.replace('-', ' ')  # Replace hyphen with space
+    brand = brand.replace('_', ' ')  # Replace underscore with space (slug → display)
 
     # Remove all remaining punctuation except spaces
     brand = re.sub(r"[^\w\s]", "", brand)

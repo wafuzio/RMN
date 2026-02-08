@@ -23,6 +23,14 @@ import re
 from pathlib import Path
 from utils.lexicon_utils import save_lexicon
 
+# Import image hashing for visual similarity matching
+try:
+    import imagehash
+    IMAGEHASH_AVAILABLE = True
+except ImportError:
+    IMAGEHASH_AVAILABLE = False
+    print("[WARN] imagehash not available - install with: pip install imagehash")
+
 # Import brand logo database
 try:
     from brand_logo_database import BrandLogoDatabase
@@ -46,6 +54,8 @@ class BrandReviewTool:
         self.blacklist_path = "config/brand_blacklist.json"
         self.lexicon_brands = []  # Cache lexicon in memory
         self.blacklisted_brands = set()  # Brands to never show again
+        # Image hash to brand mapping - persists across corrections for batch matching
+        self.hash_to_brand = {}  # {image_hash: [brand_names]}
         
         # Load blacklist
         self.load_blacklist()
@@ -124,16 +134,17 @@ class BrandReviewTool:
         self.image_label = ttk.Label(left_frame)
         self.image_label.pack(fill=tk.BOTH, expand=True)
         
-        # Image path label (clickable to open in Finder)
-        self.image_path_label = tk.Label(
+        # Image path entry (selectable/copyable, clickable to open in Finder)
+        self.image_path_var = tk.StringVar()
+        self.image_path_label = tk.Entry(
             left_frame,
-            text="",
-            font=("Arial", 12, "underline"),
+            textvariable=self.image_path_var,
+            font=("Arial", 11),
             fg="blue",
             cursor="hand2",
-            wraplength=600,
-            justify="left",
-            anchor="w"
+            readonlybackground="white",
+            relief="flat",
+            state="readonly"
         )
         self.image_path_label.pack(pady=(10, 5), fill="x")
         self.image_path_label.bind("<Button-1>", self.open_image_in_finder)
@@ -368,6 +379,24 @@ class BrandReviewTool:
         
         return False
     
+    def get_canonical_brand_name(self, brand):
+        """Return the canonical display name from the lexicon, or None if not found."""
+        from utils.brand_utils import normalize_brand_for_matching
+        
+        if not brand:
+            return None
+        
+        normalized = normalize_brand_for_matching(brand)
+        
+        for lex_brand in self.lexicon_brands:
+            if normalize_brand_for_matching(lex_brand['name']) == normalized:
+                return lex_brand['name']
+            for syn in lex_brand.get('synonyms', []):
+                if normalize_brand_for_matching(syn) == normalized:
+                    return lex_brand['name']
+        
+        return None
+    
     def match_message_to_lexicon(self, message):
         """Check if message text matches a known brand's message synonym.
         
@@ -469,6 +498,35 @@ class BrandReviewTool:
                         if ad.get('type') == 'main':
                             continue
                         
+                        # Skip Product_Listing ads with no brand/advertisers - these are organic product
+                        # search results, not brand ads that can be corrected
+                        if ad.get('type') == 'Product_Listing':
+                            if not ad.get('brand') and not ad.get('advertisers'):
+                                continue
+                        
+                        # Skip Amazon house ad modules (not brand-specific ads)
+                        ad_type_lower = (ad.get('type') or '').lower()
+                        ad_subtype_lower = (ad.get('subtype') or '').lower()
+                        message_lower = (ad.get('message') or '').lower()
+                        title_lower = (ad.get('title') or '').lower()
+                        skip_patterns = [
+                            'frequently shopped brands',
+                            'seen on social media',
+                            'customers frequently viewed',
+                            'frequently bought together',
+                            'customers who viewed this',
+                            'customers also bought',
+                            'inspired by your browsing',
+                            'related to items you',
+                            'picks from amazon influencers',
+                            'trending now',
+                            'other items to consider',
+                        ]
+                        if any(pattern in message_lower or pattern in title_lower or 
+                               pattern in ad_type_lower or pattern in ad_subtype_lower 
+                               for pattern in skip_patterns):
+                            continue
+                        
                         # Check if message text matches a known brand synonym (e.g., Kroger house ads)
                         message = ad.get('message', '')
                         if message:
@@ -533,10 +591,14 @@ class BrandReviewTool:
                                     # Compare against advertiser slugs
                                     adv_slugs = [self.to_slug(a) for a in (advertisers or [])]
                                     if brand_slug_in_file not in adv_slugs:
-                                        # FIX #1: Unconditional flag on brand slug mismatch
-                                        # Don't gate on is_uncertain_brand - any mismatch should be flagged
-                                        is_unknown_in_filename = True
-                                        print(f"[WARN] Filename brand slug '{brand_slug_in_file}' ≠ advertisers {adv_slugs}")
+                                        # Before flagging, check if both resolve to the same canonical brand
+                                        file_canonical = self.get_canonical_brand_name(brand_slug_in_file)
+                                        adv_canonicals = [self.get_canonical_brand_name(a) for a in (advertisers or [])]
+                                        if file_canonical and file_canonical in adv_canonicals:
+                                            print(f"[OK] Filename slug '{brand_slug_in_file}' and advertisers resolve to same brand: {file_canonical}")
+                                        else:
+                                            is_unknown_in_filename = True
+                                            print(f"[WARN] Filename brand slug '{brand_slug_in_file}' ≠ advertisers {adv_slugs}")
                         
                         # FIX #4: Flag broken JSON references - JSON has a path but no file exists after all reconciliation
                         if not image_path:
@@ -569,11 +631,22 @@ class BrandReviewTool:
                             print(f"[FLAGGED] Ad type={ad.get('type')}, advertisers={advertisers}")
                             print(f"[FLAGGED]   is_unknown_in_json={is_unknown_in_json}, is_unknown_in_filename={is_unknown_in_filename}")
                             print(f"[FLAGGED]   image_path={image_path}")
+                            
+                            # Compute image hash for visual similarity matching
+                            img_hash = None
+                            if IMAGEHASH_AVAILABLE and image_path and os.path.exists(image_path):
+                                try:
+                                    img = Image.open(image_path)
+                                    img_hash = str(imagehash.phash(img))
+                                except Exception as e:
+                                    print(f"[WARN] Failed to compute image hash: {e}")
+                            
                             self.unknown_ads.append({
                                 'json_file': json_file,
                                 'ad': ad,
                                 'image_path': image_path,
-                                'current_brand': current_brand
+                                'current_brand': current_brand,
+                                'image_hash': img_hash
                             })
             except (json.JSONDecodeError, KeyError) as e:
                 print(f"Error reading {json_file}: {e}")
@@ -754,13 +827,17 @@ class BrandReviewTool:
             retailer = 'kroger'  # Default fallback
         
         # Get base directory from JSON path
-        # Kroger/Instacart: output/retailer/CLIENT/runs/*.json
-        # Walmart: output/walmart/CLIENT/runs/TIMESTAMP/*.json
+        # Kroger: output/retailer/CLIENT/runs/*.json -> base_dir = output/retailer/CLIENT
+        # Instacart: output/instacart/CLIENT/runs/TIMESTAMP/*.json -> base_dir = output/instacart/CLIENT
+        # Walmart: output/walmart/CLIENT/TIMESTAMP/*.json -> base_dir = output/walmart/CLIENT
         runs_dir = os.path.dirname(json_file)
         base_dir = os.path.dirname(runs_dir)
         
+        # For Instacart, runs_dir is output/.../runs/TIMESTAMP, need to go up 2 levels
+        if retailer == 'instacart' and re.match(r'^\d{14}$', os.path.basename(runs_dir)):
+            base_dir = os.path.dirname(os.path.dirname(runs_dir))
         # For Walmart, if runs_dir ends with timestamp, go up one more level
-        if retailer == 'walmart' and re.match(r'\d{14}$', os.path.basename(runs_dir)):
+        elif retailer == 'walmart' and re.match(r'\d{14}$', os.path.basename(runs_dir)):
             base_dir = os.path.dirname(base_dir)
         
         # Extract timestamp from JSON filename to match images from same run
@@ -804,11 +881,15 @@ class BrandReviewTool:
             type_to_folder = {
                 'display_ad': 'DisplayAd',
                 'shoppable_recipe_ad': 'ShoppableRecipe',
+                'Shoppable_Display_Ad': 'Shoppable_Display_Ads',
+                'Shoppable_Video_Ad': 'Shoppable_Video_Ads',
                 'main': 'Main'
             }
             type_to_path_field = {
                 'display_ad': 'image_path',
                 'shoppable_recipe_ad': 'image_path',
+                'Shoppable_Display_Ad': 'image_path',
+                'Shoppable_Video_Ad': 'image_path',
                 'main': 'image_path'
             }
         else:
@@ -1008,12 +1089,13 @@ class BrandReviewTool:
             text=f"Ad {self.current_index + 1} of {len(self.unknown_ads)} ({unique_brands} unique brands)"
         )
         
-        # Update current brand(s) - show all if co-branded
+        # Update current brand(s) - show all if co-branded, with proper display names
         advertisers = ad.get('advertisers', ['unknown'])
-        if len(advertisers) > 1:
-            brand_text = ", ".join(advertisers)
-        else:
-            brand_text = ad_data['current_brand']
+        display_brands = []
+        for adv in advertisers:
+            canonical = self.get_canonical_brand_name(adv) if adv and adv.lower() != 'unknown' else None
+            display_brands.append(canonical or (adv.replace('_', ' ').title() if '_' in (adv or '') else (adv or 'unknown')))
+        brand_text = ", ".join(display_brands)
         self.current_brand_label.config(text=brand_text)
         
         # Display brand logo if available (use first brand)
@@ -1029,26 +1111,23 @@ class BrandReviewTool:
         
         # Display actual image path that was found
         if ad_data['image_path']:
-            # Show just the filename for readability
-            filename = os.path.basename(ad_data['image_path'])
-            
             # Check if this was a guessed path (no path in JSON)
-            ad_type = ad.get('type')
-            has_stored_path = False
-            if ad_type == 'CuratedCarousel' and 'carousel_image_path' in ad:
-                has_stored_path = True
-            elif ad_type == 'TOA' and 'toa_image_path' in ad:
-                has_stored_path = True
-            elif ad_type == 'Skyscraper' and 'skyscraper_image_path' in ad:
-                has_stored_path = True
+            # A stored path means the JSON has an explicit image_path field
+            has_stored_path = bool(ad.get('image_path') or 
+                                   ad.get('toa_image_path') or 
+                                   ad.get('skyscraper_image_path') or 
+                                   ad.get('carousel_image_path'))
             
             if not has_stored_path:
-                self.image_path_label.config(text=f"⚠️ 📁 {ad_data['image_path']} (may not match)", foreground="orange")
+                self.image_path_var.set(f"⚠️ 📁 {ad_data['image_path']} (may not match)")
+                self.image_path_label.config(foreground="orange")
             else:
-                self.image_path_label.config(text=f"📁 {ad_data['image_path']}", foreground="blue")
+                self.image_path_var.set(f"📁 {ad_data['image_path']}")
+                self.image_path_label.config(foreground="blue")
             self.current_image_path = ad_data['image_path']
         else:
-            self.image_path_label.config(text="Image: Not found", foreground="gray")
+            self.image_path_var.set("Image: Not found")
+            self.image_path_label.config(foreground="gray")
             self.current_image_path = None
         
         # Load and display image
@@ -1060,10 +1139,17 @@ class BrandReviewTool:
                 print(f"[WARNING] Image path exists in data but file not found: {ad_data['image_path']}")
         
         # Generate suggestions
-        self.show_suggestions(ad)
+        self.show_suggestions(ad, json_file=ad_data.get('json_file'))
         
-        # Populate brand entry fields with existing brands
-        self.set_brand_entries(advertisers)
+        # Populate brand entry fields with existing brands (resolved to canonical names)
+        resolved_brands = []
+        for adv in advertisers:
+            if adv and adv.lower() != 'unknown':
+                canonical = self.get_canonical_brand_name(adv)
+                resolved_brands.append(canonical or (adv.replace('_', ' ').title() if '_' in adv else adv))
+            else:
+                resolved_brands.append(adv)
+        self.set_brand_entries(resolved_brands)
         
         # Update house ad button text based on retailer
         json_file = ad_data['json_file']
@@ -1085,14 +1171,32 @@ class BrandReviewTool:
         ad_data = self.unknown_ads[self.current_index]
         json_file = ad_data.get('json_file', 'Unknown')
         
-        # Extract client and search term from JSON path
-        # e.g., output/kroger/MilkPEP/runs/run_results_protein_drinks_2025-10-24_16-19-00.json
+        # Read client and keyword from the actual JSON file (not path parsing)
         client = 'Unknown'
         search_term = 'Unknown'
-        if json_file:
+        if json_file and os.path.exists(json_file):
+            try:
+                with open(json_file, 'r') as f:
+                    json_data = json.load(f)
+                # Read actual fields from JSON
+                client = json_data.get('client', 'Unknown')
+                search_term = json_data.get('keyword', 'Unknown')
+            except Exception:
+                pass
+        
+        # Fallback to path parsing only if JSON read failed
+        if client == 'Unknown' and json_file:
             parts = json_file.split(os.sep)
-            if len(parts) >= 3:
-                client = parts[-3]  # MilkPEP
+            # Find 'output' index and get client from there
+            try:
+                output_idx = parts.index('output')
+                if len(parts) > output_idx + 2:
+                    client = parts[output_idx + 2]  # output/retailer/CLIENT/...
+            except ValueError:
+                if len(parts) >= 3:
+                    client = parts[-3]
+        
+        if search_term == 'Unknown' and json_file:
             filename = os.path.basename(json_file)
             # Extract search term from filename: run_results_<term>_<timestamp>.json
             if filename.startswith('run_results_'):
@@ -1106,7 +1210,12 @@ class BrandReviewTool:
         details.append("")
         details.append(f"Type: {ad.get('type', 'Unknown')}")
         details.append(f"Position: {ad.get('position', 'N/A')}")
-        details.append(f"Current Brand: {ad.get('advertisers', ['unknown'])[0]}")
+        advertisers = ad.get('advertisers', ['unknown'])
+        current_brand_raw = advertisers[0] if advertisers else 'unknown'
+        current_brand_display = self.get_canonical_brand_name(current_brand_raw) if current_brand_raw and current_brand_raw.lower() != 'unknown' else None
+        if not current_brand_display:
+            current_brand_display = current_brand_raw.replace('_', ' ').title() if '_' in (current_brand_raw or '') else current_brand_raw
+        details.append(f"Current Brand: {current_brand_display}")
         details.append("")
         
         if ad.get('message'):
@@ -1193,60 +1302,216 @@ class BrandReviewTool:
             self.brand_logo_label.config(image='')
             print(f"[LOGO] Error displaying logo: {e}")
     
-    def show_suggestions(self, ad):
-        """Generate and show brand suggestions"""
+    def extract_brands_from_html(self, json_file):
+        """Extract brand names from the companion HTML file's accessibility text.
+        
+        Parses 'Sponsored Ad.\nBranded image.\n{PRODUCT_TITLE}\n' patterns
+        from inline <span> accessibility text (no reliance on div/class names).
+        Cross-references against the brand lexicon for verified matches.
+        
+        Returns list of (brand_name, is_verified) tuples, sorted verified-first.
+        """
+        results = []
+        if not json_file or not os.path.exists(json_file):
+            return results
+        
+        try:
+            # Load the JSON to get the companion HTML filename
+            with open(json_file, 'r') as f:
+                json_data = json.load(f)
+            html_filename = json_data.get('html')
+            if not html_filename:
+                return results
+            
+            html_path = os.path.join(os.path.dirname(json_file), html_filename)
+            if not os.path.exists(html_path):
+                return results
+            
+            with open(html_path, 'r', errors='ignore') as f:
+                html_content = f.read()
+            
+            # Extract product titles from accessibility text
+            # Pattern 1: "Sponsored Ad.\nBranded image.\n{TITLE}\n" (display ad spans)
+            titles = re.findall(
+                r'Sponsored Ad\.\\n(?:Branded image\.\\n)?(.+?)\\n',
+                html_content
+            )
+            # Pattern 2: aria-label="Sponsored Ad - {TITLE}" (sponsored product listings)
+            aria_titles = re.findall(
+                r'aria-label="Sponsored Ad - (.+?)"',
+                html_content
+            )
+            titles.extend(aria_titles)
+            
+            if not titles:
+                return results
+            
+            print(f"[HTML] Found {len(titles)} sponsored ad titles in HTML")
+            
+            # Extract verified lexicon matches and unverified guesses from HTML titles.
+            # Verified matches are shown first; unverified guesses are marked with ❓.
+            seen = set()
+            for raw_title in titles:
+                # Decode HTML entities
+                title = raw_title.replace('&amp;amp;', '&').replace('&amp;', '&').strip()
+                
+                matched_lexicon = False
+                # Check against lexicon brands (names + synonyms)
+                for lex_brand in self.lexicon_brands:
+                    brand_name = lex_brand['name']
+                    # Check if brand name appears at the start of the title (case-insensitive)
+                    if title.lower().startswith(brand_name.lower()) and brand_name.lower() not in seen:
+                        seen.add(brand_name.lower())
+                        results.append((brand_name, True))
+                        matched_lexicon = True
+                        print(f"[HTML] ✅ Verified lexicon match: '{brand_name}' from title '{title[:60]}'")
+                    # Also check synonyms
+                    for synonym in lex_brand.get('synonyms', []):
+                        if synonym.startswith('MSG:'):
+                            continue
+                        if title.lower().startswith(synonym.lower()) and brand_name.lower() not in seen:
+                            seen.add(brand_name.lower())
+                            results.append((brand_name, True))
+                            matched_lexicon = True
+                            print(f"[HTML] ✅ Verified synonym match: '{brand_name}' (via '{synonym}') from title '{title[:60]}'")
+                
+                # If no lexicon match, extract first word(s) as unverified clickable guess
+                if not matched_lexicon:
+                    # Try "Brand - Product" pattern first (e.g., "Minor Figures - Oat Milk")
+                    dash_match = re.match(r'^(.+?)\s*-\s', title)
+                    if dash_match:
+                        guess = dash_match.group(1).strip()
+                    else:
+                        # Fall back to first 1-2 capitalized words
+                        word_match = re.match(r'^([A-Z][A-Za-z&\'\-]+(?:\s+[A-Z][A-Za-z&\'\-]+)?)', title)
+                        guess = word_match.group(1) if word_match else None
+                    
+                    if guess and guess.lower() not in seen and len(guess) > 2:
+                        seen.add(guess.lower())
+                        results.append((guess, False))
+                        print(f"[HTML] ❓ Unverified guess: '{guess}' from title '{title[:60]}'")
+            
+            # Sort: verified first, then unverified
+            results.sort(key=lambda x: (not x[1], x[0]))
+            
+        except Exception as e:
+            print(f"[HTML] Error extracting brands from HTML: {e}")
+        
+        return results
+    
+    def show_suggestions(self, ad, json_file=None):
+        """Generate and show brand suggestions.
+        
+        Sources (in priority order):
+        1. Current brand/advertisers fields (resolved to canonical display name)
+        2. Product titles in the ad JSON (leading brand words)
+        3. TOA campaign codes
+        4. URL path segments
+        5. Message/header text
+        6. Companion HTML file (Sponsored Ad accessibility text)
+        
+        Each suggestion is checked against the lexicon for verification.
+        Verified (✅) suggestions sort before unverified (❓) ones.
+        """
+        from utils.brand_utils import normalize_brand_for_matching
+        
         # Clear existing suggestions
         for widget in self.suggestions_frame.winfo_children():
             widget.destroy()
         
-        suggestions = set()
+        # ranked: list of (display_text, brand_name, is_verified)
+        ranked = []
+        seen_normalized = set()
         
-        # Extract brand from TOA campaign codes (e.g., TOABoostAugDec2025 -> Boost)
-        current_brand = ad.get('advertisers', [''])[0] if ad.get('advertisers') else ''
-        if current_brand:
-            # Pattern: TOA + BrandName + Month + Month + Year
-            toa_match = re.match(r'^TOA([A-Z][a-z]+)', current_brand, re.IGNORECASE)
+        def _add(raw_name):
+            """Add a suggestion, resolving to canonical name if in lexicon."""
+            if not raw_name or len(raw_name) < 2:
+                return
+            norm = normalize_brand_for_matching(raw_name)
+            if norm in seen_normalized or not norm:
+                return
+            seen_normalized.add(norm)
+            canonical = self.get_canonical_brand_name(raw_name)
+            if canonical:
+                display = canonical
+                is_verified = True
+            else:
+                # Use proper title case for display (un-slug)
+                display = raw_name.replace('_', ' ').title() if '_' in raw_name else raw_name
+                is_verified = False
+            prefix = "✅ " if is_verified else "❓ "
+            ranked.append((prefix + display, display, is_verified))
+            print(f"[SUGGESTION] {'✅' if is_verified else '❓'} {display} (from: {raw_name})")
+        
+        # --- Source 1: Current brand / advertisers fields ---
+        brand_field = (ad.get('brand') or '').strip()
+        if brand_field and brand_field.lower() != 'unknown':
+            _add(brand_field)
+        for adv in (ad.get('advertisers') or []):
+            if adv and adv.lower() != 'unknown':
+                _add(adv)
+        
+        # --- Source 2: Product titles (leading brand words) ---
+        for product in ad.get('products', []):
+            title = product.get('title', '')
+            if not title:
+                continue
+            # Try "BRAND Product..." pattern (all-caps brand prefix)
+            caps_match = re.match(r'^([A-Z][A-Z0-9]+(?:\s+[A-Z][A-Z0-9]+)*)\s', title)
+            if caps_match:
+                _add(caps_match.group(1).title())
+            # Try "Brand Name - Product..." or "Brand Name Product..."
+            dash_match = re.match(r'^(.+?)\s*[-–|]\s', title)
+            if dash_match:
+                _add(dash_match.group(1).strip())
+            # Try leading capitalized words (e.g., "Purito Oat In..." -> "Purito")
+            word_match = re.match(r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})', title)
+            if word_match:
+                _add(word_match.group(1))
+        
+        # --- Source 3: TOA campaign codes ---
+        current_adv = ad.get('advertisers', [''])[0] if ad.get('advertisers') else ''
+        if current_adv:
+            toa_match = re.match(r'^TOA([A-Z][a-z]+)', current_adv, re.IGNORECASE)
             if toa_match:
-                extracted_brand = toa_match.group(1)
-                suggestions.add(extracted_brand)
-                print(f"[SUGGESTION] Extracted '{extracted_brand}' from TOA code '{current_brand}'")
+                _add(toa_match.group(1))
         
-        # Extract from URL
+        # --- Source 4: URL path segments ---
         href = ad.get('href', '')
         if href:
             url_brands = re.findall(r'/([a-z][a-z-]+)/', href.lower())
             for brand in url_brands:
-                if len(brand) > 3 and brand not in ['search', 'product', 'kroger']:
-                    suggestions.add(brand.replace('-', ' ').title())
+                if len(brand) > 3 and brand not in ['search', 'product', 'kroger', 'stores', 'page', 'amazon']:
+                    _add(brand.replace('-', ' ').title())
         
-        # Extract from product titles
-        for product in ad.get('products', [])[:3]:
-            title = product.get('title', '')
-            # Get first 2-3 capitalized words
-            words = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?', title)
-            if words:
-                suggestions.add(words[0])
-        
-        # Extract from message/header
+        # --- Source 5: Message/header text ---
         for field in ['message', 'header']:
             text = ad.get(field, '')
             if text:
                 words = re.findall(r'\b[A-Z][A-Za-z&\'\-]+(?:\s+[A-Z][A-Za-z&\'\-]+)?', text)
                 for word in words[:2]:
                     if len(word) > 3:
-                        suggestions.add(word)
+                        _add(word)
         
-        # Display suggestions as buttons
-        for i, suggestion in enumerate(sorted(suggestions)[:6]):
+        # --- Source 6: Companion HTML file ---
+        if json_file:
+            html_brands = self.extract_brands_from_html(json_file)
+            for brand_name, is_verified in html_brands:
+                _add(brand_name)
+        
+        # Sort: verified first, then alphabetical
+        ranked.sort(key=lambda x: (not x[2], x[0]))
+        
+        # Display up to 6 suggestions as buttons
+        for i, (display_text, brand_name, _) in enumerate(ranked[:6]):
             btn = ttk.Button(
                 self.suggestions_frame,
-                text=suggestion,
-                command=lambda s=suggestion: self.use_suggestion(s)
+                text=display_text,
+                command=lambda s=brand_name: self.use_suggestion(s)
             )
-            btn.grid(row=i//3, column=i%3, padx=5, pady=5, sticky=tk.EW)
+            btn.grid(row=i, column=0, padx=5, pady=3, sticky=tk.EW)
         
-        for i in range(3):
-            self.suggestions_frame.columnconfigure(i, weight=1)
+        self.suggestions_frame.columnconfigure(0, weight=1)
     
     def use_suggestion(self, suggestion):
         """Use a suggested brand name"""
@@ -1324,40 +1589,52 @@ class BrandReviewTool:
                 raise Exception(f"ad[{i}] is not a dict: {type(ad)}")
             
             # Match by multiple criteria to ensure we get the right ad
-            # For Walmart ads, type+position might not be unique, so also check image_url, href, etc.
-            type_match = ad.get('type') == target_type
-            position_match = ad.get('position') == target_position
+            # Priority 1: Match by unique 'id' field (Instacart uses this)
+            target_id = target_ad.get('id')
+            ad_id = ad.get('id')
             
-            # Additional matching criteria
-            image_url_match = ad.get('image_url') == target_ad.get('image_url') if target_ad.get('image_url') else True
-            href_match = ad.get('href') == target_ad.get('href') if target_ad.get('href') else True
+            # If target has an id, ONLY match by id (strict matching for Instacart)
+            if target_id:
+                if ad_id != target_id:
+                    continue  # Skip this ad, keep looking
+                # Found the matching id
+            else:
+                # Fallback for ads without id: Match by type+position (Kroger/Walmart)
+                type_match = ad.get('type') == target_type
+                position_match = ad.get('position') == target_position
+                
+                # Additional matching criteria
+                image_url_match = ad.get('image_url') == target_ad.get('image_url') if target_ad.get('image_url') else True
+                href_match = ad.get('href') == target_ad.get('href') if target_ad.get('href') else True
+                
+                if not ((type_match and position_match and (image_url_match or href_match)) or ad == target_ad):
+                    continue  # No match, keep looking
             
-            # Match if type+position match AND (image_url matches OR href matches), or exact match
-            if ((type_match and position_match and (image_url_match or href_match)) or ad == target_ad):
-                ad['advertisers'] = corrected_brands
-                # Also update 'brand' field to match first advertiser
-                ad['brand'] = corrected_brands[0] if corrected_brands else None
-                
-                # Update image path even if it doesn't literally contain the old brand slug
-                for path_key in ['carousel_image_path', 'toa_image_path', 'skyscraper_image_path', 'image_path']:
-                    if path_key in ad:
-                        old_path = ad[path_key]
-                        new_slug = self.to_slug(corrected_brands[0])
-                        # Try direct replacement using old_slug first
-                        old_slug = self.to_slug(ad_data['current_brand'])
-                        new_path = old_path.replace(f'__{old_slug}__', f'__{new_slug}__')
-                        if new_path == old_path:
-                            # Generic replacement: swap the second segment of the basename
-                            dname, bname = os.path.split(old_path)
-                            parts = bname.split('__')
-                            if len(parts) >= 2:
-                                parts[1] = new_slug
-                                bname_new = '__'.join(parts)
-                                new_path = os.path.join(dname, bname_new)
-                        ad[path_key] = new_path
-                
-                updated = True
-                break
+            # Found a match - update it
+            ad['advertisers'] = corrected_brands
+            # Also update 'brand' field to match first advertiser
+            ad['brand'] = corrected_brands[0] if corrected_brands else None
+            
+            # Update image path even if it doesn't literally contain the old brand slug
+            for path_key in ['carousel_image_path', 'toa_image_path', 'skyscraper_image_path', 'image_path']:
+                if path_key in ad:
+                    old_path = ad[path_key]
+                    new_slug = self.to_slug(corrected_brands[0])
+                    # Try direct replacement using old_slug first
+                    old_slug = self.to_slug(ad_data['current_brand'])
+                    new_path = old_path.replace(f'__{old_slug}__', f'__{new_slug}__')
+                    if new_path == old_path:
+                        # Generic replacement: swap the second segment of the basename
+                        dname, bname = os.path.split(old_path)
+                        parts = bname.split('__')
+                        if len(parts) >= 2:
+                            parts[1] = new_slug
+                            bname_new = '__'.join(parts)
+                            new_path = os.path.join(dname, bname_new)
+                    ad[path_key] = new_path
+            
+            updated = True
+            break
         
         if not updated:
             print(f"[ERROR] Could not find ad in JSON")
@@ -1523,6 +1800,8 @@ class BrandReviewTool:
                 print(f"[LEXICON] Adding message '{msg_clean}' as synonym")
         
         if existing_brand:
+            # Mark as verified (user explicitly confirmed this brand)
+            existing_brand['verified'] = True
             # Add synonyms if not already there
             for syn in synonyms_to_add:
                 if syn not in existing_brand['synonyms']:
@@ -1532,10 +1811,11 @@ class BrandReviewTool:
                     else:
                         print(f"[LEXICON] Added '{syn}' as synonym for '{existing_brand['name']}'")
         else:
-            # Add new brand
+            # Add new brand (marked verified since user explicitly entered it)
             new_brand = {
                 'name': corrected_brand,
-                'synonyms': synonyms_to_add
+                'synonyms': synonyms_to_add,
+                'verified': True
             }
             brands.append(new_brand)
             if synonyms_to_add:
@@ -1622,7 +1902,66 @@ class BrandReviewTool:
             if matches:
                 similar_ads.append((i, ad))
         
-        print(f"[DEBUG] Found {len(similar_ads)} similar ads")
+        print(f"[DEBUG] Found {len(similar_ads)} similar ads (text-based)")
+        
+        # If no text matches found and we have an image hash, offer hash-based matching
+        current_hash = ad_data.get('image_hash')
+        if len(similar_ads) == 1 and current_hash and IMAGEHASH_AVAILABLE:
+            # First check if this hash was already corrected in a previous save
+            # Use Hamming distance for fuzzy matching (allows minor differences)
+            cached_brands = None
+            best_distance = 999
+            for cached_hash, brands in self.hash_to_brand.items():
+                try:
+                    dist = imagehash.hex_to_hash(current_hash) - imagehash.hex_to_hash(cached_hash)
+                    if dist <= 5 and dist < best_distance:  # Allow up to 5 bits difference
+                        best_distance = dist
+                        cached_brands = brands
+                except:
+                    if current_hash == cached_hash:
+                        cached_brands = brands
+                        best_distance = 0
+            
+            if cached_brands:
+                print(f"[DEBUG] Found cached hash match (distance={best_distance}): {cached_brands}")
+                # Auto-fill the brand from cache and show confirmation
+                response = messagebox.askyesno(
+                    "🔍 IMAGE HASH MATCH (from previous correction)",
+                    f"This image matches a previously corrected ad.\n\n"
+                    f"Cached brand: {', '.join(cached_brands)}\n"
+                    f"Your input: {', '.join(corrected_brands)}\n\n"
+                    f"Use the cached brand instead?"
+                )
+                if response:
+                    corrected_brands = cached_brands
+                    print(f"[DEBUG] Using cached brands: {corrected_brands}")
+            
+            # Find ads with matching image hash in the current queue (fuzzy match)
+            hash_matches = []
+            for i, ad in enumerate(self.unknown_ads):
+                if i == self.current_index:
+                    continue
+                ad_hash = ad.get('image_hash')
+                if ad_hash:
+                    try:
+                        dist = imagehash.hex_to_hash(current_hash) - imagehash.hex_to_hash(ad_hash)
+                        if dist <= 5:  # Allow up to 5 bits difference
+                            hash_matches.append((i, ad))
+                    except:
+                        if ad_hash == current_hash:
+                            hash_matches.append((i, ad))
+            
+            if hash_matches:
+                print(f"[DEBUG] Found {len(hash_matches)} image hash matches in queue")
+                # Show visual confirmation dialog for each hash match
+                confirmed_matches = self.confirm_hash_matches(ad_data, hash_matches, corrected_brands)
+                similar_ads.extend(confirmed_matches)
+                print(f"[DEBUG] User confirmed {len(confirmed_matches)} hash matches")
+        
+        # Save this hash -> brand mapping for future matches
+        if current_hash and corrected_brands:
+            self.hash_to_brand[current_hash] = corrected_brands
+            print(f"[DEBUG] Cached hash {current_hash[:16]}... -> {corrected_brands}")
         
         # Confirm with user (unless auto_confirm is True)
         if not auto_confirm:
@@ -1723,6 +2062,113 @@ class BrandReviewTool:
         else:
             messagebox.showinfo("Complete", "All unknown brands have been reviewed!")
             self.root.quit()
+
+    def confirm_hash_matches(self, current_ad_data, hash_matches, corrected_brands):
+        """Show visual confirmation dialog for image hash matches.
+        
+        Displays the current ad image alongside each potential match for human validation.
+        Returns list of confirmed matches as (index, ad_data) tuples.
+        """
+        confirmed = []
+        brand_text = ", ".join(corrected_brands)
+        
+        for idx, match_ad in hash_matches:
+            # Create a dialog showing both images side-by-side
+            dialog = tk.Toplevel(self.root)
+            dialog.title("🔍 IMAGE HASH MATCH - Visual Confirmation Required")
+            dialog.geometry("1200x900")
+            dialog.transient(self.root)
+            dialog.grab_set()
+            
+            # Result variable
+            result = {'confirmed': False}
+            
+            # Header label
+            header = ttk.Label(
+                dialog,
+                text=f"⚠️ IMAGE HASH MATCH DETECTED ⚠️\nApply brand '{brand_text}' to this matching ad?",
+                font=("Arial", 14, "bold"),
+                foreground="orange"
+            )
+            header.pack(pady=10)
+            
+            # Images frame
+            images_frame = ttk.Frame(dialog)
+            images_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            # Current ad (left side)
+            left_frame = ttk.LabelFrame(images_frame, text="CURRENT AD (just corrected)", padding=10)
+            left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+            
+            current_path = current_ad_data.get('image_path', '')
+            if current_path and os.path.exists(current_path):
+                try:
+                    img = Image.open(current_path)
+                    img.thumbnail((500, 500), Image.Resampling.LANCZOS)
+                    photo = ImageTk.PhotoImage(img)
+                    img_label = ttk.Label(left_frame, image=photo)
+                    img_label.image = photo
+                    img_label.pack()
+                except Exception:
+                    ttk.Label(left_frame, text="[Image load error]").pack()
+            else:
+                ttk.Label(left_frame, text="[No image]").pack()
+            
+            ttk.Label(left_frame, text=os.path.basename(current_path) if current_path else "N/A", 
+                     font=("Courier", 9), wraplength=450).pack(pady=5)
+            
+            # Match ad (right side)
+            right_frame = ttk.LabelFrame(images_frame, text="POTENTIAL MATCH (hash-based)", padding=10)
+            right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5)
+            
+            match_path = match_ad.get('image_path', '')
+            if match_path and os.path.exists(match_path):
+                try:
+                    img = Image.open(match_path)
+                    img.thumbnail((500, 500), Image.Resampling.LANCZOS)
+                    photo = ImageTk.PhotoImage(img)
+                    img_label = ttk.Label(right_frame, image=photo)
+                    img_label.image = photo
+                    img_label.pack()
+                except Exception:
+                    ttk.Label(right_frame, text="[Image load error]").pack()
+            else:
+                ttk.Label(right_frame, text="[No image]").pack()
+            
+            ttk.Label(right_frame, text=os.path.basename(match_path) if match_path else "N/A",
+                     font=("Courier", 9), wraplength=450).pack(pady=5)
+            
+            # Match details
+            match_json = os.path.basename(match_ad.get('json_file', 'Unknown'))
+            match_keyword = match_ad.get('ad', {}).get('metadata', {}).get('keyword_token', 'Unknown')
+            details_text = f"JSON: {match_json} | Keyword: {match_keyword}"
+            ttk.Label(right_frame, text=details_text, font=("Arial", 10)).pack(pady=5)
+            
+            # Buttons
+            button_frame = ttk.Frame(dialog)
+            button_frame.pack(pady=15)
+            
+            def on_yes():
+                result['confirmed'] = True
+                dialog.destroy()
+            
+            def on_no():
+                result['confirmed'] = False
+                dialog.destroy()
+            
+            yes_btn = ttk.Button(button_frame, text="✓ Yes, Same Ad - Apply Brand", command=on_yes)
+            yes_btn.pack(side=tk.LEFT, padx=20)
+            
+            no_btn = ttk.Button(button_frame, text="✗ No, Different Ad - Skip", command=on_no)
+            no_btn.pack(side=tk.LEFT, padx=20)
+            
+            # Wait for dialog to close
+            dialog.wait_window()
+            
+            if result['confirmed']:
+                confirmed.append((idx, match_ad))
+        
+        return confirmed
 
     def delete_current_ad(self):
         """Two-step delete: first click arms, second click deletes without popups."""

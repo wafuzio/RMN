@@ -824,20 +824,39 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     except Exception as e:
                         log(f"main: progressive scroll error -> {e}")
                     
-                    # Re-inject CSS to hide any new sticky elements that appeared during scroll
+                    # Re-inject CSS to hide sticky AND fixed elements that cause
+                    # duplication in Playwright's full_page stitching
                     try:
                         log("main: re-injecting CSS before screenshot")
                         page.evaluate("""
                         () => {
-                          const css = '#navbar,#nav-belt,#nav-main,#nav-progressive-subnav,header,[data-testid="header"],[class*="sticky" i],[data-sticky],[style*="position: sticky"],.sg-col-20-of-24 .s-desktop-width-max .s-desktop-toolbar,.s-desktop-toolbar .s-desktop-toolbar{display:none!important;visibility:hidden!important;}';
+                          const css = '#navbar,#nav-belt,#nav-main,#nav-progressive-subnav,header,[data-testid="header"],[class*="sticky" i],[data-sticky],[style*="position: sticky"],[style*="position: fixed"],.sg-col-20-of-24 .s-desktop-width-max .s-desktop-toolbar,.s-desktop-toolbar .s-desktop-toolbar{display:none!important;visibility:hidden!important;}';
                           const st = document.createElement('style');
                           st.type = 'text/css';
                           st.textContent = css;
                           document.head.appendChild(st);
+                          // Also force-remove position:fixed from all elements to prevent
+                          // duplication in Playwright's full-page stitching
+                          document.querySelectorAll('*').forEach(el => {
+                            const cs = getComputedStyle(el);
+                            if (cs.position === 'fixed' || cs.position === 'sticky') {
+                              el.style.setProperty('position', 'absolute', 'important');
+                            }
+                          });
                         }
                         """)
                     except Exception as e:
                         log(f"main: re-inject CSS error -> {e}")
+                    
+                    # Scroll back to top before screenshot — Playwright's full_page=True
+                    # internally scrolls and stitches viewport captures. Starting from a
+                    # mid-page position causes duplicated/overlapping regions.
+                    try:
+                        page.evaluate("window.scrollTo(0, 0)")
+                        time.sleep(0.5)
+                        log("main: scrolled to top before screenshot")
+                    except Exception:
+                        pass
                     
                     log("main: screenshot")
                     main_name = _std_filename("amazon", "search_results", "Main", client, keyword, run_id, 0, ".png")
@@ -1989,6 +2008,46 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 log(f"display: hydration wait complete for ad {display_idx}")
                             except Exception as e:
                                 log(f"display: hydration wait error -> {e}")
+                            
+                            # Fix clipped display ads: remove overflow:hidden and expand
+                            # container height so the full ad creative is captured.
+                            # Also scroll iframe content to top if present.
+                            try:
+                                ad_handle = ad.element_handle()
+                                page.evaluate("""
+                                  (el) => {
+                                    // Walk up ancestors and remove overflow clipping
+                                    let node = el;
+                                    for (let i = 0; i < 10 && node && node !== document.body; i++) {
+                                      const cs = getComputedStyle(node);
+                                      if (cs.overflow === 'hidden' || cs.overflowY === 'hidden') {
+                                        node.style.setProperty('overflow', 'visible', 'important');
+                                      }
+                                      node = node.parentElement;
+                                    }
+                                    // For iframe-based ads, ensure iframe is tall enough
+                                    const iframe = el.tagName === 'IFRAME' ? el : el.querySelector('iframe');
+                                    if (iframe) {
+                                      try {
+                                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                                        if (doc && doc.body) {
+                                          const fullHeight = doc.body.scrollHeight;
+                                          if (fullHeight > iframe.clientHeight) {
+                                            iframe.style.setProperty('height', fullHeight + 'px', 'important');
+                                            iframe.parentElement.style.setProperty('height', fullHeight + 'px', 'important');
+                                          }
+                                          // Scroll iframe content to top
+                                          iframe.contentWindow.scrollTo(0, 0);
+                                        }
+                                      } catch(e) {
+                                        // Cross-origin iframe — can't access content
+                                      }
+                                    }
+                                  }
+                                """, ad_handle)
+                                time.sleep(0.3)
+                            except Exception as e:
+                                log(f"display: unclip error -> {e}")
                             
                             ad.screenshot(path=fpath, timeout=4000)
                             
