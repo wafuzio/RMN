@@ -1320,7 +1320,8 @@ class BrandReviewTool:
         if not scores:
             return 0.0
         
-        return sum(s * w for s, w in zip(scores, weights)) / sum(weights)
+        # Ensure native Python float (not numpy.float64) to avoid tkinter issues
+        return float(sum(s * w for s, w in zip(scores, weights)) / sum(weights))
     
     def display_image(self, image_path):
         """Load and display the ad image"""
@@ -2174,6 +2175,37 @@ class BrandReviewTool:
             messagebox.showinfo("Complete", "All unknown brands have been reviewed!")
             self.root.quit()
 
+    def _open_zoom_for_path(self, image_path, parent=None):
+        """Open a 200% zoom popup for any image path."""
+        if not image_path or not os.path.exists(image_path):
+            return
+        try:
+            img = Image.open(image_path)
+            new_w = img.width * 2
+            new_h = img.height * 2
+            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            
+            popup = tk.Toplevel(parent or self.root)
+            popup.title("Image Preview (200%)")
+            popup.geometry(f"{min(new_w + 20, 1400)}x{min(new_h + 20, 900)}")
+            
+            canvas = tk.Canvas(popup)
+            v_scroll = ttk.Scrollbar(popup, orient=tk.VERTICAL, command=canvas.yview)
+            h_scroll = ttk.Scrollbar(popup, orient=tk.HORIZONTAL, command=canvas.xview)
+            canvas.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+            v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+            h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            
+            photo = ImageTk.PhotoImage(img)
+            canvas.create_image(0, 0, anchor=tk.NW, image=photo)
+            canvas.configure(scrollregion=(0, 0, new_w, new_h))
+            popup._photo = photo
+            popup.bind("<Escape>", lambda e: popup.destroy())
+            popup.focus_set()
+        except Exception as e:
+            print(f"[ZOOM] Error: {e}")
+
     def show_visual_match_grid(self, current_ad_data, visual_candidates, corrected_brands):
         """Show a scrollable grid of visually similar ads with checkboxes.
         
@@ -2188,9 +2220,12 @@ class BrandReviewTool:
         
         dialog = tk.Toplevel(self.root)
         dialog.title(f"Visual Match Grid — Apply '{brand_text}'")
-        dialog.geometry("1100x800")
+        dialog.geometry("1200x850")
         dialog.transient(self.root)
         dialog.grab_set()
+        
+        # Keep image references to prevent garbage collection
+        dialog._images = []
         
         # --- Reference image at top ---
         ref_frame = ttk.LabelFrame(dialog, text=f"Reference Ad  —  Brand: {brand_text}", padding=8)
@@ -2200,25 +2235,27 @@ class BrandReviewTool:
         if current_path and os.path.exists(current_path):
             try:
                 img = Image.open(current_path)
-                img.thumbnail((300, 200), Image.Resampling.LANCZOS)
+                img.thumbnail((500, 120), Image.Resampling.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
-                ref_label = ttk.Label(ref_frame, image=photo)
-                ref_label.image = photo
+                dialog._images.append(photo)
+                ref_label = ttk.Label(ref_frame, image=photo, cursor="hand2")
                 ref_label.pack(side="left", padx=10)
+                ref_label.bind("<Button-1>", lambda e, p=current_path: self._open_zoom_for_path(p, dialog))
             except Exception:
-                ttk.Label(ref_frame, text="[Image load error]").pack(side="left")
+                ttk.Label(ref_frame, text="[Image load error]", font=("Arial", 12)).pack(side="left")
         
-        ttk.Label(ref_frame, text=os.path.basename(current_path) if current_path else "N/A",
-                 font=("Courier", 9)).pack(side="left", padx=10)
+        ref_info = ttk.Frame(ref_frame)
+        ref_info.pack(side="left", fill="both", expand=True, padx=10)
+        ttk.Label(ref_info, text=os.path.basename(current_path) if current_path else "N/A",
+                 font=("Courier", 11), wraplength=600).pack(anchor="w")
         
-        # --- Select All / None buttons ---
+        # --- Toolbar: count + Select All / None ---
         toolbar = ttk.Frame(dialog)
-        toolbar.pack(fill="x", padx=10, pady=5)
+        toolbar.pack(fill="x", padx=10, pady=(5, 2))
         
         ttk.Label(toolbar, text=f"{len(visual_candidates)} potential matches found",
-                 font=("Arial", 11, "bold")).pack(side="left")
+                 font=("Arial", 13, "bold")).pack(side="left")
         
-        # Checkbox variables list
         check_vars = []
         
         def select_all():
@@ -2232,80 +2269,116 @@ class BrandReviewTool:
         ttk.Button(toolbar, text="Select All", command=select_all).pack(side="right", padx=5)
         ttk.Button(toolbar, text="Select None", command=select_none).pack(side="right", padx=5)
         
-        # --- Scrollable grid ---
-        canvas = tk.Canvas(dialog)
-        v_scroll = ttk.Scrollbar(dialog, orient=tk.VERTICAL, command=canvas.yview)
+        # --- Bottom button bar (pack BEFORE canvas so it stays visible) ---
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(side=tk.BOTTOM, fill="x", padx=10, pady=10)
+        
+        selected_count_var = tk.StringVar(value="Apply (0 selected)")
+        
+        apply_btn = ttk.Button(btn_frame, textvariable=selected_count_var,
+                              command=lambda: on_apply())
+        apply_btn.pack(side="right", padx=10)
+        
+        cancel_btn = ttk.Button(btn_frame, text="Skip All",
+                               command=lambda: on_cancel())
+        cancel_btn.pack(side="right", padx=10)
+        
+        # --- Scrollable grid (fills remaining space) ---
+        grid_container = ttk.Frame(dialog)
+        grid_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=(2, 0))
+        
+        canvas = tk.Canvas(grid_container, highlightthickness=0)
+        v_scroll = ttk.Scrollbar(grid_container, orient=tk.VERTICAL, command=canvas.yview)
         canvas.configure(yscrollcommand=v_scroll.set)
         
         v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         grid_frame = ttk.Frame(canvas)
-        canvas.create_window((0, 0), window=grid_frame, anchor="nw")
+        canvas_window = canvas.create_window((0, 0), window=grid_frame, anchor="nw")
         
-        # Keep image references to prevent garbage collection
-        dialog._thumb_images = []
+        # Make grid_frame expand to canvas width
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+        canvas.bind("<Configure>", on_canvas_configure)
         
-        COLS = 4
-        THUMB_SIZE = (220, 180)
+        COLS = 3
+        THUMB_SIZE = (340, 260)
         
         for card_idx, (queue_idx, ad, sim_score) in enumerate(visual_candidates):
             row = card_idx // COLS
             col = card_idx % COLS
             
-            # Card frame
-            card = ttk.Frame(grid_frame, relief="groove", borderwidth=2, padding=4)
-            card.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+            # Configure column weights for even distribution
+            grid_frame.columnconfigure(col, weight=1)
             
-            # Checkbox (pre-check if similarity >= 90%)
-            var = tk.BooleanVar(value=sim_score >= 0.90)
+            # Card frame with visible border
+            card = tk.Frame(grid_frame, relief="ridge", borderwidth=2, padx=6, pady=6, bg="white")
+            card.grid(row=row, column=col, padx=6, pady=6, sticky="nsew")
+            
+            # Top row: checkbox + similarity score
+            top_row = tk.Frame(card, bg="white")
+            top_row.pack(fill="x")
+            
+            var = tk.BooleanVar(value=bool(sim_score >= 0.90))
             check_vars.append(var)
             
-            chk = ttk.Checkbutton(card, variable=var)
-            chk.pack(anchor="w")
+            chk = tk.Checkbutton(top_row, variable=var, bg="white",
+                                font=("Arial", 12), text="Include")
+            chk.pack(side="left")
             
-            # Thumbnail
+            pct = int(sim_score * 100)
+            color = "#228B22" if pct >= 90 else ("#CC7700" if pct >= 80 else "#CC0000")
+            score_label = tk.Label(top_row, text=f"{pct}% match",
+                                  font=("Arial", 13, "bold"), fg=color, bg="white")
+            score_label.pack(side="right", padx=5)
+            
+            # Thumbnail (click to zoom)
             match_path = ad.get('image_path', '')
             if match_path and os.path.exists(match_path):
                 try:
                     img = Image.open(match_path)
                     img.thumbnail(THUMB_SIZE, Image.Resampling.LANCZOS)
                     photo = ImageTk.PhotoImage(img)
-                    dialog._thumb_images.append(photo)
-                    img_label = ttk.Label(card, image=photo, cursor="hand2")
-                    img_label.pack()
-                    # Click thumbnail to toggle checkbox
-                    img_label.bind("<Button-1>", lambda e, v=var: v.set(not v.get()))
+                    dialog._images.append(photo)
+                    img_label = tk.Label(card, image=photo, cursor="hand2", bg="white")
+                    img_label.pack(pady=4)
+                    # Left-click: zoom popup. Right-click: toggle checkbox.
+                    img_label.bind("<Button-1>",
+                                  lambda e, p=match_path: self._open_zoom_for_path(p, dialog))
+                    img_label.bind("<Button-2>",
+                                  lambda e, v=var: v.set(not v.get()))
+                    img_label.bind("<Button-3>",
+                                  lambda e, v=var: v.set(not v.get()))
                 except Exception:
-                    ttk.Label(card, text="[Error]", width=25).pack()
+                    tk.Label(card, text="[Error loading image]",
+                            font=("Arial", 12), bg="white").pack(pady=20)
             else:
-                ttk.Label(card, text="[No image]", width=25).pack()
+                tk.Label(card, text="[No image]",
+                        font=("Arial", 12), bg="white").pack(pady=20)
             
-            # Similarity score
-            pct = int(sim_score * 100)
-            color = "green" if pct >= 90 else ("orange" if pct >= 80 else "red")
-            score_label = tk.Label(card, text=f"{pct}% match", font=("Arial", 10, "bold"), fg=color)
-            score_label.pack()
-            
-            # Filename (truncated)
+            # Filename
             fname = os.path.basename(match_path) if match_path else "N/A"
-            if len(fname) > 30:
-                fname = fname[:27] + "..."
-            ttk.Label(card, text=fname, font=("Courier", 8), wraplength=200).pack()
+            tk.Label(card, text=fname, font=("Courier", 10), bg="white",
+                    wraplength=320, justify="left").pack(anchor="w", padx=4)
         
         # Update scroll region after grid is built
-        grid_frame.update_idletasks()
-        canvas.configure(scrollregion=canvas.bbox("all"))
+        def update_scroll(event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        grid_frame.bind("<Configure>", update_scroll)
         
-        # Mouse wheel scrolling
+        # Mouse wheel scrolling (macOS uses delta differently)
         def on_mousewheel(event):
-            canvas.yview_scroll(-1 * (event.delta // 120), "units")
+            # macOS sends delta in pixels, not notches
+            if event.delta:
+                canvas.yview_scroll(-1 * (event.delta // 3), "units")
+            elif event.num == 4:
+                canvas.yview_scroll(-3, "units")
+            elif event.num == 5:
+                canvas.yview_scroll(3, "units")
         canvas.bind_all("<MouseWheel>", on_mousewheel)
         
-        # --- Apply / Cancel buttons ---
-        btn_frame = ttk.Frame(dialog)
-        btn_frame.pack(fill="x", padx=10, pady=10)
-        
+        # --- Button callbacks ---
         def on_apply():
             for i, (queue_idx, ad, _) in enumerate(visual_candidates):
                 if check_vars[i].get():
@@ -2317,8 +2390,6 @@ class BrandReviewTool:
             canvas.unbind_all("<MouseWheel>")
             dialog.destroy()
         
-        selected_count_var = tk.StringVar(value="Apply (0 selected)")
-        
         def update_count(*args):
             n = sum(1 for v in check_vars if v.get())
             selected_count_var.set(f"Apply ({n} selected)")
@@ -2327,13 +2398,7 @@ class BrandReviewTool:
             var.trace_add("write", update_count)
         update_count()
         
-        apply_btn = ttk.Button(btn_frame, textvariable=selected_count_var, command=on_apply)
-        apply_btn.pack(side="right", padx=10)
-        
-        cancel_btn = ttk.Button(btn_frame, text="Skip All", command=on_cancel)
-        cancel_btn.pack(side="right", padx=10)
-        
-        # Close on Escape
+        # Keyboard shortcuts
         dialog.bind("<Escape>", lambda e: on_cancel())
         dialog.bind("<Return>", lambda e: on_apply())
         
