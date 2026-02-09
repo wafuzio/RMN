@@ -131,8 +131,9 @@ class BrandReviewTool:
         left_frame = ttk.LabelFrame(content_frame, text="Ad Preview", padding="10")
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
-        self.image_label = ttk.Label(left_frame)
+        self.image_label = ttk.Label(left_frame, cursor="hand2")
         self.image_label.pack(fill=tk.BOTH, expand=True)
+        self.image_label.bind("<Button-1>", self.zoom_image_popup)
         
         # Image path entry (selectable/copyable, clickable to open in Finder)
         self.image_path_var = tk.StringVar()
@@ -1252,6 +1253,47 @@ class BrandReviewTool:
             self.image_label.image = photo  # Keep a reference
         except Exception as e:
             self.image_label.config(text=f"Error loading image:\n{str(e)}", image='')
+    
+    def zoom_image_popup(self, event=None):
+        """Open a 200% zoom popup window of the current ad image."""
+        if not self.current_image_path or not os.path.exists(self.current_image_path):
+            return
+        
+        try:
+            img = Image.open(self.current_image_path)
+            
+            # Scale to 200%
+            new_w = img.width * 2
+            new_h = img.height * 2
+            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            
+            # Create popup window
+            popup = tk.Toplevel(self.root)
+            popup.title("Ad Preview (200%)")
+            popup.geometry(f"{min(new_w + 20, 1400)}x{min(new_h + 20, 900)}")
+            
+            # Scrollable canvas for large images
+            canvas = tk.Canvas(popup)
+            v_scroll = ttk.Scrollbar(popup, orient=tk.VERTICAL, command=canvas.yview)
+            h_scroll = ttk.Scrollbar(popup, orient=tk.HORIZONTAL, command=canvas.xview)
+            canvas.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+            
+            v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+            h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            
+            photo = ImageTk.PhotoImage(img)
+            canvas.create_image(0, 0, anchor=tk.NW, image=photo)
+            canvas.configure(scrollregion=(0, 0, new_w, new_h))
+            
+            # Keep reference to prevent garbage collection
+            popup._photo = photo
+            
+            # Close on Escape
+            popup.bind("<Escape>", lambda e: popup.destroy())
+            popup.focus_set()
+        except Exception as e:
+            print(f"[ZOOM] Error: {e}")
     
     def open_image_in_finder(self, event=None):
         """Open the current image file location in Finder"""
