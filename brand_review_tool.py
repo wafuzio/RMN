@@ -300,6 +300,9 @@ class BrandReviewTool:
         while len(self.brand_entries) > 1:
             self.remove_cobrand_field(1)
         
+        # Always clear the first entry
+        self.brand_entries[0].delete(0, tk.END)
+        
         # Set first brand
         if brands:
             self.brand_entries[0].delete(0, tk.END)
@@ -1142,13 +1145,12 @@ class BrandReviewTool:
         self.show_suggestions(ad, json_file=ad_data.get('json_file'))
         
         # Populate brand entry fields with existing brands (resolved to canonical names)
+        # Skip "unknown" — leave the field empty so the user can type the correct brand
         resolved_brands = []
         for adv in advertisers:
             if adv and adv.lower() != 'unknown':
                 canonical = self.get_canonical_brand_name(adv)
                 resolved_brands.append(canonical or (adv.replace('_', ' ').title() if '_' in adv else adv))
-            else:
-                resolved_brands.append(adv)
         self.set_brand_entries(resolved_brands)
         
         # Update house ad button text based on retailer
