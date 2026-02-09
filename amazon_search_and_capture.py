@@ -317,6 +317,170 @@ def _extract_brand_and_message(container):
     return brand, brand_canon, (message or "")
 
 
+def _try_hybrid_extraction(container):
+    """
+    Hybrid fallback for Sponsored Display ads (Iframe Piercing + Positional Matching).
+    Strategies:
+    1. Gemini: Pierce iframe to find hidden metadata (store links, alt text).
+    2. Opus: Match outer DOM accessibility text via geometric proximity.
+    """
+    brand = None
+    message = None
+    
+    try:
+        # Strategy 1: Iframe Piercing (Gemini)
+        # Try to find an iframe within the container
+        iframe = container.locator('iframe').first
+        if iframe.count() > 0:
+            try:
+                frame = iframe.content_frame
+                if frame:
+                    # 1a. Body Text Parsing (Most Reliable per Diagnostic Probe)
+                    # The probe showed text like: "Sponsored Ad. Brand logo. Product image. Life Extension Hair Growth..."
+                    try:
+                        body_text = frame.locator('body').inner_text()
+                        if body_text:
+                            # Clean up text
+                            clean_text = re.sub(r'\s+', ' ', body_text).strip()
+                            
+                            # Pattern 1: "Sponsored Ad. Brand logo. Product image. [Brand] ..."
+                            # Remove common prefixes to reveal the start of the actual content (usually Brand)
+                            content_text = re.sub(r'^(Sponsored Ad\.?|Brand logo\.?|Branded image\.?|Product image\.?|Shop now\.?|\s+)+', '', clean_text, flags=re.IGNORECASE)
+                            
+                            # The remaining text usually starts with the Brand + Product Title
+                            # Heuristic: Take the first few words as the brand
+                            if content_text:
+                                # Split by common separators or just take first few words
+                                parts = content_text.split()
+                                if parts:
+                                    # Candidate brand is first 1-3 words
+                                    cand = " ".join(parts[:3])
+                                    
+                                    # Refine: If we see a "Store" link URL, use that to validate/shorten
+                                    store_links = frame.locator('a[href*="/stores/"]').all()
+                                    if store_links:
+                                        href = store_links[0].get_attribute('href')
+                                        m_store = re.search(r"/stores/([^/?#]+)", href or "")
+                                        if m_store:
+                                            store_slug = m_store.group(1).replace('-', ' ').replace('_', ' ')
+                                            # If slug is in candidate, use slug (more precise)
+                                            if store_slug.lower() in cand.lower():
+                                                cand = store_slug.title()
+                                    
+                                    # Cleanup candidate
+                                    cand = re.sub(r'[^\w\s&\'\.-]', '', cand).strip()
+                                    if len(cand) > 2 and len(cand) < 40:
+                                        brand = cand
+                    except Exception:
+                        pass
+
+                    # 1b. Fallback: "Visit the [Brand] Store" links (if present)
+                    if not brand:
+                        store_link = frame.locator('a[href*="/stores/"]').first
+                        if store_link.count() > 0:
+                            txt = (store_link.inner_text() or '').strip()
+                            m = re.search(r"Visit\s+the\s+(.+?)\s+Store", txt, re.IGNORECASE)
+                            if m:
+                                brand = m.group(1).strip()
+                            else:
+                                href = store_link.get_attribute('href') or ''
+                                m2 = re.search(r"/stores/([^/?#]+)", href)
+                                if m2:
+                                    cand = m2.group(1).strip()
+                                    if cand.lower() not in ('page', 'homepage'):
+                                        brand = cand.replace('-', ' ').replace('_', ' ').strip()
+                    
+                    # 1c. Fallback: Aria-labels
+                    if not brand:
+                        lbl = frame.locator('div[aria-label*="Sponsored ad from"], a[aria-label*="Sponsored ad from"]').first
+                        if lbl.count() > 0:
+                            al = lbl.get_attribute('aria-label')
+                            m = re.search(r"Sponsored\s+ad\s+from\s+([^\.]+)", al, re.IGNORECASE)
+                            if m:
+                                brand = m.group(1).strip()
+                    
+                    # 1d. Fallback: Image Alts (least reliable)
+                    if not brand:
+                        logos = frame.locator('img[alt]').all()
+                        for logo in logos[:3]:
+                            alt = (logo.get_attribute('alt') or '').strip()
+                            if not alt: continue
+                            if any(x in alt.lower() for x in ['sponsored', 'click', 'shop', 'review', 'star', 'rating', 'brand logo', 'product image']):
+                                continue
+                            if len(alt) < 30:
+                                brand = alt
+                                break
+            except Exception:
+                pass # Cross-origin access denied or frame closed
+
+        # Strategy 2: Positional Matching (Opus)
+        # If we couldn't get it from the iframe (e.g. cross-origin), try the outer DOM
+        if not brand:
+            try:
+                box = container.bounding_box()
+                if box:
+                    # Define search area (expanded slightly around the ad)
+                    search_area = {
+                        "x": box["x"] - 50,
+                        "y": box["y"] - 50,
+                        "width": box["width"] + 100,
+                        "height": box["height"] + 100
+                    }
+                    
+                    # Scan for accessibility spans on the page
+                    # We can't query "in rect" easily, so we query all offscreen spans and check coords
+                    # Optimization: Limit to reasonable number if page is huge?
+                    spans = container.page.locator('span.a-offscreen, span.aok-offscreen').all()
+                    
+                    for span in spans:
+                        try:
+                            # Only check spans that contain "Sponsored Ad"
+                            # This avoids expensive bounding_box calls on irrelevant elements
+                            txt = (span.inner_text() or '').strip()
+                            if "Sponsored Ad" not in txt:
+                                continue
+
+                            s_box = span.bounding_box()
+                            if not s_box:
+                                continue
+                                
+                            # Check center point inclusion
+                            sx = s_box["x"] + s_box["width"]/2
+                            sy = s_box["y"] + s_box["height"]/2
+                            
+                            if (search_area["x"] <= sx <= search_area["x"] + search_area["width"] and
+                                search_area["y"] <= sy <= search_area["y"] + search_area["height"]):
+                                
+                                # Found a nearby label! Parse it.
+                                # Format 1: "Sponsored Ad.\n[Brand] logo.\n..."
+                                m_logo = re.search(r"Sponsored\s+Ad.*?\n(.+?)\s+logo", txt, re.IGNORECASE | re.DOTALL)
+                                if m_logo:
+                                    brand = m_logo.group(1).strip()
+                                
+                                # Format 2: "Sponsored Ad - [Brand] - [Title]"
+                                if not brand:
+                                    # Split by hyphens or newlines
+                                    parts = [p.strip() for p in re.split(r'[-\n]', txt) if p.strip()]
+                                    # Usually [0]=Sponsored Ad, [1]=Brand
+                                    if len(parts) >= 2 and "Sponsored" in parts[0]:
+                                        cand = parts[1]
+                                        if len(cand) < 40 and "logo" not in cand.lower():
+                                            brand = cand
+                                
+                                if brand:
+                                    message = txt
+                                    break # Found match for this ad
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+
+    except Exception:
+        pass
+        
+    return brand, message
+
+
 def _build_ids(retailer_type: str, subtype: str, brand_canon: str, anchor: str, run_id: str, pos: int = 0):
     sub = _slug(subtype)
     bc = _slug(brand_canon or "unknown")
@@ -1939,6 +2103,26 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         try:
                             brand_txt, brand_canon, message = _extract_brand_and_message(ad)
                             
+                            # --- Hybrid Extraction Fallback (Gemini + Opus) ---
+                            # If standard extraction failed (Unknown), try iframe piercing and positional matching
+                            if not brand_txt or brand_txt.lower() == "unknown":
+                                h_brand, h_msg = _try_hybrid_extraction(ad)
+                                if h_brand:
+                                    log(f"display: hybrid extraction success -> {h_brand} (msg={str(h_msg)[:30]}...)")
+                                    brand_txt = h_brand
+                                    if h_msg:
+                                        message = h_msg
+                                    
+                                    # Re-canonicalize the new brand
+                                    try:
+                                        brand_canon = canonicalize(brand_txt)
+                                        if not brand_canon and brand_txt.lower() != "unknown":
+                                            add_brand(brand_txt)
+                                            brand_canon = brand_txt.strip().title()
+                                    except Exception as e:
+                                        log(f"display: hybrid canonicalize error -> {e}")
+                            # --------------------------------------------------
+
                             # Extract product description from display ads (multiple possible structures)
                             product_description = ""
                             try:

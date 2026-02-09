@@ -45,6 +45,11 @@
     "verified": true
   },
   {
+    "name": "Airthings",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Alani Nu",
     "synonyms": [],
     "verified": true
@@ -816,6 +821,10 @@
     "verified": true
   },
   {
+    "name": "Dr.Althea Vitamin C",
+    "synonyms": []
+  },
+  {
     "name": "Dr.Melaxin",
     "synonyms": [],
     "verified": true
@@ -953,6 +962,10 @@
     "verified": true
   },
   {
+    "name": "Emuaid Sensitive Skin",
+    "synonyms": []
+  },
+  {
     "name": "Energizer",
     "synonyms": [],
     "verified": true
@@ -1071,6 +1084,10 @@
     "name": "Flipz",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Foaming",
+    "synonyms": []
   },
   {
     "name": "Folgers",
@@ -2240,6 +2257,10 @@
     "verified": true
   },
   {
+    "name": "Nerds",
+    "synonyms": []
+  },
+  {
     "name": "Nespresso",
     "synonyms": [],
     "verified": true
@@ -2563,6 +2584,10 @@
     "name": "Pataday",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Patchology Breakout Box",
+    "synonyms": []
   },
   {
     "name": "PBfit",
@@ -3056,6 +3081,10 @@
     "name": "Seattle's Best",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Seed Prebiotic And",
+    "synonyms": []
   },
   {
     "name": "Sejardin",
@@ -3621,6 +3650,10 @@
     "name": "Velveeta",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Vicks Painquil Pain",
+    "synonyms": []
   },
   {
     "name": "Vita Coco",
