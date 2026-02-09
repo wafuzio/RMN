@@ -821,10 +821,6 @@
     "verified": true
   },
   {
-    "name": "Dr.Althea Vitamin C",
-    "synonyms": []
-  },
-  {
     "name": "Dr.Melaxin",
     "synonyms": [],
     "verified": true
@@ -962,10 +958,6 @@
     "verified": true
   },
   {
-    "name": "Emuaid Sensitive Skin",
-    "synonyms": []
-  },
-  {
     "name": "Energizer",
     "synonyms": [],
     "verified": true
@@ -1084,10 +1076,6 @@
     "name": "Flipz",
     "synonyms": [],
     "verified": true
-  },
-  {
-    "name": "Foaming",
-    "synonyms": []
   },
   {
     "name": "Folgers",
@@ -2258,7 +2246,8 @@
   },
   {
     "name": "Nerds",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Nespresso",
@@ -2586,8 +2575,11 @@
     "verified": true
   },
   {
-    "name": "Patchology Breakout Box",
-    "synonyms": []
+    "name": "Patchology",
+    "synonyms": [
+      "Patchology Breakout Box"
+    ],
+    "verified": true
   },
   {
     "name": "PBfit",

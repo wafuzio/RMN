@@ -348,29 +348,43 @@ def _try_hybrid_extraction(container):
                             content_text = re.sub(r'^(Sponsored Ad\.?|Brand logo\.?|Branded image\.?|Product image\.?|Shop now\.?|\s+)+', '', clean_text, flags=re.IGNORECASE)
                             
                             # The remaining text usually starts with the Brand + Product Title
-                            # Heuristic: Take the first few words as the brand
+                            # Try to match against lexicon, progressively shorter
                             if content_text:
-                                # Split by common separators or just take first few words
                                 parts = content_text.split()
                                 if parts:
-                                    # Candidate brand is first 1-3 words
-                                    cand = " ".join(parts[:3])
+                                    # Try lexicon match: 3 words, 2 words, 1 word
+                                    for n in (3, 2, 1):
+                                        if n > len(parts):
+                                            continue
+                                        cand = " ".join(parts[:n])
+                                        cand = re.sub(r'[^\w\s&\'\.-]', '', cand).strip()
+                                        if not cand:
+                                            continue
+                                        canon = canonicalize(cand)
+                                        if canon and canon.lower() != cand.lower():
+                                            # Lexicon matched — use canonical name
+                                            brand = canon
+                                            break
+                                        elif canon:
+                                            brand = canon
+                                            break
                                     
-                                    # Refine: If we see a "Store" link URL, use that to validate/shorten
-                                    store_links = frame.locator('a[href*="/stores/"]').all()
-                                    if store_links:
-                                        href = store_links[0].get_attribute('href')
-                                        m_store = re.search(r"/stores/([^/?#]+)", href or "")
-                                        if m_store:
-                                            store_slug = m_store.group(1).replace('-', ' ').replace('_', ' ')
-                                            # If slug is in candidate, use slug (more precise)
-                                            if store_slug.lower() in cand.lower():
-                                                cand = store_slug.title()
+                                    # If no lexicon match, refine via store link URL
+                                    if not brand:
+                                        store_links = frame.locator('a[href*="/stores/"]').all()
+                                        if store_links:
+                                            href = store_links[0].get_attribute('href')
+                                            m_store = re.search(r"/stores/([^/?#]+)", href or "")
+                                            if m_store:
+                                                store_slug = m_store.group(1).replace('-', ' ').replace('_', ' ')
+                                                if len(store_slug) > 2:
+                                                    brand = store_slug.title()
                                     
-                                    # Cleanup candidate
-                                    cand = re.sub(r'[^\w\s&\'\.-]', '', cand).strip()
-                                    if len(cand) > 2 and len(cand) < 40:
-                                        brand = cand
+                                    # Last resort: use first word only (safest — avoids product descriptors)
+                                    if not brand and len(parts[0]) > 2:
+                                        cand = re.sub(r'[^\w\s&\'\.-]', '', parts[0]).strip()
+                                        if len(cand) > 2:
+                                            brand = cand
                     except Exception:
                         pass
 

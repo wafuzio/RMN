@@ -714,6 +714,11 @@ class BrandNameVerifier:
         
         self.no_similar_label = ttk.Label(self.similar_frame, text="(none found)", font=("Arial", 10))
         
+        # Shorter name alternatives frame (for multi-word brands)
+        self.shorter_frame = ttk.LabelFrame(info_frame, text="Shorter Names (click to rename)", padding=10)
+        self.shorter_buttons_frame = ttk.Frame(self.shorter_frame)
+        self.shorter_buttons_frame.pack(anchor="w")
+        
         # Stats frame
         stats_frame = ttk.Frame(info_frame)
         stats_frame.pack(pady=10)
@@ -851,6 +856,9 @@ class BrandNameVerifier:
         
         # Update similar brands
         self.show_similar_brands(brand_name)
+        
+        # Show shorter name alternatives for multi-word brands
+        self.show_shorter_names(brand_name)
         
         # Update stats
         self.stats_label.config(
@@ -1090,6 +1098,75 @@ class BrandNameVerifier:
                 btn.pack(side="left", padx=2, pady=2)
         else:
             self.no_similar_label.pack(anchor="w")
+    
+    def show_shorter_names(self, brand_name):
+        """Show clickable shorter name alternatives for multi-word brands.
+        
+        For 'Seed Prebiotic And', shows buttons: 'Seed Prebiotic' and 'Seed'
+        Clicking renames the brand and keeps the old name as a synonym.
+        """
+        # Clear existing buttons
+        for widget in self.shorter_buttons_frame.winfo_children():
+            widget.destroy()
+        
+        words = brand_name.split()
+        if len(words) <= 1:
+            # Single-word brand — hide the frame
+            self.shorter_frame.pack_forget()
+            return
+        
+        # Show the frame (between similar brands and stats)
+        self.shorter_frame.pack(pady=5, fill="x", after=self.similar_frame)
+        
+        # Generate shorter alternatives: N-1 words, N-2 words, ..., 1 word
+        for n in range(len(words) - 1, 0, -1):
+            shorter = " ".join(words[:n])
+            btn = ttk.Button(
+                self.shorter_buttons_frame,
+                text=shorter,
+                command=lambda s=shorter: self.rename_brand_to(s)
+            )
+            btn.pack(side="left", padx=2, pady=2)
+    
+    def rename_brand_to(self, new_name):
+        """Rename the current brand, keeping the old name as a synonym."""
+        if self.current_index >= len(self.brands_to_review):
+            return
+        
+        lexicon_idx, brand = self.brands_to_review[self.current_index]
+        old_name = brand.get("name", "")
+        
+        if old_name == new_name:
+            return
+        
+        # Check if new_name already exists in lexicon
+        existing = next((b for b in self.lexicon if b.get("name", "").lower() == new_name.lower()), None)
+        
+        if existing:
+            # Merge into existing brand: add old name as synonym
+            if old_name not in existing.get("synonyms", []):
+                existing.setdefault("synonyms", []).append(old_name)
+            # Move any synonyms from current brand to existing
+            for syn in brand.get("synonyms", []):
+                if syn not in existing.get("synonyms", []):
+                    existing.setdefault("synonyms", []).append(syn)
+            existing["verified"] = True
+            # Remove the current brand entry
+            self.lexicon.pop(lexicon_idx)
+            print(f"[VERIFIER] Merged '{old_name}' into existing '{new_name}'")
+        else:
+            # Rename: update the brand entry, keep old name as synonym
+            brand["name"] = new_name
+            if old_name not in brand.get("synonyms", []):
+                brand.setdefault("synonyms", []).append(old_name)
+            brand["verified"] = True
+            print(f"[VERIFIER] Renamed '{old_name}' -> '{new_name}' (old name kept as synonym)")
+        
+        self.edited_count += 1
+        save_lexicon(self.lexicon)
+        
+        self.rebuild_review_list()
+        self.show_current_brand()
     
     def merge_into_brand(self, target_name):
         """Merge current brand into an existing brand"""
