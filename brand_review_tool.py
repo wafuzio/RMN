@@ -1331,9 +1331,13 @@ class BrandReviewTool:
                 html_content = f.read()
             
             # Extract product titles from accessibility text
-            # Pattern 1: "Sponsored Ad.\nBranded image.\n{TITLE}\n" (display ad spans)
+            # Variants found in HTML:
+            #   Sponsored Ad.\nBranded image.\n{TITLE}\n
+            #   Sponsored Ad.\nBrand logo.\nBranded image.\n{TITLE}\n
+            #   Sponsored Ad.\nBrand logo.\nProduct image.\n{TITLE}\n
+            #   Sponsored Ad.\nProduct image.\n{TITLE}\n
             titles = re.findall(
-                r'Sponsored Ad\.\\n(?:Branded image\.\\n)?(.+?)\\n',
+                r'Sponsored Ad\\.\\\\n(?:Brand logo\\.\\\\n)?(?:(?:Branded|Product) image\\.\\\\n)?(.+?)\\\\n',
                 html_content
             )
             # Pattern 2: aria-label="Sponsored Ad - {TITLE}" (sponsored product listings)
@@ -1501,10 +1505,11 @@ class BrandReviewTool:
                     if len(word) > 3:
                         _add(word)
         
-        # NOTE: HTML companion file extraction removed from suggestions.
-        # HTML contains brands from OTHER ads on the same page, not the current ad.
-        # It adds noise (e.g., suggesting GE/Moon Cheese for a Liquid Death ad).
-        # HTML extraction is still used by the batch script where slot-matching is possible.
+        # HTML companion extraction removed from suggestions.
+        # It returns ALL brands on the page, not just the current ad's brand,
+        # causing wrong suggestions (e.g. Califia Farms for a CyberPower ad).
+        # The capture script now handles brand extraction at scrape time via
+        # iframe piercing + positional matching (_try_hybrid_extraction).
         
         # Sort: verified first, then alphabetical
         ranked.sort(key=lambda x: (not x[2], x[0]))
