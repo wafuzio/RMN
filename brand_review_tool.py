@@ -636,21 +636,21 @@ class BrandReviewTool:
                             print(f"[FLAGGED]   is_unknown_in_json={is_unknown_in_json}, is_unknown_in_filename={is_unknown_in_filename}")
                             print(f"[FLAGGED]   image_path={image_path}")
                             
-                            # Compute image hash for visual similarity matching
-                            img_hash = None
+                            # Compute image fingerprint for visual similarity matching
+                            img_fingerprint = None
                             if IMAGEHASH_AVAILABLE and image_path and os.path.exists(image_path):
                                 try:
-                                    img = Image.open(image_path)
-                                    img_hash = str(imagehash.phash(img))
+                                    img_fingerprint = self.compute_image_fingerprint(image_path)
                                 except Exception as e:
-                                    print(f"[WARN] Failed to compute image hash: {e}")
+                                    print(f"[WARN] Failed to compute image fingerprint: {e}")
                             
                             self.unknown_ads.append({
                                 'json_file': json_file,
                                 'ad': ad,
                                 'image_path': image_path,
                                 'current_brand': current_brand,
-                                'image_hash': img_hash
+                                'image_hash': img_fingerprint.get('phash') if img_fingerprint else None,
+                                'image_fingerprint': img_fingerprint
                             })
             except (json.JSONDecodeError, KeyError) as e:
                 print(f"Error reading {json_file}: {e}")
@@ -1239,6 +1239,88 @@ class BrandReviewTool:
                 details.append(f"  ... and {len(ad['products']) - 5} more")
         
         return "\n".join(details)
+    
+    def compute_image_fingerprint(self, image_path):
+        """Compute multiple image hashes and color histogram for robust similarity matching.
+        
+        Returns a dict with phash, dhash, ahash (as hex strings) and a color histogram tuple.
+        """
+        img = Image.open(image_path)
+        # Convert to RGB if needed (handles RGBA, P, etc.)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        fp = {
+            'phash': str(imagehash.phash(img)),
+            'dhash': str(imagehash.dhash(img)),
+            'ahash': str(imagehash.average_hash(img)),
+        }
+        
+        # Color histogram (downscaled to 8x8, quantized to 4 bins per channel = 64 values)
+        thumb = img.resize((8, 8), Image.Resampling.LANCZOS)
+        hist = thumb.histogram()  # 768 values (256 per channel)
+        # Quantize to 16 bins per channel for compact comparison
+        quantized = []
+        for ch in range(3):
+            ch_hist = hist[ch * 256:(ch + 1) * 256]
+            for b in range(16):
+                quantized.append(sum(ch_hist[b * 16:(b + 1) * 16]))
+        fp['color_hist'] = tuple(quantized)
+        
+        return fp
+    
+    def compute_image_similarity(self, fp1, fp2):
+        """Compute similarity score (0.0 to 1.0) between two image fingerprints.
+        
+        Uses weighted combination of multiple hash distances and color histogram correlation.
+        """
+        if not fp1 or not fp2:
+            return 0.0
+        
+        scores = []
+        weights = []
+        
+        # Perceptual hash (most important — structure-aware)
+        try:
+            dist = imagehash.hex_to_hash(fp1['phash']) - imagehash.hex_to_hash(fp2['phash'])
+            scores.append(max(0, 1.0 - dist / 32.0))
+            weights.append(3.0)
+        except Exception:
+            pass
+        
+        # Difference hash (edge-sensitive)
+        try:
+            dist = imagehash.hex_to_hash(fp1['dhash']) - imagehash.hex_to_hash(fp2['dhash'])
+            scores.append(max(0, 1.0 - dist / 32.0))
+            weights.append(2.0)
+        except Exception:
+            pass
+        
+        # Average hash (overall brightness pattern)
+        try:
+            dist = imagehash.hex_to_hash(fp1['ahash']) - imagehash.hex_to_hash(fp2['ahash'])
+            scores.append(max(0, 1.0 - dist / 32.0))
+            weights.append(1.5)
+        except Exception:
+            pass
+        
+        # Color histogram correlation
+        h1 = fp1.get('color_hist')
+        h2 = fp2.get('color_hist')
+        if h1 and h2 and len(h1) == len(h2):
+            # Normalized dot product (cosine similarity)
+            dot = sum(a * b for a, b in zip(h1, h2))
+            mag1 = sum(a * a for a in h1) ** 0.5
+            mag2 = sum(a * a for a in h2) ** 0.5
+            if mag1 > 0 and mag2 > 0:
+                cosine = dot / (mag1 * mag2)
+                scores.append(max(0, cosine))
+                weights.append(1.5)
+        
+        if not scores:
+            return 0.0
+        
+        return sum(s * w for s, w in zip(scores, weights)) / sum(weights)
     
     def display_image(self, image_path):
         """Load and display the ad image"""
@@ -1960,59 +2042,32 @@ class BrandReviewTool:
         
         print(f"[DEBUG] Found {len(similar_ads)} similar ads (text-based)")
         
-        # If no text matches found and we have an image hash, offer hash-based matching
+        # Always search for visually similar ads using multi-feature fingerprinting
+        current_fp = ad_data.get('image_fingerprint')
         current_hash = ad_data.get('image_hash')
-        if len(similar_ads) == 1 and current_hash and IMAGEHASH_AVAILABLE:
-            # First check if this hash was already corrected in a previous save
-            # Use Hamming distance for fuzzy matching (allows minor differences)
-            cached_brands = None
-            best_distance = 999
-            for cached_hash, brands in self.hash_to_brand.items():
-                try:
-                    dist = imagehash.hex_to_hash(current_hash) - imagehash.hex_to_hash(cached_hash)
-                    if dist <= 5 and dist < best_distance:  # Allow up to 5 bits difference
-                        best_distance = dist
-                        cached_brands = brands
-                except:
-                    if current_hash == cached_hash:
-                        cached_brands = brands
-                        best_distance = 0
+        if current_fp and IMAGEHASH_AVAILABLE:
+            # Find visually similar ads in the queue (using multi-feature comparison)
+            visual_candidates = []
+            text_matched_indices = {idx for idx, _ in similar_ads}
             
-            if cached_brands:
-                print(f"[DEBUG] Found cached hash match (distance={best_distance}): {cached_brands}")
-                # Auto-fill the brand from cache and show confirmation
-                response = messagebox.askyesno(
-                    "🔍 IMAGE HASH MATCH (from previous correction)",
-                    f"This image matches a previously corrected ad.\n\n"
-                    f"Cached brand: {', '.join(cached_brands)}\n"
-                    f"Your input: {', '.join(corrected_brands)}\n\n"
-                    f"Use the cached brand instead?"
-                )
-                if response:
-                    corrected_brands = cached_brands
-                    print(f"[DEBUG] Using cached brands: {corrected_brands}")
-            
-            # Find ads with matching image hash in the current queue (fuzzy match)
-            hash_matches = []
             for i, ad in enumerate(self.unknown_ads):
-                if i == self.current_index:
+                if i == self.current_index or i in text_matched_indices:
                     continue
-                ad_hash = ad.get('image_hash')
-                if ad_hash:
-                    try:
-                        dist = imagehash.hex_to_hash(current_hash) - imagehash.hex_to_hash(ad_hash)
-                        if dist <= 5:  # Allow up to 5 bits difference
-                            hash_matches.append((i, ad))
-                    except:
-                        if ad_hash == current_hash:
-                            hash_matches.append((i, ad))
+                other_fp = ad.get('image_fingerprint')
+                if other_fp:
+                    sim = self.compute_image_similarity(current_fp, other_fp)
+                    if sim >= 0.70:  # 70% threshold to show as candidate
+                        visual_candidates.append((i, ad, sim))
             
-            if hash_matches:
-                print(f"[DEBUG] Found {len(hash_matches)} image hash matches in queue")
-                # Show visual confirmation dialog for each hash match
-                confirmed_matches = self.confirm_hash_matches(ad_data, hash_matches, corrected_brands)
-                similar_ads.extend(confirmed_matches)
-                print(f"[DEBUG] User confirmed {len(confirmed_matches)} hash matches")
+            if visual_candidates:
+                # Sort by similarity descending
+                visual_candidates.sort(key=lambda x: x[2], reverse=True)
+                print(f"[DEBUG] Found {len(visual_candidates)} visual similarity candidates")
+                
+                # Show grid selection dialog
+                confirmed = self.show_visual_match_grid(ad_data, visual_candidates, corrected_brands)
+                similar_ads.extend(confirmed)
+                print(f"[DEBUG] User selected {len(confirmed)} visual matches")
         
         # Save this hash -> brand mapping for future matches
         if current_hash and corrected_brands:
@@ -2119,112 +2174,171 @@ class BrandReviewTool:
             messagebox.showinfo("Complete", "All unknown brands have been reviewed!")
             self.root.quit()
 
-    def confirm_hash_matches(self, current_ad_data, hash_matches, corrected_brands):
-        """Show visual confirmation dialog for image hash matches.
+    def show_visual_match_grid(self, current_ad_data, visual_candidates, corrected_brands):
+        """Show a scrollable grid of visually similar ads with checkboxes.
         
-        Displays the current ad image alongside each potential match for human validation.
+        The current ad is shown at the top as reference. Below it, candidate matches
+        are displayed in a grid with thumbnails, similarity scores, and checkboxes.
+        User selects which ones to apply the brand to and clicks 'Apply'.
+        
         Returns list of confirmed matches as (index, ad_data) tuples.
         """
-        confirmed = []
         brand_text = ", ".join(corrected_brands)
+        result = {'confirmed': []}
         
-        for idx, match_ad in hash_matches:
-            # Create a dialog showing both images side-by-side
-            dialog = tk.Toplevel(self.root)
-            dialog.title("🔍 IMAGE HASH MATCH - Visual Confirmation Required")
-            dialog.geometry("1200x900")
-            dialog.transient(self.root)
-            dialog.grab_set()
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Visual Match Grid — Apply '{brand_text}'")
+        dialog.geometry("1100x800")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # --- Reference image at top ---
+        ref_frame = ttk.LabelFrame(dialog, text=f"Reference Ad  —  Brand: {brand_text}", padding=8)
+        ref_frame.pack(fill="x", padx=10, pady=(10, 5))
+        
+        current_path = current_ad_data.get('image_path', '')
+        if current_path and os.path.exists(current_path):
+            try:
+                img = Image.open(current_path)
+                img.thumbnail((300, 200), Image.Resampling.LANCZOS)
+                photo = ImageTk.PhotoImage(img)
+                ref_label = ttk.Label(ref_frame, image=photo)
+                ref_label.image = photo
+                ref_label.pack(side="left", padx=10)
+            except Exception:
+                ttk.Label(ref_frame, text="[Image load error]").pack(side="left")
+        
+        ttk.Label(ref_frame, text=os.path.basename(current_path) if current_path else "N/A",
+                 font=("Courier", 9)).pack(side="left", padx=10)
+        
+        # --- Select All / None buttons ---
+        toolbar = ttk.Frame(dialog)
+        toolbar.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Label(toolbar, text=f"{len(visual_candidates)} potential matches found",
+                 font=("Arial", 11, "bold")).pack(side="left")
+        
+        # Checkbox variables list
+        check_vars = []
+        
+        def select_all():
+            for var in check_vars:
+                var.set(True)
+        
+        def select_none():
+            for var in check_vars:
+                var.set(False)
+        
+        ttk.Button(toolbar, text="Select All", command=select_all).pack(side="right", padx=5)
+        ttk.Button(toolbar, text="Select None", command=select_none).pack(side="right", padx=5)
+        
+        # --- Scrollable grid ---
+        canvas = tk.Canvas(dialog)
+        v_scroll = ttk.Scrollbar(dialog, orient=tk.VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=v_scroll.set)
+        
+        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10)
+        
+        grid_frame = ttk.Frame(canvas)
+        canvas.create_window((0, 0), window=grid_frame, anchor="nw")
+        
+        # Keep image references to prevent garbage collection
+        dialog._thumb_images = []
+        
+        COLS = 4
+        THUMB_SIZE = (220, 180)
+        
+        for card_idx, (queue_idx, ad, sim_score) in enumerate(visual_candidates):
+            row = card_idx // COLS
+            col = card_idx % COLS
             
-            # Result variable
-            result = {'confirmed': False}
+            # Card frame
+            card = ttk.Frame(grid_frame, relief="groove", borderwidth=2, padding=4)
+            card.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
             
-            # Header label
-            header = ttk.Label(
-                dialog,
-                text=f"⚠️ IMAGE HASH MATCH DETECTED ⚠️\nApply brand '{brand_text}' to this matching ad?",
-                font=("Arial", 14, "bold"),
-                foreground="orange"
-            )
-            header.pack(pady=10)
+            # Checkbox (pre-check if similarity >= 90%)
+            var = tk.BooleanVar(value=sim_score >= 0.90)
+            check_vars.append(var)
             
-            # Images frame
-            images_frame = ttk.Frame(dialog)
-            images_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            chk = ttk.Checkbutton(card, variable=var)
+            chk.pack(anchor="w")
             
-            # Current ad (left side)
-            left_frame = ttk.LabelFrame(images_frame, text="CURRENT AD (just corrected)", padding=10)
-            left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
-            
-            current_path = current_ad_data.get('image_path', '')
-            if current_path and os.path.exists(current_path):
-                try:
-                    img = Image.open(current_path)
-                    img.thumbnail((500, 500), Image.Resampling.LANCZOS)
-                    photo = ImageTk.PhotoImage(img)
-                    img_label = ttk.Label(left_frame, image=photo)
-                    img_label.image = photo
-                    img_label.pack()
-                except Exception:
-                    ttk.Label(left_frame, text="[Image load error]").pack()
-            else:
-                ttk.Label(left_frame, text="[No image]").pack()
-            
-            ttk.Label(left_frame, text=os.path.basename(current_path) if current_path else "N/A", 
-                     font=("Courier", 9), wraplength=450).pack(pady=5)
-            
-            # Match ad (right side)
-            right_frame = ttk.LabelFrame(images_frame, text="POTENTIAL MATCH (hash-based)", padding=10)
-            right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5)
-            
-            match_path = match_ad.get('image_path', '')
+            # Thumbnail
+            match_path = ad.get('image_path', '')
             if match_path and os.path.exists(match_path):
                 try:
                     img = Image.open(match_path)
-                    img.thumbnail((500, 500), Image.Resampling.LANCZOS)
+                    img.thumbnail(THUMB_SIZE, Image.Resampling.LANCZOS)
                     photo = ImageTk.PhotoImage(img)
-                    img_label = ttk.Label(right_frame, image=photo)
-                    img_label.image = photo
+                    dialog._thumb_images.append(photo)
+                    img_label = ttk.Label(card, image=photo, cursor="hand2")
                     img_label.pack()
+                    # Click thumbnail to toggle checkbox
+                    img_label.bind("<Button-1>", lambda e, v=var: v.set(not v.get()))
                 except Exception:
-                    ttk.Label(right_frame, text="[Image load error]").pack()
+                    ttk.Label(card, text="[Error]", width=25).pack()
             else:
-                ttk.Label(right_frame, text="[No image]").pack()
+                ttk.Label(card, text="[No image]", width=25).pack()
             
-            ttk.Label(right_frame, text=os.path.basename(match_path) if match_path else "N/A",
-                     font=("Courier", 9), wraplength=450).pack(pady=5)
+            # Similarity score
+            pct = int(sim_score * 100)
+            color = "green" if pct >= 90 else ("orange" if pct >= 80 else "red")
+            score_label = tk.Label(card, text=f"{pct}% match", font=("Arial", 10, "bold"), fg=color)
+            score_label.pack()
             
-            # Match details
-            match_json = os.path.basename(match_ad.get('json_file', 'Unknown'))
-            match_keyword = match_ad.get('ad', {}).get('metadata', {}).get('keyword_token', 'Unknown')
-            details_text = f"JSON: {match_json} | Keyword: {match_keyword}"
-            ttk.Label(right_frame, text=details_text, font=("Arial", 10)).pack(pady=5)
-            
-            # Buttons
-            button_frame = ttk.Frame(dialog)
-            button_frame.pack(pady=15)
-            
-            def on_yes():
-                result['confirmed'] = True
-                dialog.destroy()
-            
-            def on_no():
-                result['confirmed'] = False
-                dialog.destroy()
-            
-            yes_btn = ttk.Button(button_frame, text="✓ Yes, Same Ad - Apply Brand", command=on_yes)
-            yes_btn.pack(side=tk.LEFT, padx=20)
-            
-            no_btn = ttk.Button(button_frame, text="✗ No, Different Ad - Skip", command=on_no)
-            no_btn.pack(side=tk.LEFT, padx=20)
-            
-            # Wait for dialog to close
-            dialog.wait_window()
-            
-            if result['confirmed']:
-                confirmed.append((idx, match_ad))
+            # Filename (truncated)
+            fname = os.path.basename(match_path) if match_path else "N/A"
+            if len(fname) > 30:
+                fname = fname[:27] + "..."
+            ttk.Label(card, text=fname, font=("Courier", 8), wraplength=200).pack()
         
-        return confirmed
+        # Update scroll region after grid is built
+        grid_frame.update_idletasks()
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        
+        # Mouse wheel scrolling
+        def on_mousewheel(event):
+            canvas.yview_scroll(-1 * (event.delta // 120), "units")
+        canvas.bind_all("<MouseWheel>", on_mousewheel)
+        
+        # --- Apply / Cancel buttons ---
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(fill="x", padx=10, pady=10)
+        
+        def on_apply():
+            for i, (queue_idx, ad, _) in enumerate(visual_candidates):
+                if check_vars[i].get():
+                    result['confirmed'].append((queue_idx, ad))
+            canvas.unbind_all("<MouseWheel>")
+            dialog.destroy()
+        
+        def on_cancel():
+            canvas.unbind_all("<MouseWheel>")
+            dialog.destroy()
+        
+        selected_count_var = tk.StringVar(value="Apply (0 selected)")
+        
+        def update_count(*args):
+            n = sum(1 for v in check_vars if v.get())
+            selected_count_var.set(f"Apply ({n} selected)")
+        
+        for var in check_vars:
+            var.trace_add("write", update_count)
+        update_count()
+        
+        apply_btn = ttk.Button(btn_frame, textvariable=selected_count_var, command=on_apply)
+        apply_btn.pack(side="right", padx=10)
+        
+        cancel_btn = ttk.Button(btn_frame, text="Skip All", command=on_cancel)
+        cancel_btn.pack(side="right", padx=10)
+        
+        # Close on Escape
+        dialog.bind("<Escape>", lambda e: on_cancel())
+        dialog.bind("<Return>", lambda e: on_apply())
+        
+        dialog.wait_window()
+        return result['confirmed']
 
     def delete_current_ad(self):
         """Two-step delete: first click arms, second click deletes without popups."""
