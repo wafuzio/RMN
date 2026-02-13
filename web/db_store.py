@@ -455,10 +455,10 @@ def get_ad_types(
         where_clause = " AND ".join(where) if where else "TRUE"
 
         cur.execute(f"""
-            SELECT DISTINCT a.ad_type
+            SELECT DISTINCT upper(a.ad_type) as ad_type_upper
             FROM ads a JOIN runs r ON a.run_id = r.id
-            WHERE {where_clause}
-            ORDER BY a.ad_type
+            WHERE {where_clause} AND a.ad_type IS NOT NULL
+            ORDER BY ad_type_upper
         """, params)
         types = [row[0] for row in cur.fetchall()]
         cur.close()

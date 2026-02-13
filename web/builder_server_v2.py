@@ -32,9 +32,16 @@ from time import perf_counter, time
 from utils.path_taxonomy import allowed_subdirs, ADTYPE_TO_FOLDER
 from core.brands import canonicalize, is_blacklisted
 import hashlib
+_USE_DB = False
 try:
-    from web.db_store import runs as mf_runs, daily_totals as mf_daily, brands as mf_brands, brands_by_client as mf_brands_by_client, _db_available
+    from web.db_store import (
+        runs as mf_runs, daily_totals as mf_daily,
+        brands as mf_brands, brands_by_client as mf_brands_by_client,
+        _db_available, count_ads as db_count_ads,
+        get_ad_types as db_get_ad_types, get_brands_filtered as db_get_brands_filtered,
+    )
     if _db_available():
+        _USE_DB = True
         print("✅ Database store connected — using PostgreSQL for run/brand queries")
     else:
         raise ImportError("DB not reachable")
@@ -1647,6 +1654,28 @@ def api_ads_count():
     advertiser_in = request.args.get("advertiser") or None
     types_filter = (request.args.get("types") or "").strip()
 
+    # DB fast path: single SQL COUNT for any filter combination
+    if _USE_DB:
+        types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()] if types_filter else None
+        total = db_count_ads(
+            retailer=retailer,
+            clients=clients if clients else None,
+            keyword=term,
+            start=start,
+            end=end,
+            brand=advertiser_in,
+            ad_types=types_list,
+        )
+        print(f"[ads-count] DB: {total} ads for {retailer} (types={types_filter or 'all'}, brand={advertiser_in or 'all'})")
+        return jsonify({
+            "total": total,
+            "retailer": retailer,
+            "client": _norm_clients_for_cache(clients),
+            "filters": {"term": term, "advertiser": advertiser_in, "start": start, "end": end, "types": types_filter}
+        })
+
+    # --- JSON fallback paths below ---
+
     # If types filter is specified, we need to load JSONs to filter by ad type
     if types_filter:
         types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()]
@@ -1752,25 +1781,30 @@ def api_ads_types():
     if cached is not None:
         return jsonify(cached)
     
-    # Collect distinct ad types from run manifest (fast - no file I/O)
-    ad_types = set()
-    
-    for r in mf_runs():
-        if r["retailer"] != retailer:
-            continue
-        if clients and r["client"] not in clients:
-            continue
-        if start and r["day"] < start:
-            continue
-        if end and r["day"] > end:
-            continue
-        
-        # Get ad types from manifest's brands_by_type keys
-        brands_by_type = r.get("brands_by_type", {})
-        ad_types.update(brands_by_type.keys())
-    
-    # Sort alphabetically for consistent ordering
-    types_list = sorted(ad_types)
+    # DB fast path: single SQL query for distinct ad types
+    if _USE_DB:
+        types_list = db_get_ad_types(
+            retailer=retailer,
+            clients=clients if clients else None,
+            start=start,
+            end=end,
+        )
+        print(f"[ads-types] DB: {len(types_list)} types for {retailer}")
+    else:
+        # Fallback: collect distinct ad types from run manifest
+        ad_types = set()
+        for r in mf_runs():
+            if r["retailer"] != retailer:
+                continue
+            if clients and r["client"] not in clients:
+                continue
+            if start and r["day"] < start:
+                continue
+            if end and r["day"] > end:
+                continue
+            brands_by_type = r.get("brands_by_type", {})
+            ad_types.update(brands_by_type.keys())
+        types_list = sorted(ad_types)
     
     result = {
         "types": types_list,
