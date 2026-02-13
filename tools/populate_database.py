@@ -469,6 +469,39 @@ def populate_runs(conn):
 
 
 # ---------------------------------------------------------------------------
+# 5. Blacklist
+# ---------------------------------------------------------------------------
+BLACKLIST_JSON = os.path.join(PROJECT_ROOT, "config", "brand_blacklist.json")
+
+
+def populate_blacklist(conn):
+    print("\n=== Populating blacklist ===")
+    with open(BLACKLIST_JSON) as f:
+        data = json.load(f)
+
+    entries = data.get("brands", [])
+    cur = conn.cursor()
+    cur.execute("DELETE FROM blacklist")
+
+    count = 0
+    for name in entries:
+        name = (name or "").strip()
+        if not name:
+            continue
+        try:
+            cur.execute(
+                "INSERT INTO blacklist (key, reason) VALUES (%s, %s)",
+                (name, "imported from brand_blacklist.json"),
+            )
+            count += 1
+        except psycopg2.errors.UniqueViolation:
+            conn.rollback()
+
+    conn.commit()
+    print(f"  Inserted {count} blacklist entries from {len(entries)} items")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
@@ -477,11 +510,12 @@ def main():
     parser.add_argument("--logos", action="store_true", help="Populate brand logos")
     parser.add_argument("--schedules", action="store_true", help="Populate schedules")
     parser.add_argument("--runs", action="store_true", help="Populate runs + ads")
+    parser.add_argument("--blacklist", action="store_true", help="Populate blacklist")
     parser.add_argument("--all", action="store_true", help="Populate everything")
     args = parser.parse_args()
 
     # Default to --all if no flags
-    if not any([args.brands, args.logos, args.schedules, args.runs, args.all]):
+    if not any([args.brands, args.logos, args.schedules, args.runs, args.blacklist, args.all]):
         args.all = True
 
     print(f"Connecting to {DB_URL}...")
@@ -497,6 +531,8 @@ def main():
             populate_schedules(conn)
         if args.all or args.runs:
             populate_runs(conn)
+        if args.all or args.blacklist:
+            populate_blacklist(conn)
     finally:
         conn.close()
 
