@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,20 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
   const [competitorColorMap, setCompetitorColorMap] = useState<Map<string, string>>(new Map());
   const [imageZoom, setImageZoom] = useState(100);
   const [showZoomedImage, setShowZoomedImage] = useState(false);
+  const [adsPage, setAdsPage] = useState(1);
+  const [accumulatedAds, setAccumulatedAds] = useState<Ad[]>([]);
+  const [adsTotalCards, setAdsTotalCards] = useState(0);
+  const prevViewStateRef = useRef(viewState);
+
+  // Reset accumulated ads when view state changes
+  useEffect(() => {
+    if (prevViewStateRef.current !== viewState) {
+      setAdsPage(1);
+      setAccumulatedAds([]);
+      setAdsTotalCards(0);
+      prevViewStateRef.current = viewState;
+    }
+  }, [viewState]);
 
   const { data: brandDetail, isLoading, error } = useQuery({
     queryKey: ["brand-detail", brand, retailers],
@@ -92,69 +106,61 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
     enabled: selectedCompetitors.size > 0 && !!brandDetail?.top_keywords,
   });
 
-  // Remove the expensive allBrandAds query - we'll show unique counts after clicking a retailer
-
-  const { data: filteredAds, isLoading: adsLoading } = useQuery({
-    queryKey: ["brand-ads", brand, viewState],
+  // Fetch a single page of ads at a time instead of exhaustively loading all pages
+  const { data: adsPageData, isLoading: adsLoading, isFetching: adsFetching } = useQuery({
+    queryKey: ["brand-ads", brand, viewState, adsPage],
     queryFn: async () => {
       if (viewState.type === 'detail') return null;
 
-      const allAds: Ad[] = [];
+      // Determine which retailer to query
+      let retailer: string | undefined;
+      if (viewState.type === 'retailer-ads') {
+        retailer = viewState.retailer;
+      } else if (brandDetail?.retailer_ads) {
+        // For keyword-ads, pick the first retailer (or query all)
+        const retailers = Object.keys(brandDetail.retailer_ads);
+        retailer = retailers.length === 1 ? retailers[0] : retailers[0];
+      }
+      if (!retailer) return null;
 
-      // Query each retailer in parallel (much faster than sequential)
-      if (brandDetail?.retailer_ads) {
-        const retailerPromises = Object.keys(brandDetail.retailer_ads).map(async (retailer) => {
-          // Skip retailers we don't want for retailer view
-          if (viewState.type === 'retailer-ads' && viewState.retailer !== retailer) {
-            return [];
-          }
+      const params = new URLSearchParams();
+      params.set('retailer', retailer);
+      params.set('client', 'all');
+      params.set('advertiser', brand);
+      params.set('page', String(adsPage));
+      params.set('page_size', '48');
 
-          try {
-            const params = new URLSearchParams();
-            params.set('retailer', retailer);
-            params.set('client', 'all');
-            params.set('advertiser', brand); // Filter by brand/advertiser directly
-
-            if (viewState.type === 'keyword-ads') {
-              params.set('term', viewState.keyword);
-            }
-
-            const response = await fetch(`/api/ads/cards?${params.toString()}`);
-            if (response.ok) {
-              const data = await response.json();
-              return data.cards || [];
-            }
-          } catch (err) {
-            console.error(`Failed to fetch ads for ${retailer}:`, err);
-          }
-          return [];
-        });
-
-        const results = await Promise.all(retailerPromises);
-        results.forEach(cards => allAds.push(...cards));
+      if (viewState.type === 'keyword-ads') {
+        params.set('term', viewState.keyword);
       }
 
-      // Deduplicate and filter out invalid ads
-      const dedupeMap = new Map<string, Ad>();
-      for (const ad of allAds) {
-        // Skip ads without valid images
-        if (!ad.image_url || ad.image_url.includes('placeholder')) {
-          continue;
-        }
-        
-        // Build unique ID
-        const id = `${ad.retailer}-${ad.client}-${ad.brand}-${ad.message}-${ad.timestamp}`;
-        if (!dedupeMap.has(id)) {
-          dedupeMap.set(id, ad);
-        }
-      }
-
-      return Array.from(dedupeMap.values());
+      const response = await fetch(`/api/ads/cards?${params.toString()}`);
+      if (!response.ok) return null;
+      return response.json();
     },
     enabled: viewState.type !== 'detail' && !!brandDetail,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
+
+  // Accumulate ads as pages are loaded
+  useEffect(() => {
+    if (adsPageData?.cards) {
+      setAdsTotalCards(adsPageData.total_cards || 0);
+      if (adsPage === 1) {
+        setAccumulatedAds(adsPageData.cards);
+      } else {
+        setAccumulatedAds(prev => [...prev, ...adsPageData.cards]);
+      }
+    }
+  }, [adsPageData, adsPage]);
+
+  const filteredAds = accumulatedAds.length > 0 ? accumulatedAds : null;
+  const hasMoreAds = adsPageData?.has_more ?? false;
+
+  const loadMoreAds = useCallback(() => {
+    setAdsPage(p => p + 1);
+  }, []);
 
   // Aggregate ads for grouped display
   const aggregatedAds = useMemo(() => {
@@ -327,6 +333,9 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
           </div>
         ) : viewState.type !== 'detail' && aggregatedAds ? (
           <div className="space-y-4">
+            <div className="text-sm text-gray-500 mb-2">
+              Showing {accumulatedAds.length} of {adsTotalCards} ads
+            </div>
             <div className="modal-content-box flex flex-col gap-4">
               {aggregatedAds.map((item, idx) => (
                 <div key={idx}>
@@ -348,6 +357,22 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
                 </div>
               ))}
             </div>
+            {hasMoreAds && (
+              <div className="flex justify-center pt-4">
+                <Button
+                  onClick={loadMoreAds}
+                  disabled={adsFetching}
+                  variant="outline"
+                  className="w-full max-w-xs"
+                >
+                  {adsFetching ? (
+                    <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading...</>
+                  ) : (
+                    `Load More (${accumulatedAds.length} of ${adsTotalCards})`
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         ) : isLoading ? (
           <div className="flex items-center justify-center py-8">
