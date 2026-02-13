@@ -39,6 +39,8 @@ try:
         brands as mf_brands, brands_by_client as mf_brands_by_client,
         _db_available, count_ads as db_count_ads,
         get_ad_types as db_get_ad_types, get_brands_filtered as db_get_brands_filtered,
+        get_brand_details as db_get_brand_details,
+        query_ads as db_query_ads,
     )
     if _db_available():
         _USE_DB = True
@@ -1900,7 +1902,149 @@ def api_ads_cards():
     
     if not retailer:
         return jsonify({"error": "retailer parameter required"}), 400
-    
+
+    # ── DB FAST PATH: SQL filtering + pagination, then resolve images from JSON ──
+    if _USE_DB:
+        from time import perf_counter as _pc
+        _t0 = _pc()
+        types_list_db = [t.strip().lower() for t in types_filter.split(',') if t.strip()] if types_filter else None
+        db_result = db_query_ads(
+            retailer=retailer,
+            clients=clients if clients else None,
+            keyword=term if term else None,
+            start=start_date if start_date else None,
+            end=end_date if end_date else None,
+            brand=advertiser_raw if advertiser_raw else None,
+            ad_types=types_list_db,
+            page=page,
+            page_size=page_size,
+            sort=sort_order if sort_order else "latest",
+        )
+        db_ads = db_result.get("ads", [])
+        db_total = db_result.get("total", 0)
+        db_has_more = db_result.get("has_more", False)
+
+        # Group by json_path to batch-load files
+        from collections import defaultdict
+        file_groups = defaultdict(list)
+        for idx, ad_row in enumerate(db_ads):
+            jp = ad_row.get("json_path") or ""
+            file_groups[jp].append((idx, ad_row))
+
+        cards = []
+        brands_set = set()
+        json_cache = {}
+
+        for jp, group in file_groups.items():
+            fp = OUTPUT_ROOT / jp if jp else None
+            data = None
+            if fp and jp not in json_cache:
+                try:
+                    with open(fp, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    json_cache[jp] = data
+                except Exception as e:
+                    print(f"[ads-cards] DB path: error loading {jp}: {e}")
+                    json_cache[jp] = None
+            data = json_cache.get(jp)
+
+            for idx, ad_row in group:
+                file_retailer = ad_row["retailer"]
+                file_client = ad_row["client"]
+                ad_type = ad_row.get("ad_type") or "Main"
+                brand = ad_row.get("brand") or "Unknown"
+                slot = ad_row.get("slot")
+                message = ad_row.get("title") or ad_row.get("message") or ad_row.get("description") or ""
+                ts = ad_row.get("timestamp") or ""
+
+                # Try to find the original ad dict in the JSON for image/video resolution
+                orig_ad = None
+                if data:
+                    all_ads = data.get("ads") or []
+                    oid = ad_row.get("original_id")
+                    if oid is not None and isinstance(oid, int) and 0 <= oid < len(all_ads):
+                        orig_ad = all_ads[oid]
+                    else:
+                        # Fallback: match by brand + ad_type
+                        for a in all_ads:
+                            ab = (a.get("brand") or a.get("advertiser") or "").strip()
+                            at = (a.get("type") or a.get("ad_type") or "")
+                            if ab.lower() == brand.lower() and at.lower() == ad_type.lower():
+                                orig_ad = a
+                                break
+
+                if orig_ad:
+                    image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, orig_ad)
+                    media_urls = build_media_urls_for_ad(file_retailer, file_client, orig_ad)
+                    video_url_api = media_urls.get("video_url")
+                    video_overlay = orig_ad.get("video_overlay")
+                    card_format = orig_ad.get("card_format")
+                    dimensions = orig_ad.get("dimensions")
+                    advertisers = orig_ad.get("advertisers") or []
+                    if not advertisers and brand and brand != "Unknown":
+                        advertisers = [brand]
+                    # Slot fallback
+                    if not slot:
+                        ad_type_raw = (orig_ad.get("type") or orig_ad.get("ad_type") or "").lower()
+                        subtype_raw = (orig_ad.get("subtype") or "").lower()
+                        if "sponsored_display" in ad_type_raw or "sponsored display" in ad_type_raw:
+                            if "left_rail" in subtype_raw:
+                                slot = "left_rail"
+                            elif "bottom" in subtype_raw:
+                                slot = "bottom"
+                            else:
+                                slot = "top"
+                else:
+                    # No JSON match — use DB fields directly
+                    img_path = ad_row.get("image_path") or ""
+                    image_url = f"/api/image/{img_path}" if img_path else ""
+                    video_url_api = ad_row.get("video_url") or ad_row.get("video_path") or None
+                    video_overlay = None
+                    card_format = None
+                    dimensions = None
+                    advertisers = [brand] if brand and brand != "Unknown" else []
+
+                if brand and brand != "Unknown":
+                    brands_set.add(brand)
+
+                cards.append({
+                    "retailer": file_retailer,
+                    "client": file_client,
+                    "keyword": ad_row.get("keyword"),
+                    "ad_type": ad_type,
+                    "slot": slot,
+                    "brand": brand,
+                    "advertisers": advertisers,
+                    "message": message,
+                    "image_url": image_url,
+                    "video_url": video_url_api,
+                    "video_overlay": video_overlay,
+                    "run_file": os.path.basename(jp) if jp else "",
+                    "timestamp": ts,
+                    "featured": False,
+                    "ad_index": ad_row.get("original_id"),
+                    "card_format": card_format,
+                    "dimensions": dimensions,
+                })
+
+        _elapsed = (_pc() - _t0) * 1000
+        result = {
+            "retailer": retailer,
+            "client": _norm_clients_for_cache(clients),
+            "cards": cards,
+            "page": page,
+            "page_size": page_size,
+            "has_more": db_has_more,
+            "total_cards": db_total,
+            "brands": sorted(list(brands_set)),
+            "filters": {"term": term, "advertiser": advertiser_raw or None, "start": start_date, "end": end_date}
+        }
+        _set_cache(cache_key, result)
+        client_str = _norm_clients_for_cache(clients)
+        print(f"[{retailer}/{client_str}] DB cards: {len(cards)} cards from {db_total} total "
+              f"(page {page}, {len(json_cache)} files loaded) in {_elapsed:.0f}ms")
+        return jsonify(result)
+
     # BRAND INDEX FAST PATH: Paginate at file level, don't load all cards
     if advertiser_filter:
         items = _entries_for_brand_sorted(retailer, clients, start_date, end_date, advertiser_raw)
@@ -3006,6 +3150,22 @@ def api_brands():
     else:
         retailers_to_query = [r.strip() for r in retailers_param.split(",")]
 
+    # DB FAST PATH: handle ALL filter combos with a single SQL query
+    if _USE_DB:
+        types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()] if types_filter else None
+        brands_list = db_get_brands_filtered(
+            retailer=retailers_to_query if retailers_to_query else None,
+            clients=clients if clients else None,
+            start=start_date,
+            end=end_date,
+            keyword=term if term else None,
+            ad_types=types_list,
+        )
+        result = {"brands": brands_list}
+        _set_cache(cache_key, result)
+        print(f"[brands] DB: {len(brands_list)} brands (filters: retailers={retailers_param}, types={types_filter or 'none'}, term={term or 'none'})")
+        return jsonify(result)
+
     # FAST PATH: Use pre-computed brands from manifest when only retailer/client filters
     # (no date, term, advertiser, or types filters)
     has_complex_filters = bool(advertiser or start_date or end_date or term or types_filter)
@@ -3432,6 +3592,24 @@ def api_brand_details():
                     retailers_to_query.append(item)
     else:
         retailers_to_query = [r.strip() for r in retailers_param.split(",")]
+
+    # DB fast path: 4 SQL queries instead of 3 full filesystem scans
+    if _USE_DB:
+        from time import perf_counter as _pc
+        _t0 = _pc()
+        db_retailers = None if retailers_param == "all" else retailers_to_query
+        result = db_get_brand_details(
+            brand_name=brand_name,
+            retailers=db_retailers if db_retailers else None,
+            keywords_filter=filter_keywords if filter_keywords else None,
+        )
+        _elapsed = (_pc() - _t0) * 1000
+        if result is not None:
+            print(f"[brand-details] DB: {brand_name} → {result['total_ads']} ads, "
+                  f"{len(result['top_keywords'])} keywords, {len(result['top_competitors'])} competitors "
+                  f"in {_elapsed:.0f}ms")
+            return jsonify(result)
+        print(f"[brand-details] DB returned None for {brand_name}, falling back to JSON scan")
 
     try:
         # Collect all ads for this brand across retailers

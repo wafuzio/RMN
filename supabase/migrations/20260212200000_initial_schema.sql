@@ -192,3 +192,11 @@ CREATE TRIGGER trg_brand_logos_updated_at
 CREATE TRIGGER trg_schedules_updated_at
     BEFORE UPDATE ON schedules
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ── Performance indexes for API queries ──
+CREATE INDEX IF NOT EXISTS idx_ads_run_id ON ads(run_id);
+CREATE INDEX IF NOT EXISTS idx_ads_brand_lower ON ads(lower(brand));
+CREATE INDEX IF NOT EXISTS idx_ads_ad_type ON ads(ad_type);
+CREATE INDEX IF NOT EXISTS idx_runs_retailer ON runs(retailer);
+CREATE INDEX IF NOT EXISTS idx_runs_keyword_lower ON runs(lower(keyword));
+CREATE INDEX IF NOT EXISTS idx_runs_retailer_day ON runs(retailer, day);

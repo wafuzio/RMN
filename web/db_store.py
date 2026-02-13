@@ -470,14 +470,15 @@ def get_ad_types(
 
 
 def get_brands_filtered(
-    retailer: str = None,
+    retailer=None,
     clients: set = None,
     start: str = None,
     end: str = None,
     keyword: str = None,
     ad_types: list = None,
 ) -> List[Dict[str, Any]]:
-    """Get brand counts with full filtering — replaces slow JSON scan."""
+    """Get brand counts with full filtering — replaces slow JSON scan.
+    retailer can be a single string or a list of strings."""
     try:
         conn = _get_conn()
         cur = conn.cursor()
@@ -486,8 +487,12 @@ def get_brands_filtered(
         params = []
 
         if retailer:
-            where.append("r.retailer = %s")
-            params.append(retailer)
+            if isinstance(retailer, list):
+                where.append("r.retailer = ANY(%s)")
+                params.append(retailer)
+            else:
+                where.append("r.retailer = %s")
+                params.append(retailer)
         if clients:
             where.append("r.client = ANY(%s)")
             params.append(list(clients))
@@ -532,3 +537,156 @@ def get_brands_filtered(
     except Exception as e:
         print(f"⚠️  db_store.get_brands_filtered() failed: {e}")
         return []
+
+
+def get_brand_details(
+    brand_name: str,
+    retailers: list = None,
+    keywords_filter: set = None,
+) -> Dict[str, Any]:
+    """
+    Get detailed brand info in a single DB round-trip:
+      total_ads, retailer_ads, last_seen, top_keywords,
+      top_competitors, monthly_activity.
+    Replaces the 3-pass JSON filesystem scan.
+    """
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+
+        # Build retailer filter clause
+        ret_clause = ""
+        ret_params: list = []
+        if retailers:
+            ret_clause = "AND r.retailer = ANY(%s)"
+            ret_params = [retailers]
+
+        # ── 1. Total ads + per-retailer counts + last_seen ──
+        cur.execute(f"""
+            SELECT r.retailer, COUNT(*) as cnt,
+                   MAX(r.timestamp AT TIME ZONE 'UTC') as last_ts
+            FROM ads a
+            JOIN runs r ON a.run_id = r.id
+            WHERE lower(a.brand) = lower(%s) {ret_clause}
+            GROUP BY r.retailer
+        """, [brand_name] + ret_params)
+        retailer_rows = cur.fetchall()
+
+        retailer_ads = {}
+        total_ads = 0
+        last_seen = None
+        for retailer, cnt, last_ts in retailer_rows:
+            retailer_ads[retailer] = cnt
+            total_ads += cnt
+            if last_ts:
+                ts_str = last_ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+                if last_seen is None or ts_str > last_seen:
+                    last_seen = ts_str
+
+        # ── 2. Top keywords ──
+        kw_filter_clause = ""
+        kw_filter_params: list = []
+        if keywords_filter:
+            kw_filter_clause = "AND lower(r.keyword) = ANY(%s)"
+            kw_filter_params = [list(keywords_filter)]
+
+        cur.execute(f"""
+            SELECT lower(r.keyword) as kw, COUNT(*) as cnt
+            FROM ads a
+            JOIN runs r ON a.run_id = r.id
+            WHERE lower(a.brand) = lower(%s) {ret_clause}
+              AND r.keyword IS NOT NULL AND r.keyword != ''
+              {kw_filter_clause}
+            GROUP BY lower(r.keyword)
+            ORDER BY cnt DESC
+            LIMIT 10
+        """, [brand_name] + ret_params + kw_filter_params)
+        top_keywords = [
+            {"keyword": row[0], "count": row[1]}
+            for row in cur.fetchall()
+        ]
+
+        # ── 3. Top competitors (brands appearing on same keywords) ──
+        # Get the keywords this brand appears on
+        cur.execute(f"""
+            SELECT DISTINCT lower(r.keyword) as kw
+            FROM ads a
+            JOIN runs r ON a.run_id = r.id
+            WHERE lower(a.brand) = lower(%s) {ret_clause}
+              AND r.keyword IS NOT NULL AND r.keyword != ''
+        """, [brand_name] + ret_params)
+        brand_keywords = [row[0] for row in cur.fetchall()]
+
+        top_competitors = []
+        if brand_keywords:
+            cur.execute(f"""
+                SELECT a.brand, lower(r.keyword) as kw, COUNT(*) as cnt
+                FROM ads a
+                JOIN runs r ON a.run_id = r.id
+                WHERE lower(r.keyword) = ANY(%s) {ret_clause}
+                  AND lower(a.brand) != lower(%s)
+                  AND a.brand IS NOT NULL AND a.brand != '' AND a.brand != 'Unknown'
+                GROUP BY a.brand, lower(r.keyword)
+            """, [brand_keywords] + ret_params + [brand_name])
+            comp_rows = cur.fetchall()
+
+            # Aggregate by brand
+            comp_map: Dict[str, Dict[str, Any]] = {}
+            for comp_brand, kw, cnt in comp_rows:
+                if comp_brand not in comp_map:
+                    comp_map[comp_brand] = {"total": 0, "keywords": {}}
+                comp_map[comp_brand]["total"] += cnt
+                comp_map[comp_brand]["keywords"][kw] = cnt
+
+            top_competitors = sorted(
+                [{"brand": b, "total": d["total"], "keywords": d["keywords"]}
+                 for b, d in comp_map.items()],
+                key=lambda x: x["total"], reverse=True
+            )[:10]
+
+        # ── 4. Monthly activity (last 12 months) ──
+        from datetime import datetime as dt_cls
+        now = dt_cls.now()
+        cur.execute(f"""
+            SELECT to_char(r.timestamp AT TIME ZONE 'UTC', 'YYYY-MM') as month,
+                   COUNT(*) as cnt
+            FROM ads a
+            JOIN runs r ON a.run_id = r.id
+            WHERE lower(a.brand) = lower(%s) {ret_clause}
+              AND r.timestamp >= (now() - interval '12 months')
+              {kw_filter_clause}
+            GROUP BY month
+            ORDER BY month
+        """, [brand_name] + ret_params + kw_filter_params)
+        monthly_rows = {row[0]: row[1] for row in cur.fetchall()}
+
+        # Fill in missing months with 0
+        monthly_activity = []
+        for i in range(11, -1, -1):
+            m = now.month - i
+            y = now.year
+            while m <= 0:
+                m += 12
+                y -= 1
+            month_key = f"{y:04d}-{m:02d}"
+            monthly_activity.append({
+                "month": month_key,
+                "count": monthly_rows.get(month_key, 0),
+            })
+
+        cur.close()
+        _put_conn(conn)
+
+        return {
+            "brand": brand_name,
+            "total_ads": total_ads,
+            "retailer_ads": retailer_ads,
+            "last_seen": last_seen,
+            "top_keywords": top_keywords,
+            "top_competitors": top_competitors,
+            "monthly_activity": monthly_activity,
+        }
+    except Exception as e:
+        print(f"⚠️  db_store.get_brand_details() failed: {e}")
+        import traceback; traceback.print_exc()
+        return None
