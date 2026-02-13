@@ -32,7 +32,15 @@ from time import perf_counter, time
 from utils.path_taxonomy import allowed_subdirs, ADTYPE_TO_FOLDER
 from core.brands import canonicalize, is_blacklisted
 import hashlib
-from web.manifest_store import runs as mf_runs, daily_totals as mf_daily, brands as mf_brands, brands_by_client as mf_brands_by_client
+try:
+    from web.db_store import runs as mf_runs, daily_totals as mf_daily, brands as mf_brands, brands_by_client as mf_brands_by_client, _db_available
+    if _db_available():
+        print("✅ Database store connected — using PostgreSQL for run/brand queries")
+    else:
+        raise ImportError("DB not reachable")
+except Exception as _db_err:
+    print(f"⚠️  Database store unavailable ({_db_err}), falling back to manifest_store")
+    from web.manifest_store import runs as mf_runs, daily_totals as mf_daily, brands as mf_brands, brands_by_client as mf_brands_by_client
 
 # ============================================================================
 # Thumbnail Generation
@@ -1522,6 +1530,95 @@ def api_advertisers():
         "client": client,
         "advertisers": sorted(advertisers),
         "count": len(advertisers)
+    })
+
+
+@app.route("/api/stats/summary", methods=["GET"])
+def api_stats_summary():
+    """
+    Fast summary endpoint — returns total cards, brand counts, and top brand
+    in a single call using only the run manifest. No JSON file loading.
+
+    Query params:
+    - retailers (optional): comma-separated list or "all" (default: "all")
+    - client (optional): client name or "all" (default: "all")
+
+    Returns: {
+      totalCards: number,
+      activeBrands: number,
+      topBrand: {brand: str, count: number, percentage: number} | null,
+      brands: [{brand, count, percentage}, ...],
+      builtAt: str | null
+    }
+    """
+    from utils.brand_utils import normalize_brand_for_matching
+
+    retailers_param = (request.args.get("retailers") or "all").strip().lower()
+    clients = _parse_clients(request)
+
+    # Determine which retailers to query
+    if retailers_param == "all":
+        retailers_to_query = list(mf_brands().keys())
+    else:
+        retailers_to_query = [r.strip() for r in retailers_param.split(",")]
+
+    # ── Total cards from manifest runs ──
+    total_cards = 0
+    for r in mf_runs():
+        if retailers_param != "all" and r["retailer"] not in retailers_to_query:
+            continue
+        if clients and r["client"] not in clients:
+            continue
+        total_cards += int(r.get("ad_count") or 0)
+
+    # ── Brands from pre-computed manifest data ──
+    brand_counts = {}
+    brand_display = {}
+
+    if clients:
+        precomputed_by_client = mf_brands_by_client()
+        for retailer in retailers_to_query:
+            retailer_data = precomputed_by_client.get(retailer, {})
+            for client in clients:
+                client_brands = retailer_data.get(client, [])
+                for b in client_brands:
+                    norm_key = normalize_brand_for_matching(b["brand"])
+                    if norm_key not in brand_counts:
+                        brand_counts[norm_key] = 0
+                        brand_display[norm_key] = b["brand"]
+                    brand_counts[norm_key] += b["count"]
+    else:
+        precomputed = mf_brands()
+        for retailer in retailers_to_query:
+            retailer_brands = precomputed.get(retailer, [])
+            for b in retailer_brands:
+                norm_key = normalize_brand_for_matching(b["brand"])
+                if norm_key not in brand_counts:
+                    brand_counts[norm_key] = 0
+                    brand_display[norm_key] = b["brand"]
+                brand_counts[norm_key] += b["count"]
+
+    # Build sorted brands list
+    total_brand_ads = sum(brand_counts.values())
+    brands_list = []
+    for norm_key, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True):
+        brands_list.append({
+            "brand": brand_display[norm_key],
+            "count": count,
+            "percentage": round((count / total_brand_ads) * 100, 1) if total_brand_ads > 0 else 0
+        })
+
+    top_brand = brands_list[0] if brands_list else None
+
+    client_info = f" (clients: {','.join(clients)})" if clients else ""
+    print(f"[stats/summary] {total_cards} cards, {len(brands_list)} brands{client_info}")
+
+    return jsonify({
+        "totalCards": total_cards,
+        "activeBrands": len(brands_list),
+        "topBrand": top_brand,
+        "brands": brands_list,
+        "builtAt": mf_daily() and None  # placeholder
     })
 
 

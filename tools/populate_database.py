@@ -348,6 +348,7 @@ def populate_runs(conn):
                 (retailer, client, keyword, unique_run_id, ts, rel_path, len(ads_list)),
             )
             db_run_id = cur.fetchone()[0]
+            conn.commit()
             run_count += 1
         except psycopg2.errors.UniqueViolation:
             conn.rollback()
@@ -378,7 +379,16 @@ def populate_runs(conn):
             if ad.get("metadata") and isinstance(ad["metadata"], dict):
                 metadata.update(ad["metadata"])
 
-            slot = metadata.pop("slot", ad.get("slot"))
+            slot_val = metadata.pop("slot", ad.get("slot"))
+            # slot column is INTEGER; non-numeric values go into metadata
+            if isinstance(slot_val, int):
+                slot = slot_val
+            elif isinstance(slot_val, str) and slot_val.isdigit():
+                slot = int(slot_val)
+            else:
+                slot = None
+                if slot_val is not None:
+                    metadata["slot_label"] = slot_val
 
             try:
                 cur.execute(
@@ -444,8 +454,9 @@ def populate_runs(conn):
             except Exception as e:
                 conn.rollback()
                 error_count += 1
-                if error_count <= 5:
+                if error_count <= 10:
                     print(f"  Error inserting ad: {e}")
+                continue
 
         # Commit every batch_size files
         if run_count % batch_size == 0:
