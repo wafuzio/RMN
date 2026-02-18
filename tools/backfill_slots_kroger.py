@@ -412,6 +412,29 @@ def preview_file(json_path):
 
 # ── Backfill ──────────────────────────────────────────────────────────────────
 
+def _build_product_listings(matched_results):
+    """Convert Product_Listing slots to standardized product_listings dicts."""
+    listings = []
+    for slot, _ in matched_results:
+        if slot['ad_type'] != 'Product_Listing':
+            continue
+        d = slot['detail']
+        listings.append({
+            'type': 'Product_Listing',
+            'subtype': 'sponsored_product' if d.get('is_sponsored') else 'organic_product',
+            'product_id': d.get('upc', ''),
+            'retailer_id_type': 'upc',
+            'title': d.get('title', ''),
+            'brand': None,
+            'price': d.get('price', ''),
+            'image_url': d.get('image_url', ''),
+            'href': d.get('href', ''),
+            'is_sponsored': d.get('is_sponsored', False),
+            'position': d.get('grid_position', -1),
+        })
+    return listings
+
+
 def process_file(json_path, dry_run=False):
     """
     Process a single Kroger run JSON + its HTML.
@@ -428,8 +451,6 @@ def process_file(json_path, dry_run=False):
         return 0, 0, 0, "JSON parse error: %s" % e
 
     json_ads = _get_kroger_ads(data)
-    if not json_ads:
-        return 0, 0, 0, None
 
     try:
         slots = parse_kroger_html(html_path)
@@ -442,7 +463,13 @@ def process_file(json_path, dry_run=False):
     matched_results = match_slots_to_json(slots, json_ads)
     assigned, unmatched = assign_slot_fields(matched_results)
 
-    if assigned > 0 and not dry_run:
+    # Inject product listings from HTML
+    product_listings = _build_product_listings(matched_results)
+    changed = assigned > 0 or (product_listings and 'product_listings' not in data)
+    if product_listings:
+        data['product_listings'] = product_listings
+
+    if changed and not dry_run:
         try:
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
