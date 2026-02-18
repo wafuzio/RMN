@@ -185,6 +185,18 @@ def save_run_artifacts(client_root: Path, run_id: str, payload: dict, html_conte
     """
     run_dir = client_root / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Extract product listings from saved HTML before writing JSON
+    if html_content:
+        try:
+            from tools.extract_product_listings import extract_product_listings
+            product_listings = extract_product_listings("instacart", html_content)
+            payload["product_listings"] = product_listings
+            sp_count = sum(1 for p in product_listings if p.get("is_sponsored"))
+            print(f"   Extracted {len(product_listings)} product listings ({sp_count} sponsored)")
+        except Exception as pl_err:
+            print(f"   Product listing extraction failed: {pl_err}")
+
     json_path = run_dir / f"run_results_{run_id}.json"
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
     if html_content:

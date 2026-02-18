@@ -1357,6 +1357,9 @@ def _capture_gallery_cards(page, base_dir: str, keyword: str, meta: Dict, SL=Non
                     if "for the brand " in alt_lower:
                         # Extract everything after "for the brand "
                         advertiser = alt_lower.split("for the brand ")[-1].strip().title()
+                        # Strip trailing "Brand" — Walmart sometimes includes it in the alt text
+                        if advertiser.endswith(" Brand"):
+                            advertiser = advertiser[:-6].strip()
                     elif " logo" in alt_lower:
                         # Fallback to older format: extract text before "logo"
                         # Examples: "cursive black font on white background of peach slices logo"
@@ -3682,6 +3685,19 @@ def search_and_capture(
                         html_content = f.read()
                 except:
                     pass
+            
+            # Extract product listings from saved HTML
+            if html_content:
+                try:
+                    from tools.extract_product_listings import extract_product_listings
+                    product_listings = extract_product_listings("walmart", html_content)
+                    payload["product_listings"] = product_listings
+                    SL.log("product_listings_extracted", count=len(product_listings),
+                           sponsored=sum(1 for p in product_listings if p.get("is_sponsored")))
+                    say("info", f"[{retailer}] Extracted {len(product_listings)} product listings from HTML")
+                except Exception as pl_err:
+                    SL.log("product_listings_error", error=str(pl_err))
+                    say("warn", f"[{retailer}] Product listing extraction failed: {pl_err}")
             
             run_dir = save_run_artifacts(
                 client_root=Path(client_root),

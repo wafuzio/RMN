@@ -706,6 +706,16 @@ def search_and_capture(keyword: str, output_dir: str, *, headless: bool = False)
                 "ads": ads,
             }
 
+            # Extract product listings from saved HTML
+            try:
+                from tools.extract_product_listings import extract_product_listings
+                product_listings = extract_product_listings("target", html_content)
+                run_payload["product_listings"] = product_listings
+                sp_count = sum(1 for p in product_listings if p.get("is_sponsored"))
+                log(f"   Extracted {len(product_listings)} product listings ({sp_count} sponsored)")
+            except Exception as pl_err:
+                log(f"   Product listing extraction failed: {pl_err}")
+
             with open(json_file, "w", encoding="utf-8") as f:
                 json.dump(run_payload, f, indent=2)
             log(f"💾 JSON saved: {json_file}")

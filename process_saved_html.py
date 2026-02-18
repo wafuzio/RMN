@@ -522,6 +522,17 @@ def process_specific_html_files(files, output_dir=None, force_images: bool = Fal
                 "run_id": run_id,
                 "ads": result.get("ads", []),
             }
+            # Extract product listings from saved HTML
+            try:
+                from tools.extract_product_listings import extract_product_listings
+                html_source = result.get('source_file') or html_file
+                if html_source and os.path.exists(html_source):
+                    product_listings = extract_product_listings("kroger", html_source)
+                    canonical["product_listings"] = product_listings
+                    sp_count = sum(1 for p in product_listings if p.get("is_sponsored"))
+                    print(f"   Extracted {len(product_listings)} product listings ({sp_count} sponsored)")
+            except Exception as pl_err:
+                print(f"   Product listing extraction failed: {pl_err}")
             # Write canonical alongside (named by run_id to be stable)
             canon_path = os.path.join(runs_root, f"run_results_{run_id}.json")
             with open(canon_path, "w", encoding="utf-8") as cf:
