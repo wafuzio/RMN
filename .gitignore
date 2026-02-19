@@ -42,6 +42,9 @@ dist/
 *.exe
 *.dmg
 
+# Product image store (large binary files, not tracked in git)
+assets/*/product_images/
+
 # Node (if present)
 node_modules/
 .cache/
