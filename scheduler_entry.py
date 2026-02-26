@@ -99,8 +99,10 @@ def main():
     print(f"📝 PID file: {pid_path}")
     print(f"🚀 Starting scheduler daemon: {daemon_path}")
 
-    # Use the current python interpreter
-    cmd = [sys.executable, str(daemon_path)]
+    # Prefer .venv Python for all subprocesses
+    venv_python = project_dir / ".venv" / "bin" / "python3"
+    python_exec = str(venv_python) if venv_python.exists() else sys.executable
+    cmd = [python_exec, str(daemon_path)]
     try:
         proc = subprocess.Popen(cmd, cwd=str(project_dir))
         # Wait for child to exit while holding the lock

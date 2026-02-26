@@ -600,6 +600,307 @@ def extract_walmart_sba_logo(brand, brand_key):
         print(f"  ⚠️  Walmart SBA extraction failed: {e}")
         return None, None
 
+def logopedia_fetch_logo(brand):
+    """
+    Fetch a brand logo from Logopedia (logos.fandom.com) via the MediaWiki API.
+    
+    Strategy:
+    1. Search for the brand page
+    2. Get images listed on that page
+    3. Filter for likely "current" logo images (prefer SVG/PNG, skip tiny icons)
+    4. Fetch the best candidate
+    
+    Returns (raw_bytes, content_type, source_url) or (None, None, None)
+    """
+    LOGOPEDIA_API = "https://logos.fandom.com/api.php"
+    
+    try:
+        # Step 1: Search for the brand page
+        search_params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": brand,
+            "srnamespace": 0,
+            "srlimit": 5,
+            "format": "json",
+        }
+        r = requests.get(LOGOPEDIA_API, params=search_params, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        results = r.json().get("query", {}).get("search", [])
+        
+        if not results:
+            return None, None, None
+        
+        # Pick the best matching page title
+        brand_lower = brand.lower()
+        page_title = None
+        for result in results:
+            title = result.get("title", "")
+            title_lower = title.lower()
+            # Exact match or brand name is the title
+            if title_lower == brand_lower:
+                page_title = title
+                break
+            # Title starts with brand name (e.g. "Coca-Cola" matches "Coca-Cola")
+            if title_lower.startswith(brand_lower):
+                page_title = title
+                break
+        
+        if not page_title:
+            # Fall back to first result if it's reasonably close
+            first_title = results[0].get("title", "")
+            if brand_lower in first_title.lower():
+                page_title = first_title
+            else:
+                return None, None, None
+        
+        # Step 2: Get images on the page
+        images_params = {
+            "action": "query",
+            "titles": page_title,
+            "prop": "images",
+            "imlimit": 50,
+            "format": "json",
+        }
+        r = requests.get(LOGOPEDIA_API, params=images_params, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        pages = r.json().get("query", {}).get("pages", {})
+        
+        images = []
+        for page_data in pages.values():
+            for img in page_data.get("images", []):
+                images.append(img.get("title", ""))
+        
+        if not images:
+            return None, None, None
+        
+        # Step 3: Filter and rank candidate images
+        # Prefer: SVG > PNG > JPG, "current" or recent logos, skip icons/favicons
+        skip_patterns = [
+            "favicon", "icon", "wikia", "fandom", "placeholder",
+            "semi-protection", "ambox", "commons-logo", "stub",
+            "lock-", "edit-", "information", "nuvola", "crystal",
+        ]
+        
+        candidates = []
+        for img_title in images:
+            img_lower = img_title.lower()
+            
+            # Skip wiki UI images
+            if any(skip in img_lower for skip in skip_patterns):
+                continue
+            
+            # Score the image
+            score = 0
+            
+            # Prefer SVG
+            if img_lower.endswith(".svg"):
+                score += 3
+            elif img_lower.endswith(".png"):
+                score += 2
+            elif img_lower.endswith((".jpg", ".jpeg")):
+                score += 1
+            else:
+                continue  # skip non-image files
+            
+            # Prefer images with brand name in filename
+            if brand_lower in img_lower:
+                score += 2
+            
+            # Prefer "logo" in filename
+            if "logo" in img_lower:
+                score += 2
+            
+            # Prefer "current" or recent year in filename
+            if "current" in img_lower or "2024" in img_lower or "2025" in img_lower or "2026" in img_lower:
+                score += 1
+            
+            # Penalize "old", "former", "previous", dated images
+            if any(w in img_lower for w in ["old", "former", "previous", "historic", "1st", "first"]):
+                score -= 2
+            
+            candidates.append((img_title, score))
+        
+        if not candidates:
+            return None, None, None
+        
+        # Sort by score descending
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        
+        # Step 4: Fetch the best candidate image URL and download it
+        for img_title, score in candidates[:3]:  # Try top 3
+            info_params = {
+                "action": "query",
+                "titles": img_title,
+                "prop": "imageinfo",
+                "iiprop": "url|size|mime",
+                "format": "json",
+            }
+            r = requests.get(LOGOPEDIA_API, params=info_params, headers=HEADERS, timeout=10)
+            r.raise_for_status()
+            
+            info_pages = r.json().get("query", {}).get("pages", {})
+            for page_data in info_pages.values():
+                for ii in page_data.get("imageinfo", []):
+                    img_url = ii.get("url", "")
+                    mime = ii.get("mime", "")
+                    size = ii.get("size", 0)
+                    
+                    if not img_url:
+                        continue
+                    
+                    # Skip very small files (< 500 bytes likely broken)
+                    if size > 0 and size < 500:
+                        continue
+                    
+                    # Download
+                    try:
+                        img_resp = requests.get(img_url, headers=HEADERS, timeout=15)
+                        if img_resp.status_code != 200:
+                            continue
+                        
+                        raw = img_resp.content
+                        ctype = img_resp.headers.get("Content-Type", mime)
+                        
+                        if len(raw) < 200:
+                            continue
+                        
+                        return raw, ctype, img_url
+                        
+                    except Exception:
+                        continue
+        
+        return None, None, None
+        
+    except Exception as e:
+        print(f"error: {e}")
+        return None, None, None
+
+
+def scrape_amazon_brand_store_logo(brand):
+    """
+    Navigate to the Amazon brand store page and extract the square logo
+    from the floating header that appears when you scroll down.
+    
+    The floating header contains an <img class="image square"> element
+    with a high-quality square brand logo (typically 400x400).
+    
+    We pick the largest srcset variant (SX400) for best quality.
+    
+    Returns (raw_bytes, content_type, source_url) or (None, None, None)
+    """
+    from playwright.sync_api import sync_playwright
+    
+    slug = brand.replace(" ", "+")
+    store_url = f"https://www.amazon.com/stores/{brand.replace(' ', '+')}"
+    
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 800},
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        )
+        page = context.new_page()
+        
+        try:
+            print(f"    → trying {store_url} ...", end=" ", flush=True)
+            page.goto(store_url, timeout=15000, wait_until="domcontentloaded")
+            page.wait_for_timeout(2000)
+            
+            # Check if we landed on a valid brand store page
+            page_title = page.title().lower()
+            if "page not found" in page_title or "sorry" in page_title:
+                print("page not found")
+                browser.close()
+                return None, None, None
+            
+            # Scroll down to trigger the floating header
+            page.evaluate("window.scrollBy(0, 600)")
+            page.wait_for_timeout(1500)
+            
+            # Look for the square logo image in the floating header
+            # Primary selector: img with class "image square"
+            selectors = [
+                'img.image.square',
+                'img[class*="image"][class*="square"]',
+                'img[data-testid="image"][class*="square"]',
+            ]
+            
+            logo_img = None
+            for sel in selectors:
+                loc = page.locator(sel).first
+                if loc.count() > 0:
+                    logo_img = loc
+                    break
+            
+            if not logo_img:
+                print("no square logo found")
+                browser.close()
+                return None, None, None
+            
+            # Get the best quality URL from srcset (largest SX variant)
+            srcset = logo_img.get_attribute("srcset") or ""
+            src = logo_img.get_attribute("src") or ""
+            alt = logo_img.get_attribute("alt") or ""
+            
+            best_url = src  # fallback
+            best_width = 0
+            
+            if srcset:
+                # Parse srcset: "url 56w, url 86w, url 400w"
+                for entry in srcset.split(","):
+                    entry = entry.strip()
+                    parts = entry.rsplit(" ", 1)
+                    if len(parts) == 2:
+                        url_part = parts[0].strip()
+                        width_part = parts[1].strip()
+                        if width_part.endswith("w"):
+                            try:
+                                w = int(width_part[:-1])
+                                if w > best_width:
+                                    best_width = w
+                                    best_url = url_part
+                            except ValueError:
+                                pass
+            
+            if not best_url:
+                print("no usable URL")
+                browser.close()
+                return None, None, None
+            
+            # Fetch the image
+            try:
+                img_resp = requests.get(best_url, headers=HEADERS, timeout=10)
+                if img_resp.status_code != 200:
+                    print(f"HTTP {img_resp.status_code}")
+                    browser.close()
+                    return None, None, None
+                
+                ctype = img_resp.headers.get("Content-Type", "")
+                raw = img_resp.content
+                
+                if len(raw) < 100:
+                    print("too small")
+                    browser.close()
+                    return None, None, None
+                
+                size_kb = len(raw) / 1024
+                print(f"✓ found ({best_width}w, {size_kb:.1f}KB, alt='{alt[:40]}')")
+                
+                browser.close()
+                return raw, ctype, best_url
+                
+            except Exception as e:
+                print(f"download error: {e}")
+                browser.close()
+                return None, None, None
+                
+        except Exception as e:
+            print(f"error: {e}")
+            browser.close()
+            return None, None, None
+
+
 def fetch_logo_for_brand(db, brand, retailer="instacart"):
     """
     Fetch logo for brand and add to database.
@@ -614,8 +915,36 @@ def fetch_logo_for_brand(db, brand, retailer="instacart"):
     
     slug = slugify(brand)
 
-    # 1) Try brand's official website header first
-    print(f"  [1] Checking {brand}.com header...")
+    # 1) Amazon brand store floating header logo (square, high quality)
+    print(f"  [1] Checking Amazon brand store page...")
+    raw, ctype, src_url = scrape_amazon_brand_store_logo(brand)
+    if raw:
+        ext = normalize_ext_from_ctype(ctype or "image/png")
+        logo_path = safe_write_logo(brand_key, raw, ext)
+        source_info = {
+            "source": "amazon-brand-store",
+            "url": src_url,
+            "ctype": ctype,
+        }
+        add_logo_to_database(db, brand, logo_path, source_info, retailer)
+        return logo_path, source_info
+
+    # 2) Logopedia (logos.fandom.com) — clean logos, often SVG with transparency
+    print(f"  [2] Checking Logopedia...")
+    raw, ctype, src_url = logopedia_fetch_logo(brand)
+    if raw:
+        ext = normalize_ext_from_ctype(ctype or "image/png")
+        logo_path = safe_write_logo(brand_key, raw, ext)
+        source_info = {
+            "source": "logopedia",
+            "url": src_url,
+            "ctype": ctype,
+        }
+        add_logo_to_database(db, brand, logo_path, source_info, retailer)
+        return logo_path, source_info
+
+    # 3) Try brand's official website header
+    print(f"  [3] Checking {brand}.com header...")
     raw, ctype, src_url = scrape_header_logo(brand)
     if raw:
         ext = normalize_ext_from_ctype(ctype or "image/png")
@@ -628,8 +957,8 @@ def fetch_logo_for_brand(db, brand, retailer="instacart"):
         add_logo_to_database(db, brand, logo_path, source_info, retailer)
         return logo_path, source_info
 
-    # 2) Wikidata → official site + logo image
-    print(f"  [2] Checking Wikidata...")
+    # 4) Wikidata → official site + logo image
+    print(f"  [4] Checking Wikidata...")
     qid = wikidata_search_entity(brand)
     official_domain = None
     if qid:
@@ -655,9 +984,9 @@ def fetch_logo_for_brand(db, brand, retailer="instacart"):
                 add_logo_to_database(db, brand, logo_path, source_info, retailer)
                 return logo_path, source_info
 
-    # 3) Clearbit (requires domain)
+    # 5) Clearbit (requires domain)
     if official_domain:
-        print(f"  [3] Trying Clearbit for {official_domain}...")
+        print(f"  [5] Trying Clearbit for {official_domain}...")
         raw, ctype = clearbit_logo(official_domain)
         if raw:
             ext = normalize_ext_from_ctype(ctype or "image/png")
@@ -670,7 +999,7 @@ def fetch_logo_for_brand(db, brand, retailer="instacart"):
             add_logo_to_database(db, brand, logo_path, source_info, retailer)
             return logo_path, source_info
 
-    # 4) Walmart harvester (checks SBA first, then brand store)
+    # 6) Walmart harvester (checks SBA first, then brand store)
     # Check Walmart harvester
     walmart_failed = db.get("failed_searches", {}).get(brand_key, {}).get("walmart", False)
     

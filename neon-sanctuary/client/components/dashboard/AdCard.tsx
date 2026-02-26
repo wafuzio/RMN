@@ -229,8 +229,10 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slo
   const isGalleryCardLeftColumn = isLeftColumnAd && adType === "Gallery_Cards";
   const isSBALeftColumn = isLeftColumnAd && adType === "SBA";
 
-  // For Gallery Cards with dimensions, use simple width:100% height:auto layout
-  const useAutoHeight = (isGalleryCard && useAspectRatio) || isSBALeftColumn;
+  // For left-column cards, use simple width:100% height:auto layout so the image
+  // scales to fit the full card width instead of being cropped via object-cover.
+  // Gallery Cards with dimensions and SBA always use this; other types use it only in the left column.
+  const useAutoHeight = (isGalleryCard && useAspectRatio) || isSBALeftColumn || isLeftColumnAd;
   
   // SPECIAL CASE: Video overlay - use simple layout where image determines size
   // This ensures the video overlay percentages align correctly with the image
@@ -275,7 +277,7 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slo
   
   // Build container style for non-overlay cases
   const containerStyle: React.CSSProperties = useAutoHeight
-    ? { width: '100%', display: 'flex', flexDirection: 'column' }  // Let image determine height naturally, full width
+    ? { width: '100%', display: 'flex', flexDirection: 'column', maxHeight: '300px' }  // Let image determine height naturally, full width, capped
     : isLeftColumnAd
       ? { position: 'absolute', top: 0, left: 0, right: 0, height: mediaHeight, margin: 0, padding: 0, backgroundColor: 'rgb(243, 244, 246)' }
       : useAspectRatio && aspectRatio
@@ -357,6 +359,7 @@ export interface Ad {
 export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOverIndex, currentIndex, priority, isLeftColumn = false }: { ad: Ad; onRemove: (id: string)=>void; onOpen: (ad: Ad)=>void; draggableProps?: any; dragIndex?: number | null; dragOverIndex?: number | null; currentIndex?: number; priority?: boolean; isLeftColumn?: boolean; }) {
   const [hidden, setHidden] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [flagged, setFlagged] = useState(false);
   
   // Use viewport detection for lazy-loading video overlays
   const [cardRef, isInViewport] = useInViewport<HTMLDivElement>();
@@ -391,22 +394,9 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
   // Shoppable Display Ads - use auto height like Gallery Cards
   const hasShoppableDisplayDimensions = isShoppableDisplayAd;
   let containerHeight: string | undefined = '420px';
-  if (hasVideoOverlayDimensions && isLeftColumn) {
-    // For video overlay ads, let height be auto so image determines size
+  if (isLeftColumn) {
+    // All left-column cards: let height be auto so image + content determine size
     containerHeight = undefined;
-  } else if (hasShoppableDisplayDimensions && isLeftColumn) {
-    // For Shoppable Display Ads, let height be auto so image determines size
-    containerHeight = undefined;
-  } else if (isSBA && isLeftColumn) {
-    // For SBA ads, let height be auto so image determines size
-    containerHeight = undefined;
-  } else if (isGalleryCard && isLeftColumn) {
-    // For Gallery Cards with dimensions, let height be auto so it shrinks to fit image
-    containerHeight = hasGalleryCardDimensions ? undefined : '320px';
-  } else if (isTargetListingBanner && isLeftColumn) {
-    containerHeight = '252px';
-  } else if (isKrogerTOA && isLeftColumn) {
-    containerHeight = '268px';
   }
 
   if (isLeftRailDisplay) {
@@ -431,7 +421,7 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
   };
 
   // For Gallery Cards, video overlay ads, SBA ads, and Shoppable Display Ads with dimensions, use normal flow (not absolute) so content is below image
-  const useFlowLayout = (hasGalleryCardDimensions || hasVideoOverlayDimensions || hasShoppableDisplayDimensions || (isSBA && isLeftColumn)) && isLeftColumn;
+  const useFlowLayout = isLeftColumn;
   
   const contentFrame = (
     <div id="content-frame" className={cn("adcard-content-box card-text w-full flex flex-col flex-shrink-0", isColumnCard ? "p-4 gap-2" : "p-6 gap-3")} style={isLeftColumn && !useFlowLayout ? { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isSponsoredLogo ? 'rgba(0, 0, 0, 0.6)' : 'rgb(255, 255, 255)', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', padding: isSponsoredLogo ? '12px 16px' : '0 16px 16px 16px' } : (useFlowLayout ? { backgroundColor: 'rgb(255, 255, 255)', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', padding: '12px 16px 16px 16px' } : {})}>
@@ -523,6 +513,28 @@ export function AdCard({ ad, onRemove, onOpen, draggableProps, dragIndex, dragOv
         className="absolute right-2 top-2 h-8 w-8 grid place-items-center rounded-full bg-white/90 border opacity-0 group-hover:opacity-100 transition z-20"
       >
         ×
+      </button>
+      <button
+        aria-label="Flag for review"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (flagged) return;
+          setFlagged(true);
+          fetch('/api/flag-review', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'ad', ad_id: ad.id, reason: 'User flagged from dashboard' }),
+          }).catch(() => setFlagged(false));
+        }}
+        className={cn(
+          "absolute left-2 top-2 px-2 py-1 rounded text-[10px] font-medium transition z-20",
+          flagged
+            ? "bg-amber-100 text-amber-700 opacity-100"
+            : "bg-white/90 text-gray-400 border border-gray-200 opacity-0 group-hover:opacity-100 hover:text-amber-600 hover:border-amber-300"
+        )}
+      >
+        {flagged ? '✓ flagged' : 'needs review'}
       </button>
       {isLeftColumn ? (
         <>

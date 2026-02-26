@@ -11,18 +11,8 @@ __pycache__/
 # Local runtime/output
 logs/
 diagnostics/
-
-# Allow reports in diagnostics to be tracked (Markdown/CSV only)
-!diagnostics/reports/
-!diagnostics/reports/*.md
-!diagnostics/reports/*.csv
 playwright_profile/
 output/
-
-# Allow reports in output to be tracked (Markdown/CSV only)
-!output/reports/
-!output/reports/*.md
-!output/reports/*.csv
 images/
 *.log
 file_list.log
@@ -51,3 +41,10 @@ node_modules/
 
 # Builder conflict prevention
 app.pycache/
+
+# Stray scraper output dirs
+--output-dir/
+cache/
+
+# Flask lib copies (not needed in repo)
+web/libs/

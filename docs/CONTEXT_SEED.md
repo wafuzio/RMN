@@ -2,7 +2,7 @@
 
 **What it does:** Automated tool for capturing and analyzing retail media ads (TOA, Skyscraper, Display Ads, etc.) from Kroger, Walmart, Instacart, and Amazon.
 
-**Use case:** Competitive intelligence, ad monitoring, and retail media analysis for brands and agencies.
+**Use case:** Competitive intelligence, ad monitoring, and retail media analysis for brands and agencies. The main differentiator is that while other competitive retail tools do a good job tracking sponsored search ads, they do not always count the branded content and especially the DSP content. This attempts to capture all components and then factor them all in to arrive at a figure like share of voice. It also works as a visual competitive monitor and look board that is easily presentable.
 
 ---
 
@@ -151,6 +151,16 @@ python3 auth/retailer_auth.py --retailer kroger --profile-dir ~/ChromeProfiles/k
 - `tools/repair_blue_bunny_sweet_pairings.py` - Fix Unknown brand ads with known creative
 - `tools/build_brand_index.py` - Rebuild brand index from all run JSONs
 
+**Slot Backfill Tools** (parse saved HTML → build ordered `slots[]` array in run JSON):
+- `tools/backfill_slots_walmart.py` - Walmart: Sponsored_Display, SBA, SBV, Sponsored_Product, Tile_Takeover, Product_Listing
+- `tools/backfill_slots_amazon.py` - Amazon: Sponsored_Brand, Sponsored_Carousel, Sponsored_Brand_Video, Sponsored_Display, Product_Listing
+- `tools/backfill_slots_target.py` - Target: Sponsored_Product, Product_Listing, ListingPageBannerAd, Sponsored_Logo
+- `tools/backfill_slots_instacart.py` - Instacart: Shoppable_Ad_Item, Product_Listing
+- `tools/backfill_slots_kroger.py` - Kroger: TOA, Skyscraper, CuratedCarousel, Product_Listing
+- Usage: `python3 tools/backfill_slots_<retailer>.py --preview <json_path>` (compare against screenshot)
+- Usage: `python3 tools/backfill_slots_<retailer>.py` (backfill all files)
+- These supersede the legacy `product_listings` key — `slots` is the single source of truth
+
 **Logs:**
 - `logs/<retailer>/keyword_input.log` - GUI activity
 - `logs/<retailer>/image_extract_*.log` - Extraction logs
@@ -225,6 +235,19 @@ Successfully migrated all Walmart data to canonical schema with 100% image cover
   - **Root cause:** Fuzzy token matching on "blue" matched short brand name "Bluey"
   - **Solution:** Skip short tokens in fuzzy matching; use exact/phrase matching first
   - Prevents brand collisions while preserving distinct brands
+
+- [x] **Slot Backfill System** - ✅ COMPLETE (Feb 2026)
+  - `tools/backfill_slots_<retailer>.py` — 5 scripts (Walmart, Amazon, Target, Instacart, Kroger)
+  - Parses saved HTML via recursive DOM walk → builds ordered `slots[]` array in run JSON
+  - Each slot entry: `slot`, `slot_within_type`, `total_slots`, `total_slots_of_type`, `ad_type`, `is_sponsored`, `product_id`, `title`, `price`, `image_url`, `href`, `brand`, `matched_ad_index`
+  - `slots[]` supersedes legacy `product_listings` key (removed on backfill)
+  - `screenshot_path` injected into run JSON linking to Main page screenshot
+  - `--preview` mode for visual comparison against screenshots
+  - **Walmart ad types**: Sponsored_Display (top/bottom/left_rail), SBA, SBV, Sponsored_Product, Product_Listing, Tile_Takeover, Gallery_Cards
+  - **Amazon ad types**: Sponsored_Brand, Sponsored_Carousel, Sponsored_Brand_Video, Sponsored_Display (bottom/left_rail), Product_Listing
+  - **Validated**: Walmart (cheese_dip + bomb_pop), Target (Proactiv), Amazon (bomb_pop)
+  - **Known bug**: Instacart parser misses organic product cards (only captures Shoppable_Ad_Items)
+  - **Pending**: Full backfill run across all retailers; Instacart organic product fix
 
 - [ ] **Amazon selectors refinement**
   - Tighten selectors for SB/SBV/SP and right-rail SD

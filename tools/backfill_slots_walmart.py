@@ -123,9 +123,10 @@ def _extract_product_detail(item_element):
     # Price
     price_el = item_element.select_one('[data-automation-id="product-price"]')
     raw_price = price_el.get_text(strip=True) if price_el else ''
-    # Clean up Walmart's price format: "$474current price $4.74" → "$4.74"
-    m = re.search(r'(\$[\d,.]+(?:\.\d{2})?)', raw_price)
-    detail['price'] = m.group(1) if m else raw_price[:20]
+    # Walmart embeds both forms: "$497current price $4.97" — prefer decimal form
+    m_decimal = re.search(r'(\$[\d,]+\.\d{2})', raw_price)
+    m_any     = re.search(r'(\$[\d,.]+)', raw_price)
+    detail['price'] = (m_decimal or m_any).group(1) if (m_decimal or m_any) else raw_price[:20]
 
     # Image
     img_el = item_element.select_one('img[src*="walmartimages"]')
@@ -173,52 +174,103 @@ def parse_walmart_html(html_path):
     """
     Parse a Walmart search results HTML file and return a list of slots
     in true DOM order.
+
+    Uses a recursive DOM walk to guarantee correct ordering, instead of
+    html_str.find() which gives wrong positions for nested elements.
     """
     with open(html_path, 'r', encoding='utf-8', errors='replace') as f:
         soup = BeautifulSoup(f, 'html.parser')
 
     slots = []
+    seen_ids = set()  # avoid double-counting nested data-item-id elements
 
-    # Walk all slot-relevant elements in DOM order.
-    # We need to interleave: data-item-id elements, Gallery Card iframes, and video elements.
-    # Strategy: collect all with their source positions, then sort.
+    def _walk(el):
+        """Recursively walk the DOM in document order, emitting slots."""
+        if not hasattr(el, 'name') or not el.name:
+            return
 
-    html_str = str(soup)
+        # ── Ad iframes (display ads, gallery cards) ─────────────────
+        if el.name == 'iframe' and 'Walmart Advertisement' in el.get('title', ''):
+            ad_type_attr = el.get('data-ad-type', '')
+            testid = el.get('data-testid', '')
+            # Determine slot_location from data-testid / data-ad-type
+            if 'skyline' in testid or ad_type_attr == 'top':
+                iframe_type = 'Sponsored_Display'
+                slot_location = 'top'
+            elif ad_type_attr == 'bottom' or 'btf' in testid:
+                iframe_type = 'Sponsored_Display'
+                slot_location = 'bottom'
+            elif 'sidebar' in testid or 'skyscraper' in testid:
+                iframe_type = 'Sponsored_Display'
+                slot_location = 'left_rail'
+            else:
+                iframe_type = 'Gallery_Cards'
+                slot_location = ''
+            slots.append({
+                'ad_type': iframe_type,
+                'detail': {
+                    'iframe_src': el.get('src', '')[:200],
+                    'is_sponsored': True,
+                    'slot_location': slot_location,
+                    'data_testid': testid,
+                    'data_ad_type': ad_type_attr,
+                }
+            })
+            return
 
-    candidates = []  # (source_pos, type, element)
+        # ── SBA container — emit all child data-item-id as SBA ──────
+        if el.get('data-testid') == 'sba-container':
+            for item in el.find_all(attrs={'data-item-id': True}):
+                iid = item.get('data-item-id', '')
+                if iid not in seen_ids:
+                    seen_ids.add(iid)
+                    detail = _extract_product_detail(item)
+                    detail['plmt'] = _get_plmt(item)
+                    detail['is_sponsored'] = True
+                    slots.append({'ad_type': 'SBA', 'detail': detail})
+            return  # don't recurse further
 
-    # 1) Gallery Card iframes
-    for iframe in soup.select('iframe[title="Walmart Advertisement"]'):
-        pos = html_str.find(str(iframe)[:80])
-        candidates.append((pos, 'Gallery_Cards', iframe))
+        # ── SBV video carousel — emit child data-item-id as SBV ─────
+        if el.get('data-testid') == 'video-product-carousel':
+            for item in el.find_all(attrs={'data-item-id': True}):
+                iid = item.get('data-item-id', '')
+                if iid not in seen_ids:
+                    seen_ids.add(iid)
+                    detail = _extract_product_detail(item)
+                    detail['plmt'] = _get_plmt(item)
+                    detail['is_sponsored'] = True
+                    slots.append({'ad_type': 'SBV', 'detail': detail})
+            return  # don't recurse further
 
-    # 2) All data-item-id elements
-    for item in soup.find_all(attrs={'data-item-id': True}):
-        item_snippet = str(item)[:80]
-        pos = html_str.find(item_snippet)
-        ad_type = _classify_item(item)
-        candidates.append((pos, ad_type, item))
+        # ── Tile Takeover ────────────────────────────────────────────
+        if el.get('data-testid') == 'tile-take-over':
+            # Extract link and text from the tile takeover
+            link_el = el.select_one('a[href]')
+            detail = {
+                'href': link_el.get('href', '') if link_el else '',
+                'title': el.get_text(strip=True)[:120],
+                'is_sponsored': True,
+            }
+            slots.append({'ad_type': 'Tile_Takeover', 'detail': detail})
+            return
 
-    # Sort by source position (DOM order)
-    candidates.sort(key=lambda x: x[0])
-
-    # Track SBA/SBV carousel grouping for JSON matching
-    last_sba_group = []
-    last_sbv_group = []
-
-    for pos, ad_type, el in candidates:
-        if ad_type == 'Gallery_Cards':
-            detail = {}
-            # Extract iframe src for reference
-            detail['iframe_src'] = el.get('src', '')[:200]
-            slots.append({'ad_type': 'Gallery_Cards', 'detail': detail})
-
-        elif ad_type in ('SBA', 'SBV', 'Sponsored_Product', 'Product_Listing'):
+        # ── Individual product (data-item-id) ────────────────────────
+        # seen_ids only contains IDs already emitted by SBA/SBV containers;
+        # duplicate product IDs in the grid are real (SP + OR for same item).
+        iid = el.get('data-item-id', '')
+        if iid and iid not in seen_ids:
+            ad_type = _classify_item(el)
             detail = _extract_product_detail(el)
             detail['plmt'] = _get_plmt(el)
             detail['is_sponsored'] = ad_type in ('SBA', 'SBV', 'Sponsored_Product')
             slots.append({'ad_type': ad_type, 'detail': detail})
+            return  # don't recurse into product children
 
+        # ── Otherwise, recurse into children ─────────────────────────
+        for child in el.children:
+            _walk(child)
+
+    _walk(soup)
     return slots
 
 
@@ -272,6 +324,14 @@ def match_slots_to_json(slots, json_ads):
             if gc_idx < len(gc_ads):
                 matched = gc_ads[gc_idx]
                 gc_idx += 1
+
+        elif ad_type == 'Sponsored_Display':
+            # Programmatic display ads — no direct JSON match
+            matched = None
+
+        elif ad_type == 'Tile_Takeover':
+            # Tile takeovers — no direct JSON match
+            matched = None
 
         elif ad_type in ('Sponsored_Product', 'Product_Listing'):
             # No JSON match for individual product listings
@@ -374,6 +434,11 @@ def preview_file(json_path):
             if json_ad:
                 brand = json_ad.get('brand', '')
             detail_str = "[Gallery] %s" % brand
+        elif ad_type == 'Sponsored_Display':
+            loc = detail.get('slot_location', '?')
+            detail_str = "[Display:%s] testid=%s" % (loc, detail.get('data_testid', ''))
+        elif ad_type == 'Tile_Takeover':
+            detail_str = "[Tile] %s" % detail.get('title', '')[:60]
         else:
             detail_str = ''
 
@@ -397,6 +462,83 @@ def preview_file(json_path):
 
 # ── Backfill ──────────────────────────────────────────────────────────────────
 
+def _build_slots_array(matched_results, json_ads):
+    """Build a serializable slots array from matched_results for persisting in JSON.
+
+    Every entry gets:
+      slot, slot_within_type, total_slots, total_slots_of_type,
+      ad_type, is_sponsored, product_id, title, price, image_url, image_path,
+      brand, href, matched_ad_index
+
+    image_path points to assets/walmart/product_images/<product_id>.<ext> —
+    downloaded on first encounter, re-linked on subsequent appearances of the
+    same product_id (same product can appear multiple times on one page).
+    """
+    try:
+        from tools.product_image_store import download_and_store, get_image_path, has_image
+        _img_store = True
+    except ImportError:
+        _img_store = False
+
+    ads_index_map = {id(a): i for i, a in enumerate(json_ads)}
+    total_slots = len(matched_results)
+
+    # Pre-compute per-type totals
+    type_counts = Counter(slot['ad_type'] for slot, _ in matched_results)
+    # Running within-type index
+    type_running = Counter()
+    # Cache product_id → image_path within this run (avoids re-downloading duplicates)
+    _image_cache = {}
+
+    slots_out = []
+    for i, (slot, json_ad) in enumerate(matched_results):
+        d = slot['detail']
+        ad_type = slot['ad_type']
+        within = type_running[ad_type]
+        type_running[ad_type] += 1
+
+        product_id = d.get('item_id', '')
+        image_url  = d.get('image_url', '')
+
+        # Resolve canonical image path — download once, re-link on duplicates
+        image_path = None
+        if _img_store and product_id:
+            if product_id in _image_cache:
+                image_path = _image_cache[product_id]
+            elif has_image('walmart', product_id):
+                image_path = get_image_path('walmart', product_id)
+                _image_cache[product_id] = image_path
+            elif image_url:
+                image_path = download_and_store('walmart', product_id, image_url)
+                _image_cache[product_id] = image_path
+
+        entry = {
+            'slot': i,
+            'slot_within_type': within,
+            'total_slots': total_slots,
+            'total_slots_of_type': type_counts[ad_type],
+            'ad_type': ad_type,
+            'is_sponsored': d.get('is_sponsored', ad_type in (
+                'SBA', 'SBV', 'Sponsored_Product', 'Gallery_Cards',
+                'Sponsored_Display', 'Tile_Takeover')),
+            'product_id': product_id,
+            'title': d.get('title', ''),
+            'price': d.get('price', ''),
+            'image_url': image_url,
+            'image_path': image_path,
+            'href': d.get('href', ''),
+            'brand': None,
+            'matched_ad_index': ads_index_map.get(id(json_ad)) if json_ad else None,
+        }
+        if json_ad:
+            entry['brand'] = json_ad.get('brand', json_ad.get('brand_name'))
+        # Sponsored_Display gets slot_location (top, bottom, left_rail)
+        if ad_type == 'Sponsored_Display':
+            entry['slot_location'] = d.get('slot_location', '')
+        slots_out.append(entry)
+    return slots_out
+
+
 def _build_product_listings(matched_results):
     """Convert Product_Listing slots to standardized product_listings dicts."""
     listings = []
@@ -418,6 +560,29 @@ def _build_product_listings(matched_results):
             'position': d.get('grid_position', -1),
         })
     return listings
+
+
+def _find_screenshot_for_run(json_path):
+    """Find the Main page screenshot matching a run's timestamp."""
+    dirname = os.path.dirname(json_path)
+    ts = os.path.basename(dirname)  # e.g. 20260112200800
+    if len(ts) < 14:
+        m = re.search(r'(\d{14})', os.path.basename(json_path))
+        if m:
+            ts = m.group(1)
+        else:
+            return None
+    # Convert to screenshot date format: DYYYY-MM-DD_THH-MM.SS
+    date_str = 'D%s-%s-%s_T%s-%s.%s' % (ts[:4], ts[4:6], ts[6:8], ts[8:10], ts[10:12], ts[12:14])
+    # Screenshots live in <keyword_dir>/Main/
+    kw_dir = os.path.dirname(os.path.dirname(dirname))
+    main_dir = os.path.join(kw_dir, 'Main')
+    if not os.path.isdir(main_dir):
+        return None
+    for f in os.listdir(main_dir):
+        if f.endswith('.png') and date_str in f:
+            return os.path.join(main_dir, f)
+    return None
 
 
 def process_file(json_path, dry_run=False):
@@ -445,11 +610,28 @@ def process_file(json_path, dry_run=False):
     matched_results = match_slots_to_json(slots, json_ads)
     assigned, unmatched = assign_slot_fields(matched_results)
 
-    # Inject product listings from HTML
-    product_listings = _build_product_listings(matched_results)
-    changed = assigned > 0 or (product_listings and 'product_listings' not in data)
-    if product_listings:
-        data['product_listings'] = product_listings
+    # Build and inject the slots array (single source of truth for the full page)
+    slots_array = _build_slots_array(matched_results, json_ads)
+    changed = assigned > 0 or (slots_array and data.get('slots') != slots_array)
+    if slots_array:
+        data['slots'] = slots_array
+    # Remove legacy product_listings — slots supersedes it
+    if 'product_listings' in data:
+        del data['product_listings']
+        changed = True
+
+    # Link to Main page screenshot
+    screenshot = _find_screenshot_for_run(json_path)
+    if screenshot:
+        # Store as relative path from the output root
+        output_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output')
+        try:
+            rel = os.path.relpath(screenshot, os.path.dirname(json_path))
+        except ValueError:
+            rel = screenshot
+        if 'screenshot_path' not in data or data['screenshot_path'] != rel:
+            data['screenshot_path'] = rel
+            changed = True
 
     if changed and not dry_run:
         try:

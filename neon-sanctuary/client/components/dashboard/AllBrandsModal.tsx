@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,19 @@ export function AllBrandsModal({
 }: AllBrandsModalProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [flaggedBrands, setFlaggedBrands] = useState<Set<string>>(new Set());
+
+  const handleFlagBrand = useCallback((brandName: string) => {
+    if (flaggedBrands.has(brandName)) return;
+    setFlaggedBrands(prev => new Set(prev).add(brandName));
+    fetch('/api/flag-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'brand', brand_name: brandName, reason: 'User flagged from brand gallery' }),
+    }).catch(() => {
+      setFlaggedBrands(prev => { const next = new Set(prev); next.delete(brandName); return next; });
+    });
+  }, [flaggedBrands]);
 
   const filteredBrands = useMemo(() => {
     if (!searchTerm) return brands;
@@ -168,9 +181,22 @@ export function AllBrandsModal({
                     <div className="text-xs text-gray-500">{brand.count} ads</div>
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="font-extrabold text-lg bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent">
-                    {brand.percentage === 0 ? "<1" : brand.percentage}%
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleFlagBrand(brand.brand); }}
+                    className={cn(
+                      "text-[10px] font-medium px-2 py-1 rounded transition",
+                      flaggedBrands.has(brand.brand)
+                        ? "bg-amber-100 text-amber-700"
+                        : "text-gray-300 hover:text-amber-600 hover:bg-amber-50"
+                    )}
+                  >
+                    {flaggedBrands.has(brand.brand) ? '✓ flagged' : 'needs review'}
+                  </button>
+                  <div className="text-right">
+                    <div className="font-extrabold text-lg bg-gradient-to-r from-[#667eea] via-[#7c6eb0] to-[#764ba2] bg-clip-text text-transparent">
+                      {brand.percentage === 0 ? "<1" : brand.percentage}%
+                    </div>
                   </div>
                 </div>
               </button>

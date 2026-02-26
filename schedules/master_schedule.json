@@ -1,32 +1,6 @@
 {
   "schedules": [
     {
-      "id": "amazon_bandaid_waterproof_bandages_c675479a",
-      "retailer": "amazon",
-      "client": "bandaid",
-      "keywords": [
-        "waterproof bandages"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday"
-      ],
-      "times": [
-        "08:10",
-        "12:10",
-        "16:10"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-11-25T00:12:31Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__bandaid__waterproof_bandages.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/bandaid"
-    },
-    {
       "id": "amazon_barilla_barilla_pasta_1069f9ea",
       "retailer": "amazon",
       "client": "barilla",
@@ -53,33 +27,6 @@
       "updated_at": "2025-11-25T04:46:44Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__barilla__barilla_pasta.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/barilla"
-    },
-    {
-      "id": "amazon_batteries_aaa_batteries_2a3ce220",
-      "retailer": "amazon",
-      "client": "batteries",
-      "keywords": [
-        "AAA batteries"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "08:20",
-        "12:20"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-11-25T00:12:41Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__batteries__aaa_batteries.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/batteries"
     },
     {
       "id": "amazon_blue_bunny_ice_cream_bar_7399dc31",
@@ -142,11 +89,13 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/bomb_pop"
     },
     {
-      "id": "amazon_cheese_dip_cheese_dip_bf87bee7",
+      "id": "amazon_community_coffee_coffee_k_cup_0873e152",
       "retailer": "amazon",
-      "client": "cheese dip",
+      "client": "Community Coffee",
       "keywords": [
-        "cheese dip"
+        "coffee k cup",
+        "ground coffee",
+        "community coffee"
       ],
       "days": [
         "monday",
@@ -158,25 +107,25 @@
         "sunday"
       ],
       "times": [
-        "08:35",
-        "12:35",
-        "16:25",
-        "17:15",
-        "20:15"
+        "09:30",
+        "13:30",
+        "18:20"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:12:56Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__cheese_dip__cheese_dip.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/cheese_dip"
+      "created_at": "2026-02-10T21:42:24Z",
+      "updated_at": "2026-02-10T21:42:24Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__community_coffee__coffee_k_cup.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/community_coffee"
     },
     {
-      "id": "amazon_cheesy_poofs_cheese_puffs_e3ae5ba4",
+      "id": "amazon_community_coffee_coffee_k_cups_e67c67dd",
       "retailer": "amazon",
-      "client": "cheesy poofs",
+      "client": "Community Coffee",
       "keywords": [
-        "cheese puffs"
+        "coffee k cups",
+        "ground coffee",
+        "community coffee"
       ],
       "days": [
         "monday",
@@ -188,18 +137,16 @@
         "sunday"
       ],
       "times": [
-        "08:40",
-        "12:40",
-        "16:30",
-        "17:20",
-        "20:20"
+        "09:30",
+        "13:30",
+        "18:20"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:13:01Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__cheesy_poofs__cheese_puffs.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/cheesy_poofs"
+      "created_at": "2026-02-10T21:29:23Z",
+      "updated_at": "2026-02-10T21:29:23Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__community_coffee__coffee_k_cups.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/community_coffee"
     },
     {
       "id": "amazon_curology_curology_8ab37ade",
@@ -231,6 +178,34 @@
       "updated_at": "2025-11-25T04:46:44Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__curology__curology.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/curology"
+    },
+    {
+      "id": "amazon_goodles_goodles_22bd5ac0",
+      "retailer": "amazon",
+      "client": "goodles",
+      "keywords": [
+        "goodles",
+        "chickpea pasta"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:35",
+        "15:35",
+        "18:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2026-02-11T04:59:38Z",
+      "updated_at": "2026-02-11T04:59:38Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__goodles__goodles.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/goodles"
     },
     {
       "id": "amazon_milkpep_protein_drinks_7251a0f7",
@@ -298,30 +273,33 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/proactiv"
     },
     {
-      "id": "instacart_bandaid_waterproof_bandages_c4b2fe02",
-      "retailer": "instacart",
-      "client": "bandaid",
+      "id": "amazon_quip_electric_toothbrush_79604446",
+      "retailer": "amazon",
+      "client": "quip",
       "keywords": [
-        "waterproof bandages"
+        "electric toothbrush",
+        "smart toothbrush"
       ],
       "days": [
         "monday",
         "tuesday",
         "wednesday",
         "thursday",
-        "friday"
+        "friday",
+        "saturday",
+        "sunday"
       ],
       "times": [
-        "08:10",
-        "12:10",
-        "16:10"
+        "04:50",
+        "12:00",
+        "17:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:12:31Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__bandaid__waterproof_bandages.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/bandaid"
+      "created_at": "2026-02-09T17:39:09Z",
+      "updated_at": "2026-02-09T17:39:09Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/amazon__quip__electric_toothbrush.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/amazon/quip"
     },
     {
       "id": "instacart_barilla_barilla_pasta_e2d0da48",
@@ -350,33 +328,6 @@
       "updated_at": "2025-11-25T04:46:44Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__barilla__barilla_pasta.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/barilla"
-    },
-    {
-      "id": "instacart_batteries_aaa_batteries_a4bd6847",
-      "retailer": "instacart",
-      "client": "batteries",
-      "keywords": [
-        "AAA batteries"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "08:20",
-        "12:20"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-11-25T00:12:41Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__batteries__aaa_batteries.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/batteries"
     },
     {
       "id": "instacart_blue_bunny_ice_cream_bar_e9b29dc7",
@@ -439,11 +390,13 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/bomb_pop"
     },
     {
-      "id": "instacart_cheese_dip_cheese_dip_fb1ff455",
+      "id": "instacart_community_coffee_coffee_k_cup_2c4c5a88",
       "retailer": "instacart",
-      "client": "cheese dip",
+      "client": "Community Coffee",
       "keywords": [
-        "cheese dip"
+        "coffee k cup",
+        "ground coffee",
+        "community coffee"
       ],
       "days": [
         "monday",
@@ -455,25 +408,25 @@
         "sunday"
       ],
       "times": [
-        "08:35",
-        "12:35",
-        "16:25",
-        "17:15",
-        "20:15"
+        "09:30",
+        "13:30",
+        "18:20"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:12:56Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__cheese_dip__cheese_dip.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/cheese_dip"
+      "created_at": "2026-02-10T21:42:24Z",
+      "updated_at": "2026-02-10T21:42:24Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__community_coffee__coffee_k_cup.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/community_coffee"
     },
     {
-      "id": "instacart_cheesy_poofs_cheese_puffs_982aab36",
+      "id": "instacart_community_coffee_coffee_k_cups_5a133a1e",
       "retailer": "instacart",
-      "client": "cheesy poofs",
+      "client": "Community Coffee",
       "keywords": [
-        "cheese puffs"
+        "coffee k cups",
+        "ground coffee",
+        "community coffee"
       ],
       "days": [
         "monday",
@@ -485,18 +438,16 @@
         "sunday"
       ],
       "times": [
-        "08:40",
-        "12:40",
-        "16:30",
-        "17:20",
-        "20:20"
+        "09:30",
+        "13:30",
+        "18:20"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:13:01Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__cheesy_poofs__cheese_puffs.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/cheesy_poofs"
+      "created_at": "2026-02-10T21:29:23Z",
+      "updated_at": "2026-02-10T21:29:23Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__community_coffee__coffee_k_cups.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/community_coffee"
     },
     {
       "id": "instacart_curology_curology_56cfa68c",
@@ -530,6 +481,34 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/curology"
     },
     {
+      "id": "instacart_goodles_goodles_b22c7808",
+      "retailer": "instacart",
+      "client": "goodles",
+      "keywords": [
+        "goodles",
+        "chickpea pasta"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:35",
+        "15:35",
+        "18:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2026-02-11T04:59:38Z",
+      "updated_at": "2026-02-11T04:59:38Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__goodles__goodles.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/goodles"
+    },
+    {
       "id": "instacart_halo_top_healthy_ice_cream_ec247958",
       "retailer": "instacart",
       "client": "halo top",
@@ -559,66 +538,6 @@
       "updated_at": "2025-11-25T04:46:44Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__halo_top__healthy_ice_cream.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/halo_top"
-    },
-    {
-      "id": "instacart_jenis_jenis_ice_cream_73ce6189",
-      "retailer": "instacart",
-      "client": "jenis",
-      "keywords": [
-        "jenis ice cream"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "08:55",
-        "12:55",
-        "16:45",
-        "17:35",
-        "20:35"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-22T03:51:29Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__jenis__jenis_ice_cream.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/jenis"
-    },
-    {
-      "id": "instacart_keto_chips_keto_chips_625458b3",
-      "retailer": "instacart",
-      "client": "keto chips",
-      "keywords": [
-        "keto chips"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "09:00",
-        "13:00",
-        "16:50",
-        "17:40",
-        "20:40"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-22T04:03:14Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__keto_chips__keto_chips.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/keto_chips"
     },
     {
       "id": "instacart_land_o_frost_honey_ham_37a6126a",
@@ -776,60 +695,6 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/proactiv"
     },
     {
-      "id": "instacart_sour_cream_light_sour_cream_546f03d1",
-      "retailer": "instacart",
-      "client": "sour cream",
-      "keywords": [
-        "light sour cream"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "09:20",
-        "13:20",
-        "18:10"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-22T04:22:47Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/instacart__sour_cream__light_sour_cream.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/instacart/sour_cream"
-    },
-    {
-      "id": "kroger_bandaid_waterproof_bandages_18719e2a",
-      "retailer": "kroger",
-      "client": "bandaid",
-      "keywords": [
-        "waterproof bandages"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday"
-      ],
-      "times": [
-        "08:10",
-        "12:10",
-        "16:10"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-11-25T00:12:31Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__bandaid__waterproof_bandages.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/bandaid"
-    },
-    {
       "id": "kroger_barilla_barilla_pasta_c54e9124",
       "retailer": "kroger",
       "client": "barilla",
@@ -856,33 +721,6 @@
       "updated_at": "2025-11-25T04:46:44Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__barilla__barilla_pasta.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/barilla"
-    },
-    {
-      "id": "kroger_batteries_aaa_batteries_ec23cb1f",
-      "retailer": "kroger",
-      "client": "batteries",
-      "keywords": [
-        "AAA batteries"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "08:20",
-        "12:20"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-11-25T00:12:41Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__batteries__aaa_batteries.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/batteries"
     },
     {
       "id": "kroger_blue_bunny_ice_cream_bar_d1eff72f",
@@ -945,11 +783,13 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/bomb_pop"
     },
     {
-      "id": "kroger_cheese_dip_cheese_dip_f71a05c9",
+      "id": "kroger_community_coffee_coffee_k_cup_668bd0dc",
       "retailer": "kroger",
-      "client": "cheese dip",
+      "client": "Community Coffee",
       "keywords": [
-        "cheese dip"
+        "coffee k cup",
+        "ground coffee",
+        "community coffee"
       ],
       "days": [
         "monday",
@@ -961,25 +801,25 @@
         "sunday"
       ],
       "times": [
-        "08:35",
-        "12:35",
-        "16:25",
-        "17:15",
-        "20:15"
+        "09:30",
+        "13:30",
+        "18:20"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:12:56Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__cheese_dip__cheese_dip.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/cheese_dip"
+      "created_at": "2026-02-10T21:42:24Z",
+      "updated_at": "2026-02-10T21:42:24Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__community_coffee__coffee_k_cup.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/community_coffee"
     },
     {
-      "id": "kroger_cheesy_poofs_cheese_puffs_a24fda29",
+      "id": "kroger_community_coffee_coffee_k_cups_1dd3101e",
       "retailer": "kroger",
-      "client": "cheesy poofs",
+      "client": "Community Coffee",
       "keywords": [
-        "cheese puffs"
+        "coffee k cups",
+        "ground coffee",
+        "community coffee"
       ],
       "days": [
         "monday",
@@ -991,18 +831,16 @@
         "sunday"
       ],
       "times": [
-        "08:40",
-        "12:40",
-        "16:30",
-        "17:20",
-        "20:20"
+        "09:30",
+        "13:30",
+        "18:20"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:13:01Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__cheesy_poofs__cheese_puffs.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/cheesy_poofs"
+      "created_at": "2026-02-10T21:29:23Z",
+      "updated_at": "2026-02-10T21:29:23Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__community_coffee__coffee_k_cups.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/community_coffee"
     },
     {
       "id": "kroger_curology_curology_93d06ca1",
@@ -1036,6 +874,34 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/curology"
     },
     {
+      "id": "kroger_goodles_goodles_cc5fde91",
+      "retailer": "kroger",
+      "client": "goodles",
+      "keywords": [
+        "goodles",
+        "chickpea pasta"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:35",
+        "15:35",
+        "18:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2026-02-11T04:59:38Z",
+      "updated_at": "2026-02-11T04:59:38Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__goodles__goodles.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/goodles"
+    },
+    {
       "id": "kroger_halo_top_healthy_ice_cream_eb6e34cd",
       "retailer": "kroger",
       "client": "halo top",
@@ -1065,66 +931,6 @@
       "updated_at": "2025-11-25T04:46:44Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__halo_top__healthy_ice_cream.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/halo_top"
-    },
-    {
-      "id": "kroger_jenis_jenis_ice_cream_e50e0a09",
-      "retailer": "kroger",
-      "client": "jenis",
-      "keywords": [
-        "jenis ice cream"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "08:55",
-        "12:55",
-        "16:45",
-        "17:35",
-        "20:35"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-22T03:51:29Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__jenis__jenis_ice_cream.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/jenis"
-    },
-    {
-      "id": "kroger_keto_chips_keto_chips_43c3ddf9",
-      "retailer": "kroger",
-      "client": "keto chips",
-      "keywords": [
-        "keto chips"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "09:00",
-        "13:00",
-        "16:50",
-        "17:40",
-        "20:40"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-22T04:03:14Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__keto_chips__keto_chips.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/keto_chips"
     },
     {
       "id": "kroger_land_o_frost_honey_ham_cad95639",
@@ -1251,34 +1057,6 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pickle"
     },
     {
-      "id": "kroger_pork_rinds_pork_rinds_e207573e",
-      "retailer": "kroger",
-      "client": "pork rinds",
-      "keywords": [
-        "pork rinds"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "09:20",
-        "13:20",
-        "18:10"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-22T03:27:17Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__pork_rinds__pork_rinds.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/pork_rinds"
-    },
-    {
       "id": "kroger_proactiv_proactiv_cc74ba79",
       "retailer": "kroger",
       "client": "Proactiv",
@@ -1310,11 +1088,12 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/proactiv"
     },
     {
-      "id": "kroger_sour_cream_light_sour_cream_2a1eba81",
+      "id": "kroger_quip_electric_toothbrush_3a6000d3",
       "retailer": "kroger",
-      "client": "sour cream",
+      "client": "quip",
       "keywords": [
-        "light sour cream"
+        "electric toothbrush",
+        "smart toothbrush"
       ],
       "days": [
         "monday",
@@ -1326,42 +1105,16 @@
         "sunday"
       ],
       "times": [
-        "09:25",
-        "13:25",
-        "18:15"
+        "04:50",
+        "12:00",
+        "17:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:22:47Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__sour_cream__light_sour_cream.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/sour_cream"
-    },
-    {
-      "id": "target_bandaid_waterproof_bandages_2146202a",
-      "retailer": "target",
-      "client": "bandaid",
-      "keywords": [
-        "waterproof bandages"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday"
-      ],
-      "times": [
-        "08:10",
-        "12:10",
-        "16:10"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-11-25T00:12:31Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__bandaid__waterproof_bandages.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/bandaid"
+      "created_at": "2026-02-09T17:39:09Z",
+      "updated_at": "2026-02-09T17:39:09Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/kroger__quip__electric_toothbrush.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/kroger/quip"
     },
     {
       "id": "target_barilla_barilla_pasta_cc94d2ca",
@@ -1390,33 +1143,6 @@
       "updated_at": "2025-11-25T04:46:44Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__barilla__barilla_pasta.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/barilla"
-    },
-    {
-      "id": "target_batteries_aaa_batteries_2328154e",
-      "retailer": "target",
-      "client": "batteries",
-      "keywords": [
-        "AAA batteries"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "08:20",
-        "12:20"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-11-25T00:12:41Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__batteries__aaa_batteries.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/batteries"
     },
     {
       "id": "target_blue_bunny_ice_cream_bar_c7e5774b",
@@ -1479,11 +1205,13 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/bomb_pop"
     },
     {
-      "id": "target_cheese_dip_cheese_dip_966b7b25",
+      "id": "target_community_coffee_coffee_k_cup_8243f78e",
       "retailer": "target",
-      "client": "cheese dip",
+      "client": "Community Coffee",
       "keywords": [
-        "cheese dip"
+        "coffee k cup",
+        "ground coffee",
+        "community coffee"
       ],
       "days": [
         "monday",
@@ -1495,25 +1223,25 @@
         "sunday"
       ],
       "times": [
-        "08:35",
-        "12:35",
-        "16:25",
-        "17:15",
-        "20:15"
+        "09:30",
+        "13:30",
+        "18:20"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:12:56Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__cheese_dip__cheese_dip.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/cheese_dip"
+      "created_at": "2026-02-10T21:42:24Z",
+      "updated_at": "2026-02-10T21:42:24Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__community_coffee__coffee_k_cup.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/community_coffee"
     },
     {
-      "id": "target_cheesy_poofs_cheese_puffs_1764becf",
+      "id": "target_community_coffee_coffee_k_cups_b3992df9",
       "retailer": "target",
-      "client": "cheesy poofs",
+      "client": "Community Coffee",
       "keywords": [
-        "cheese puffs"
+        "coffee k cups",
+        "ground coffee",
+        "community coffee"
       ],
       "days": [
         "monday",
@@ -1525,18 +1253,16 @@
         "sunday"
       ],
       "times": [
-        "08:40",
-        "12:40",
-        "16:30",
-        "17:20",
-        "20:20"
+        "09:30",
+        "13:30",
+        "18:20"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:13:01Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__cheesy_poofs__cheese_puffs.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/cheesy_poofs"
+      "created_at": "2026-02-10T21:29:23Z",
+      "updated_at": "2026-02-10T21:29:23Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__community_coffee__coffee_k_cups.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/community_coffee"
     },
     {
       "id": "target_curology_curology_9adf02cc",
@@ -1568,6 +1294,34 @@
       "updated_at": "2025-11-25T04:46:44Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__curology__curology.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/curology"
+    },
+    {
+      "id": "target_goodles_goodles_70974f7d",
+      "retailer": "target",
+      "client": "goodles",
+      "keywords": [
+        "goodles",
+        "chickpea pasta"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:35",
+        "15:35",
+        "18:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2026-02-11T04:59:38Z",
+      "updated_at": "2026-02-11T04:59:38Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__goodles__goodles.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/goodles"
     },
     {
       "id": "target_milkpep_protein_drinks_d0f1e62c",
@@ -1635,30 +1389,33 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/proactiv"
     },
     {
-      "id": "walmart_bandaid_waterproof_bandages_26dedec8",
-      "retailer": "walmart",
-      "client": "bandaid",
+      "id": "target_quip_electric_toothbrush_462119a1",
+      "retailer": "target",
+      "client": "quip",
       "keywords": [
-        "waterproof bandages"
+        "electric toothbrush",
+        "smart toothbrush"
       ],
       "days": [
         "monday",
         "tuesday",
         "wednesday",
         "thursday",
-        "friday"
+        "friday",
+        "saturday",
+        "sunday"
       ],
       "times": [
-        "08:10",
-        "12:10",
-        "16:10"
+        "04:50",
+        "12:00",
+        "17:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:12:31Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__bandaid__waterproof_bandages.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/bandaid"
+      "created_at": "2026-02-09T17:39:09Z",
+      "updated_at": "2026-02-09T17:39:09Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/target__quip__electric_toothbrush.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/target/quip"
     },
     {
       "id": "walmart_barilla_barilla_pasta_b6c31b3a",
@@ -1687,33 +1444,6 @@
       "updated_at": "2025-11-25T04:46:44Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__barilla__barilla_pasta.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/barilla"
-    },
-    {
-      "id": "walmart_batteries_aaa_batteries_a98f2788",
-      "retailer": "walmart",
-      "client": "batteries",
-      "keywords": [
-        "AAA batteries"
-      ],
-      "days": [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "08:20",
-        "12:20"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-11-25T00:12:41Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__batteries__aaa_batteries.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/batteries"
     },
     {
       "id": "walmart_blue_bunny_ice_cream_bar_4bdd20e5",
@@ -1776,11 +1506,13 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/bomb_pop"
     },
     {
-      "id": "walmart_cheese_dip_cheese_dip_048bbf1d",
+      "id": "walmart_community_coffee_coffee_k_cup_bae3237f",
       "retailer": "walmart",
-      "client": "cheese dip",
+      "client": "Community Coffee",
       "keywords": [
-        "cheese dip"
+        "coffee k cup",
+        "ground coffee",
+        "community coffee"
       ],
       "days": [
         "monday",
@@ -1792,25 +1524,25 @@
         "sunday"
       ],
       "times": [
-        "08:35",
-        "12:35",
-        "16:25",
-        "17:15",
-        "20:15"
+        "09:30",
+        "13:30",
+        "18:20"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:12:56Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__cheese_dip__cheese_dip.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/cheese_dip"
+      "created_at": "2026-02-10T21:42:24Z",
+      "updated_at": "2026-02-10T21:42:24Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__community_coffee__coffee_k_cup.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/community_coffee"
     },
     {
-      "id": "walmart_cheesy_poofs_cheese_puffs_e5edc4f8",
+      "id": "walmart_community_coffee_coffee_k_cups_7b89bb76",
       "retailer": "walmart",
-      "client": "cheesy poofs",
+      "client": "Community Coffee",
       "keywords": [
-        "cheese puffs"
+        "coffee k cups",
+        "ground coffee",
+        "community coffee"
       ],
       "days": [
         "monday",
@@ -1822,18 +1554,16 @@
         "sunday"
       ],
       "times": [
-        "08:40",
-        "12:40",
-        "16:30",
-        "17:20",
-        "20:20"
+        "09:30",
+        "13:30",
+        "18:20"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-11-25T00:13:01Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__cheesy_poofs__cheese_puffs.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/cheesy_poofs"
+      "created_at": "2026-02-10T21:29:23Z",
+      "updated_at": "2026-02-10T21:29:23Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__community_coffee__coffee_k_cups.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/community_coffee"
     },
     {
       "id": "walmart_curology_curology_273d32c4",
@@ -1867,6 +1597,65 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/curology"
     },
     {
+      "id": "walmart_garan_garanimals_3b4b33a0",
+      "retailer": "walmart",
+      "client": "Garan",
+      "keywords": [
+        "Garanimals",
+        "toddler clothes",
+        "kids clothes",
+        "toddler clothes clearance"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:40",
+        "15:40",
+        "18:00"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2026-02-11T18:13:20Z",
+      "updated_at": "2026-02-11T18:13:20Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__garan__garanimals.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/garan"
+    },
+    {
+      "id": "walmart_goodles_goodles_f3de5f0f",
+      "retailer": "walmart",
+      "client": "goodles",
+      "keywords": [
+        "goodles",
+        "chickpea pasta"
+      ],
+      "days": [
+        "monday",
+        "tuesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ],
+      "times": [
+        "09:35",
+        "15:35",
+        "18:10"
+      ],
+      "enabled": true,
+      "tz": "",
+      "created_at": "2026-02-11T04:59:38Z",
+      "updated_at": "2026-02-11T04:59:38Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__goodles__goodles.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/goodles"
+    },
+    {
       "id": "walmart_halo_top_healthy_ice_cream_4eb2de4d",
       "retailer": "walmart",
       "client": "halo top",
@@ -1896,52 +1685,6 @@
       "updated_at": "2025-11-25T04:46:44Z",
       "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__halo_top__healthy_ice_cream.json",
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/halo_top"
-    },
-    {
-      "id": "walmart_jenis_jenis_ice_cream_d51f04aa",
-      "retailer": "walmart",
-      "client": "jenis",
-      "keywords": [
-        "jenis ice cream"
-      ],
-      "days": [
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "08:05",
-        "12:05",
-        "16:05"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-22T03:51:29Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__jenis__jenis_ice_cream.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/jenis"
-    },
-    {
-      "id": "walmart_keto_chips_keto_chips_f09ffccc",
-      "retailer": "walmart",
-      "client": "keto chips",
-      "keywords": [
-        "keto chips"
-      ],
-      "days": [
-        "saturday",
-        "sunday"
-      ],
-      "times": [
-        "08:10",
-        "12:10",
-        "16:10"
-      ],
-      "enabled": true,
-      "tz": "",
-      "created_at": "2025-10-22T04:03:14Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__keto_chips__keto_chips.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/keto_chips"
     },
     {
       "id": "walmart_land_o_frost_honey_ham_b00718ae",
@@ -2080,27 +1823,33 @@
       "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/proactiv"
     },
     {
-      "id": "walmart_sour_cream_light_sour_cream_2b034c8a",
+      "id": "walmart_quip_electric_toothbrush_bebfa081",
       "retailer": "walmart",
-      "client": "sour cream",
+      "client": "quip",
       "keywords": [
-        "light sour cream"
+        "electric toothbrush",
+        "smart toothbrush"
       ],
       "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
         "saturday",
         "sunday"
       ],
       "times": [
-        "09:10",
-        "13:10",
-        "17:35"
+        "04:50",
+        "12:00",
+        "17:00"
       ],
       "enabled": true,
       "tz": "",
-      "created_at": "2025-10-22T04:22:47Z",
-      "updated_at": "2025-11-25T04:46:44Z",
-      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__sour_cream__light_sour_cream.json",
-      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/sour_cream"
+      "created_at": "2026-02-09T17:39:09Z",
+      "updated_at": "2026-02-09T17:39:09Z",
+      "source_path": "/Users/dan.maguire/Documents/Amazon_Scrape/schedules/walmart__quip__electric_toothbrush.json",
+      "output_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/output/walmart/quip"
     }
   ],
   "version": "1.0"

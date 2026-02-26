@@ -26,48 +26,39 @@ VITE_DIR="$SCRAPER_DIR/neon-sanctuary"
 
 echo -e "${YELLOW}[1/3] Stopping existing servers...${NC}"
 
-# Kill Flask API (port 5006)
-echo "  - Stopping Flask API (port 5006)..."
-if lsof -ti:5006 > /dev/null 2>&1; then
-    lsof -ti:5006 | xargs kill -9 2>/dev/null || true
-    echo -e "    ${GREEN}✓ Flask stopped${NC}"
-else
-    echo "    ℹ Flask not running"
-fi
-
-# Kill any builder_server_v2.py processes (in case they're hung)
+# --- Kill by process name first (catches detached/orphaned processes) ---
+echo "  - Killing stale processes by name..."
 if pgrep -f "builder_server_v2.py" > /dev/null 2>&1; then
     pkill -9 -f "builder_server_v2.py" 2>/dev/null || true
-    echo -e "    ${GREEN}✓ Cleaned up Flask processes${NC}"
+    echo -e "    ${GREEN}✓ Killed builder_server_v2.py${NC}"
 fi
-
-# Kill ngrok (port 4040 is ngrok's web interface)
-echo "  - Stopping ngrok..."
 if pgrep -f "ngrok" > /dev/null 2>&1; then
     pkill -9 ngrok 2>/dev/null || true
-    echo -e "    ${GREEN}✓ ngrok stopped${NC}"
-else
-    echo "    ℹ ngrok not running"
+    echo -e "    ${GREEN}✓ Killed ngrok${NC}"
 fi
 
-# Kill Vite (port 3000)
-echo "  - Stopping Vite dev server (port 3000)..."
-if lsof -ti:3000 > /dev/null 2>&1; then
-    lsof -ti:3000 | xargs kill -9 2>/dev/null || true
-    echo -e "    ${GREEN}✓ Vite stopped${NC}"
-else
-    echo "    ℹ Vite not running"
-fi
+# --- Kill anything on our ports (catches processes we didn't start) ---
+for PORT in 5006 3000 3001 4040; do
+    if lsof -ti:$PORT > /dev/null 2>&1; then
+        echo "  - Killing processes on port $PORT..."
+        lsof -ti:$PORT | xargs kill -9 2>/dev/null || true
+        echo -e "    ${GREEN}✓ Port $PORT cleared${NC}"
+    fi
+done
 
-# Also kill port 3001 in case Vite moved there
-if lsof -ti:3001 > /dev/null 2>&1; then
-    lsof -ti:3001 | xargs kill -9 2>/dev/null || true
-    echo -e "    ${GREEN}✓ Cleaned up port 3001${NC}"
-fi
-
-# Wait for ports to be fully released
+# --- Wait for ports to be fully released (retry up to 5s) ---
 echo "  - Waiting for ports to be released..."
-sleep 2
+for i in 1 2 3 4 5; do
+    ALL_FREE=true
+    for PORT in 5006 3000; do
+        if lsof -ti:$PORT > /dev/null 2>&1; then
+            ALL_FREE=false
+            break
+        fi
+    done
+    if $ALL_FREE; then break; fi
+    sleep 1
+done
 
 # ============================================
 # Step 2: Verify ports are free
@@ -98,23 +89,30 @@ if [ "$PORTS_OK" = false ]; then
     exit 1
 fi
 
+# Use .venv Python for all tool scripts
+PYTHON="$SCRAPER_DIR/.venv/bin/python3"
+if [ ! -x "$PYTHON" ]; then
+    echo -e "${YELLOW}⚠️  .venv not found, falling back to system python3${NC}"
+    PYTHON=python3
+fi
+
 # Rebuild indexes (brand index and run manifest) before starting servers
 echo ""
 echo "🔄 Rebuilding brand index..."
 cd "$SCRAPER_DIR"
-python3 tools/build_brand_index.py || echo "⚠️ Brand index rebuild failed (continuing startup)"
+"$PYTHON" tools/build_brand_index.py || echo "⚠️ Brand index rebuild failed (continuing startup)"
 
 echo ""
 echo "🔄 Rebuilding run manifest..."
-python3 tools/build_run_manifest.py || echo "⚠️ Run manifest rebuild failed (continuing startup)"
+"$PYTHON" tools/build_run_manifest.py || echo "⚠️ Run manifest rebuild failed (continuing startup)"
 
 echo ""
 echo "🔄 Harvesting Amazon brand logos..."
-python3 tools/harvest_amazon_brand_logos.py || echo "⚠️ Amazon logo harvest failed (continuing startup)"
+"$PYTHON" tools/harvest_amazon_brand_logos.py || echo "⚠️ Amazon logo harvest failed (continuing startup)"
 
 echo ""
 echo "🔄 Syncing verified logos to database..."
-python3 tools/sync_verified_logos.py || echo "⚠️ Logo sync failed (continuing startup)"
+"$PYTHON" tools/sync_verified_logos.py || echo "⚠️ Logo sync failed (continuing startup)"
 
 # ============================================
 # Step 3: Start servers
@@ -126,7 +124,7 @@ echo -e "${YELLOW}[3/3] Starting servers...${NC}"
 # Start Flask API
 echo "  - Starting Flask API..."
 cd "$SCRAPER_DIR"
-nohup python3 web/builder_server_v2.py > logs/flask.log 2>&1 &
+nohup "$PYTHON" web/builder_server_v2.py > logs/flask.log 2>&1 &
 FLASK_PID=$!
 sleep 2
 

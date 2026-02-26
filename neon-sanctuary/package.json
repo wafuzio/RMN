@@ -2,6 +2,14 @@
   "name": "fusion-starter",
   "private": true,
   "type": "module",
+  "builder": {
+    "devServer": {
+      "command": "echo 'Server already running'",
+      "port": 3000,
+      "directory": "neon-sanctuary",
+      "url": "http://localhost:3000"
+    }
+  },
   "pkg": {
     "assets": [
       "dist/spa/*"

@@ -463,6 +463,13 @@ class KeywordInputApp:
         self.new_client_btn.state(['!disabled'])  # ensure enabled
         self.new_client_btn.pack(side=tk.LEFT)
         
+        self.remove_client_btn = ttk.Button(
+            client_frame,
+            text="Remove…",
+            command=self.on_remove_client,
+        )
+        self.remove_client_btn.pack(side=tk.LEFT, padx=(4, 0))
+        
         # Build adapter maps (exact and case-insensitive)
         adapters = list_adapters()
         self._retailer_by_name = {a.display_name: a.slug for a in adapters}
@@ -650,8 +657,16 @@ class KeywordInputApp:
             command=self.save_schedule,
             style='Primary.TButton'
         )
-        self.schedule_button.pack(side=tk.LEFT, padx=(0, 10))
+        self.schedule_button.pack(side=tk.LEFT, padx=(0, 5))
         self.schedule_button.state(['disabled'])
+        
+        self.clear_schedule_button = ttk.Button(
+            schedule_buttons_frame,
+            text="🗑 Clear Schedule",
+            command=self.clear_schedule,
+            width=16
+        )
+        self.clear_schedule_button.pack(side=tk.LEFT, padx=(0, 10))
         
         # Scheduler management buttons (right side of Schedule Settings)
         ttk.Button(
@@ -3115,33 +3130,40 @@ Captured: {timestamp_str}
         return False
     
     def launch_brand_review_tool(self):
-        """Launch the logo verifier first, then brand review tool"""
+        """Launch brand review pipeline sequentially: Logo Verifier → Name Verifier → Unknown Ad Review.
+        Each tool runs and must be closed before the next one opens, so changes from one
+        step are reflected in the next."""
         try:
             base_dir = get_base_dir()
             
-            # 1. Launch logo verifier
-            logo_verifier_path = os.path.join(base_dir, 'tools', 'logo_verifier_gui.py')
-            if os.path.exists(logo_verifier_path):
-                subprocess.Popen([sys.executable, logo_verifier_path], cwd=base_dir)
-                logging.info("Launched logo verifier GUI")
-            else:
-                logging.warning(f"Logo verifier not found at: {logo_verifier_path}")
+            steps = [
+                ("Logo Verifier", os.path.join(base_dir, 'tools', 'logo_verifier_gui.py')),
+                ("Brand Name Verifier", os.path.join(base_dir, 'tools', 'brand_name_verifier.py')),
+                ("Unknown Ad Review", os.path.join(base_dir, 'brand_review_tool.py')),
+            ]
             
-            # 2. Launch brand name verifier (lexicon cleanup)
-            brand_verifier_path = os.path.join(base_dir, 'tools', 'brand_name_verifier.py')
-            if os.path.exists(brand_verifier_path):
-                subprocess.Popen([sys.executable, brand_verifier_path], cwd=base_dir)
-                logging.info("Launched brand name verifier")
-            else:
-                logging.warning(f"Brand name verifier not found at: {brand_verifier_path}")
+            # Validate all paths first
+            missing = [name for name, path in steps if not os.path.exists(path)]
+            if missing:
+                messagebox.showerror("Error", f"Missing tools:\n" + "\n".join(missing))
+                return
             
-            # 3. Launch brand review tool (unknown brand correction)
-            tool_path = os.path.join(base_dir, 'brand_review_tool.py')
-            if os.path.exists(tool_path):
-                subprocess.Popen([sys.executable, tool_path], cwd=base_dir)
-                logging.info("Launched brand review tool")
-            else:
-                messagebox.showerror("Error", f"Brand review tool not found at:\n{tool_path}")
+            # Run sequentially in a background thread so the main UI stays responsive
+            def run_pipeline():
+                for name, path in steps:
+                    logging.info(f"[REVIEW] Starting {name}...")
+                    try:
+                        proc = subprocess.Popen([sys.executable, path], cwd=base_dir)
+                        proc.wait()  # Block until this tool is closed
+                        logging.info(f"[REVIEW] {name} closed (exit code {proc.returncode})")
+                    except Exception as e:
+                        logging.error(f"[REVIEW] {name} failed: {e}")
+                logging.info("[REVIEW] Brand review pipeline complete")
+            
+            import threading
+            thread = threading.Thread(target=run_pipeline, daemon=True)
+            thread.start()
+            
         except Exception as e:
             logging.error(f"Error launching brand review tools: {e}")
             messagebox.showerror("Error", f"Failed to launch brand review tools:\n{str(e)}")
@@ -3223,9 +3245,28 @@ Captured: {timestamp_str}
         schedule_frame.grid_rowconfigure(0, weight=1)
         schedule_frame.grid_columnconfigure(0, weight=1)
         
-        # Load all schedules
-        def load_schedules():
-            """Load all schedule configs using shared library"""
+        # ── Schedule file helpers (used by load, delete, toggle) ──
+        schedules_dir = os.path.join(get_base_dir(), "schedules")
+        
+        # Map: schedule_file_path → parsed config dict (for management actions)
+        schedule_file_map = {}
+        
+        def _rebuild_master_index():
+            """Rebuild the master schedule index after changes."""
+            try:
+                from pathlib import Path
+                sys.path.insert(0, str(get_base_dir()))
+                from schedules.schedules_lib import build_master_index
+                build_master_index(Path(get_base_dir()))
+            except Exception:
+                pass
+        
+        def load_schedules(include_disabled=False):
+            """Load all schedule configs using shared library.
+            
+            Returns list of dicts with keys: time, day, retailer, client, keywords,
+            enabled, file_path (absolute path to the JSON file).
+            """
             schedules = []
             base = get_base_dir()
             
@@ -3240,8 +3281,24 @@ Captured: {timestamp_str}
                 
                 # Convert Schedule objects to display format
                 for sched in schedule_objects:
-                    if not sched.enabled:
+                    if not include_disabled and not sched.enabled:
                         continue
+                    
+                    # Track the source file
+                    file_path = str(sched.source_path) if hasattr(sched, 'source_path') and sched.source_path else None
+                    if not file_path:
+                        # Reconstruct from convention
+                        client_slug = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in sched.client.lower())
+                        kw_slug = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in sched.keywords[0].lower()) if sched.keywords else "default"
+                        file_path = os.path.join(base, "schedules", f"{sched.retailer}__{client_slug}__{kw_slug}.json")
+                    
+                    # Cache the config for management
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                schedule_file_map[file_path] = json.load(f)
+                        except Exception:
+                            pass
                     
                     keywords_str = ", ".join(sched.keywords[:3])
                     if len(sched.keywords) > 3:
@@ -3261,10 +3318,13 @@ Captured: {timestamp_str}
                             for day in sched.days:
                                 schedules.append({
                                     "time": time_str,
+                                    "time_24h": time_24h,
                                     "day": day.capitalize(),
                                     "retailer": sched.retailer,
                                     "client": sched.client,
-                                    "keywords": keywords_str
+                                    "keywords": keywords_str,
+                                    "enabled": sched.enabled,
+                                    "file_path": file_path,
                                 })
                         except (ValueError, AttributeError):
                             continue
@@ -3316,7 +3376,9 @@ Captured: {timestamp_str}
                                             "day": day,
                                             "retailer": retailer,
                                             "client": client,
-                                            "keywords": keywords_str
+                                            "keywords": keywords_str,
+                                            "enabled": config.get("enabled", True),
+                                            "file_path": config_file,
                                         })
                             elif "schedule" in config:
                                 # Old format
@@ -3327,27 +3389,43 @@ Captured: {timestamp_str}
                                             "day": day.capitalize(),
                                             "retailer": retailer,
                                             "client": client,
-                                            "keywords": keywords_str
+                                            "keywords": keywords_str,
+                                            "enabled": config.get("enabled", True),
+                                            "file_path": config_file,
                                         })
                         except Exception as e:
                             print(f"Error loading {config_file}: {e}")
             
             return schedules
         
+        # ── Row metadata: tree item id → schedule info for context menu ──
+        row_meta = {}  # tree_item_id → {"day", "time", "retailer", "client", "file_path", "enabled"}
+        
+        # Include disabled schedules checkbox
+        include_disabled_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            filters_frame,
+            text="Include disabled",
+            variable=include_disabled_var
+        ).grid(row=0, column=7, padx=5, sticky="w")
+        
         # Populate filters and tree
         def refresh_display():
             """Refresh the tree view as a matrix: rows=time slots, columns=retailers"""
-            # Clear tree
+            # Clear tree and metadata
             for item in tree.get_children():
                 tree.delete(item)
+            row_meta.clear()
+            schedule_file_map.clear()
             
             # Get filter values
             client_filter_val = client_var.get()
             day_filter_val = day_var.get()
             show_empty = show_empty_var.get()
+            include_disabled = include_disabled_var.get()
             
             # Load all schedules
-            all_schedules = load_schedules()
+            all_schedules = load_schedules(include_disabled=include_disabled)
             
             # Get all unique retailers from schedules AND from output directory
             scheduled_retailers = set(s["retailer"] for s in all_schedules)
@@ -3396,13 +3474,13 @@ Captured: {timestamp_str}
             
             all_time_slots = generate_time_slots()
             
-            # Build matrix: {(day, time, retailer): [clients]}
+            # Build matrix: {(day, time, retailer): [(client, enabled, file_path)]}
             matrix = {}
             for s in all_schedules:
                 key = (s["day"], s["time"], s["retailer"])
                 if key not in matrix:
                     matrix[key] = []
-                matrix[key].append(s["client"])
+                matrix[key].append((s["client"], s.get("enabled", True), s.get("file_path", "")))
             
             # Configure tree columns: Day/Time + one column per retailer
             columns = ["time_day"] + all_retailers
@@ -3417,6 +3495,7 @@ Captured: {timestamp_str}
             
             # Populate tree
             occupied_count = 0
+            disabled_count = 0
             total_slots = 0
             
             for day in all_days:
@@ -3432,47 +3511,275 @@ Captured: {timestamp_str}
                     
                     total_slots += 1
                     
-                    # Build row values
+                    # Build row values and track metadata per cell
                     row_values = [time_slot]
+                    row_has_disabled = False
+                    row_clients_info = []  # For context menu
+                    
                     for retailer in all_retailers:
                         key = (day, time_slot, retailer)
                         if key in matrix:
-                            clients = matrix[key]
-                            row_values.append(", ".join(clients))
-                            occupied_count += len(clients)
+                            entries = matrix[key]
+                            display_parts = []
+                            for client, enabled, fpath in entries:
+                                if not enabled:
+                                    display_parts.append(f"⏸ {client}")
+                                    row_has_disabled = True
+                                    disabled_count += 1
+                                else:
+                                    display_parts.append(client)
+                                    occupied_count += 1
+                                row_clients_info.append({
+                                    "day": day, "time": time_slot, "retailer": retailer,
+                                    "client": client, "enabled": enabled, "file_path": fpath,
+                                })
+                            row_values.append(", ".join(display_parts))
                         else:
                             row_values.append("—" if show_empty else "")
                     
                     # Insert row
-                    tags = ("empty",) if not has_assignment else ()
-                    tree.insert(day_node, "end", values=row_values, tags=tags)
+                    if row_has_disabled:
+                        tags = ("disabled_row",)
+                    elif not has_assignment:
+                        tags = ("empty",)
+                    else:
+                        tags = ()
+                    
+                    item_id = tree.insert(day_node, "end", values=row_values, tags=tags)
+                    
+                    # Store metadata for this row (for context menu)
+                    if row_clients_info:
+                        row_meta[item_id] = row_clients_info
             
             # Configure tags
             tree.tag_configure("day_header", font=("Inter", 11, "bold"), background="#e0e0e0")
             tree.tag_configure("empty", foreground="gray")
+            tree.tag_configure("disabled_row", foreground="#999999")
             
             # Update count
+            parts = [f"{occupied_count} active runs"]
+            if disabled_count:
+                parts.append(f"{disabled_count} disabled")
             if show_empty:
-                count_label.config(text=f"Showing {total_slots} time slots with {occupied_count} scheduled runs")
-            else:
-                count_label.config(text=f"Showing {occupied_count} scheduled runs")
+                parts.append(f"{total_slots} total slots")
+            count_label.config(text="Showing " + "  |  ".join(parts))
+        
+        # ── Right-click context menu ──
+        ctx_menu = tk.Menu(popup, tearoff=0)
+        
+        def _get_row_schedules(event=None):
+            """Get schedule info for the row under the cursor."""
+            item = tree.identify_row(event.y) if event else tree.focus()
+            if not item or item not in row_meta:
+                return None, None
+            return item, row_meta[item]
+        
+        def _toggle_schedule(file_path, enable):
+            """Enable or disable a schedule by modifying its JSON file."""
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                config["enabled"] = enable
+                config["updated_at"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, indent=2)
+                _rebuild_master_index()
+                return True
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to update schedule:\n{e}")
+                return False
+        
+        def _remove_time_from_schedule(file_path, time_24h):
+            """Remove a specific time slot from a schedule file."""
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                times = config.get("times", [])
+                if time_24h in times:
+                    times.remove(time_24h)
+                    config["times"] = times
+                    config["updated_at"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+                    if not times:
+                        # No times left — delete the file entirely
+                        os.remove(file_path)
+                    else:
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            json.dump(config, f, indent=2)
+                    _rebuild_master_index()
+                    return True
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to remove time slot:\n{e}")
+            return False
+        
+        def _delete_schedule_file(file_path):
+            """Delete an entire schedule file."""
+            try:
+                fname = os.path.basename(file_path)
+                confirm = messagebox.askyesno(
+                    "Delete Schedule",
+                    f"Permanently delete this schedule?\n\n{fname}\n\nThis cannot be undone."
+                )
+                if not confirm:
+                    return False
+                os.remove(file_path)
+                _rebuild_master_index()
+                return True
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to delete schedule:\n{e}")
+                return False
+        
+        def on_right_click(event):
+            """Show context menu on right-click."""
+            item, schedules_info = _get_row_schedules(event)
+            if not schedules_info:
+                return
+            
+            ctx_menu.delete(0, tk.END)
+            
+            # If there's exactly one schedule in this cell, show direct actions
+            # If multiple, show a submenu per client
+            unique_files = {}
+            for info in schedules_info:
+                fp = info.get("file_path", "")
+                if fp and fp not in unique_files:
+                    unique_files[fp] = info
+            
+            for fp, info in unique_files.items():
+                client = info["client"]
+                retailer = info["retailer"]
+                enabled = info["enabled"]
+                label_prefix = f"{retailer}/{client}"
+                fname = os.path.basename(fp)
+                
+                # Enable/Disable toggle
+                if enabled:
+                    ctx_menu.add_command(
+                        label=f"⏸  Disable: {label_prefix}",
+                        command=lambda f=fp: (_toggle_schedule(f, False), refresh_display())
+                    )
+                else:
+                    ctx_menu.add_command(
+                        label=f"▶  Enable: {label_prefix}",
+                        command=lambda f=fp: (_toggle_schedule(f, True), refresh_display())
+                    )
+                
+                # Remove this specific time slot
+                # Find the 24h time for this row
+                time_24h_val = None
+                for s in schedules_info:
+                    if s.get("file_path") == fp:
+                        # Convert display time back to 24h
+                        t = s.get("time", "")
+                        try:
+                            parts = t.replace(":", " ").split()
+                            h = int(parts[0]); m = int(parts[1]); ap = parts[2].upper()
+                            if ap == "AM":
+                                if h == 12: h = 0
+                            else:
+                                if h != 12: h += 12
+                            time_24h_val = f"{h:02d}:{m:02d}"
+                        except (ValueError, IndexError):
+                            pass
+                        break
+                
+                if time_24h_val:
+                    ctx_menu.add_command(
+                        label=f"🕐  Remove time {info['time']}: {label_prefix}",
+                        command=lambda f=fp, t=time_24h_val: (_remove_time_from_schedule(f, t), refresh_display())
+                    )
+                
+                ctx_menu.add_command(
+                    label=f"🗑  Delete entire schedule: {label_prefix}",
+                    command=lambda f=fp: (_delete_schedule_file(f) and refresh_display())
+                )
+                
+                ctx_menu.add_separator()
+            
+            # Show file path info
+            if len(unique_files) == 1:
+                fp = list(unique_files.keys())[0]
+                ctx_menu.add_command(label=f"📄 {os.path.basename(fp)}", state="disabled")
+            
+            ctx_menu.tk_popup(event.x_root, event.y_root)
+        
+        # Bind right-click (macOS: Button-2 or Control-Button-1)
+        tree.bind("<Button-2>", on_right_click)
+        tree.bind("<Control-Button-1>", on_right_click)
+        if sys.platform != "darwin":
+            tree.bind("<Button-3>", on_right_click)
         
         # Bind filter changes
         retailer_var.trace("w", lambda *args: refresh_display())
         client_var.trace("w", lambda *args: refresh_display())
         day_var.trace("w", lambda *args: refresh_display())
         show_empty_var.trace("w", lambda *args: refresh_display())
+        include_disabled_var.trace("w", lambda *args: refresh_display())
         
-        # Count label at bottom
-        count_label = ttk.Label(main_frame, text="", font=("Inter", 10))
-        count_label.pack(pady=(5, 0))
+        # ── Bottom bar: count + action buttons ──
+        bottom_frame = ttk.Frame(main_frame)
+        bottom_frame.pack(fill=tk.X, pady=(5, 0))
         
-        # Refresh button
+        count_label = ttk.Label(bottom_frame, text="", font=("Inter", 10))
+        count_label.pack(side=tk.LEFT)
+        
         ttk.Button(
-            main_frame,
+            bottom_frame,
             text="🔄 Refresh",
-            command=refresh_display
-        ).pack(pady=5)
+            command=refresh_display,
+            width=10
+        ).pack(side=tk.RIGHT, padx=2)
+        
+        def _delete_client_schedules():
+            """Delete all schedules for a specific client."""
+            sel_client = client_var.get()
+            if sel_client == "All" or not sel_client:
+                messagebox.showinfo("Select Client", "Filter to a specific client first, then use this button.")
+                return
+            
+            # Find all files for this client
+            matching = set()
+            for info_list in row_meta.values():
+                for info in info_list:
+                    if info["client"] == sel_client and info.get("file_path"):
+                        matching.add(info["file_path"])
+            
+            if not matching:
+                messagebox.showinfo("No Schedules", f"No schedule files found for '{sel_client}'")
+                return
+            
+            confirm = messagebox.askyesno(
+                "Delete All Client Schedules",
+                f"Delete ALL {len(matching)} schedule(s) for '{sel_client}'?\n\n"
+                + "\n".join(f"  • {os.path.basename(f)}" for f in sorted(matching))
+                + "\n\nThis cannot be undone."
+            )
+            if not confirm:
+                return
+            
+            deleted = 0
+            for fp in matching:
+                try:
+                    os.remove(fp)
+                    deleted += 1
+                except Exception:
+                    pass
+            
+            _rebuild_master_index()
+            refresh_display()
+            messagebox.showinfo("Done", f"Deleted {deleted} schedule(s) for '{sel_client}'")
+        
+        ttk.Button(
+            bottom_frame,
+            text="🗑 Delete Client Schedules",
+            command=_delete_client_schedules,
+            width=22
+        ).pack(side=tk.RIGHT, padx=2)
+        
+        ttk.Label(
+            bottom_frame,
+            text="  Right-click a row for actions  ",
+            font=("Inter", 9), foreground="gray"
+        ).pack(side=tk.RIGHT, padx=5)
         
         # Initial load
         refresh_display()
@@ -3666,6 +3973,205 @@ Captured: {timestamp_str}
         # set up logging for this client
         self.logger = self.setup_logging(name)
         # refresh schedule UI/conflicts
+        try:
+            if hasattr(self, 'refresh_all_conflict_displays'):
+                self.refresh_all_conflict_displays()
+            self.refresh_save_button_state()
+        except Exception:
+            pass
+    
+    def on_remove_client(self):
+        """Remove a client: unschedule only (keep folders) or full delete (folders + schedules)."""
+        selected_client = self.client_var.get()
+        if not selected_client or selected_client == PLACEHOLDER:
+            self.notify("Select a client to remove first", "error")
+            return
+        
+        # Gather info about what exists for this client
+        base = get_base_dir()
+        schedules_dir = os.path.join(base, "schedules")
+        client_slug = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client.lower())
+        
+        # Find schedule files
+        schedule_files = []
+        if os.path.exists(schedules_dir):
+            for f in os.listdir(schedules_dir):
+                if f.endswith('.json') and f != 'master_schedule.json':
+                    try:
+                        with open(os.path.join(schedules_dir, f), 'r', encoding='utf-8') as fh:
+                            cfg = json.load(fh)
+                        cfg_client = cfg.get("client", "")
+                        cfg_slug = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in cfg_client.lower())
+                        if cfg_slug == client_slug or cfg_client == selected_client:
+                            schedule_files.append(f)
+                    except Exception:
+                        # Fallback: match by filename convention
+                        if f'__{client_slug}__' in f:
+                            schedule_files.append(f)
+        
+        # Find output folders (across all retailers)
+        output_dir = os.path.join(base, "output")
+        client_folders = []
+        if os.path.exists(output_dir):
+            for retailer in os.listdir(output_dir):
+                retailer_dir = os.path.join(output_dir, retailer)
+                if not os.path.isdir(retailer_dir) or retailer in ["runs", "brand_logos"]:
+                    continue
+                for folder in os.listdir(retailer_dir):
+                    folder_slug = folder.lower()
+                    if folder_slug == client_slug or folder == selected_client:
+                        full_path = os.path.join(retailer_dir, folder)
+                        if os.path.isdir(full_path):
+                            # Count files inside
+                            file_count = sum(len(files) for _, _, files in os.walk(full_path))
+                            client_folders.append((f"{retailer}/{folder}", full_path, file_count))
+        
+        if not schedule_files and not client_folders and selected_client not in self.client_history:
+            self.notify(f"Nothing found for '{selected_client}'", "warn")
+            return
+        
+        # Build the removal dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Remove Client: {selected_client}")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+        
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(frame, text=f"Remove '{selected_client}'", font=("Inter", 14, "bold")).pack(anchor="w")
+        ttk.Label(frame, text="Choose what to remove:", font=("Inter", 10)).pack(anchor="w", pady=(5, 10))
+        
+        # Summary of what exists
+        summary_frame = ttk.LabelFrame(frame, text="What exists", padding=8)
+        summary_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        if schedule_files:
+            ttk.Label(summary_frame, text=f"📅  {len(schedule_files)} schedule file(s)").pack(anchor="w")
+            for sf in schedule_files:
+                ttk.Label(summary_frame, text=f"      {sf}", foreground="gray").pack(anchor="w")
+        else:
+            ttk.Label(summary_frame, text="📅  No schedule files", foreground="gray").pack(anchor="w")
+        
+        if client_folders:
+            total_files = sum(fc for _, _, fc in client_folders)
+            ttk.Label(summary_frame, text=f"📁  {len(client_folders)} data folder(s)  ({total_files} files)").pack(anchor="w")
+            for label, _, fc in client_folders:
+                ttk.Label(summary_frame, text=f"      {label}/  ({fc} files)", foreground="gray").pack(anchor="w")
+        else:
+            ttk.Label(summary_frame, text="📁  No data folders", foreground="gray").pack(anchor="w")
+        
+        if selected_client in self.client_history:
+            kw_count = len(self.client_history[selected_client])
+            ttk.Label(summary_frame, text=f"📝  Client entry with {kw_count} keyword(s)").pack(anchor="w")
+        
+        # Checkboxes for what to remove
+        options_frame = ttk.LabelFrame(frame, text="Remove", padding=8)
+        options_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        remove_schedules_var = tk.BooleanVar(value=True)
+        remove_history_var = tk.BooleanVar(value=True)
+        remove_folders_var = tk.BooleanVar(value=False)
+        
+        ttk.Checkbutton(
+            options_frame, text="Schedule files (stops all automated runs)",
+            variable=remove_schedules_var
+        ).pack(anchor="w")
+        
+        ttk.Checkbutton(
+            options_frame, text="Client from dropdown (remove from history)",
+            variable=remove_history_var
+        ).pack(anchor="w")
+        
+        folder_cb = ttk.Checkbutton(
+            options_frame,
+            text="Data folders and all contents (⚠️ cannot be undone)",
+            variable=remove_folders_var
+        )
+        folder_cb.pack(anchor="w")
+        
+        # Buttons
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        result = {"confirmed": False}
+        
+        def do_remove():
+            result["confirmed"] = True
+            dialog.destroy()
+        
+        ttk.Button(btn_frame, text="Cancel", command=dialog.destroy).pack(side=tk.RIGHT, padx=(5, 0))
+        ttk.Button(btn_frame, text="Remove", command=do_remove, style='Primary.TButton').pack(side=tk.RIGHT)
+        
+        # Center dialog on parent
+        dialog.update_idletasks()
+        w = dialog.winfo_width()
+        h = dialog.winfo_height()
+        x = self.root.winfo_x() + (self.root.winfo_width() - w) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - h) // 2
+        dialog.geometry(f"+{x}+{y}")
+        
+        dialog.wait_window()
+        
+        if not result["confirmed"]:
+            return
+        
+        removed_parts = []
+        
+        # 1. Remove schedule files
+        if remove_schedules_var.get() and schedule_files:
+            deleted = 0
+            for sf in schedule_files:
+                try:
+                    os.remove(os.path.join(schedules_dir, sf))
+                    deleted += 1
+                except Exception as e:
+                    print(f"Error deleting schedule {sf}: {e}")
+            removed_parts.append(f"{deleted} schedule(s)")
+            
+            # Rebuild master index
+            try:
+                from pathlib import Path
+                sys.path.insert(0, str(base))
+                from schedules.schedules_lib import build_master_index
+                build_master_index(Path(base))
+            except Exception:
+                pass
+        
+        # 2. Remove from client history
+        if remove_history_var.get() and selected_client in self.client_history:
+            del self.client_history[selected_client]
+            try:
+                os.makedirs(os.path.dirname(self.history_file), exist_ok=True)
+                with open(self.history_file, "w", encoding="utf-8") as f:
+                    json.dump(self.client_history, f, indent=2)
+            except Exception as e:
+                print(f"Error saving client history: {e}")
+            removed_parts.append("client entry")
+        
+        # 3. Remove data folders
+        if remove_folders_var.get() and client_folders:
+            import shutil
+            deleted_folders = 0
+            for label, full_path, _ in client_folders:
+                try:
+                    shutil.rmtree(full_path)
+                    deleted_folders += 1
+                except Exception as e:
+                    print(f"Error deleting folder {full_path}: {e}")
+            removed_parts.append(f"{deleted_folders} folder(s)")
+        
+        # Update UI
+        self.update_client_dropdown()
+        self.client_var.set(PLACEHOLDER)
+        self.keyword_input.delete(1.0, tk.END)
+        
+        summary = ", ".join(removed_parts) if removed_parts else "nothing"
+        self.notify(f"Removed {summary} for '{selected_client}'", "success")
+        self.status_label.config(text=f"Removed {summary} for {selected_client}")
+        self._activity_line(f"Removed client '{selected_client}': {summary}", "info")
+        
         try:
             if hasattr(self, 'refresh_all_conflict_displays'):
                 self.refresh_all_conflict_displays()
@@ -4252,6 +4758,68 @@ Captured: {timestamp_str}
         else:
             self.notify("Failed to save any schedules", "error")
             return False
+    
+    def clear_schedule(self):
+        """Delete all schedule files for the currently selected client across all retailers."""
+        selected_client = self.client_var.get()
+        if not selected_client or selected_client == PLACEHOLDER:
+            self.notify("Select a client/product first", "error")
+            return
+        
+        # Find all schedule files for this client
+        schedules_dir = os.path.join(get_base_dir(), "schedules")
+        if not os.path.exists(schedules_dir):
+            self.notify("No schedules directory found", "warn")
+            return
+        
+        client_slug = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in selected_client.lower())
+        
+        matching_files = []
+        for f in os.listdir(schedules_dir):
+            if f.endswith('.json') and f'__{client_slug}__' in f:
+                matching_files.append(f)
+        
+        if not matching_files:
+            self.notify(f"No schedules found for '{selected_client}'", "warn")
+            return
+        
+        # Confirm deletion
+        retailers = set()
+        for f in matching_files:
+            parts = f.split('__')
+            if parts:
+                retailers.add(parts[0])
+        
+        confirm = messagebox.askyesno(
+            "Clear Schedule",
+            f"Delete {len(matching_files)} schedule(s) for '{selected_client}'?\n\n"
+            f"Retailers: {', '.join(sorted(retailers))}\n\n"
+            f"Files:\n" + "\n".join(f"  • {f}" for f in matching_files) +
+            "\n\nThis cannot be undone."
+        )
+        if not confirm:
+            return
+        
+        deleted = 0
+        for f in matching_files:
+            try:
+                os.remove(os.path.join(schedules_dir, f))
+                deleted += 1
+            except Exception as e:
+                print(f"Error deleting {f}: {e}")
+        
+        # Rebuild master index
+        try:
+            from pathlib import Path
+            sys.path.insert(0, str(get_base_dir()))
+            from schedules.schedules_lib import build_master_index
+            build_master_index(Path(get_base_dir()))
+        except Exception:
+            pass
+        
+        self.notify(f"Deleted {deleted} schedule(s) for '{selected_client}'", "success")
+        self.status_label.config(text=f"🗑 Cleared {deleted} schedule(s) for {selected_client}")
+        self._activity_line(f"Cleared {deleted} schedule(s) for {selected_client}", "info")
     
     def any_conflicts_current_view(self) -> bool:
         """Return True if any time selector shows a conflict."""

@@ -193,6 +193,27 @@ CREATE TRIGGER trg_schedules_updated_at
     BEFORE UPDATE ON schedules
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+-- --------------------------------------------------------
+-- 9. Review flags (user-flagged ads/brands for re-review)
+-- --------------------------------------------------------
+CREATE TABLE review_flags (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    flag_type   TEXT NOT NULL CHECK (flag_type IN ('ad', 'brand')),
+    -- For ad flags: ad_id references the specific ad
+    ad_id       BIGINT REFERENCES ads(id) ON DELETE CASCADE,
+    -- For brand flags: brand_name is the display name shown in the gallery
+    brand_name  TEXT,
+    reason      TEXT,
+    status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'dismissed')),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_review_flags_status ON review_flags (status);
+CREATE INDEX idx_review_flags_type ON review_flags (flag_type, status);
+CREATE INDEX idx_review_flags_ad ON review_flags (ad_id) WHERE ad_id IS NOT NULL;
+CREATE INDEX idx_review_flags_brand ON review_flags (brand_name) WHERE brand_name IS NOT NULL;
+
 -- ── Performance indexes for API queries ──
 CREATE INDEX IF NOT EXISTS idx_ads_run_id ON ads(run_id);
 CREATE INDEX IF NOT EXISTS idx_ads_brand_lower ON ads(lower(brand));

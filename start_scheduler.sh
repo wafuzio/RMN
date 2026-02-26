@@ -43,4 +43,10 @@ echo " Lock         = $LOCK_FILE"
 echo " PID          = $PID_FILE"
 
 cd "$SCRIPT_DIR"
-exec python3 scheduler_entry.py
+# Use .venv Python explicitly to ensure all dependencies are available
+if [[ -x "$SCRIPT_DIR/.venv/bin/python3" ]]; then
+  exec "$SCRIPT_DIR/.venv/bin/python3" scheduler_entry.py
+else
+  echo "⚠️  .venv not found, falling back to system python3"
+  exec python3 scheduler_entry.py
+fi

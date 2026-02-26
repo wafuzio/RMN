@@ -73,11 +73,23 @@ export default function Brands() {
 
   const toggleRetailer = (retailer: Retailer) => {
     setSelectedRetailers((prev) => {
-      if (prev.includes(retailer)) {
-        return prev.filter(r => r !== retailer);
-      } else {
+      // If all retailers are selected, reset: make clicked retailer the only one
+      if (prev.length === allRetailers.length) {
+        return [retailer];
+      }
+
+      // If 0 retailers are selected, make clicked retailer the only one
+      if (prev.length === 0) {
+        return [retailer];
+      }
+
+      // If clicked retailer is not selected, add it
+      if (!prev.includes(retailer)) {
         return [...prev, retailer];
       }
+
+      // If clicked retailer is already selected, keep as is (don't deselect)
+      return prev;
     });
     setSearchTerm("");
   };

@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useRetailers, useClients, useAds, useAdCount, useAdTypes } from "@/hooks/useRetailAds";
-import { useBrands } from "@/hooks/useBrands";
+import { useRetailers, useClients, useAds, useAdTypes } from "@/hooks/useRetailAds";
+import { useStatsSummary } from "@/hooks/useStatsSummary";
 import type { Retailer } from "@/lib/api";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { AdVolumeTrendCard } from "@/components/dashboard/AdVolumeTrendCard";
 import { RetailerSelector } from "@/components/dashboard/RetailerSelector";
@@ -105,13 +106,16 @@ function useDnD<T>(items: T[], setItems: (v:T[])=>void) {
 
 // Helper: Check if ad type should be displayed in narrow column (skyscraper/sponsored brand layout)
 function isColumnAdType(ad: any): boolean {
-  const columnTypes = ["Skyscraper", "Tile_Takeover", "Sponsored_Brand_Card", "Sponsored_Logo"];
+  const columnTypes = ["Skyscraper", "Tile_Takeover", "Tile Takeover", "Sponsored_Brand_Card", "Sponsored Brand Card", "Sponsored_Logo", "Sponsored Logo"];
   if (columnTypes.includes(ad.ad_type)) {
     return true;
   }
-  // Gallery_Cards tiles go in the column, banners stay on left
-  if (ad.ad_type === "Gallery_Cards" && ad.card_format === "tile") {
-    return true;
+  // Gallery Cards: only tile (vertical) format goes in column; banner (horizontal) stays in LHS
+  if (ad.ad_type === "Gallery_Cards" || ad.ad_type === "Gallery Cards") {
+    if (ad.card_format === "tile") return true;
+    // Fallback: use dimensions — taller than wide = vertical = RHS
+    if (!ad.card_format && ad.dimensions?.height > ad.dimensions?.width) return true;
+    return false;
   }
   // Left rail Sponsored Display ads also go in the column
   if (ad.ad_type === "Sponsored_Display" && ad.slot === "left_rail") {
@@ -130,13 +134,15 @@ function isColumnAdGroup(group: any, ads: any[]): boolean {
     }
   }
   // Fallback to checking just ad_type
-  const columnTypes = ["Skyscraper", "Tile_Takeover", "Sponsored_Brand_Card", "Sponsored_Logo"];
+  const columnTypes = ["Skyscraper", "Tile_Takeover", "Tile Takeover", "Sponsored_Brand_Card", "Sponsored Brand Card", "Sponsored_Logo", "Sponsored Logo"];
   if (columnTypes.includes(group.ad_type)) {
     return true;
   }
-  // Gallery_Cards tiles go in the column, banners stay on left
-  if (group.ad_type === "Gallery_Cards" && group.cover?.card_format === "tile") {
-    return true;
+  // Gallery Cards: only tile (vertical) format goes in column
+  if (group.ad_type === "Gallery_Cards" || group.ad_type === "Gallery Cards") {
+    if (group.card_format === "tile" || group.cover?.card_format === "tile") return true;
+    if (!group.card_format && !group.cover?.card_format && group.cover?.dimensions?.height > group.cover?.dimensions?.width) return true;
+    return false;
   }
   return false;
 }
@@ -368,12 +374,6 @@ export default function Index() {
     }
   }, [allClientsList]);
 
-  // Auto-select first client if none selected
-  useEffect(() => {
-    if (allClientsList.length && !filters.clients?.length) {
-      setFilters(prev => ({ ...prev, clients: [allClientsList[0]] }));
-    }
-  }, [allClientsList, filters.clients?.length]);
 
   // Handle multiple clients by creating queries for each
   // When all clients are selected, use the special "all" client parameter
@@ -382,11 +382,12 @@ export default function Index() {
   const isAllClientsSelected = selectedClients.length > 0 && selectedClients.length === allClientsAvailable.length;
 
   // If all clients are selected, use "all"; otherwise send comma-separated list
+  // Fallback to "all" when no clients are selected (e.g. during retailer switching transition)
   const selectedClient = isAllClientsSelected
     ? "all"
     : selectedClients.length > 0
     ? selectedClients.join(",")
-    : "";
+    : "all";
 
   // PERFORMANCE FIX: Memoize and debounce filter parameters to prevent render loops
   // This stabilizes the filter object identity so useAds doesn't re-run on every render
@@ -453,36 +454,8 @@ export default function Index() {
     ...debouncedFilters,
   });
 
-  // Count queries for total cards (much faster than loading full cards)
-  const krogerCountQuery = useAdCount({
-    retailer: isKrogerSelected ? "kroger" : undefined,
-    client: selectedClient,
-    ...debouncedFilters,
-  });
-
-  const walmartCountQuery = useAdCount({
-    retailer: isWalmartSelected ? "walmart" : undefined,
-    client: selectedClient,
-    ...debouncedFilters,
-  });
-
-  const instacartCountQuery = useAdCount({
-    retailer: isInstacartSelected ? "instacart" : undefined,
-    client: selectedClient,
-    ...debouncedFilters,
-  });
-
-  const amazonCountQuery = useAdCount({
-    retailer: isAmazonSelected ? "amazon" : undefined,
-    client: selectedClient,
-    ...debouncedFilters,
-  });
-
-  const targetCountQuery = useAdCount({
-    retailer: isTargetSelected ? "target" : undefined,
-    client: selectedClient,
-    ...debouncedFilters,
-  });
+  // Fast summary stats from manifest (single call replaces 5 count queries + brands query)
+  const { data: statsSummary } = useStatsSummary(retailers, selectedClient || undefined);
 
   // Collect all queries - one per retailer now
   const allQueries = [
@@ -505,6 +478,13 @@ export default function Index() {
 
   // For backwards compatibility, keep adsQuery as a reference query
   const adsQuery = retailerQueries[0];
+
+  // Set up infinite scroll
+  const { sentinelRef } = useInfiniteScroll({
+    hasNextPage: adsQuery?.hasNextPage,
+    isFetchingNextPage: adsQuery?.isFetchingNextPage,
+    fetchNextPage: () => adsQuery?.fetchNextPage(),
+  });
 
   const lf = leftFilters ?? filters;
   const rf = rightFilters ?? filters;
@@ -820,42 +800,15 @@ export default function Index() {
     return all;
   }, [krogerTimeline.data, walmartTimeline.data, instacartTimeline.data, amazonTimeline.data, targetTimeline.data]);
 
-  const totalCards = useMemo(() => {
-    return [
-      krogerCountQuery,
-      walmartCountQuery,
-      instacartCountQuery,
-      amazonCountQuery,
-      targetCountQuery,
-    ].reduce((sum, query) => sum + (query.data?.total || 0), 0);
-  }, [
-    krogerCountQuery.data,
-    walmartCountQuery.data,
-    instacartCountQuery.data,
-    amazonCountQuery.data,
-    targetCountQuery.data,
-  ]);
-  
-  // Get brand aggregations from dedicated brands endpoint with current filters
-  // Use the same selectedClient logic as the ads queries
-  const brandsFilters = {
-    client: selectedClient || "all",
-    start: debouncedFilters.start,
-    end: debouncedFilters.end,
-    term: debouncedFilters.term,
-    types: debouncedFilters.types
-  };
-  const { data: brandsData } = useBrands(retailers, brandsFilters);
-  const apiBrands = brandsData?.brands || [];
-  
-  const activeBrands = apiBrands.length;
+  // Stat card values from fast manifest summary
+  const totalCards = statsSummary?.totalCards ?? 0;
+  const activeBrands = statsSummary?.activeBrands ?? 0;
   const sov = useMemo(() => {
-    if (!apiBrands.length) return { brand: "-", pct: 0 };
-    const top = apiBrands[0];
+    const top = statsSummary?.topBrand;
+    if (!top) return { brand: "-", pct: 0 };
     return { brand: top.brand, pct: top.percentage };
-  }, [apiBrands]);
-
-  const topBrands = apiBrands;
+  }, [statsSummary?.topBrand]);
+  const topBrands = statsSummary?.brands ?? [];
 
 
   const [modalAd, setModalAd] = useState<Ad|null>(null);
@@ -1158,11 +1111,12 @@ export default function Index() {
               </div>
             )}
 
-            {adsQuery.hasNextPage && (
-              <div className="flex justify-center py-6">
-                <Button onClick={()=> adsQuery.fetchNextPage() } disabled={adsQuery.isFetchingNextPage}>Load More</Button>
-              </div>
-            )}
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="py-8 text-center">
+              {adsQuery.isFetchingNextPage && (
+                <div className="text-gray-400">Loading more ads...</div>
+              )}
+            </div>
           </section>
         )}
 
@@ -1233,6 +1187,13 @@ export default function Index() {
           onOpenChange={setShowTopBrandModal}
           topBrands={topBrands}
           onRetailerClick={handleBrandClick}
+          filterParams={{
+            retailers: retailers,
+            clients: filters.clients || [],
+            dateRange: filters.start || filters.end ? { start: filters.start, end: filters.end } : undefined,
+            adTypes: filters.types || [],
+            keywords: filters.keywords || [],
+          }}
         />
         {selectedBrandForModal && (
           <BrandDetailModal

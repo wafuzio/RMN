@@ -4,11 +4,22 @@ Auto-detect video overlay bounds in SBV screenshots using computer vision.
 Uses retailer-specific rules to find the video region.
 """
 
-import cv2
-import numpy as np
 from pathlib import Path
 from typing import Optional, Tuple, Dict
 import json
+
+# Lazy imports for cv2/numpy — only needed when detection functions are actually called.
+# This prevents ImportError from breaking the entire scraper when opencv is not installed.
+cv2 = None
+np = None
+
+def _ensure_cv2():
+    global cv2, np
+    if cv2 is None:
+        import cv2 as _cv2
+        import numpy as _np
+        cv2 = _cv2
+        np = _np
 
 
 def detect_walmart_sbv_bounds(image_path: Path) -> Optional[Dict]:
@@ -23,6 +34,7 @@ def detect_walmart_sbv_bounds(image_path: Path) -> Optional[Dict]:
     Strategy: Detect gray borders in the WHITE product area (right side)
     where they're clearly visible, then apply to video area.
     """
+    _ensure_cv2()
     img = cv2.imread(str(image_path))
     if img is None:
         return None
@@ -147,6 +159,7 @@ def detect_instacart_video_bounds(image_path: Path) -> Optional[Dict]:
     Strategy: Find all 4 edges by detecting where solid/multicolor 
     video content begins (not white/light gray background).
     """
+    _ensure_cv2()
     img = cv2.imread(str(image_path))
     if img is None:
         return None
@@ -315,6 +328,7 @@ def detect_amazon_sbv_bounds(image_path: Path) -> Optional[Dict]:
     - Product tiles on right (white background)
     - May have gray border wrapping video and products
     """
+    _ensure_cv2()
     img = cv2.imread(str(image_path))
     if img is None:
         return None
@@ -472,6 +486,7 @@ def visualize_detection(image_path: Path, bounds: Dict, output_path: Optional[Pa
     import subprocess
     import tempfile
     
+    _ensure_cv2()
     img = cv2.imread(str(image_path))
     if img is None:
         return

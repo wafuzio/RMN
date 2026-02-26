@@ -2,6 +2,10 @@
 
 This document catalogs recurring problems across retailers and their proven solutions.
 
+First: RUN IN THE .VENV!
+
+source .venv/bin/activate
+
 ## Headless fails, headed works (Kroger)
 
 **Cause:** CDN/anti-automation fingerprint blocks fetch/navigation in headless mode.
@@ -2112,5 +2116,81 @@ File operations must use `file_client` to access the correct directory structure
 - Video overlay alignment in `AdModal.tsx`
 - Media URL building in `build_media_urls_for_ad()`
 - Client filtering in `/api/ads/cards` endpoint
+
+---
+
+## Slot backfill: `product_listings` duplicated page / missing slot fields
+
+**Status:** ✅ SOLVED (Feb 2026)
+
+**Symptoms:**
+- Run JSON contained both `product_listings` (51 items) and `slots` (58 items) covering the same page
+- `product_listings` entries had `position: -1` (never assigned slot positions)
+- Tile Takeovers and display ads missing from `product_listings` (only in `slots`)
+- No `slot_within_type`, `total_slots`, or `total_slots_of_type` on slot entries
+
+**Root Cause:**
+Legacy `_build_product_listings()` only emitted `Product_Listing` and `Sponsored_Product` types, missing Tile_Takeover, Sponsored_Display, SBA, SBV, Gallery_Cards. The `_build_slots_array()` used `position` instead of the standard `slot` field and lacked per-type counting.
+
+**Solution:**
+1. Removed `product_listings` from all 5 retailer backfill scripts — `slots` is now the single source of truth
+2. Every `slots[]` entry now includes: `slot`, `slot_within_type`, `total_slots`, `total_slots_of_type`
+3. Legacy `product_listings` key is deleted on backfill if present
+
+**Files Modified:**
+- `tools/backfill_slots_walmart.py`
+- `tools/backfill_slots_amazon.py`
+- `tools/backfill_slots_target.py`
+- `tools/backfill_slots_instacart.py`
+- `tools/backfill_slots_kroger.py`
+
+---
+
+## Walmart parser: Skyline_Display renamed to Sponsored_Display
+
+**Status:** ✅ SOLVED (Feb 2026)
+
+**Problem:**
+Walmart's top-of-page programmatic display ad (iframe with `data-testid="skyline1"`) was classified as `Skyline_Display`, inconsistent with Amazon's `Sponsored_Display` type.
+
+**Solution:**
+- Renamed `Skyline_Display` → `Sponsored_Display` with `slot_location` field (`top`, `bottom`, `left_rail`)
+- Matches Amazon's format: `Sponsored_Display` with `slot_location`
+- Parser now handles future bottom/sidebar display ads if they appear in saved HTML
+
+**Note:** Walmart's saved HTML only contains the skyline (top) iframe. Bottom and sidebar display ads are lazy-loaded client-side and not present in the HTML dump. Capturing those would require scraper changes.
+
+---
+
+## Walmart parser: duplicate products skipped / wrong DOM order
+
+**Status:** ✅ SOLVED (Feb 2026)
+
+**Symptoms:**
+- Organic product listings skipped when the same product ID appeared earlier as a sponsored product
+- Slot ordering didn't match the visual page layout
+
+**Root Cause:**
+1. `seen_ids` set prevented the same product ID from appearing twice, but the same product legitimately appears as both Sponsored_Product and organic Product_Listing on the page
+2. Parser used `html_str.find()` for element positioning instead of true DOM order
+
+**Solution:**
+1. `seen_ids` now only prevents double-counting within SBA/SBV containers — individual product slots are never deduplicated
+2. Rewrote `parse_walmart_html()` to use recursive DOM walking (`_walk()`) for true document order
+
+---
+
+## Instacart parser: organic products not captured
+
+**Status:** 🔴 OPEN (Feb 2026)
+
+**Symptoms:**
+- Parser only finds Shoppable_Ad_Items (e.g., 14 slots) but screenshot shows ~63 products on page
+- All `Product_Listing` slots missing from output
+
+**Root Cause:**
+Parser only looks for `item_list_item_*` data-testid attributes. Organic product cards use a different DOM structure (`item-card-image` data-testid, 63 instances on a typical page) that the parser doesn't recognize.
+
+**Affected File:** `tools/backfill_slots_instacart.py`
 
 ---

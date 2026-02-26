@@ -206,6 +206,10 @@ class SchedulerDaemon:
         self.last_run_times = {}  # Track last run times to avoid duplicates
         self.inflight = {}  # run_key -> thread for async jobs
         
+        # Prefer .venv Python for all subprocesses
+        venv_python = self.code_dir / ".venv" / "bin" / "python3"
+        self._python_exec = str(venv_python) if venv_python.exists() else sys.executable
+        
         # Configurable timeouts and concurrency
         self.keyword_timeout = int(os.environ.get("SCHEDULER_KEYWORD_TIMEOUT", "180"))  # 3 minutes default
         self.job_budget = int(os.environ.get("SCHEDULER_JOB_BUDGET_SEC", "600"))  # 10 minutes per job
@@ -430,12 +434,8 @@ class SchedulerDaemon:
             self.logger.info(f"[frontpage] Capturing {retailer} front page...")
             self.execution_logger.info(f"FRONTPAGE_CAPTURE_RETAILER: {retailer}")
             
-            # Use venv python if available, otherwise sys.executable
-            venv_python = self.code_dir / ".venv" / "bin" / "python"
-            python_exec = str(venv_python) if venv_python.exists() else sys.executable
-            
             cmd = [
-                python_exec,
+                self._python_exec,
                 str(script_path),
                 "--retailer",
                 retailer
@@ -669,7 +669,7 @@ class SchedulerDaemon:
                 # Build command based on retailer
                 if retailer == "kroger":
                     cmd = [
-                        sys.executable,
+                        self._python_exec,
                         str(script_path),
                         "--search",
                         keyword,
@@ -679,7 +679,7 @@ class SchedulerDaemon:
                 elif retailer == "amazon":
                     # Amazon uses positional args only (no --output-dir flag)
                     cmd = [
-                        sys.executable,
+                        self._python_exec,
                         str(script_path),
                         keyword,
                         str(client_dir)
@@ -687,7 +687,7 @@ class SchedulerDaemon:
                 else:
                     # Instacart, Walmart use positional keyword arg + --output-dir flag
                     cmd = [
-                        sys.executable,
+                        self._python_exec,
                         str(script_path),
                         keyword,
                         "--output-dir",
@@ -761,7 +761,7 @@ class SchedulerDaemon:
             self.execution_logger.info(f"HTML_PROCESSING_START: {client_dir} (latest-missing)")
             try:
                 process_cmd = [
-                    sys.executable,
+                    self._python_exec,
                     str(self.code_dir / "process_saved_html.py"),
                     "--input-dir",
                     str(client_dir),

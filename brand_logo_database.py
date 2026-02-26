@@ -202,6 +202,11 @@ class BrandLogoDatabase:
         
         brand_key = self._normalize_brand_name(display_name)
         
+        # Check if this logo URL was previously rejected (deleted by user)
+        rejected = self.database.get("rejected_logos", {})
+        if brand_key in rejected and logo_url in rejected[brand_key]:
+            return False
+        
         # Check if we already have this logo
         if brand_key in self.database["brands"]:
             existing = self.database["brands"][brand_key]
@@ -247,6 +252,29 @@ class BrandLogoDatabase:
         self._save_database()
         print(f"✅ Added brand logo: {brand} → {logo_path}")
         return True
+    
+    def reject_logo(self, brand_key: str, logo_url: str = None):
+        """Record a logo as rejected so it won't be re-harvested.
+        
+        Args:
+            brand_key: Normalized brand key
+            logo_url: The URL to reject. If None, rejects whatever URL is currently stored.
+        """
+        if "rejected_logos" not in self.database:
+            self.database["rejected_logos"] = {}
+        
+        # If no URL given, grab it from the current brand entry
+        if logo_url is None:
+            entry = self.database.get("brands", {}).get(brand_key, {})
+            logo_url = entry.get("logo_url")
+        
+        if logo_url:
+            self.database["rejected_logos"].setdefault(brand_key, [])
+            if logo_url not in self.database["rejected_logos"][brand_key]:
+                self.database["rejected_logos"][brand_key].append(logo_url)
+                print(f"🚫 Rejected logo for {brand_key}: {logo_url[:60]}...")
+        
+        self._save_database()
     
     def get_brand_logo(self, brand: str) -> Optional[Dict[str, Any]]:
         """Get brand logo information from database

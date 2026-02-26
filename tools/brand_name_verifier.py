@@ -1165,6 +1165,20 @@ class BrandNameVerifier:
         self.edited_count += 1
         save_lexicon(self.lexicon)
         
+        # Re-canonicalize ads in background thread so the rename takes effect immediately
+        def recanon_rename_in_background():
+            try:
+                from tools.recanon_ads import recanon_brand
+                print(f"[RECANON] Changing '{old_name}' ads to '{new_name}'...")
+                recanon_brand(old_brand=old_name, new_brand=new_name)
+                print(f"[RECANON] Complete for '{old_name}' -> '{new_name}'")
+            except Exception as e:
+                print(f"[WARN] Failed to recanon ads: {e}")
+        
+        import threading
+        thread = threading.Thread(target=recanon_rename_in_background, daemon=True)
+        thread.start()
+        
         self.rebuild_review_list()
         self.show_current_brand()
     

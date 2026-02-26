@@ -1,0 +1,26 @@
+{
+  "id": "walmart_goodles_goodles_f3de5f0f",
+  "retailer": "walmart",
+  "client": "goodles",
+  "keywords": [
+    "goodles",
+    "chickpea pasta"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday"
+  ],
+  "times": [
+    "09:35",
+    "15:35",
+    "18:10"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2026-02-11T04:59:38Z",
+  "updated_at": "2026-02-11T04:59:38Z"
+}

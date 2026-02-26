@@ -1,7 +1,8 @@
 {
     "builder.serverUrl": "http://localhost:3000",
-    "builder.command": "npm run dev",
+    "builder.command": "cd neon-sanctuary && pnpm dev",
     "builder.runDevServer": false,
     "builder.autoDetectDevServer": true,
-    "builder.launchType": "editor"
+    "builder.launchType": "editor",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python"
 }

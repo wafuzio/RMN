@@ -11,20 +11,29 @@ import { useAds } from "@/hooks/useRetailAds";
 // Ad type groups configuration
 // NOTE: These must match the exact ad_type values from the backend
 const AD_TYPE_GROUPS = {
-  "Video Ads": ["SBV", "Sponsored_Brand_Video", "Shoppable_Video_Ad"],
-  "Banner Ads": ["TOA", "SBA", "ListingPageBannerAd", "Shoppable_Display_Ad", "Sponsored_Brand"],
-  "Display Ads": ["Sponsored_Display"],
-  "Carousel Ads": ["Sponsored_Carousel", "CuratedCarousel", "Carousel"],
-  "Ad Tiles": ["Sponsored_Brand_Card", "Skyscraper", "Tile_Takeover", "Sponsored_Logo", "Gallery_Cards"],
+  "Video Ads": ["Sponsored Brand Video", "Shoppable Video Ad"],
+  "Banner Ads": ["TOA", "SBA", "Sponsored Brand", "Listing Page Banner Ad", "Shoppable Display Ad"],
+  "Display Ads": ["Sponsored Display"],
+  "Carousel Ads": ["Sponsored Carousel", "Curated Carousel", "Carousel"],
+  "Ad Tiles": ["Skyscraper", "Tile Takeover", "Sponsored Logo", "Gallery Cards"],
+  "Product Ads": ["Product Listing"],
 } as const;
 
-// Create reverse mapping: ad type -> group name
-const AD_TYPE_TO_GROUP = Object.entries(AD_TYPE_GROUPS).reduce((acc, [group, types]) => {
+// Normalize an ad type string for comparison: lowercase, strip underscores/hyphens/spaces
+const normalizeType = (t: string) => t.toLowerCase().replace(/[_\- ]/g, "");
+
+// Create reverse mapping: normalized ad type -> group name
+const AD_TYPE_TO_GROUP_NORMALIZED = Object.entries(AD_TYPE_GROUPS).reduce((acc, [group, types]) => {
   types.forEach(t => {
-    acc[t] = group;
+    acc[normalizeType(t)] = group;
   });
   return acc;
 }, {} as Record<string, string>);
+
+// Find which group a backend ad type belongs to (case/format insensitive)
+const findGroupForType = (backendType: string): string | undefined => {
+  return AD_TYPE_TO_GROUP_NORMALIZED[normalizeType(backendType)];
+};
 
 // Helper to format client names for display
 const formatClientName = (client: string): string => {
@@ -210,9 +219,13 @@ export function Filters({
                     value="all"
                     onSelect={() => {
                       if (selectedClients.size === clients.length) {
-                        onChange({ ...value, clients: [] });
+                        const next = { ...value, clients: [] };
+                        onChange(next);
+                        onApply();
                       } else {
-                        onChange({ ...value, clients: clients.slice() });
+                        const next = { ...value, clients: clients.slice() };
+                        onChange(next);
+                        onApply();
                       }
                     }}
                   >
@@ -226,7 +239,9 @@ export function Filters({
                       onSelect={() => {
                         const next = new Set(selectedClients);
                         if (next.has(c)) next.delete(c); else next.add(c);
-                        onChange({ ...value, clients: Array.from(next) });
+                        const updated = { ...value, clients: Array.from(next) };
+                        onChange(updated);
+                        onApply();
                       }}
                     >
                       <Checkbox checked={selectedClients.has(c)} aria-label={`toggle ${c}`} />
@@ -278,27 +293,27 @@ export function Filters({
                 {/* Presets sidebar */}
                 <div className="p-3 border-r border-gray-200 max-h-[450px] overflow-y-auto hidden lg:block bg-gray-50">
                   <div className="space-y-1">
-                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("today"); onApply(); setOpenDate(false); }}>Today</button>
-                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("yesterday"); onApply(); setOpenDate(false); }}>Yesterday</button>
-                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("last_week"); onApply(); setOpenDate(false); }}>Last 7 days</button>
+                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("today"); setOpenDate(false); onApply(); }}>Today</button>
+                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("yesterday"); setOpenDate(false); onApply(); }}>Yesterday</button>
+                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("last_week"); setOpenDate(false); onApply(); }}>Last 7 days</button>
                     <div className="px-2 py-1.5">
                       <div className="text-xs font-medium mb-2 text-gray-600">Last X days</div>
                       <div className="flex items-center gap-1">
                         <Input type="number" min={1} value={xDays} onChange={(e)=> setXDays(Math.max(1, Number(e.target.value)||1))} className="w-14 h-7 text-xs" />
-                        <Button size="sm" onClick={() => { applyPreset("last_x_days", { days: xDays }); onApply(); setOpenDate(false); }} className="text-xs py-0 h-7 bg-blue-500 hover:bg-blue-600 text-white">Apply</Button>
+                        <Button size="sm" onClick={() => { applyPreset("last_x_days", { days: xDays }); setOpenDate(false); onApply(); }} className="text-xs py-0 h-7 bg-blue-500 hover:bg-blue-600 text-white">Apply</Button>
                       </div>
                     </div>
                     <div className="px-2 py-1.5">
                       <div className="text-xs font-medium mb-2 text-gray-600">Last X months</div>
                       <div className="flex items-center gap-1">
                         <Input type="number" min={1} value={xMonths} onChange={(e)=> setXMonths(Math.max(1, Number(e.target.value)||1))} className="w-14 h-7 text-xs" />
-                        <Button size="sm" onClick={() => { applyPreset("last_x_months", { months: xMonths }); onApply(); setOpenDate(false); }} className="text-xs py-0 h-7 bg-blue-500 hover:bg-blue-600 text-white">Apply</Button>
+                        <Button size="sm" onClick={() => { applyPreset("last_x_months", { months: xMonths }); setOpenDate(false); onApply(); }} className="text-xs py-0 h-7 bg-blue-500 hover:bg-blue-600 text-white">Apply</Button>
                       </div>
                     </div>
-                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("mtd"); onApply(); setOpenDate(false); }}>Month to date</button>
-                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("ytd"); onApply(); setOpenDate(false); }}>Year to date</button>
-                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("last_52_weeks"); onApply(); setOpenDate(false); }}>Last 52 weeks</button>
-                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("lifetime"); onApply(); setOpenDate(false); }}>Lifetime</button>
+                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("mtd"); setOpenDate(false); onApply(); }}>Month to date</button>
+                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("ytd"); setOpenDate(false); onApply(); }}>Year to date</button>
+                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("last_52_weeks"); setOpenDate(false); onApply(); }}>Last 52 weeks</button>
+                    <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("lifetime"); setOpenDate(false); onApply(); }}>Lifetime</button>
                     <button className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-200 text-sm transition-colors" onClick={() => { applyPreset("custom"); }}>Custom…</button>
                   </div>
                 </div>
@@ -314,11 +329,14 @@ export function Filters({
                         onSelect={(date) => {
                           if (date) {
                             // If start date is after end date, update end date
+                            let updated;
                             if (value.end && date > value.end) {
-                              onChange({ ...value, start: date, end: date, datePreset: { type: "custom" } });
+                              updated = { ...value, start: date, end: date, datePreset: { type: "custom" } };
                             } else {
-                              onChange({ ...value, start: date, datePreset: { type: "custom" } });
+                              updated = { ...value, start: date, datePreset: { type: "custom" } };
                             }
+                            onChange(updated);
+                            onApply();
                           }
                         }}
                         disabled={{ before: new Date("2020-01-01") }}
@@ -332,11 +350,14 @@ export function Filters({
                         onSelect={(date) => {
                           if (date) {
                             // If end date is before start date, update start date
+                            let updated;
                             if (value.start && date < value.start) {
-                              onChange({ ...value, start: date, end: date, datePreset: { type: "custom" } });
+                              updated = { ...value, start: date, end: date, datePreset: { type: "custom" } };
                             } else {
-                              onChange({ ...value, end: date, datePreset: { type: "custom" } });
+                              updated = { ...value, end: date, datePreset: { type: "custom" } };
                             }
+                            onChange(updated);
+                            onApply();
                           }
                         }}
                         disabled={{ before: new Date("2020-01-01") }}
@@ -345,7 +366,6 @@ export function Filters({
                   </div>
                   <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-200">
                     <Button variant="outline" size="sm" onClick={() => setOpenDate(false)}>Close</Button>
-                    <Button size="sm" onClick={() => { onApply(); setOpenDate(false); }} className="bg-blue-500 hover:bg-blue-600 text-white">Apply</Button>
                   </div>
                 </div>
               </div>
@@ -368,9 +388,28 @@ export function Filters({
               {types.length === 0 ? (
                 <div className="text-sm text-gray-500 py-4 text-center">No ad types available</div>
               ) : (
-                Object.entries(AD_TYPE_GROUPS).map(([groupName, groupTypes]) => {
-                  // Filter to only show groups that have available types
-                  const availableInGroup = groupTypes.filter(t => types.includes(t));
+                (() => {
+                  // Build groups from actual backend types using normalized matching
+                  const groupMap = new Map<string, string[]>();
+                  const groupOrder = Object.keys(AD_TYPE_GROUPS);
+                  groupOrder.forEach(g => groupMap.set(g, []));
+
+                  const ungrouped: string[] = [];
+                  for (const t of types) {
+                    const group = findGroupForType(t);
+                    if (group && groupMap.has(group)) {
+                      groupMap.get(group)!.push(t);
+                    } else {
+                      ungrouped.push(t);
+                    }
+                  }
+                  if (ungrouped.length > 0) {
+                    ungrouped.sort((a, b) => formatAdTypeName(a).localeCompare(formatAdTypeName(b)));
+                    groupMap.set("Other", ungrouped);
+                  }
+
+                  return Array.from(groupMap.entries());
+                })().map(([groupName, availableInGroup]) => {
                   if (availableInGroup.length === 0) return null;
 
                   // Check how many items in this group are selected
@@ -393,7 +432,9 @@ export function Filters({
                               // Remove all items in this group
                               availableInGroup.forEach(t => next.delete(t));
                             }
-                            onChange({ ...value, types: Array.from(next) });
+                            const updated = { ...value, types: Array.from(next) };
+                            onChange(updated);
+                            onApply();
                           }}
                           aria-label={`toggle ${groupName}`}
                         />
@@ -409,7 +450,9 @@ export function Filters({
                               onCheckedChange={(checked) => {
                                 const next = new Set(value.types);
                                 if (checked) next.add(t); else next.delete(t);
-                                onChange({ ...value, types: Array.from(next) });
+                                const updated = { ...value, types: Array.from(next) };
+                                onChange(updated);
+                                onApply();
                               }}
                               aria-label={`toggle ${t}`}
                             />
@@ -448,7 +491,9 @@ export function Filters({
                       onSelect={() => {
                         const next = new Set(value.keywords || []);
                         if (next.has(k)) next.delete(k); else next.add(k);
-                        onChange({ ...value, keywords: Array.from(next) });
+                        const updated = { ...value, keywords: Array.from(next) };
+                        onChange(updated);
+                        onApply();
                       }}
                     >
                       <div className="mr-2">
@@ -466,10 +511,14 @@ export function Filters({
 
       {/* Group Identical Ads Toggle */}
       <div className="flex items-center gap-2">
-        <Checkbox 
+        <Checkbox
           id="group-identical"
           checked={value.groupIdentical ?? true}
-          onCheckedChange={(checked) => onChange({ ...value, groupIdentical: checked as boolean })}
+          onCheckedChange={(checked) => {
+            const updated = { ...value, groupIdentical: checked as boolean };
+            onChange(updated);
+            onApply();
+          }}
         />
         <label htmlFor="group-identical" className="text-sm font-medium cursor-pointer">
           Group identical ads
@@ -477,7 +526,6 @@ export function Filters({
       </div>
 
       <div className="flex gap-2 ml-auto">
-        <Button onClick={onApply} className="bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white rounded-md">Apply Filters</Button>
         <Button variant="outline" onClick={onReset} className="bg-gray-50">Reset</Button>
       </div>
     </div>

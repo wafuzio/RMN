@@ -239,6 +239,7 @@ def count_ads(
     start: str = None,
     end: str = None,
     brand: str = None,
+    brands: list = None,
     ad_types: list = None,
 ) -> int:
     """Count ads matching filters — pure SQL, no file I/O."""
@@ -267,6 +268,9 @@ def count_ads(
         if brand:
             where.append("lower(a.brand) = lower(%s)")
             params.append(brand)
+        if brands:
+            where.append("lower(a.brand) = ANY(%s)")
+            params.append([b.lower() for b in brands])
         if ad_types:
             # Normalize types for matching
             type_conditions = []
@@ -299,6 +303,7 @@ def query_ads(
     start: str = None,
     end: str = None,
     brand: str = None,
+    brands: list = None,
     ad_types: list = None,
     page: int = 1,
     page_size: int = 24,
@@ -306,6 +311,8 @@ def query_ads(
 ) -> Dict[str, Any]:
     """
     Query ads with filtering and pagination — pure SQL.
+    brand: single brand (advertiser filter)
+    brands: list of brands (Top Brands multi-select filter)
     Returns dict with: ads, total, page, page_size, has_more
     """
     try:
@@ -333,6 +340,9 @@ def query_ads(
         if brand:
             where.append("lower(a.brand) = lower(%s)")
             params.append(brand)
+        if brands:
+            where.append("lower(a.brand) = ANY(%s)")
+            params.append([b.lower() for b in brands])
         if ad_types:
             type_conditions = []
             for t in ad_types:
@@ -525,14 +535,35 @@ def get_brands_filtered(
         cur.close()
         _put_conn(conn)
 
-        total = sum(c for _, c in rows)
+        # Canonicalize brand names to merge synonyms, case variants, punctuation
+        from core.brands import canonicalize as _canon, is_blacklisted as _is_bl
+        merged: dict[str, tuple[str, int]] = {}  # canon_key -> (display_name, count)
+        for raw_brand, count in rows:
+            if _is_bl(raw_brand):
+                continue
+            canon = _canon(raw_brand, mark_ambiguous=False)
+            display = canon if canon else raw_brand
+            key = display.lower()
+            if key in merged:
+                prev_display, prev_count = merged[key]
+                # Keep the display name with the higher count (most common variant)
+                if count > prev_count:
+                    merged[key] = (display, prev_count + count)
+                else:
+                    merged[key] = (prev_display, prev_count + count)
+            else:
+                merged[key] = (display, count)
+
+        # Sort by count descending
+        sorted_brands = sorted(merged.values(), key=lambda x: x[1], reverse=True)
+        total = sum(c for _, c in sorted_brands)
         return [
             {
-                "brand": brand,
+                "brand": display,
                 "count": count,
                 "percentage": round((count / total) * 100, 1) if total > 0 else 0,
             }
-            for brand, count in rows
+            for display, count in sorted_brands
         ]
     except Exception as e:
         print(f"⚠️  db_store.get_brands_filtered() failed: {e}")
@@ -690,3 +721,77 @@ def get_brand_details(
         print(f"⚠️  db_store.get_brand_details() failed: {e}")
         import traceback; traceback.print_exc()
         return None
+
+
+# ──────────────────────────────────────────────────────────────
+# Review flags
+# ──────────────────────────────────────────────────────────────
+
+def flag_ad_for_review(ad_id: int, reason: str = None) -> bool:
+    """Flag an ad for re-review (brand re-extraction)."""
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO review_flags (flag_type, ad_id, reason)
+            VALUES ('ad', %s, %s)
+        """, [ad_id, reason])
+        conn.commit()
+        cur.close()
+        _put_conn(conn)
+        return True
+    except Exception as e:
+        print(f"⚠️  db_store.flag_ad_for_review() failed: {e}")
+        return False
+
+
+def flag_brand_for_review(brand_name: str, reason: str = None) -> bool:
+    """Flag a brand for re-review (synonym/canonicalization check)."""
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO review_flags (flag_type, brand_name, reason)
+            VALUES ('brand', %s, %s)
+        """, [brand_name, reason])
+        conn.commit()
+        cur.close()
+        _put_conn(conn)
+        return True
+    except Exception as e:
+        print(f"⚠️  db_store.flag_brand_for_review() failed: {e}")
+        return False
+
+
+def get_pending_review_flags(flag_type: str = None, limit: int = 100) -> List[Dict[str, Any]]:
+    """Get pending review flags, optionally filtered by type."""
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+        where = ["status = 'pending'"]
+        params = []
+        if flag_type:
+            where.append("flag_type = %s")
+            params.append(flag_type)
+        params.append(limit)
+        cur.execute(f"""
+            SELECT id, flag_type, ad_id, brand_name, reason, created_at
+            FROM review_flags
+            WHERE {' AND '.join(where)}
+            ORDER BY created_at DESC
+            LIMIT %s
+        """, params)
+        rows = cur.fetchall()
+        cur.close()
+        _put_conn(conn)
+        return [
+            {
+                "id": r[0], "flag_type": r[1], "ad_id": r[2],
+                "brand_name": r[3], "reason": r[4],
+                "created_at": r[5].isoformat() if r[5] else None,
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"⚠️  db_store.get_pending_review_flags() failed: {e}")
+        return []

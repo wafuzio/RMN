@@ -538,6 +538,80 @@ def preview_file(json_path):
 
 # ── Backfill ──────────────────────────────────────────────────────────────────
 
+def _build_slots_array(matched_results, json_ads):
+    """Build a serializable slots array from matched_results for persisting in JSON.
+
+    Every entry gets:
+      slot, slot_within_type, total_slots, total_slots_of_type,
+      ad_type, is_sponsored, product_id, title, price, image_url, image_path,
+      brand, href, matched_ad_index
+
+    image_path points to assets/amazon/product_images/<asin>.<ext> —
+    downloaded on first encounter, re-linked on subsequent appearances of the
+    same asin (same product can appear multiple times on one page).
+    """
+    try:
+        from tools.product_image_store import download_and_store, get_image_path, has_image
+        _img_store = True
+    except ImportError:
+        _img_store = False
+
+    ads_index_map = {id(a): i for i, a in enumerate(json_ads)}
+    total_slots = len(matched_results)
+
+    # Pre-compute per-type totals
+    type_counts = Counter(slot['ad_type'] for slot, _ in matched_results)
+    type_running = Counter()
+    # Cache product_id → image_path within this run (avoids re-downloading duplicates)
+    _image_cache = {}
+
+    slots_out = []
+    for i, (slot, json_ad) in enumerate(matched_results):
+        d = slot['detail']
+        ad_type = slot['ad_type']
+        within = type_running[ad_type]
+        type_running[ad_type] += 1
+
+        product_id = d.get('asin', '')
+        image_url  = d.get('image_url', '')
+
+        # Resolve canonical image path — download once, re-link on duplicates
+        image_path = None
+        if _img_store and product_id:
+            if product_id in _image_cache:
+                image_path = _image_cache[product_id]
+            elif has_image('amazon', product_id):
+                image_path = get_image_path('amazon', product_id)
+                _image_cache[product_id] = image_path
+            elif image_url:
+                image_path = download_and_store('amazon', product_id, image_url)
+                _image_cache[product_id] = image_path
+
+        entry = {
+            'slot': i,
+            'slot_within_type': within,
+            'total_slots': total_slots,
+            'total_slots_of_type': type_counts[ad_type],
+            'ad_type': ad_type,
+            'is_sponsored': d.get('is_sponsored', ad_type != 'Product_Listing'),
+            'product_id': product_id,
+            'title': d.get('title', ''),
+            'price': d.get('price', ''),
+            'image_url': image_url,
+            'image_path': image_path,
+            'href': d.get('href', ''),
+            'brand': None,
+            'matched_ad_index': ads_index_map.get(id(json_ad)) if json_ad else None,
+        }
+        if json_ad:
+            entry['brand'] = json_ad.get('brand', json_ad.get('brand_canonical'))
+        # Sponsored_Display gets slot_location
+        if ad_type == 'Sponsored_Display':
+            entry['slot_location'] = d.get('slot_location', '')
+        slots_out.append(entry)
+    return slots_out
+
+
 def process_file(json_path, dry_run=False):
     """
     Process a single Amazon run JSON + its HTML.
@@ -568,7 +642,17 @@ def process_file(json_path, dry_run=False):
     matched_results = match_slots_to_json(slots, json_ads)
     assigned, unmatched = assign_slot_fields(matched_results)
 
-    if assigned > 0 and not dry_run:
+    # Build and inject the slots array (single source of truth for the full page)
+    slots_array = _build_slots_array(matched_results, json_ads)
+    changed = assigned > 0 or (slots_array and data.get('slots') != slots_array)
+    if slots_array:
+        data['slots'] = slots_array
+    # Remove legacy product_listings — slots supersedes it
+    if 'product_listings' in data:
+        del data['product_listings']
+        changed = True
+
+    if changed and not dry_run:
         try:
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)

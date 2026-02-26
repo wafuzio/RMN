@@ -218,22 +218,37 @@ def _extract_brand_and_message(container):
                     title_seg = ht.split('|', 1)[0].strip()
                     t_tokens = title_seg.split()
                     if t_tokens:
+                        # Collect non-numeric leading tokens (up to 3)
                         brand_tokens = []
                         for tok in t_tokens:
-                            # Stop when we hit a token with digits (usually quantity/size)
                             if any(ch.isdigit() for ch in tok):
                                 break
                             brand_tokens.append(tok)
-                            if len(brand_tokens) >= 2:
+                            if len(brand_tokens) >= 3:
                                 break
 
-                        cand = " ".join(brand_tokens).strip()
-                        if cand and not re.match(r"^[0-9.,]+$", cand):
-                            # Reuse the same filters we use elsewhere (avoid review/rating noise)
-                            if not re.search(r"\breviews?\b", cand, re.IGNORECASE) \
-                               and not re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
-                               and not re.search(r"\brated\b", cand, re.IGNORECASE):
+                        # Try progressively: 1 token, then 2, then 3
+                        # This ensures "Rael" matches before "Rael Pimple" is considered
+                        for n in range(1, len(brand_tokens) + 1):
+                            cand = " ".join(brand_tokens[:n]).strip()
+                            if not cand or re.match(r"^[0-9.,]+$", cand):
+                                continue
+                            if re.search(r"\breviews?\b", cand, re.IGNORECASE) \
+                               or re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
+                               or re.search(r"\brated\b", cand, re.IGNORECASE):
+                                continue
+                            # If this candidate already canonicalizes, use it immediately
+                            if canonicalize(cand):
                                 brand = cand
+                                break
+                        # If no n-gram matched the lexicon, fall back to first 2 tokens
+                        if not brand and len(brand_tokens) >= 1:
+                            cand = " ".join(brand_tokens[:min(2, len(brand_tokens))]).strip()
+                            if cand and not re.match(r"^[0-9.,]+$", cand):
+                                if not re.search(r"\breviews?\b", cand, re.IGNORECASE) \
+                                   and not re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
+                                   and not re.search(r"\brated\b", cand, re.IGNORECASE):
+                                    brand = cand
     except Exception:
         pass
 
@@ -280,14 +295,27 @@ def _extract_brand_and_message(container):
                         if any(ch.isdigit() for ch in tok):
                             break
                         brand_tokens.append(tok)
-                        if len(brand_tokens) >= 2:
+                        if len(brand_tokens) >= 3:
                             break
-                    cand = " ".join(brand_tokens).strip()
-                    if cand and not re.match(r"^[0-9.,]+$", cand):
-                        if not re.search(r"\breviews?\b", cand, re.IGNORECASE) \
-                           and not re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
-                           and not re.search(r"\brated\b", cand, re.IGNORECASE):
+                    # Try progressively: 1 token, then 2, then 3
+                    for n in range(1, len(brand_tokens) + 1):
+                        cand = " ".join(brand_tokens[:n]).strip()
+                        if not cand or re.match(r"^[0-9.,]+$", cand):
+                            continue
+                        if re.search(r"\breviews?\b", cand, re.IGNORECASE) \
+                           or re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
+                           or re.search(r"\brated\b", cand, re.IGNORECASE):
+                            continue
+                        if canonicalize(cand):
                             brand = cand
+                            break
+                    if not brand and len(brand_tokens) >= 1:
+                        cand = " ".join(brand_tokens[:min(2, len(brand_tokens))]).strip()
+                        if cand and not re.match(r"^[0-9.,]+$", cand):
+                            if not re.search(r"\breviews?\b", cand, re.IGNORECASE) \
+                               and not re.search(r"\bout of 5 stars\b", cand, re.IGNORECASE) \
+                               and not re.search(r"\brated\b", cand, re.IGNORECASE):
+                                brand = cand
         except Exception:
             pass
     
@@ -616,6 +644,118 @@ def _normalize_display_container(el):
     except Exception:
         pass
     return el
+
+
+MIN_DISPLAY_SCREENSHOT_BYTES = 5000  # Screenshots below this are almost certainly blank/unloaded
+MAX_DISPLAY_AD_HEIGHT = 800  # Cap iframe expansion to prevent capturing entire page
+
+
+def _is_blank_screenshot(fpath):
+    """Return True if a screenshot file is blank (too small to contain real ad content)."""
+    try:
+        return os.path.getsize(fpath) < MIN_DISPLAY_SCREENSHOT_BYTES
+    except OSError:
+        return True
+
+
+def _display_screenshot_target(el):
+    """
+    Given a display ad container (e.g. AdHolder), return the innermost
+    visual element to screenshot — the iframe or primary image.
+    Falls back to the container itself if nothing better is found.
+    """
+    try:
+        # Prefer iframe — this IS the ad creative
+        iframes = el.locator("iframe")
+        if iframes.count() > 0:
+            iframe = iframes.first
+            if iframe.is_visible():
+                return iframe
+        # Fallback: largest visible image
+        imgs = el.locator("img").all()
+        best, best_area = None, 0
+        for img in imgs:
+            try:
+                if not img.is_visible():
+                    continue
+                box = img.bounding_box()
+                if box:
+                    area = box["width"] * box["height"]
+                    if area > best_area:
+                        best, best_area = img, area
+            except Exception:
+                continue
+        if best and best_area > 500:
+            return best
+    except Exception:
+        pass
+    return el
+
+
+def _wait_for_iframe_content(page, el, timeout_ms=4000):
+    """
+    Wait for iframe-based display ads to load their creative content.
+    Returns True if content appears loaded, False otherwise.
+    """
+    try:
+        ad_handle = el.element_handle()
+        loaded = page.evaluate("""
+          (el) => new Promise((resolve) => {
+            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+            (async () => {
+              // First check for iframes
+              const iframe = el.tagName === 'IFRAME' ? el : el.querySelector('iframe');
+              if (!iframe) {
+                // No iframe — check for direct images instead
+                let stable = 0, last = 0;
+                for (let i = 0; i < 10 && stable < 3; i++) {
+                  const imgs = Array.from(el.querySelectorAll('img')).filter(img => img.complete && img.naturalWidth > 10).length;
+                  const content = el.textContent.trim().length;
+                  const current = imgs + Math.floor(content / 100);
+                  if (current === last) stable++; else stable = 0;
+                  last = current;
+                  await sleep(300);
+                }
+                resolve(last > 0);
+                return;
+              }
+              // For iframe-based ads, wait for the iframe to load
+              // and have non-trivial dimensions or visible content
+              let attempts = 0;
+              const maxAttempts = Math.floor(arguments.length > 1 ? arguments[1] : 4000 / 400);
+              while (attempts < 12) {
+                attempts++;
+                try {
+                  // Check if iframe has loaded (cross-origin safe checks)
+                  const rect = iframe.getBoundingClientRect();
+                  const hasSize = rect.width > 50 && rect.height > 20;
+                  // Try to check iframe content (same-origin only)
+                  let hasContent = false;
+                  try {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (doc && doc.body) {
+                      const bodyHTML = doc.body.innerHTML || '';
+                      hasContent = bodyHTML.length > 100;
+                    }
+                  } catch(e) {
+                    // Cross-origin: check if iframe has a valid src and rendered height
+                    const src = iframe.src || iframe.getAttribute('src') || '';
+                    hasContent = src.length > 10 && rect.height > 30;
+                  }
+                  if (hasSize && hasContent) {
+                    resolve(true);
+                    return;
+                  }
+                } catch(e) {}
+                await sleep(400);
+              }
+              resolve(false);
+            })()
+          })
+        """, ad_handle)
+        return bool(loaded)
+    except Exception:
+        return False
 
 
 def _creative_fingerprint(el):
@@ -2180,30 +2320,14 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 ad.scroll_into_view_if_needed()
                                 time.sleep(0.5)  # Initial wait
                                 
-                                # Wait for images and content to load with longer timeout
-                                ad_handle = ad.element_handle()
-                                page.evaluate("""
-                                  (el) => new Promise((resolve) => {
-                                    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-                                    (async () => {
-                                      let stable = 0; let last = 0;
-                                      // Longer wait for display ads (up to 3 seconds)
-                                      for (let i=0; i<10 && stable<3; i++) {
-                                        const imgs = Array.from(el.querySelectorAll('img')).filter(img => img.complete && img.naturalWidth>10).length;
-                                        const content = el.textContent.trim().length;
-                                        const current = imgs + Math.floor(content/100);
-                                        if (current === last) stable++; else stable = 0;
-                                        last = current; 
-                                        await sleep(300);
-                                      }
-                                      resolve(true);
-                                    })()
-                                  })
-                                """, ad_handle)
+                                # Wait for iframe/image content to actually load
+                                content_loaded = _wait_for_iframe_content(page, ad, timeout_ms=5000)
                                 
                                 # Additional wait for any remaining lazy content
                                 time.sleep(0.5)
-                                log(f"display: hydration wait complete for ad {display_idx}")
+                                log(f"display: hydration wait complete for ad {display_idx} (loaded={content_loaded})")
+                                if not content_loaded:
+                                    log(f"display: WARNING ad {display_idx} may not have loaded content")
                             except Exception as e:
                                 log(f"display: hydration wait error -> {e}")
                             
@@ -2214,6 +2338,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 ad_handle = ad.element_handle()
                                 page.evaluate("""
                                   (el) => {
+                                    const MAX_HEIGHT = 800;
                                     // Walk up ancestors and remove overflow clipping
                                     let node = el;
                                     for (let i = 0; i < 10 && node && node !== document.body; i++) {
@@ -2224,12 +2349,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                       node = node.parentElement;
                                     }
                                     // For iframe-based ads, ensure iframe is tall enough
+                                    // but cap at MAX_HEIGHT to avoid capturing the entire page
                                     const iframe = el.tagName === 'IFRAME' ? el : el.querySelector('iframe');
                                     if (iframe) {
                                       try {
                                         const doc = iframe.contentDocument || iframe.contentWindow.document;
                                         if (doc && doc.body) {
-                                          const fullHeight = doc.body.scrollHeight;
+                                          const fullHeight = Math.min(doc.body.scrollHeight, MAX_HEIGHT);
                                           if (fullHeight > iframe.clientHeight) {
                                             iframe.style.setProperty('height', fullHeight + 'px', 'important');
                                             iframe.parentElement.style.setProperty('height', fullHeight + 'px', 'important');
@@ -2247,7 +2373,43 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             except Exception as e:
                                 log(f"display: unclip error -> {e}")
                             
-                            ad.screenshot(path=fpath, timeout=4000)
+                            # Screenshot the actual ad creative (iframe/img), not the oversized container
+                            shot_el = _display_screenshot_target(ad)
+                            if shot_el is not ad:
+                                log(f"display: targeting inner creative for ad {display_idx}")
+                            shot_el.screenshot(path=fpath, timeout=4000)
+                            
+                            # Post-screenshot blank detection: skip if the capture is blank
+                            if _is_blank_screenshot(fpath):
+                                log(f"display: BLANK screenshot detected ({os.path.getsize(fpath)} bytes), deleting -> {fname}")
+                                try:
+                                    os.remove(fpath)
+                                except OSError:
+                                    pass
+                                continue
+                            
+                            # OCR fallback: if brand is still unknown after DOM extraction,
+                            # run OCR on the saved screenshot to find known brands
+                            if (not brand_txt or brand_txt.lower() == "unknown") and os.path.exists(fpath):
+                                try:
+                                    from extractors.ocr_brand_detector import detect_brand_from_image_for_display
+                                    ocr_brand = detect_brand_from_image_for_display(fpath)
+                                    if ocr_brand and ocr_brand.lower() != "unknown":
+                                        log(f"display: OCR fallback found brand -> {ocr_brand}")
+                                        brand_txt = ocr_brand
+                                        brand_canon = canonicalize(ocr_brand) or ocr_brand
+                                        if not brand_canon or brand_canon.lower() == "unknown":
+                                            brand_canon = ocr_brand
+                                        # Rename screenshot to include correct brand
+                                        new_fname = _std_filename("amazon", brand_canon, "Sponsored_Display", client, keyword, run_id, display_idx, ".png")
+                                        new_fpath = os.path.join(output_dir, "Sponsored_Display", new_fname)
+                                        if new_fpath != fpath:
+                                            os.rename(fpath, new_fpath)
+                                            fname = new_fname
+                                            fpath = new_fpath
+                                            log(f"display: renamed screenshot -> {new_fname}")
+                                except Exception as e:
+                                    log(f"display: OCR fallback error -> {e}")
                             
                             # Update dedupe sets after successful screenshot (per slot)
                             if bbox:
@@ -3298,33 +3460,15 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     el = left_ads.nth(i)
                     if not el.is_visible():
                         continue
-                    # Instacart-style scroll and freeze
+                    # Scroll into view and wait for iframe/image content to load
                     try:
                         el.scroll_into_view_if_needed()
-                        time.sleep(0.1)
+                        time.sleep(0.3)
                     except Exception:
                         pass
-                    try:
-                        el.evaluate("""
-                          (el) => new Promise(async (resolve) => {
-                            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-                            let stable = 0, last = 0;
-                            for (let i=0; i<8 && stable<3; i++) {
-                              const imgs = Array.from(el.querySelectorAll('img')).filter(i => i.complete && i.naturalWidth > 10).length;
-                              if (imgs === last) stable++; else stable = 0;
-                              last = imgs; await sleep(300);
-                            }
-                            resolve(true);
-                          })
-                        """)
-                    except Exception:
-                        pass
-                    try:
-                        if left_ads.nth(i).locator('img').count() == 0:
-                            log("display: left skipped (no images)")
-                            continue
-                    except Exception:
-                        pass
+                    content_loaded = _wait_for_iframe_content(page, el, timeout_ms=4000)
+                    if not content_loaded:
+                        log(f"display: left ad {i} content may not have loaded")
                     brand_txt, brand_canon, message = _extract_brand_and_message(el)
                     adv_for_name = brand_canon or "unknown"
                     fname = _std_filename("amazon", adv_for_name, "Sponsored_Display", client, keyword, run_id, i, ".png")
@@ -3346,7 +3490,40 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
                         except Exception:
                             pass
-                        el.screenshot(path=fpath, timeout=4000)
+                        # Screenshot the actual ad creative (iframe/img), not the oversized container
+                        shot_el = _display_screenshot_target(el)
+                        if shot_el is not el:
+                            log(f"display: left targeting inner creative for ad {i}")
+                        shot_el.screenshot(path=fpath, timeout=4000)
+                        # Post-screenshot blank detection
+                        if _is_blank_screenshot(fpath):
+                            log(f"display: left BLANK screenshot detected ({os.path.getsize(fpath)} bytes), deleting -> {fname}")
+                            try:
+                                os.remove(fpath)
+                            except OSError:
+                                pass
+                            continue
+                        # OCR fallback: if brand is still unknown, run OCR on the screenshot
+                        if (not brand_txt or brand_txt.lower() == "unknown") and os.path.exists(fpath):
+                            try:
+                                from extractors.ocr_brand_detector import detect_brand_from_image_for_display
+                                ocr_brand = detect_brand_from_image_for_display(fpath)
+                                if ocr_brand and ocr_brand.lower() != "unknown":
+                                    log(f"display: left OCR fallback found brand -> {ocr_brand}")
+                                    brand_txt = ocr_brand
+                                    brand_canon = canonicalize(ocr_brand) or ocr_brand
+                                    if not brand_canon or brand_canon.lower() == "unknown":
+                                        brand_canon = ocr_brand
+                                    adv_for_name = brand_canon
+                                    new_fname = _std_filename("amazon", adv_for_name, "Sponsored_Display", client, keyword, run_id, i, ".png")
+                                    new_fpath = os.path.join(output_dir, "Sponsored_Display", new_fname)
+                                    if new_fpath != fpath:
+                                        os.rename(fpath, new_fpath)
+                                        fname = new_fname
+                                        fpath = new_fpath
+                                        log(f"display: left renamed screenshot -> {new_fname}")
+                            except Exception as e:
+                                log(f"display: left OCR fallback error -> {e}")
                         anchor = _module_anchor(el)
                         if re.match(r'^(sb|sponsoredb|sponsoredbrands)', (anchor or '').lower()):
                             log(f"display: skip sb-like anchor -> {anchor}")
@@ -3411,33 +3588,15 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                 for i, el in enumerate(bottom_ads):
                     if not el.is_visible():
                         continue
-                    # Instacart-style scroll and freeze
+                    # Scroll into view and wait for iframe/image content to load
                     try:
                         el.scroll_into_view_if_needed()
-                        time.sleep(0.1)
+                        time.sleep(0.3)
                     except Exception:
                         pass
-                    try:
-                        el.evaluate("""
-                          (el) => new Promise(async (resolve) => {
-                            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-                            let stable = 0, last = 0;
-                            for (let i=0; i<10 && stable<3; i++) {
-                              const imgs = Array.from(el.querySelectorAll('img')).filter(i => i.complete && i.naturalWidth > 10).length;
-                              if (imgs === last) stable++; else stable = 0;
-                              last = imgs; await sleep(300);
-                            }
-                            resolve(true);
-                          })
-                        """)
-                    except Exception:
-                        pass
-                    try:
-                        if bottom_ads.nth(i).locator('img').count() == 0:
-                            log("display: bottom skipped (no images)")
-                            continue
-                    except Exception:
-                        pass
+                    content_loaded = _wait_for_iframe_content(page, el, timeout_ms=4000)
+                    if not content_loaded:
+                        log(f"display: bottom ad {i} content may not have loaded")
                     brand_txt, brand_canon, message = _extract_brand_and_message(el)
                     adv_for_name = brand_canon or "unknown"
                     fname = _std_filename("amazon", adv_for_name, "Sponsored_Display", client, keyword, run_id, i, ".png")
@@ -3459,7 +3618,40 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
                         except Exception:
                             pass
-                        el.screenshot(path=fpath, timeout=4000)
+                        # Screenshot the actual ad creative (iframe/img), not the oversized container
+                        shot_el = _display_screenshot_target(el)
+                        if shot_el is not el:
+                            log(f"display: bottom targeting inner creative for ad {i}")
+                        shot_el.screenshot(path=fpath, timeout=4000)
+                        # Post-screenshot blank detection
+                        if _is_blank_screenshot(fpath):
+                            log(f"display: bottom BLANK screenshot detected ({os.path.getsize(fpath)} bytes), deleting -> {fname}")
+                            try:
+                                os.remove(fpath)
+                            except OSError:
+                                pass
+                            continue
+                        # OCR fallback: if brand is still unknown, run OCR on the screenshot
+                        if (not brand_txt or brand_txt.lower() == "unknown") and os.path.exists(fpath):
+                            try:
+                                from extractors.ocr_brand_detector import detect_brand_from_image_for_display
+                                ocr_brand = detect_brand_from_image_for_display(fpath)
+                                if ocr_brand and ocr_brand.lower() != "unknown":
+                                    log(f"display: bottom OCR fallback found brand -> {ocr_brand}")
+                                    brand_txt = ocr_brand
+                                    brand_canon = canonicalize(ocr_brand) or ocr_brand
+                                    if not brand_canon or brand_canon.lower() == "unknown":
+                                        brand_canon = ocr_brand
+                                    adv_for_name = brand_canon
+                                    new_fname = _std_filename("amazon", adv_for_name, "Sponsored_Display", client, keyword, run_id, i, ".png")
+                                    new_fpath = os.path.join(output_dir, "Sponsored_Display", new_fname)
+                                    if new_fpath != fpath:
+                                        os.rename(fpath, new_fpath)
+                                        fname = new_fname
+                                        fpath = new_fpath
+                                        log(f"display: bottom renamed screenshot -> {new_fname}")
+                            except Exception as e:
+                                log(f"display: bottom OCR fallback error -> {e}")
                         anchor = _module_anchor(el)
                         if re.match(r'^(sb|sponsoredb|sponsoredbrands)', (anchor or '').lower()):
                             log(f"display: skip sb-like anchor -> {anchor}")

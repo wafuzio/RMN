@@ -18,6 +18,8 @@ import { handlePlaceholderAd } from "./routes/placeholder";
 import { handleImageProxy } from "./routes/image";
 import { handleVideoProxy } from "./routes/video";
 import { handleListSnapshots, handleGetSnapshot, handleGetCarouselData, handleGetCarouselSlide } from "./routes/snapshots";
+import { handleStatsSummary } from "./routes/stats-summary";
+import { handleFlagReview } from "./routes/flag-review";
 
 // Wrapper for regex route to extract ID from path
 const handlePlaceholderAdRegex: RequestHandler = (req, res, next) => {
@@ -65,6 +67,7 @@ export function createServer() {
   app.get("/api/logo/brand/:brand", handleBrandLogo);
   app.get("/api/logo/:retailer", handleRetailerLogo);
   app.get("/proxy-image", handleProxyImage);
+  app.get("/api/proxy-image", handleProxyImage);
   // Match URLs like /api/placeholder-ad-1.jpg, /api/placeholder-ad-2.jpg, etc.
   app.get(/^\/api\/placeholder-ad-(\d+)\.jpg$/, handlePlaceholderAdRegex);
   // Match /api/image/:retailer/:client/* to proxy to Flask backend
@@ -90,7 +93,9 @@ export function createServer() {
   app.get("/api/ads/count", handleAdsCount);
   app.get("/api/ads/types", handleAdTypes);
   app.get("/api/brands", handleBrands);
+  app.get("/api/stats/summary", handleStatsSummary);
   app.get("/api/brand-details", handleBrandDetails);
+  app.post("/api/flag-review", handleFlagReview);
   app.get("/api/timeline", handleTimeline);
 
   // Snapshots API routes

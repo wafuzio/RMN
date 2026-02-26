@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from PIL import Image, ImageTk
 import tkinter as tk
-from tkinter import ttk, simpledialog
+from tkinter import ttk, simpledialog, filedialog, messagebox
 from difflib import SequenceMatcher
 
 # Paths - use absolute paths relative to project root
@@ -90,6 +90,80 @@ def find_similar_brands(brand_name, lexicon, threshold=0.6):
     # Sort by score descending
     similar.sort(key=lambda x: x[1], reverse=True)
     return similar[:5]  # Return top 5 matches
+
+
+def check_logo_quality(logo_path):
+    """Check logo quality. Returns 'good', 'poor', or 'missing'.
+    
+    'poor' means the logo exists but has quality issues:
+    - No transparency (not RGBA/LA/PA) and background isn't white
+    - Very small dimensions (< 150px)
+    - White background but small (< 200px) — still poor
+    """
+    if not logo_path or not Path(logo_path).exists():
+        return "missing"
+    
+    path = Path(logo_path)
+    
+    # SVG files are vector — always good quality
+    if path.suffix.lower() == '.svg':
+        return "good"
+    
+    try:
+        img = Image.open(path)
+        w, h = img.size
+        
+        # Very small images are always poor quality
+        if w < 150 or h < 150:
+            return "poor"
+        
+        # Check for transparency
+        has_alpha = img.mode in ('RGBA', 'LA', 'PA')
+        
+        if has_alpha:
+            # Has alpha channel — check if it's actually used
+            alpha = img.getchannel('A')
+            alpha_data = alpha.getdata()
+            min_alpha = min(alpha_data)
+            # If minimum alpha < 250, transparency is actually used → good
+            if min_alpha < 250:
+                return "good"
+            # Alpha channel exists but fully opaque — treat as no transparency
+        
+        # No real transparency — check if background is white
+        # Sample corner pixels (top-left, top-right, bottom-left, bottom-right)
+        rgb = img.convert('RGB')
+        corners = [
+            rgb.getpixel((0, 0)),
+            rgb.getpixel((w - 1, 0)),
+            rgb.getpixel((0, h - 1)),
+            rgb.getpixel((w - 1, h - 1)),
+        ]
+        
+        # Also sample a few pixels along edges
+        edge_pixels = corners[:]
+        for x in (w // 4, w // 2, 3 * w // 4):
+            edge_pixels.append(rgb.getpixel((x, 0)))
+            edge_pixels.append(rgb.getpixel((x, h - 1)))
+        for y in (h // 4, h // 2, 3 * h // 4):
+            edge_pixels.append(rgb.getpixel((0, y)))
+            edge_pixels.append(rgb.getpixel((w - 1, y)))
+        
+        # Check if most edge pixels are near-white (R,G,B all > 240)
+        white_count = sum(1 for r, g, b in edge_pixels if r > 240 and g > 240 and b > 240)
+        white_ratio = white_count / len(edge_pixels)
+        
+        if white_ratio >= 0.6:
+            # White background — acceptable only if reasonably sized
+            if w >= 200 and h >= 200:
+                return "good"
+            return "poor"  # White bg but too small
+        
+        # Not transparent and not white background → poor
+        return "poor"
+        
+    except Exception:
+        return "poor"
 
 
 class LogoVerifier:
@@ -288,6 +362,19 @@ class LogoVerifier:
         )
         self.quit_btn.pack(side="left", padx=10)
         
+        # Second row of buttons
+        button_frame2 = ttk.Frame(self.root)
+        button_frame2.pack(pady=5)
+        
+        # Browse All Brands button
+        self.browse_btn = ttk.Button(
+            button_frame2,
+            text="📋 Browse All Brands (B)",
+            command=self.show_brand_browser,
+            width=25
+        )
+        self.browse_btn.pack(side="left", padx=10)
+        
         # Stats label
         self.stats_label = ttk.Label(
             self.root,
@@ -309,6 +396,8 @@ class LogoVerifier:
         self.root.bind('Q', lambda e: self.quit_app())
         self.root.bind('<Left>', lambda e: self.previous_logo())
         self.root.bind('<Right>', lambda e: self.next_logo())
+        self.root.bind('b', lambda e: self.show_brand_browser())
+        self.root.bind('B', lambda e: self.show_brand_browser())
     
     def show_empty_message(self):
         """Show message when no logos to verify"""
@@ -661,6 +750,16 @@ class LogoVerifier:
         
         logo_path = LOGOS_DIR / logo_file
         
+        # Record rejection so the logo won't be re-harvested
+        logo_url = brand_data.get("logo_url")
+        if logo_url:
+            if "rejected_logos" not in self.db:
+                self.db["rejected_logos"] = {}
+            self.db["rejected_logos"].setdefault(brand_key, [])
+            if logo_url not in self.db["rejected_logos"][brand_key]:
+                self.db["rejected_logos"][brand_key].append(logo_url)
+                print(f"🚫 Rejected logo URL for {brand_key} (won't be re-harvested)")
+        
         # Delete file
         if logo_path.exists():
             logo_path.unlink()
@@ -806,6 +905,748 @@ class LogoVerifier:
         # Disable buttons
         self.keep_btn.config(state="disabled")
         self.delete_btn.config(state="disabled")
+    
+    def show_brand_browser(self):
+        """Show a browsable list of all brands with their logo status.
+        
+        Allows filtering to brands without logos, previewing existing logos,
+        and uploading logos for any brand.
+        """
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Brand Logo Browser")
+        dialog.geometry("900x700")
+        dialog.transient(self.root)
+        
+        # --- Build brand data (rebuilt on each refresh) ---
+        def build_all_rows():
+            """Rebuild brand rows from live lexicon + DB state.
+            
+            Each row is (name, key, quality, logo_path, verified) where
+            quality is 'good', 'poor', or 'missing'.
+            """
+            db_brands = self.db.get("brands", {})
+            rows = []
+            seen_keys = set()
+            
+            for entry in self.lexicon:
+                name = entry.get("name", "").strip()
+                if not name:
+                    continue
+                key = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+                seen_keys.add(key)
+                
+                db_entry = db_brands.get(key)
+                if db_entry:
+                    logo_file = db_entry.get("logo_file", "")
+                    if logo_file.startswith("brand_logos/"):
+                        logo_file = logo_file[len("brand_logos/"):]
+                    logo_path = LOGOS_DIR / logo_file if logo_file else None
+                    quality = check_logo_quality(logo_path)
+                    verified = db_entry.get("verified", False)
+                else:
+                    quality = "missing"
+                    logo_path = None
+                    verified = False
+                
+                rows.append((name, key, quality, logo_path, verified))
+            
+            # Also include logo DB brands not in lexicon
+            for key, db_entry in db_brands.items():
+                if key not in seen_keys:
+                    name = db_entry.get("brand_name", key.replace("_", " ").title())
+                    logo_file = db_entry.get("logo_file", "")
+                    if logo_file.startswith("brand_logos/"):
+                        logo_file = logo_file[len("brand_logos/"):]
+                    logo_path = LOGOS_DIR / logo_file if logo_file else None
+                    quality = check_logo_quality(logo_path)
+                    verified = db_entry.get("verified", False)
+                    rows.append((name, key, quality, logo_path, verified))
+            
+            rows.sort(key=lambda r: r[0].lower())
+            return rows
+        
+        all_rows = build_all_rows()
+        
+        def _summary_text(rows):
+            good = sum(1 for r in rows if r[2] == "good")
+            poor = sum(1 for r in rows if r[2] == "poor")
+            miss = sum(1 for r in rows if r[2] == "missing")
+            return f"{len(rows)} brands  |  ✅ {good} good  |  🟡 {poor} poor quality  |  ❌ {miss} missing"
+        
+        # --- Header ---
+        header_frame = ttk.Frame(dialog)
+        header_frame.pack(fill="x", padx=10, pady=(10, 5))
+        
+        summary_label = ttk.Label(
+            header_frame,
+            text=_summary_text(all_rows),
+            font=("Arial", 12, "bold")
+        )
+        summary_label.pack(side="left")
+        
+        # Filter controls
+        filter_frame = ttk.Frame(dialog)
+        filter_frame.pack(fill="x", padx=10, pady=(0, 2))
+        
+        filter_var = tk.StringVar(value="all")
+        
+        def apply_filter():
+            populate_list()
+        
+        for val, label in [("all", "All"), ("missing", "❌ Missing"), ("poor", "🟡 Poor Quality"), ("needs_work", "❌+🟡 Needs Work")]:
+            ttk.Radiobutton(
+                filter_frame, text=label, variable=filter_var,
+                value=val, command=apply_filter
+            ).pack(side="left", padx=5)
+        
+        # Search box
+        search_frame = ttk.Frame(dialog)
+        search_frame.pack(fill="x", padx=10, pady=(0, 5))
+        
+        ttk.Label(search_frame, text="Search:").pack(side="left", padx=(0, 5))
+        search_var = tk.StringVar()
+        search_entry = ttk.Entry(search_frame, textvariable=search_var, width=30)
+        search_entry.pack(side="left", fill="x", expand=True)
+        search_var.trace_add("write", lambda *_: populate_list())
+        
+        # --- Treeview list ---
+        tree_frame = ttk.Frame(dialog)
+        tree_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        columns = ("status", "brand", "verified")
+        tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=20)
+        tree.heading("status", text="Logo")
+        tree.heading("brand", text="Brand Name")
+        tree.heading("verified", text="Verified")
+        tree.column("status", width=60, anchor="center")
+        tree.column("brand", width=600, anchor="w")
+        tree.column("verified", width=80, anchor="center")
+        
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Store filtered rows for selection lookup
+        filtered_rows = []
+        
+        def populate_list():
+            nonlocal filtered_rows, all_rows
+            # Rebuild from live DB state (picks up uploads)
+            all_rows = build_all_rows()
+            summary_label.config(text=_summary_text(all_rows))
+            
+            tree.delete(*tree.get_children())
+            
+            query = search_var.get().lower().strip()
+            filt = filter_var.get()
+            
+            filtered_rows = []
+            for row in all_rows:
+                name, key, quality, logo_path, verified = row
+                if filt == "missing" and quality != "missing":
+                    continue
+                if filt == "poor" and quality != "poor":
+                    continue
+                if filt == "needs_work" and quality == "good":
+                    continue
+                if query and query not in name.lower():
+                    continue
+                filtered_rows.append(row)
+            
+            status_map = {"good": "✅", "poor": "🟡", "missing": "❌"}
+            for row in filtered_rows:
+                name, key, quality, logo_path, verified = row
+                status = status_map.get(quality, "❌")
+                v_text = "✓" if verified else ""
+                tree.insert("", "end", values=(status, name, v_text))
+            
+            count_label.config(text=f"Showing {len(filtered_rows)} of {len(all_rows)}")
+        
+        count_label = ttk.Label(dialog, text="", font=("Arial", 10, "italic"))
+        count_label.pack(pady=(0, 5))
+        
+        # --- Preview + action area ---
+        bottom_frame = ttk.Frame(dialog)
+        bottom_frame.pack(fill="x", padx=10, pady=(0, 10))
+        
+        # Preview canvas (left)
+        preview_canvas = tk.Canvas(bottom_frame, width=200, height=150, bg="white",
+                                   highlightthickness=1, highlightbackground="#ccc")
+        preview_canvas.pack(side="left", padx=(0, 10))
+        
+        # Info + buttons (right)
+        action_frame = ttk.Frame(bottom_frame)
+        action_frame.pack(side="left", fill="both", expand=True)
+        
+        selected_label = ttk.Label(action_frame, text="Select a brand above", font=("Arial", 11))
+        selected_label.pack(anchor="w", pady=(0, 5))
+        
+        file_label = ttk.Label(action_frame, text="", font=("Arial", 9), foreground="gray")
+        file_label.pack(anchor="w")
+        
+        upload_btn = ttk.Button(
+            action_frame,
+            text="📁 Upload Logo...",
+            command=lambda: self._upload_logo_for_selected(tree, filtered_rows, dialog, populate_list),
+            width=20
+        )
+        upload_btn.pack(anchor="w", pady=5)
+        
+        merge_btn = ttk.Button(
+            action_frame,
+            text="🔀 Merge into existing...",
+            command=lambda: self._merge_brand_in_browser(tree, filtered_rows, dialog, populate_list),
+            width=24
+        )
+        merge_btn.pack(anchor="w", pady=(0, 5))
+        
+        # URL paste + download
+        url_frame = ttk.Frame(action_frame)
+        url_frame.pack(anchor="w", fill="x", pady=(2, 5))
+        
+        url_var = tk.StringVar()
+        url_entry = ttk.Entry(url_frame, textvariable=url_var, width=40)
+        url_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        url_entry.insert(0, "")
+        # Placeholder hint
+        url_entry.bind("<FocusIn>", lambda e: url_entry.select_range(0, "end"))
+        
+        url_btn = ttk.Button(
+            url_frame,
+            text="🔗 Fetch URL",
+            command=lambda: self._fetch_logo_from_url(
+                tree, filtered_rows, dialog, populate_list, url_var
+            ),
+            width=12
+        )
+        url_btn.pack(side="left")
+        
+        # Keep a reference to prevent GC of preview image
+        dialog._preview_photo = None
+        
+        def on_select(event):
+            sel = tree.selection()
+            if not sel:
+                return
+            idx = tree.index(sel[0])
+            if idx >= len(filtered_rows):
+                return
+            name, key, quality, logo_path, verified = filtered_rows[idx]
+            
+            selected_label.config(text=name)
+            
+            # Show preview
+            preview_canvas.delete("all")
+            if quality != "missing" and logo_path and logo_path.exists():
+                file_label.config(text=str(logo_path.relative_to(LOGOS_DIR)))
+                try:
+                    img = Image.open(logo_path)
+                    if img.mode == 'RGBA':
+                        bg = Image.new('RGB', img.size, (240, 240, 240))
+                        bg.paste(img, mask=img.split()[3])
+                        img = bg
+                    elif img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    img.thumbnail((190, 140), Image.Resampling.LANCZOS)
+                    dialog._preview_photo = ImageTk.PhotoImage(img)
+                    x = (200 - img.width) // 2
+                    y = (150 - img.height) // 2
+                    preview_canvas.create_image(x, y, anchor="nw", image=dialog._preview_photo)
+                except Exception as e:
+                    preview_canvas.create_text(100, 75, text=f"Error:\n{e}", font=("Arial", 9), fill="red")
+            else:
+                file_label.config(text="No logo file")
+                preview_canvas.create_text(100, 75, text="No logo", font=("Arial", 11), fill="#999")
+        
+        tree.bind("<<TreeviewSelect>>", on_select)
+        
+        # Initial populate
+        populate_list()
+        search_entry.focus()
+    
+    def _upload_logo_for_selected(self, tree, filtered_rows, dialog, refresh_fn):
+        """Upload a logo file for the currently selected brand in the browser."""
+        sel = tree.selection()
+        if not sel:
+            messagebox.showinfo("No Selection", "Please select a brand first.", parent=dialog)
+            return
+        
+        idx = tree.index(sel[0])
+        if idx >= len(filtered_rows):
+            return
+        
+        name, key, quality, existing_path, verified = filtered_rows[idx]
+        
+        # Ask for file
+        file_path = filedialog.askopenfilename(
+            title=f"Select logo for '{name}'",
+            parent=dialog,
+            filetypes=[
+                ("Image files", "*.png *.jpg *.jpeg *.svg *.webp *.gif"),
+                ("PNG", "*.png"),
+                ("JPEG", "*.jpg *.jpeg"),
+                ("SVG", "*.svg"),
+                ("All files", "*.*"),
+            ]
+        )
+        
+        if not file_path:
+            return
+        
+        src = Path(file_path)
+        
+        # --- Validate the file ---
+        warnings = []
+        
+        # Check extension
+        valid_exts = {'.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif'}
+        if src.suffix.lower() not in valid_exts:
+            warnings.append(f"Unsupported file type: {src.suffix}\nExpected: {', '.join(sorted(valid_exts))}")
+        
+        # Check file size
+        file_size = src.stat().st_size
+        if file_size > 5 * 1024 * 1024:  # 5 MB
+            warnings.append(f"File is very large ({file_size / 1024 / 1024:.1f} MB). Logos should typically be under 1 MB.")
+        if file_size < 100:
+            warnings.append(f"File is suspiciously small ({file_size} bytes). It may be corrupt.")
+        
+        # Try to open with PIL (skip for SVG)
+        if src.suffix.lower() != '.svg':
+            try:
+                img = Image.open(src)
+                w, h = img.size
+                
+                # Check dimensions
+                if w < 32 or h < 32:
+                    warnings.append(f"Image is very small ({w}x{h}px). Logos should be at least 64x64px for clarity.")
+                if w > 4000 or h > 4000:
+                    warnings.append(f"Image is very large ({w}x{h}px). Consider resizing to a reasonable logo size.")
+                
+                # Check aspect ratio (logos are usually roughly square or wide, not extremely tall)
+                ratio = max(w, h) / max(min(w, h), 1)
+                if ratio > 6:
+                    warnings.append(f"Extreme aspect ratio ({w}x{h}). This may not be a logo image.")
+                
+            except Exception as e:
+                warnings.append(f"Cannot open as image: {e}\nThe file may be corrupt or not a valid image.")
+        
+        # Show warnings and ask for confirmation
+        if warnings:
+            msg = f"Potential issues with '{src.name}':\n\n"
+            msg += "\n\n".join(f"⚠️  {w}" for w in warnings)
+            msg += "\n\nUpload anyway?"
+            if not messagebox.askyesno("Logo Validation Warning", msg, parent=dialog, icon="warning"):
+                return
+        
+        # Confirm overwrite if brand already has a logo
+        if quality != "missing" and existing_path and existing_path.exists():
+            if not messagebox.askyesno(
+                "Replace Existing Logo",
+                f"'{name}' already has a logo.\nReplace it?",
+                parent=dialog
+            ):
+                return
+        
+        # --- Copy file to verified/ ---
+        import shutil
+        dest_dir = LOGOS_DIR / "verified"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        
+        ext = src.suffix.lower()
+        dest_path = dest_dir / f"{key}{ext}"
+        
+        try:
+            shutil.copy2(str(src), str(dest_path))
+        except Exception as e:
+            messagebox.showerror("Upload Failed", f"Could not copy file:\n{e}", parent=dialog)
+            return
+        
+        # --- Update logo database ---
+        db_entry = self.db.setdefault("brands", {}).get(key)
+        now = self.get_timestamp()
+        
+        if db_entry:
+            # Delete old file if different path
+            old_file = db_entry.get("logo_file", "")
+            if old_file.startswith("brand_logos/"):
+                old_file = old_file[len("brand_logos/"):]
+            old_path = LOGOS_DIR / old_file if old_file else None
+            if old_path and old_path.exists() and old_path != dest_path:
+                try:
+                    old_path.unlink()
+                    print(f"🗑️  Removed old logo: {old_file}")
+                except Exception:
+                    pass
+            
+            db_entry["logo_file"] = f"verified/{key}{ext}"
+            db_entry["verified"] = True
+            db_entry["verified_at"] = now
+            db_entry["source"] = db_entry.get("source", "manual_upload")
+        else:
+            self.db["brands"][key] = {
+                "brand_name": name,
+                "logo_file": f"verified/{key}{ext}",
+                "verified": True,
+                "verified_at": now,
+                "source": "manual_upload",
+                "first_seen": now,
+                "last_seen": now,
+                "retailers": [],
+            }
+        
+        save_database(self.db)
+        print(f"✅ Uploaded logo for '{name}': {dest_path.name}")
+        
+        # Refresh the list
+        refresh_fn()
+        
+        messagebox.showinfo("Logo Uploaded", f"Logo for '{name}' saved successfully.", parent=dialog)
+    
+    def _fetch_logo_from_url(self, tree, filtered_rows, dialog, refresh_fn, url_var):
+        """Download a logo from a URL for the currently selected brand."""
+        import urllib.request
+        import tempfile
+        
+        sel = tree.selection()
+        if not sel:
+            messagebox.showinfo("No Selection", "Please select a brand first.", parent=dialog)
+            return
+        
+        idx = tree.index(sel[0])
+        if idx >= len(filtered_rows):
+            return
+        
+        url = url_var.get().strip()
+        if not url:
+            messagebox.showinfo("No URL", "Please paste a URL into the text field.", parent=dialog)
+            return
+        
+        if not url.startswith(("http://", "https://")):
+            messagebox.showwarning("Invalid URL", "URL must start with http:// or https://", parent=dialog)
+            return
+        
+        name, key, quality, existing_path, verified = filtered_rows[idx]
+        
+        # Confirm overwrite if brand already has a logo
+        if quality != "missing" and existing_path and existing_path.exists():
+            if not messagebox.askyesno(
+                "Replace Existing Logo",
+                f"'{name}' already has a logo.\nReplace it?",
+                parent=dialog
+            ):
+                return
+        
+        # Determine extension from URL
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        url_path = parsed.path.lower()
+        ext = ".png"  # default
+        for candidate in ('.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif'):
+            if url_path.endswith(candidate):
+                ext = candidate
+                break
+        
+        # Download to temp file first
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+            })
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = resp.read()
+                content_type = resp.headers.get("Content-Type", "")
+        except Exception as e:
+            messagebox.showerror("Download Failed", f"Could not fetch URL:\n{e}", parent=dialog)
+            return
+        
+        # Infer extension from content-type if URL didn't have one
+        ct_map = {
+            "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif",
+            "image/webp": ".webp", "image/svg+xml": ".svg",
+        }
+        for ct, ct_ext in ct_map.items():
+            if ct in content_type:
+                ext = ct_ext
+                break
+        
+        # Validate downloaded data
+        warnings = []
+        
+        if len(data) < 100:
+            warnings.append(f"Downloaded file is suspiciously small ({len(data)} bytes).")
+        if len(data) > 5 * 1024 * 1024:
+            warnings.append(f"Downloaded file is very large ({len(data) / 1024 / 1024:.1f} MB).")
+        
+        if ext != '.svg':
+            try:
+                from io import BytesIO
+                img = Image.open(BytesIO(data))
+                w, h = img.size
+                if w < 32 or h < 32:
+                    warnings.append(f"Image is very small ({w}x{h}px).")
+                if w > 4000 or h > 4000:
+                    warnings.append(f"Image is very large ({w}x{h}px).")
+                ratio = max(w, h) / max(min(w, h), 1)
+                if ratio > 6:
+                    warnings.append(f"Extreme aspect ratio ({w}x{h}).")
+            except Exception as e:
+                warnings.append(f"Cannot open as image: {e}")
+        
+        if "text/html" in content_type:
+            warnings.append("Server returned HTML instead of an image.\nThe URL may require authentication or is not a direct image link.")
+        
+        if warnings:
+            msg = f"Potential issues with downloaded file:\n\n"
+            msg += "\n\n".join(f"⚠️  {w}" for w in warnings)
+            msg += "\n\nSave anyway?"
+            if not messagebox.askyesno("Logo Validation Warning", msg, parent=dialog, icon="warning"):
+                return
+        
+        # Save to verified/
+        dest_dir = LOGOS_DIR / "verified"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / f"{key}{ext}"
+        
+        try:
+            dest_path.write_bytes(data)
+        except Exception as e:
+            messagebox.showerror("Save Failed", f"Could not save file:\n{e}", parent=dialog)
+            return
+        
+        # Update logo database
+        now = self.get_timestamp()
+        db_entry = self.db.get("brands", {}).get(key)
+        
+        if db_entry:
+            old_file = db_entry.get("logo_file", "")
+            if old_file.startswith("brand_logos/"):
+                old_file = old_file[len("brand_logos/"):]
+            old_path = LOGOS_DIR / old_file if old_file else None
+            if old_path and old_path.exists() and old_path != dest_path:
+                try:
+                    old_path.unlink()
+                except Exception:
+                    pass
+            
+            db_entry["logo_file"] = f"verified/{key}{ext}"
+            db_entry["logo_url"] = url
+            db_entry["verified"] = True
+            db_entry["verified_at"] = now
+            db_entry["source"] = db_entry.get("source", "manual_url")
+        else:
+            self.db.setdefault("brands", {})[key] = {
+                "brand_name": name,
+                "logo_file": f"verified/{key}{ext}",
+                "logo_url": url,
+                "verified": True,
+                "verified_at": now,
+                "source": "manual_url",
+                "first_seen": now,
+                "last_seen": now,
+                "retailers": [],
+            }
+        
+        save_database(self.db)
+        print(f"✅ Fetched logo for '{name}' from URL: {dest_path.name}")
+        
+        # Clear URL field and refresh
+        url_var.set("")
+        refresh_fn()
+        
+        messagebox.showinfo("Logo Fetched", f"Logo for '{name}' saved successfully.", parent=dialog)
+    
+    def _merge_brand_in_browser(self, tree, filtered_rows, dialog, refresh_fn):
+        """Merge the selected brand into an existing brand that has a logo.
+        
+        - Copies the target's logo to the source brand
+        - Adds the source brand name as a synonym of the target in the lexicon
+        - Updates the logo database
+        """
+        sel = tree.selection()
+        if not sel:
+            messagebox.showinfo("No Selection", "Please select a brand to merge first.", parent=dialog)
+            return
+        
+        idx = tree.index(sel[0])
+        if idx >= len(filtered_rows):
+            return
+        
+        src_name, src_key, src_quality, src_logo_path, src_verified = filtered_rows[idx]
+        
+        # Build list of brands that have logos (potential merge targets)
+        db_brands = self.db.get("brands", {})
+        targets = []
+        for entry in self.lexicon:
+            t_name = entry.get("name", "").strip()
+            if not t_name:
+                continue
+            t_key = re.sub(r"[^a-z0-9]+", "_", t_name.lower()).strip("_")
+            if t_key == src_key:
+                continue  # Skip self
+            t_db = db_brands.get(t_key)
+            if t_db:
+                t_logo = t_db.get("logo_file", "")
+                if t_logo:
+                    targets.append((t_name, t_key, t_db))
+        
+        if not targets:
+            messagebox.showinfo("No Targets", "No other brands with logos found.", parent=dialog)
+            return
+        
+        # Show a searchable picker dialog
+        picker = tk.Toplevel(dialog)
+        picker.title(f"Merge '{src_name}' into...")
+        picker.geometry("500x500")
+        picker.transient(dialog)
+        picker.grab_set()
+        
+        ttk.Label(picker, text=f"Select the brand to merge '{src_name}' into:",
+                  font=("Arial", 11)).pack(padx=10, pady=(10, 5), anchor="w")
+        
+        # Search
+        search_frame = ttk.Frame(picker)
+        search_frame.pack(fill="x", padx=10, pady=(0, 5))
+        ttk.Label(search_frame, text="Search:").pack(side="left", padx=(0, 5))
+        pick_search = tk.StringVar()
+        pick_entry = ttk.Entry(search_frame, textvariable=pick_search, width=30)
+        pick_entry.pack(side="left", fill="x", expand=True)
+        
+        # Listbox
+        lb_frame = ttk.Frame(picker)
+        lb_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        lb = tk.Listbox(lb_frame, font=("Arial", 11))
+        lb_scroll = ttk.Scrollbar(lb_frame, orient="vertical", command=lb.yview)
+        lb.configure(yscrollcommand=lb_scroll.set)
+        lb.pack(side="left", fill="both", expand=True)
+        lb_scroll.pack(side="right", fill="y")
+        
+        # Preview of target logo
+        preview_frame = ttk.Frame(picker)
+        preview_frame.pack(fill="x", padx=10, pady=5)
+        target_preview = tk.Canvas(preview_frame, width=100, height=80, bg="white",
+                                   highlightthickness=1, highlightbackground="#ccc")
+        target_preview.pack(side="left", padx=(0, 10))
+        target_info = ttk.Label(preview_frame, text="", font=("Arial", 10))
+        target_info.pack(side="left", anchor="w")
+        picker._preview_photo = None
+        
+        visible_targets = list(targets)
+        
+        def populate_picker():
+            nonlocal visible_targets
+            lb.delete(0, tk.END)
+            q = pick_search.get().lower().strip()
+            visible_targets = [t for t in targets if q in t[0].lower()] if q else list(targets)
+            for t_name, _, _ in visible_targets:
+                lb.insert(tk.END, t_name)
+        
+        def on_pick_select(event):
+            sel_idx = lb.curselection()
+            if not sel_idx:
+                return
+            t_name, t_key, t_db = visible_targets[sel_idx[0]]
+            target_info.config(text=t_name)
+            target_preview.delete("all")
+            t_logo = t_db.get("logo_file", "")
+            if t_logo.startswith("brand_logos/"):
+                t_logo = t_logo[len("brand_logos/"):]
+            t_path = LOGOS_DIR / t_logo if t_logo else None
+            if t_path and t_path.exists():
+                try:
+                    img = Image.open(t_path)
+                    if img.mode == 'RGBA':
+                        bg = Image.new('RGB', img.size, (240, 240, 240))
+                        bg.paste(img, mask=img.split()[3])
+                        img = bg
+                    elif img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    img.thumbnail((90, 70), Image.Resampling.LANCZOS)
+                    picker._preview_photo = ImageTk.PhotoImage(img)
+                    target_preview.create_image(50, 40, anchor="center", image=picker._preview_photo)
+                except Exception:
+                    target_preview.create_text(50, 40, text="?", font=("Arial", 14))
+        
+        lb.bind("<<ListboxSelect>>", on_pick_select)
+        pick_search.trace_add("write", lambda *_: populate_picker())
+        
+        def do_merge():
+            sel_idx = lb.curselection()
+            if not sel_idx:
+                messagebox.showinfo("No Selection", "Please select a target brand.", parent=picker)
+                return
+            
+            t_name, t_key, t_db = visible_targets[sel_idx[0]]
+            
+            if not messagebox.askyesno(
+                "Confirm Merge",
+                f"Merge '{src_name}' into '{t_name}'?\n\n"
+                f"• '{src_name}' will use '{t_name}'s logo\n"
+                f"• '{src_name}' will be added as a synonym of '{t_name}' in the lexicon",
+                parent=picker
+            ):
+                return
+            
+            import shutil
+            
+            # 1. Copy target's logo to source brand key
+            t_logo = t_db.get("logo_file", "")
+            if t_logo.startswith("brand_logos/"):
+                t_logo = t_logo[len("brand_logos/"):]
+            t_path = LOGOS_DIR / t_logo
+            
+            if t_path.exists():
+                ext = t_path.suffix
+                dest_dir = LOGOS_DIR / "verified"
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                dest_path = dest_dir / f"{src_key}{ext}"
+                
+                try:
+                    shutil.copy2(str(t_path), str(dest_path))
+                except Exception as e:
+                    messagebox.showerror("Merge Failed", f"Could not copy logo:\n{e}", parent=picker)
+                    return
+                
+                # Update source brand in logo DB
+                now = self.get_timestamp()
+                self.db.setdefault("brands", {})[src_key] = {
+                    "brand_name": src_name,
+                    "logo_file": f"verified/{src_key}{ext}",
+                    "logo_url": t_db.get("logo_url", ""),
+                    "verified": True,
+                    "verified_at": now,
+                    "source": f"merged_from_{t_key}",
+                    "first_seen": now,
+                    "last_seen": now,
+                    "retailers": t_db.get("retailers", []),
+                }
+                save_database(self.db)
+            
+            # 2. Add source name as synonym of target in lexicon
+            target_entry = next((b for b in self.lexicon if b.get("name", "").lower() == t_name.lower()), None)
+            if target_entry:
+                syns = target_entry.setdefault("synonyms", [])
+                if src_name not in syns:
+                    syns.append(src_name)
+                    from utils.lexicon_utils import save_lexicon as _save_lex
+                    _save_lex(self.lexicon)
+                    print(f"[MERGE] Added '{src_name}' as synonym of '{t_name}'")
+            
+            print(f"✅ Merged '{src_name}' -> '{t_name}' (logo copied, synonym added)")
+            
+            picker.destroy()
+            refresh_fn()
+            messagebox.showinfo("Merge Complete",
+                                f"'{src_name}' now uses '{t_name}'s logo.\n"
+                                f"Added as synonym in lexicon.",
+                                parent=dialog)
+        
+        btn_frame = ttk.Frame(picker)
+        btn_frame.pack(fill="x", padx=10, pady=(0, 10))
+        ttk.Button(btn_frame, text="Merge", command=do_merge).pack(side="right", padx=5)
+        ttk.Button(btn_frame, text="Cancel", command=picker.destroy).pack(side="right")
+        
+        populate_picker()
+        pick_entry.focus()
     
     def quit_app(self):
         """Save database and quit"""

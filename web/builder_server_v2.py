@@ -41,6 +41,8 @@ try:
         get_ad_types as db_get_ad_types, get_brands_filtered as db_get_brands_filtered,
         get_brand_details as db_get_brand_details,
         query_ads as db_query_ads,
+        flag_ad_for_review as db_flag_ad_for_review,
+        flag_brand_for_review as db_flag_brand_for_review,
     )
     if _db_available():
         _USE_DB = True
@@ -310,12 +312,12 @@ def _matches_ad_type_filter(ad, types_list):
         return True
 
     ad_type = ad.get("type") or ad.get("ad_type") or "Main"
-    ad_type_normalized = ad_type.lower().replace("_", " ").replace("-", " ")
+    # Canonicalize the ad's type and the filter values for comparison
+    ad_canonical = canonicalize_ad_type(ad_type).lower()
 
-    # Normalize both sides before comparison
     for req_type in types_list:
-        req_type_normalized = req_type.lower().replace("_", " ").replace("-", " ")
-        if req_type_normalized == ad_type_normalized or req_type_normalized in ad_type_normalized or ad_type_normalized in req_type_normalized:
+        req_canonical = canonicalize_ad_type(req_type).lower()
+        if req_canonical == ad_canonical or req_canonical in ad_canonical or ad_canonical in req_canonical:
             return True
     return False
 
@@ -621,12 +623,51 @@ def canonicalize_brand(raw: str | None) -> str | None:
     return raw
 
 
+# Canonical ad type mapping: raw DB values → single canonical display name
+# Multiple raw values can map to the same canonical name (deduplication)
+_AD_TYPE_CANONICAL = {
+    "sbv":                    "Sponsored Brand Video",
+    "sponsored_brand_video":  "Sponsored Brand Video",
+    "shoppable_video_ad":     "Shoppable Video Ad",
+    "toa":                    "TOA",
+    "sba":                    "SBA",
+    "sponsored_brand":        "Sponsored Brand",
+    "listingpagebannerad":    "Listing Page Banner Ad",
+    "shoppable_display_ad":   "Shoppable Display Ad",
+    "sponsored_display":      "Sponsored Display",
+    "sponsored_carousel":     "Sponsored Carousel",
+    "curatedcarousel":        "Curated Carousel",
+    "carousel":               "Carousel",
+    "skyscraper":             "Skyscraper",
+    "tile_takeover":          "Tile Takeover",
+    "sponsored_logo":         "Sponsored Logo",
+    "gallery_cards":          "Gallery Cards",
+    "product_listing":        "Product Listing",
+}
+
+
+def canonicalize_ad_type(ad_type: str | None) -> str:
+    """
+    Map a raw ad_type value to its canonical display name.
+    Handles case differences, underscores, hyphens, etc.
+    Falls back to a cleaned-up version if not in the mapping.
+    """
+    if not ad_type:
+        return ""
+    key = ad_type.strip().lower().replace("-", "_").replace(" ", "_")
+    canonical = _AD_TYPE_CANONICAL.get(key)
+    if canonical:
+        return canonical
+    # Fallback: replace underscores/hyphens with spaces, title-case
+    return ad_type.replace("_", " ").replace("-", " ").strip()
+
+
 def type_label_for(ad_type: str | None) -> str:
     """
     Convert ad type to human-readable label.
-    Replaces underscores and hyphens with spaces, strips whitespace.
+    Uses canonical mapping for known types, falls back to simple cleanup.
     """
-    return (ad_type or "").replace("_", " ").replace("-", " ").strip()
+    return canonicalize_ad_type(ad_type)
 
 
 # Blocked brands - ad types and house ads that should never be counted as real brand ads
@@ -811,6 +852,32 @@ def find_image_file(retailer: str, client: str, req_relpath: str) -> tuple[Path 
 
     # Prefer exact; else first loose
     pick = exact_hits[0] if exact_hits else (loose_hits[0] if loose_hits else None)
+
+    # 4) Brand+timestamp fuzzy match for corrupted filenames
+    #    Some JSON image_paths have extra brand names injected into the middle
+    #    (e.g. "magic_spoon_optimum_nutritino" instead of "magic_spoon").
+    #    Match on retailer__brand prefix + D<date>_T<time>_<idx>.ext suffix.
+    if not pick:
+        import re
+        ts_match = re.search(r'(D\d{4}-\d{2}-\d{2}_T\d{2}-\d{2}\.\d{2}_\d+\.\w+)$', req_name)
+        name_parts = req_name.split('__')
+        if ts_match and len(name_parts) >= 2:
+            ts_suffix = ts_match.group(1).lower()
+            brand_prefix = (name_parts[0] + '__' + name_parts[1]).lower()
+            req_folder = Path(req_relpath).parts[0].lower() if len(Path(req_relpath).parts) > 1 else ""
+            for d in scan_dirs:
+                if req_folder and d.name.lower() != req_folder:
+                    continue
+                for f in d.glob("*"):
+                    if not f.is_file():
+                        continue
+                    fn = f.name.lower()
+                    if fn.startswith(brand_prefix) and fn.endswith(ts_suffix):
+                        pick = f
+                        break
+                if pick:
+                    break
+
     if pick:
         # Build relative path from client root (folder/filename)
         try:
@@ -1656,9 +1723,12 @@ def api_ads_count():
     advertiser_in = request.args.get("advertiser") or None
     types_filter = (request.args.get("types") or "").strip()
 
+    brands_filter_raw = (request.args.get("brands") or "").strip()
+
     # DB fast path: single SQL COUNT for any filter combination
     if _USE_DB:
         types_list = [t.strip().lower() for t in types_filter.split(',') if t.strip()] if types_filter else None
+        brands_list = [b.strip() for b in brands_filter_raw.split(',') if b.strip()] if brands_filter_raw else None
         total = db_count_ads(
             retailer=retailer,
             clients=clients if clients else None,
@@ -1666,6 +1736,7 @@ def api_ads_count():
             start=start,
             end=end,
             brand=advertiser_in,
+            brands=brands_list,
             ad_types=types_list,
         )
         print(f"[ads-count] DB: {total} ads for {retailer} (types={types_filter or 'all'}, brand={advertiser_in or 'all'})")
@@ -1808,6 +1879,13 @@ def api_ads_types():
             ad_types.update(brands_by_type.keys())
         types_list = sorted(ad_types)
     
+    # Canonicalize and deduplicate ad type names
+    canonical_set = set()
+    for t in types_list:
+        canonical_set.add(canonicalize_ad_type(t))
+    canonical_set.discard("")
+    types_list = sorted(canonical_set)
+
     result = {
         "types": types_list,
         "retailer": retailer,
@@ -1908,6 +1986,7 @@ def api_ads_cards():
         from time import perf_counter as _pc
         _t0 = _pc()
         types_list_db = [t.strip().lower() for t in types_filter.split(',') if t.strip()] if types_filter else None
+        brands_list_db = [b.strip() for b in brands_filter.split(',') if b.strip()] if brands_filter else None
         db_result = db_query_ads(
             retailer=retailer,
             clients=clients if clients else None,
@@ -1915,6 +1994,7 @@ def api_ads_cards():
             start=start_date if start_date else None,
             end=end_date if end_date else None,
             brand=advertiser_raw if advertiser_raw else None,
+            brands=brands_list_db,
             ad_types=types_list_db,
             page=page,
             page_size=page_size,
@@ -1951,7 +2031,7 @@ def api_ads_cards():
             for idx, ad_row in group:
                 file_retailer = ad_row["retailer"]
                 file_client = ad_row["client"]
-                ad_type = ad_row.get("ad_type") or "Main"
+                ad_type = canonicalize_ad_type(ad_row.get("ad_type") or "Main")
                 brand = ad_row.get("brand") or "Unknown"
                 slot = ad_row.get("slot")
                 message = ad_row.get("title") or ad_row.get("message") or ad_row.get("description") or ""
@@ -1962,14 +2042,31 @@ def api_ads_cards():
                 if data:
                     all_ads = data.get("ads") or []
                     oid = ad_row.get("original_id")
-                    if oid is not None and isinstance(oid, int) and 0 <= oid < len(all_ads):
-                        orig_ad = all_ads[oid]
+                    # Try integer index first
+                    int_idx = None
+                    if oid is not None:
+                        if isinstance(oid, int):
+                            int_idx = oid
+                        elif isinstance(oid, str):
+                            # Parse trailing number from IDs like 'walmart-20260213092946-2'
+                            # These IDs are 1-indexed, so subtract 1 for array index
+                            parts = oid.rsplit('-', 1)
+                            if len(parts) == 2 and parts[1].isdigit():
+                                int_idx = int(parts[1]) - 1
+                            elif oid.isdigit():
+                                int_idx = int(oid)
+                    if int_idx is not None and 0 <= int_idx < len(all_ads):
+                        orig_ad = all_ads[int_idx]
                     else:
-                        # Fallback: match by brand + ad_type
+                        # Fallback: match by brand + ad_type (case-insensitive, partial brand match)
                         for a in all_ads:
                             ab = (a.get("brand") or a.get("advertiser") or "").strip()
                             at = (a.get("type") or a.get("ad_type") or "")
-                            if ab.lower() == brand.lower() and at.lower() == ad_type.lower():
+                            if at.lower() == ad_type.lower() and (
+                                ab.lower() == brand.lower() or
+                                ab.lower() in brand.lower() or
+                                brand.lower() in ab.lower()
+                            ):
                                 orig_ad = a
                                 break
 
@@ -1995,10 +2092,24 @@ def api_ads_cards():
                             else:
                                 slot = "top"
                 else:
-                    # No JSON match — use DB fields directly
+                    # No JSON match — build a synthetic ad dict from DB fields
+                    # and use build_media_urls_for_ad for proper URL construction
+                    synthetic_ad = {}
                     img_path = ad_row.get("image_path") or ""
-                    image_url = f"/api/image/{img_path}" if img_path else ""
-                    video_url_api = ad_row.get("video_url") or ad_row.get("video_path") or None
+                    vid_path = ad_row.get("video_path") or ""
+                    vid_url = ad_row.get("video_url") or ""
+                    raw_img_url = ad_row.get("image_url") or ""
+                    if img_path:
+                        synthetic_ad["image_path"] = img_path
+                    if vid_path:
+                        synthetic_ad["video_path"] = vid_path
+                    if vid_url:
+                        synthetic_ad["video_url"] = vid_url
+                    if raw_img_url:
+                        synthetic_ad["image_url"] = raw_img_url
+                    media_urls = build_media_urls_for_ad(file_retailer, file_client, synthetic_ad)
+                    image_url = media_urls.get("image_url", "")
+                    video_url_api = media_urls.get("video_url")
                     video_overlay = None
                     card_format = None
                     dimensions = None
@@ -2095,8 +2206,8 @@ def api_ads_cards():
                         if not _matches_ad_type_filter(ad, types_list):
                             continue  # Skip this ad, doesn't match the types filter
 
-                        # Extract ad type for card data
-                        ad_type = ad.get("type") or ad.get("ad_type") or "Main"
+                        # Extract ad type for card data (canonicalized)
+                        ad_type = canonicalize_ad_type(ad.get("type") or ad.get("ad_type") or "Main")
 
                         # Build card (simplified, no complex brand extraction)
                         brand = ad.get("brand") or "Unknown"
@@ -2276,8 +2387,8 @@ def api_ads_cards():
             if not _matches_ad_type_filter(ad, types_list):
                 continue  # Skip this ad, doesn't match filter
 
-            # Extract ad type for card data
-            ad_type = ad.get("type") or ad.get("ad_type") or "Main"
+            # Extract ad type for card data (canonicalized)
+            ad_type = canonicalize_ad_type(ad.get("type") or ad.get("ad_type") or "Main")
 
             # Extract advertisers array (preferred) or fallback to brand field
             advertisers = ad.get("advertisers") or []
@@ -2863,7 +2974,7 @@ def api_ads_cards():
                     "retailer": retailer,
                     "client": file_client,
                     "keyword": data.get("keyword") or data.get("search_term"),
-                    "ad_type": ad.get("type") or ad.get("ad_type"),
+                    "ad_type": canonicalize_ad_type(ad.get("type") or ad.get("ad_type")),
                     "brand": brand,
                     "advertisers": advertisers,  # NEW: array of advertisers for filtering
                     "message": message,
@@ -3550,6 +3661,42 @@ def api_timeline():
                 timestamps.append(run_ts)
     
     return jsonify({"timestamps": timestamps})
+
+
+@app.route("/api/flag-review", methods=["POST"])
+def api_flag_review():
+    """Flag an ad or brand for re-review.
+    Body JSON: { "type": "ad"|"brand", "ad_id": int (for ad), "brand_name": str (for brand), "reason": str (optional) }
+    """
+    if not _USE_DB:
+        return jsonify({"error": "Database not available"}), 503
+
+    data = request.get_json(silent=True) or {}
+    flag_type = (data.get("type") or "").strip()
+    reason = data.get("reason")
+
+    if flag_type == "ad":
+        ad_id = data.get("ad_id")
+        if not ad_id:
+            return jsonify({"error": "ad_id required for ad flags"}), 400
+        ok = db_flag_ad_for_review(int(ad_id), reason)
+        if ok:
+            print(f"[flag-review] Ad {ad_id} flagged for review")
+            return jsonify({"ok": True, "flag_type": "ad", "ad_id": ad_id})
+        return jsonify({"error": "Failed to flag ad"}), 500
+
+    elif flag_type == "brand":
+        brand_name = (data.get("brand_name") or "").strip()
+        if not brand_name:
+            return jsonify({"error": "brand_name required for brand flags"}), 400
+        ok = db_flag_brand_for_review(brand_name, reason)
+        if ok:
+            print(f"[flag-review] Brand '{brand_name}' flagged for review")
+            return jsonify({"ok": True, "flag_type": "brand", "brand_name": brand_name})
+        return jsonify({"error": "Failed to flag brand"}), 500
+
+    return jsonify({"error": "type must be 'ad' or 'brand'"}), 400
+
 
 @app.route("/api/brand-details", methods=["GET"])
 def api_brand_details():

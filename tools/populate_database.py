@@ -458,6 +458,75 @@ def populate_runs(conn):
                     print(f"  Error inserting ad: {e}")
                 continue
 
+        # Insert slots[] — the full ordered page view including SPs, PLs, etc.
+        # Each slot becomes an ads row; slots already covered by ads[] are skipped
+        # via the original_id dedup key "slot:<run_id_val>:<slot_idx>".
+        slots_list = data.get("slots", [])
+        if isinstance(slots_list, list):
+            for slot_entry in slots_list:
+                if not isinstance(slot_entry, dict):
+                    continue
+                slot_idx = slot_entry.get("slot")
+                if slot_idx is None:
+                    continue
+
+                # Stable dedup key for this slot within this run
+                slot_original_id = f"slot:{run_id_val}:{slot_idx}"
+
+                # Skip if already in DB (e.g. from ads[] pass above)
+                cur.execute(
+                    "SELECT id FROM ads WHERE run_id=%s AND original_id=%s LIMIT 1",
+                    (db_run_id, slot_original_id),
+                )
+                if cur.fetchone():
+                    continue
+
+                ad_type = slot_entry.get("ad_type", "Unknown")
+                brand = slot_entry.get("brand") or None
+                product_id = slot_entry.get("product_id") or None
+
+                slot_metadata = {
+                    "slot_within_type":    slot_entry.get("slot_within_type"),
+                    "total_slots":         slot_entry.get("total_slots"),
+                    "total_slots_of_type": slot_entry.get("total_slots_of_type"),
+                    "is_sponsored":        slot_entry.get("is_sponsored"),
+                    "matched_ad_index":    slot_entry.get("matched_ad_index"),
+                }
+                if slot_entry.get("slot_location"):
+                    slot_metadata["slot_location"] = slot_entry["slot_location"]
+                if product_id:
+                    slot_metadata["product_id"] = product_id
+
+                try:
+                    cur.execute(
+                        """INSERT INTO ads
+                           (run_id, original_id, ad_type, ad_subtype, slot,
+                            brand, title, href,
+                            image_url, image_path,
+                            metadata)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        (
+                            db_run_id,
+                            slot_original_id,
+                            ad_type,
+                            "sponsored_product" if slot_entry.get("is_sponsored") else "organic_product",
+                            slot_idx,
+                            brand,
+                            slot_entry.get("title") or None,
+                            slot_entry.get("href") or None,
+                            slot_entry.get("image_url") or None,
+                            slot_entry.get("image_path") or None,
+                            json.dumps(slot_metadata),
+                        ),
+                    )
+                    ad_count += 1
+                except Exception as e:
+                    conn.rollback()
+                    error_count += 1
+                    if error_count <= 10:
+                        print(f"  Error inserting slot ad: {e}")
+                    continue
+
         # Commit every batch_size files
         if run_count % batch_size == 0:
             conn.commit()

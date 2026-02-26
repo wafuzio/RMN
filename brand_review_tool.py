@@ -31,6 +31,14 @@ except ImportError:
     IMAGEHASH_AVAILABLE = False
     print("[WARN] imagehash not available - install with: pip install imagehash")
 
+# Import OCR for brand name detection from ad images
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+    print("[WARN] pytesseract not available - install with: pip install pytesseract")
+
 # Import brand logo database
 try:
     from brand_logo_database import BrandLogoDatabase
@@ -42,7 +50,7 @@ except ImportError:
 class BrandReviewTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("Brand Review Tool - Correct Unknown Brands")
+        self.root.title("Unknown Ad Review")
         self.root.geometry("1200x900")
         
         # Data
@@ -1240,6 +1248,150 @@ class BrandReviewTool:
         
         return "\n".join(details)
     
+    def ocr_brand_suggestions(self, image_path):
+        """Extract possible brand names from an ad image using OCR.
+        
+        Strategy:
+        1. Run pytesseract with bounding-box data to get text + font height
+        2. Large text (top 20% tallest) → likely the brand name
+        3. Smaller text that looks like a product title → first 1-2 words
+        4. Copyright/trademark patterns (©, ®, ™)
+        
+        Returns a list of (candidate_name, source_label) tuples, best first.
+        """
+        if not PYTESSERACT_AVAILABLE:
+            return []
+        if not image_path or not os.path.exists(image_path):
+            return []
+        
+        try:
+            from PIL import ImageEnhance
+            img = Image.open(image_path)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Enhance contrast for better OCR
+            img = ImageEnhance.Contrast(img).enhance(1.5)
+            
+            # Get word-level data with bounding boxes
+            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+            
+            img_w, img_h = img.size
+            
+            # Collect valid text blocks with their heights
+            blocks = []
+            n = len(data['text'])
+            for i in range(n):
+                conf = int(data['conf'][i])
+                text = (data['text'][i] or '').strip()
+                h = int(data['height'][i])
+                top = int(data['top'][i])
+                left = int(data['left'][i])
+                
+                # Skip low-confidence or empty/tiny text
+                if conf < 40 or not text or len(text) < 2 or h < 5:
+                    continue
+                blocks.append({
+                    'text': text,
+                    'height': h,
+                    'top': top,
+                    'left': left,
+                    'conf': conf,
+                })
+            
+            if not blocks:
+                return []
+            
+            # Sort by height descending — largest text first
+            blocks.sort(key=lambda b: b['height'], reverse=True)
+            max_h = blocks[0]['height']
+            
+            candidates = []
+            seen_lower = set()
+            
+            # Generic words to skip
+            skip_words = {
+                'shop', 'now', 'save', 'buy', 'get', 'free', 'new', 'the',
+                'and', 'for', 'with', 'from', 'more', 'best', 'sale', 'off',
+                'deal', 'today', 'click', 'here', 'learn', 'see', 'view',
+                'explore', 'sponsored', 'brand', 'ad', 'advertisement',
+                'power', 'protect', 'must', 'have', 'accessories',
+            }
+            
+            def _is_brand_candidate(text):
+                """Check if text looks like a brand name (not generic)."""
+                low = text.lower()
+                if low in skip_words:
+                    return False
+                # Skip pure numbers or very short
+                if text.isdigit() or len(text) < 2:
+                    return False
+                # Skip URLs
+                if '.' in text and ('www' in low or 'com' in low or 'http' in low):
+                    return False
+                return True
+            
+            # --- Strategy 1: Large prominent text (height >= 60% of max) ---
+            # These are typically brand names displayed prominently
+            large_texts = [b for b in blocks if b['height'] >= max_h * 0.6]
+            # Group adjacent large text blocks into phrases (same line)
+            large_phrases = []
+            for b in large_texts:
+                if _is_brand_candidate(b['text']):
+                    # Check if this can be merged with previous (same vertical position)
+                    if large_phrases and abs(b['top'] - large_phrases[-1]['top']) < max_h * 0.3:
+                        large_phrases[-1]['text'] += ' ' + b['text']
+                    else:
+                        large_phrases.append({'text': b['text'], 'top': b['top'], 'height': b['height']})
+            
+            for phrase in large_phrases:
+                text = phrase['text'].strip()
+                if text and len(text) >= 2 and text.lower() not in seen_lower:
+                    # Title-case if all-caps
+                    display = text.title() if text.isupper() else text
+                    seen_lower.add(display.lower())
+                    candidates.append((display, "OCR-large"))
+            
+            # --- Strategy 2: Top-left text (brand logo area, top 30% / left 40%) ---
+            top_left = [b for b in blocks 
+                        if b['top'] < img_h * 0.35 and b['left'] < img_w * 0.45
+                        and _is_brand_candidate(b['text'])]
+            # Sort by top then left (reading order)
+            top_left.sort(key=lambda b: (b['top'], b['left']))
+            if top_left:
+                # Take first 1-2 words from top-left area
+                phrase = ' '.join(b['text'] for b in top_left[:2]).strip()
+                if phrase and phrase.lower() not in seen_lower:
+                    display = phrase.title() if phrase.isupper() else phrase
+                    seen_lower.add(display.lower())
+                    candidates.append((display, "OCR-topleft"))
+            
+            # --- Strategy 3: Copyright/trademark patterns ---
+            full_text = ' '.join(b['text'] for b in blocks)
+            # ©2025 Brand Name
+            for m in re.finditer(r'©\s*\d{4}\s+([A-Z][A-Za-z0-9&\s\'\-]+?)(?:,|\s+LLC|\s+Inc|$)', full_text):
+                brand = m.group(1).strip()
+                brand = re.sub(r'\s+(LLC|Inc|Corp|Co|Foods).*$', '', brand, flags=re.IGNORECASE).strip()
+                if brand and len(brand) > 2 and brand.lower() not in seen_lower:
+                    seen_lower.add(brand.lower())
+                    candidates.append((brand, "OCR-copyright"))
+            # Brand® or Brand™
+            for m in re.finditer(r'([A-Z][A-Za-z0-9&\'\-]+)[®™]', full_text):
+                brand = m.group(1).strip()
+                if brand and len(brand) > 2 and brand.lower() not in seen_lower:
+                    seen_lower.add(brand.lower())
+                    candidates.append((brand, "OCR-trademark"))
+            
+            print(f"[OCR] {len(blocks)} text blocks, {len(candidates)} brand candidates from {image_path}")
+            for c, src in candidates:
+                print(f"  [{src}] {c}")
+            
+            return candidates
+            
+        except Exception as e:
+            print(f"[OCR] Error: {e}")
+            return []
+    
     def compute_image_fingerprint(self, image_path):
         """Compute multiple image hashes and color histogram for robust similarity matching.
         
@@ -1638,6 +1790,12 @@ class BrandReviewTool:
         # The capture script now handles brand extraction at scrape time via
         # iframe piercing + positional matching (_try_hybrid_extraction).
         
+        # --- Source 6: OCR from ad image (large text / top-left text / trademarks) ---
+        if hasattr(self, 'current_image_path') and self.current_image_path:
+            ocr_candidates = self.ocr_brand_suggestions(self.current_image_path)
+            for candidate_name, source in ocr_candidates:
+                _add(candidate_name)
+        
         # Sort: verified first, then alphabetical
         ranked.sort(key=lambda x: (not x[2], x[0]))
         
@@ -1846,6 +2004,10 @@ class BrandReviewTool:
                     continue
                 
                 if logo_brand.lower() not in existing_names:
+                    # Also check via canonicalize (catches apostrophe/accent variants)
+                    from core.brands import canonicalize as _canon
+                    if _canon(logo_brand, mark_ambiguous=False):
+                        continue  # Already in lexicon under a normalized variant
                     # Add to lexicon
                     lexicon_brands.append({
                         'name': logo_brand,
@@ -1881,12 +2043,23 @@ class BrandReviewTool:
                 brand['synonyms'].remove(corrected_brand)
                 print(f"[LEXICON] Removed '{corrected_brand}' from synonyms of '{brand['name']}' (promoting to main brand)")
         
-        # Check if brand already exists as a main entry
+        # Check if brand already exists as a main entry (exact or normalized match)
         existing_brand = None
         for brand in brands:
             if brand['name'].lower() == corrected_brand.lower():
                 existing_brand = brand
                 break
+        
+        # Fallback: use canonicalize to catch apostrophe/accent/hyphen variants
+        if not existing_brand:
+            from core.brands import canonicalize as _canon, _normalize_brand
+            canon = _canon(corrected_brand, mark_ambiguous=False)
+            if canon:
+                for brand in brands:
+                    if brand['name'].lower() == canon.lower():
+                        existing_brand = brand
+                        print(f"[LEXICON] Matched '{corrected_brand}' to existing '{brand['name']}' via normalization")
+                        break
         
         # Collect synonyms to add
         synonyms_to_add = []

@@ -10,7 +10,14 @@ set -euo pipefail
 
 # Resolve project root (directory of this script)
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON="${PYTHON_EXEC:-python3}"
+# Prefer .venv Python for all dependencies (cv2, etc.)
+if [[ -n "${PYTHON_EXEC:-}" ]]; then
+  PYTHON="$PYTHON_EXEC"
+elif [[ -x "$ROOT/.venv/bin/python3" ]]; then
+  PYTHON="$ROOT/.venv/bin/python3"
+else
+  PYTHON="python3"
+fi
 
 # SCRAPER_HOME controls where output/ and logs/ live.
 # Default it to the project root if not set.

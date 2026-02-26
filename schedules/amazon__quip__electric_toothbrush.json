@@ -1,0 +1,27 @@
+{
+  "id": "amazon_quip_electric_toothbrush_79604446",
+  "retailer": "amazon",
+  "client": "quip",
+  "keywords": [
+    "electric toothbrush",
+    "smart toothbrush"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "04:50",
+    "12:00",
+    "17:00"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2026-02-09T17:39:09Z",
+  "updated_at": "2026-02-09T17:39:09Z"
+}

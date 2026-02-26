@@ -143,6 +143,7 @@ Each retailer outputs different JSON structures, requiring retailer-specific cod
   "keyword": "search term",
   "timestamp": "2025-10-27T02:56:54Z",
   "run_id": "20251026215556",
+  "screenshot_path": "../../Main/walmart__main__client__keyword__D2025-10-26_T21-55.56_1.png",
   "ads": [
     {
       "id": "walmart-20251026215556-1",
@@ -160,6 +161,39 @@ Each retailer outputs different JSON structures, requiring retailer-specific cod
         "slot": 0
       }
     }
+  ],
+  "slots": [
+    {
+      "slot": 0,
+      "slot_within_type": 0,
+      "total_slots": 58,
+      "total_slots_of_type": 1,
+      "ad_type": "Sponsored_Display",
+      "is_sponsored": true,
+      "product_id": "",
+      "title": "",
+      "price": "",
+      "image_url": "",
+      "href": "",
+      "brand": null,
+      "matched_ad_index": null,
+      "slot_location": "top"
+    },
+    {
+      "slot": 1,
+      "slot_within_type": 0,
+      "total_slots": 58,
+      "total_slots_of_type": 2,
+      "ad_type": "SBA",
+      "is_sponsored": true,
+      "product_id": "9508907018",
+      "title": "",
+      "price": "$4.97",
+      "image_url": "https://...",
+      "href": "https://...",
+      "brand": "Trolli",
+      "matched_ad_index": 0
+    }
   ]
 }
 ```
@@ -172,6 +206,7 @@ Each retailer outputs different JSON structures, requiring retailer-specific cod
   keyword: string;            // Search term
   timestamp: string;          // ISO 8601 with timezone (Z or +HH:MM)
   run_id: string;             // 14-digit timestamp (YYYYMMDDHHMMSS)
+  screenshot_path: string;    // Relative path to Main page screenshot
   ads: Array<{
     id: string;               // Format: "<retailer>-<run_id>-<index>"
     type: string;             // Canonical ad type (SBA, SBV, Tile_Takeover, TOA, etc.)
@@ -188,6 +223,22 @@ Each retailer outputs different JSON structures, requiring retailer-specific cod
       slot?: number;          // Grid position/index
       [key: string]: any;     // Retailer-specific metadata
     };
+  }>;
+  slots: Array<{              // Full-page slot map (single source of truth)
+    slot: number;             // 0-based global page position
+    slot_within_type: number; // 0-based position within ads of the same type
+    total_slots: number;      // Total number of slots on the page
+    total_slots_of_type: number; // Total slots of this ad type on the page
+    ad_type: string;          // Sponsored_Display, SBA, SBV, Sponsored_Product, Product_Listing, Tile_Takeover, etc.
+    is_sponsored: boolean;    // true for paid ads, false for organic
+    product_id: string;       // Retailer-specific product ID (item_id, ASIN, TCIN, UPC)
+    title: string;
+    price: string;
+    image_url: string;
+    href: string;
+    brand: string | null;
+    matched_ad_index: number | null; // Index into ads[] if matched, null otherwise
+    slot_location?: string;   // For Sponsored_Display: "top", "bottom", "left_rail"
   }>;
 }
 ```

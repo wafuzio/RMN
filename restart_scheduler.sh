@@ -45,4 +45,11 @@ echo ""
 echo "🚀 Starting fresh scheduler daemon..."
 echo "   (Press Ctrl+C to stop)"
 echo ""
-python3 scheduler_entry.py
+# Use .venv Python to ensure all dependencies (cv2, etc.) are available
+VENV_PYTHON="$(dirname "$0")/.venv/bin/python3"
+if [ -x "$VENV_PYTHON" ]; then
+    "$VENV_PYTHON" scheduler_entry.py
+else
+    echo "⚠️  .venv not found, falling back to system python3"
+    python3 scheduler_entry.py
+fi
