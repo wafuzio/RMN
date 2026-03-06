@@ -27,6 +27,15 @@ sys.path.insert(0, str(Path(__file__).parent))
 from tools.tiktok_captcha_solver import solve_captcha, download_image, find_slot_position
 
 
+def load_credentials():
+    """Load TikTok Shop credentials from config file."""
+    cred_file = os.path.join(os.path.dirname(__file__), "config", "tiktokshop_credentials.json")
+    if os.path.exists(cred_file):
+        with open(cred_file, 'r') as f:
+            return json.load(f)
+    return None
+
+
 def now_iso_z() -> str:
     """Return current timestamp in ISO 8601 format (local time)."""
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
@@ -412,12 +421,13 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
             if is_login_redirect:
                 print(f"   ⚠️ Redirected to login page: {current_url}")
                 print("   ⚠️ Not logged in — TikTok requires authentication")
+                
+                # Manual login workflow
+                # TODO: Investigate cookie persistence to avoid re-login on each run
                 print("\n" + "="*60)
                 print("   🔐 PLEASE LOG IN TO TIKTOK SHOP")
-                print("   1. Complete the login process in the browser window")
-                print("   2. Wait for the search results page to load")
-                print("   3. CLOSE THE BROWSER WINDOW when ready")
-                print("   (The scraper will wait indefinitely)")
+                print("   Complete the login in the browser window")
+                print("   Waiting up to 5 minutes for login...")
                 print("="*60 + "\n")
                 
                 try:
@@ -425,32 +435,37 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
                 except Exception:
                     pass
                 
-                # Wait indefinitely for user to close the window
-                try:
-                    while True:
-                        await asyncio.sleep(1)
-                        # Check if page is still alive
-                        try:
-                            _ = page.url
-                        except Exception:
-                            # Page/context closed by user
-                            print("   ✅ Browser closed by user - assuming login complete")
+                # Wait for user to complete login (check URL change)
+                login_success = False
+                deadline = time.time() + 300  # 5 minutes
+                last_report = 0.0
+                
+                while time.time() < deadline:
+                    remaining = int(deadline - time.time())
+                    now = time.time()
+                    
+                    if now - last_report >= 15:
+                        print(f"   ⏳ Waiting for login... ({remaining}s remaining)")
+                        last_report = now
+                    
+                    # Check if we've left the login page
+                    try:
+                        current_url = page.url
+                        if '/login' not in current_url:
+                            print("   ✅ Login completed!")
+                            login_success = True
                             break
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
+                    
+                    await asyncio.sleep(2)
                 
-                # User closed browser - relaunch and navigate to search
-                print(f"   ↻ Relaunching browser and navigating to search...")
-                await context.close()
+                if not login_success:
+                    print("   ❌ Login timed out after 5 minutes")
+                    await context.close()
+                    return False
                 
-                # Relaunch with same profile
-                context = await browser.new_context(
-                    user_data_dir=profile_dir,
-                    viewport={'width': 1912, 'height': 1417},
-                    locale='en-US',
-                )
-                page = await context.new_page()
-                await page.goto(shop_url, wait_until='domcontentloaded', timeout=30000)
+                # Already on search page after login redirect
                 await asyncio.sleep(3)
             else:
                 # Check for "Log in" button in header as secondary check

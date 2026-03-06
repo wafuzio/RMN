@@ -19,6 +19,10 @@ file_list.log
 filtered_file_list.log
 debug.log
 scraper_subprocess.log
+# Credentials and sensitive config
+service_account.json
+cookies_*.json
+config/tiktokshop_credentials.json
 profiles/
 
 # macOS
