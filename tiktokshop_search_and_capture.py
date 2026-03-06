@@ -357,23 +357,40 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
     
     try:
         async with async_playwright() as p:
-            # Launch with persistent context
+            # Launch with persistent context using stealth settings
+            # Use real Chrome to avoid Google OAuth detection
             context = await p.chromium.launch_persistent_context(
                 user_data_dir=profile_dir,
                 headless=False,
+                channel='chrome',  # Use real Chrome instead of Chromium
                 viewport={'width': 1920, 'height': 1080},
                 locale='en-US',
+                args=[
+                    '--disable-blink-features=AutomationControlled',  # Hide automation
+                    '--disable-dev-shm-usage',
+                    '--disable-web-security',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--no-sandbox',  # Required for Playwright, suppresses warning
+                ],
+                ignore_default_args=['--enable-automation'],  # Remove automation flag
             )
             
             page = context.pages[0] if context.pages else await context.new_page()
+            
+            # Override navigator.webdriver to hide automation
+            await page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+            """)
             
             # Navigate to TikTok Shop
             if keyword.lower() in ['main', 'home', '']:
                 # Just capture main page
                 shop_url = 'https://www.tiktok.com/shop'
             else:
-                # Search for keyword
-                shop_url = f'https://www.tiktok.com/shop/search?q={quote_plus(keyword)}'
+                # Search for keyword (updated URL structure: /shop/s instead of /shop/search)
+                shop_url = f'https://www.tiktok.com/shop/s?q={quote_plus(keyword)}'
             
             print(f"   URL: {shop_url}")
             
@@ -385,26 +402,85 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
                 await context.close()
                 return False
             
-            # Login state check — TikTok shows "Log in" div when not authenticated
-            try:
-                _tt_login_vis = await page.locator('div:has-text("Log in"):not(:has(*:has-text("Log in")))').first.is_visible(timeout=2000)
-                if _tt_login_vis:
-                    print("   ⚠️ Not logged in — 'Log in' button visible")
-                    try:
-                        from utils.profile_health import prompt_relogin_async
-                        _relogged = await prompt_relogin_async(page, "tiktokshop", keyword)
-                        if not _relogged:
-                            from utils.profile_health import record_login_outcome
-                            record_login_outcome("tiktokshop", keyword, logged_in=False)
-                    except Exception:
-                        pass
-                else:
-                    print("   ✅ Logged-in session detected")
-            except Exception:
-                pass
+            # Wait for any redirects to complete
+            await asyncio.sleep(3)
+            
+            # Login state check — Check URL for login redirect AND login button
+            current_url = page.url
+            is_login_redirect = '/login' in current_url or 'waf_force_login' in current_url
+            
+            if is_login_redirect:
+                print(f"   ⚠️ Redirected to login page: {current_url}")
+                print("   ⚠️ Not logged in — TikTok requires authentication")
+                print("\n" + "="*60)
+                print("   🔐 PLEASE LOG IN TO TIKTOK SHOP")
+                print("   1. Complete the login process in the browser window")
+                print("   2. Wait for the search results page to load")
+                print("   3. CLOSE THE BROWSER WINDOW when ready")
+                print("   (The scraper will wait indefinitely)")
+                print("="*60 + "\n")
+                
+                try:
+                    await page.bring_to_front()
+                except Exception:
+                    pass
+                
+                # Wait indefinitely for user to close the window
+                try:
+                    while True:
+                        await asyncio.sleep(1)
+                        # Check if page is still alive
+                        try:
+                            _ = page.url
+                        except Exception:
+                            # Page/context closed by user
+                            print("   ✅ Browser closed by user - assuming login complete")
+                            break
+                except Exception:
+                    pass
+                
+                # User closed browser - relaunch and navigate to search
+                print(f"   ↻ Relaunching browser and navigating to search...")
+                await context.close()
+                
+                # Relaunch with same profile
+                context = await browser.new_context(
+                    user_data_dir=profile_dir,
+                    viewport={'width': 1912, 'height': 1417},
+                    locale='en-US',
+                )
+                page = await context.new_page()
+                await page.goto(shop_url, wait_until='domcontentloaded', timeout=30000)
+                await asyncio.sleep(3)
+            else:
+                # Check for "Log in" button in header as secondary check
+                try:
+                    login_button = page.locator('button:has-text("Log in"), a:has-text("Log in")').first
+                    is_login_visible = await login_button.is_visible(timeout=2000)
+                    
+                    if is_login_visible:
+                        print("   ⚠️ Not logged in — 'Log in' button visible")
+                        try:
+                            from utils.profile_health import prompt_relogin_async
+                            _relogged = await prompt_relogin_async(page, "tiktokshop", keyword, timeout_sec=600)
+                            if not _relogged:
+                                from utils.profile_health import record_login_outcome
+                                record_login_outcome("tiktokshop", keyword, logged_in=False)
+                                print("   ❌ Login required but user declined. Exiting.")
+                                await context.close()
+                                return False
+                        except Exception as e:
+                            print(f"   ⚠️ Re-login prompt failed: {e}")
+                            await context.close()
+                            return False
+                    else:
+                        print("   ✅ Logged-in session detected")
+                except Exception as e:
+                    print(f"   ⚠️ Could not verify login status: {e}")
+                    print("   ⚠️ Proceeding anyway - results may be limited if not logged in")
 
             # Wait for content to load
-            await asyncio.sleep(3)
+            await asyncio.sleep(2)
             
             # Scroll to load more content
             print("[SCROLL] Loading more content...")
