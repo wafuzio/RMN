@@ -25,6 +25,7 @@ from playwright.async_api import async_playwright, TimeoutError as PlaywrightTim
 # Import CAPTCHA solver
 sys.path.insert(0, str(Path(__file__).parent))
 from tools.tiktok_captcha_solver import solve_captcha, download_image, find_slot_position
+from utils.tiktokshop_diagnostics import TikTokShopDiagnostics
 
 
 def load_credentials():
@@ -364,6 +365,10 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
     print(f"   Profile: {profile_dir}")
     print(f"   Output: {output_dir}")
     
+    # Initialize diagnostics
+    diag = TikTokShopDiagnostics(output_dir, keyword)
+    diag.log("init", keyword=keyword, profile=profile_dir)
+    
     try:
         async with async_playwright() as p:
             # Launch with persistent context using stealth settings
@@ -402,8 +407,10 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
                 shop_url = f'https://www.tiktok.com/shop/s?q={quote_plus(keyword)}'
             
             print(f"   URL: {shop_url}")
+            diag.log("navigate", url=shop_url)
             
             await page.goto(shop_url, wait_until='domcontentloaded', timeout=30000)
+            await diag.screenshot(page, "initial_page")
             
             # Check for and solve CAPTCHA
             if not await check_and_solve_captcha(page):
@@ -418,9 +425,14 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
             current_url = page.url
             is_login_redirect = '/login' in current_url or 'waf_force_login' in current_url
             
+            diag.log("login_check", current_url=current_url, is_login_redirect=is_login_redirect)
+            await diag.screenshot(page, "after_redirect_check")
+            
             if is_login_redirect:
                 print(f"   ⚠️ Redirected to login page: {current_url}")
                 print("   ⚠️ Not logged in — TikTok requires authentication")
+                diag.log("login_required", url=current_url)
+                await diag.save_html(page, "login_page")
                 
                 # Manual login workflow
                 # TODO: Investigate cookie persistence to avoid re-login on each run
@@ -446,6 +458,7 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
                     
                     if now - last_report >= 15:
                         print(f"   ⏳ Waiting for login... ({remaining}s remaining)")
+                        diag.log("login_wait", remaining_sec=remaining)
                         last_report = now
                     
                     # Check if we've left the login page
@@ -453,6 +466,8 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
                         current_url = page.url
                         if '/login' not in current_url:
                             print("   ✅ Login completed!")
+                            diag.log("login_success", final_url=current_url)
+                            await diag.screenshot(page, "after_login")
                             login_success = True
                             break
                     except Exception:
@@ -462,6 +477,10 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
                 
                 if not login_success:
                     print("   ❌ Login timed out after 5 minutes")
+                    diag.log("login_timeout")
+                    await diag.screenshot(page, "login_timeout")
+                    await diag.save_html(page, "login_timeout")
+                    diag.finalize(success=False, error="Login timeout")
                     await context.close()
                     return False
                 
@@ -496,24 +515,31 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
 
             # Wait for content to load
             await asyncio.sleep(2)
+            diag.log("content_loaded")
             
             # Scroll to load more content
             print("[SCROLL] Loading more content...")
-            for _ in range(3):
+            diag.log("scroll_start")
+            for i in range(3):
                 await page.evaluate("window.scrollBy(0, window.innerHeight)")
+                diag.log("scroll", iteration=i+1)
                 await asyncio.sleep(1)
             
             # Scroll back to top
             await page.evaluate("window.scrollTo(0, 0)")
             await asyncio.sleep(0.5)
+            await diag.screenshot(page, "after_scroll")
             
             # Capture main screenshot
             main_image_path = await capture_main_screenshot(page, output_dir, timestamp)
+            diag.log("main_screenshot", path=main_image_path)
             
             # Extract products
             print("[EXTRACT] Finding products...")
+            diag.log("extract_products_start")
             products = await extract_products(page)
             print(f"[EXTRACT] Found {len(products)} products")
+            diag.log("extract_products_complete", count=len(products))
             
             # Capture product screenshots
             if products:
@@ -521,8 +547,10 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
             
             # Extract featured brands
             print("[EXTRACT] Finding featured brands...")
+            diag.log("extract_brands_start")
             featured_brands = await extract_featured_brands(page)
             print(f"[EXTRACT] Found {len(featured_brands)} brand sections")
+            diag.log("extract_brands_complete", count=len(featured_brands))
             
             # Build result JSON
             result = {
@@ -552,6 +580,14 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
             
             await context.close()
             
+            # Finalize diagnostics
+            diag.finalize(
+                success=True,
+                products_found=len(products),
+                brands_found=len(featured_brands),
+                final_url=page.url
+            )
+            
             print(f"\n✅ Capture complete!")
             print(f"   Products: {len(products)}")
             print(f"   Brand sections: {len(featured_brands)}")
@@ -560,11 +596,15 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
             
     except PlaywrightTimeout as e:
         print(f"❌ Timeout: {e}")
+        diag.log("error", type="timeout", message=str(e))
+        diag.finalize(success=False, error="Timeout", error_message=str(e))
         return False
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback
         traceback.print_exc()
+        diag.log("error", type="exception", message=str(e))
+        diag.finalize(success=False, error="Exception", error_message=str(e))
         return False
 
 
