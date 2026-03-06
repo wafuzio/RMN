@@ -66,12 +66,18 @@ class WalmartAdapter(RetailerAdapter):
         return {'ok': ok, 'bail': bail, 'reason': bail_reason, 'result': result}
 
     def collect_pairs_for_run(self, ctx, run_start_ts: float):
-        """Collect JSON/HTML pairs from the most recent run."""
+        """Collect JSON/HTML pairs from the most recent run.
+
+        Walmart saves JSONs under runs/<timestamp>/run_results_*.json (date subdirs).
+        We glob both the flat pattern and one level deep to handle both layouts.
+        """
         import glob
-        # Use ctx.runs_dir if available, otherwise fall back to output_dir/runs
         runs = getattr(ctx, "runs_dir", None) or os.path.join(ctx.output_dir, "runs")
         print(f"[walmart adapter] collect_pairs_for_run: searching in {runs}")
-        jsons = sorted([p for p in glob.glob(os.path.join(runs, "run_results_*.json"))
+        # Match flat: runs/run_results_*.json AND subdir: runs/*/run_results_*.json
+        candidates = glob.glob(os.path.join(runs, "run_results_*.json")) + \
+                     glob.glob(os.path.join(runs, "*", "run_results_*.json"))
+        jsons = sorted([p for p in candidates
                         if os.path.getmtime(p) >= run_start_ts - 2],
                        key=os.path.getmtime)
         print(f"[walmart adapter] found {len(jsons)} run_results JSON files")

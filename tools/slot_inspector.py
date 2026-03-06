@@ -7,8 +7,8 @@ Right panel: slot table with type/brand/title per row
 
 Clicking a row in the slot table:
   - Highlights the row
-  - Scrolls the image to the approximate vertical position of that slot
-  - Shows a horizontal crosshair line on the image
+  - Finds the product thumbnail in the screenshot via template matching (cv2)
+  - Draws a bounding box around the matched region and scrolls to it
 
 Usage:
     python3 tools/slot_inspector.py <json_path>
@@ -23,9 +23,12 @@ import importlib
 import json
 import os
 import sys
+import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
+import cv2
+import numpy as np
 from PIL import Image, ImageTk, ImageDraw
 
 # ── Colour palette per ad type ─────────────────────────────────────────────
@@ -54,6 +57,89 @@ DEFAULT_COLOR = "#2c3e50"
 MATCHED_BG   = "#eafaf1"   # light green row bg  → matched
 UNMATCHED_BG = "#fdedec"   # light red row bg    → unmatched
 SELECTED_BG  = "#d5e8d4"   # selected row
+
+BOX_COLOR    = (255, 60, 60)   # RGB for bounding box
+BOX_WIDTH    = 4
+
+
+_MATCH_SS_MAX_W = 300   # downsample screenshot to this width for matching
+
+
+def _screenshot_to_gray(screenshot_img):
+    """Convert a PIL Image to a (downsampled) grayscale array + the scale factor used."""
+    orig_w = screenshot_img.width
+    scale  = _MATCH_SS_MAX_W / orig_w if orig_w > _MATCH_SS_MAX_W else 1.0
+    if scale < 1.0:
+        new_w = _MATCH_SS_MAX_W
+        new_h = int(screenshot_img.height * scale)
+        small = screenshot_img.resize((new_w, new_h), Image.LANCZOS)
+    else:
+        small = screenshot_img
+    arr  = np.array(small.convert("RGB"))
+    gray = cv2.cvtColor(cv2.cvtColor(arr, cv2.COLOR_RGB2BGR), cv2.COLOR_BGR2GRAY)
+    return gray, scale
+
+
+def _find_product_in_screenshot(ss_gray_scale, image_path, min_size=20):
+    """
+    Use cv2 template matching to locate a product thumbnail inside the
+    full-page screenshot.  Returns (x, y, w, h) in ORIGINAL-image pixels,
+    or None if not found / confidence too low.
+
+    ss_gray_scale: tuple (gray_array, scale) from _screenshot_to_gray.
+    image_path: path to the cached product image file.
+    """
+    if ss_gray_scale is None or not image_path or not os.path.exists(image_path):
+        return None
+
+    ss_gray, scale = ss_gray_scale
+
+    try:
+        prod = Image.open(image_path).convert("RGB")
+        prod_arr = np.array(prod)
+        prod_gray = cv2.cvtColor(
+            cv2.cvtColor(prod_arr, cv2.COLOR_RGB2BGR), cv2.COLOR_BGR2GRAY
+        )
+
+        orig_h, orig_w = prod_gray.shape[:2]
+        if orig_w == 0 or orig_h == 0:
+            return None
+
+        ss_h, ss_w = ss_gray.shape[:2]
+
+        # Target widths in downsampled-screenshot space (thumbnails ~40-120px at this scale)
+        min_tw = max(min_size, int(40 * scale))
+        max_tw = min(ss_w - 1, int(160 * scale))
+        step   = max(2, int(10 * scale))
+
+        best_val = -1.0
+        best_loc = None
+        best_wh  = None
+
+        for target_w in range(min_tw, max_tw, step):
+            target_h = int(orig_h * target_w / orig_w)
+            if target_h < min_size or target_h >= ss_h or target_w >= ss_w:
+                continue
+            tmpl = cv2.resize(prod_gray, (target_w, target_h), interpolation=cv2.INTER_AREA)
+            res  = cv2.matchTemplate(ss_gray, tmpl, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, max_loc = cv2.minMaxLoc(res)
+            if max_val > best_val:
+                best_val = max_val
+                best_loc = max_loc
+                best_wh  = (target_w, target_h)
+
+        if best_val < 0.55 or best_loc is None:
+            return None
+
+        # Map back to original-image pixel coordinates
+        x = int(best_loc[0] / scale)
+        y = int(best_loc[1] / scale)
+        w = int(best_wh[0]  / scale)
+        h = int(best_wh[1]  / scale)
+        return (x, y, w, h)
+
+    except Exception:
+        return None
 
 
 def type_color(ad_type):
@@ -132,6 +218,13 @@ def load_slots(json_path):
     retailer = _retailer_from_json(data, json_path)
     json_ads = data.get("ads", [])
 
+    # --- Pre-load image store for path lookups ---
+    try:
+        sys.path.insert(0, os.path.dirname(__file__))
+        from product_image_store import get_image_path as _get_img
+    except Exception:
+        _get_img = None
+
     # --- Try live parse via backfill module ---
     slots = None
     module_name = f"backfill_slots_{retailer}" if retailer else None
@@ -162,6 +255,13 @@ def load_slots(json_path):
                         brand = ""
                         if jad:
                             brand = jad.get("brand") or jad.get("brand_canonical") or ""
+                        pid = d.get("asin") or d.get("item_id") or d.get("product_id") or d.get("upc") or ""
+                        img_path = ""
+                        if pid and _get_img:
+                            try:
+                                img_path = _get_img(retailer, pid) or ""
+                            except Exception:
+                                pass
                         entry = {
                             "slot":               i,
                             "slot_within_type":   wt,
@@ -169,13 +269,14 @@ def load_slots(json_path):
                             "total_slots_of_type": type_counts[at],
                             "ad_type":            at,
                             "is_sponsored":       d.get("is_sponsored", at != "Product_Listing"),
-                            "product_id":         d.get("asin") or d.get("item_id") or d.get("product_id") or d.get("upc") or "",
+                            "product_id":         pid,
                             "title":              d.get("title", ""),
                             "price":              _fmt_price(d.get("price", ""), retailer),
                             "brand":              brand,
                             "matched":            jad is not None,
                             "slot_location":      d.get("slot_location", ""),
                             "iframe_src":         d.get("iframe_src", ""),
+                            "image_path":         img_path,
                         }
                         slots.append(entry)
         except Exception as e:
@@ -201,6 +302,7 @@ def load_slots(json_path):
                     "matched":            entry.get("matched_ad_index") is not None,
                     "slot_location":      entry.get("slot_location", ""),
                     "iframe_src":         entry.get("iframe_src", ""),
+                    "image_path":         entry.get("image_path") or "",
                 })
 
     # --- Resolve screenshot path ---
@@ -212,17 +314,55 @@ def load_slots(json_path):
         if os.path.exists(candidate):
             ss_path = candidate
     if not ss_path:
-        # Walk up and look for Main/ folder
+        # Walk up and look for Main/ folder; pick screenshot closest in time to the run
+        import re as _re
+        from datetime import datetime as _dt
+
+        def _ts_from_name(name):
+            """Extract a comparable datetime from a filename."""
+            # Run JSON: ...20260226133248... → compact 14-digit timestamp
+            m = _re.search(r'(\d{14})', name)
+            if m:
+                try:
+                    return _dt.strptime(m.group(1), "%Y%m%d%H%M%S")
+                except ValueError:
+                    pass
+            # Screenshot: ...D2026-02-26_T13-31.33... → parse date+time
+            m2 = _re.search(r'D(\d{4}-\d{2}-\d{2})_T(\d{2}-\d{2}[.\d]*)', name)
+            if m2:
+                try:
+                    ds = m2.group(1)
+                    ts = m2.group(2).replace('-', ':').replace('.', ':').split(':')
+                    h, mn = int(ts[0]), int(ts[1])
+                    return _dt.strptime(f"{ds} {h:02d}:{mn:02d}", "%Y-%m-%d %H:%M")
+                except Exception:
+                    pass
+            return None
+
+        run_ts = _ts_from_name(os.path.basename(json_path))
+
         for up in range(1, 5):
             check = run_dir
             for _ in range(up):
                 check = os.path.dirname(check)
             main_dir = os.path.join(check, "Main")
             if os.path.isdir(main_dir):
-                pngs = sorted(os.listdir(main_dir))
-                if pngs:
-                    ss_path = os.path.join(main_dir, pngs[-1])
+                pngs = [f for f in os.listdir(main_dir)
+                        if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
+                if not pngs:
                     break
+                if run_ts:
+                    # Pick the screenshot with timestamp closest to the run
+                    def _key(name):
+                        t = _ts_from_name(name)
+                        if t is None:
+                            return float('inf')
+                        return abs((t - run_ts).total_seconds())
+                    best = min(pngs, key=_key)
+                else:
+                    best = sorted(pngs)[-1]
+                ss_path = os.path.join(main_dir, best)
+                break
 
     return slots or [], ss_path, json_ads, retailer
 
@@ -242,10 +382,12 @@ class SlotInspector(tk.Tk):
         self.json_path   = json_path
         self.zoom_index  = self.INITIAL_ZOOM_INDEX
         self.zoom        = self.ZOOM_STEPS[self.zoom_index]
-        self._orig_image = None
-        self._tk_image   = None
-        self._crosshair_y = None   # fractional 0-1 position on full image
-        self.slots       = []
+        self._orig_image  = None
+        self._tk_image    = None
+        self._highlight_box  = None   # (x, y, w, h) in original-image pixels
+        self._slot_coords    = {}     # pid/cel_widget → {x,y,w,h} from sidecar
+        self._coords_status  = ""     # status string shown in status bar
+        self.slots        = []
         self.selected_iid = None
 
         self._build_ui()
@@ -405,6 +547,9 @@ class SlotInspector(tk.Tk):
         )
 
         self._populate_tree(self.slots)
+        self._slot_coords   = {}
+        self._coords_status = ""
+        self._load_coords_async(json_path)
 
         if ss_path and os.path.exists(ss_path):
             self._load_image(ss_path)
@@ -425,8 +570,60 @@ class SlotInspector(tk.Tk):
 
     # ── Image ──────────────────────────────────────────────────────────────
 
+    def _load_coords_async(self, json_path):
+        """Try to load cached coords sidecar; if missing, build it in background."""
+        import importlib, sys as _sys
+        _sys.path.insert(0, os.path.dirname(__file__))
+        try:
+            bsc = importlib.import_module('build_slot_coords')
+        except Exception:
+            return
+
+        try:
+            html_path = bsc._html_path_for_json(json_path)
+        except Exception:
+            return
+        if not html_path or not os.path.exists(html_path):
+            return
+
+        sidecar = bsc.coords_path_for_html(html_path)
+
+        if os.path.exists(sidecar):
+            try:
+                with open(sidecar) as f:
+                    self._slot_coords = json.load(f)
+                self._coords_status = f"coords: {len(self._slot_coords)} rects (cached)"
+                self._update_status()
+            except Exception:
+                pass
+            return
+
+        # Build in background
+        self._coords_status = "coords: building…"
+        self._update_status()
+        def _build():
+            try:
+                coords, _ = bsc.build_and_cache(json_path)
+                def _apply():
+                    self._slot_coords   = coords
+                    self._coords_status = f"coords: {len(coords)} rects"
+                    self._update_status()
+                self.after(0, _apply)
+            except Exception as e:
+                def _err():
+                    self._coords_status = f"coords: build failed ({e})"
+                    self._update_status()
+                self.after(0, _err)
+        threading.Thread(target=_build, daemon=True).start()
+
+    def _update_status(self):
+        base = self.status_var.get().split('  |  coords')[0]
+        if self._coords_status:
+            self.status_var.set(base + f'  |  {self._coords_status}')
+
     def _load_image(self, path):
-        self._orig_image = Image.open(path)
+        self._orig_image    = Image.open(path)
+        self._highlight_box = None
         self._render_image()
 
     def _render_image(self):
@@ -436,13 +633,21 @@ class SlotInspector(tk.Tk):
         h = int(self._orig_image.height * self.zoom)
         resized = self._orig_image.resize((w, h), Image.LANCZOS)
 
-        # Draw crosshair if set
-        if self._crosshair_y is not None:
+        # Draw bounding box if a product was located
+        if self._highlight_box is not None:
+            ox, oy, ow, oh = self._highlight_box
+            bx = int(ox * self.zoom)
+            by = int(oy * self.zoom)
+            bw = int(ow * self.zoom)
+            bh = int(oh * self.zoom)
             draw = ImageDraw.Draw(resized)
-            cy = int(self._crosshair_y * h)
-            draw.line([(0, cy), (w, cy)], fill="#ff3333", width=max(2, int(3 * self.zoom)))
-            # Small triangle pointer on left edge
-            draw.polygon([(0, cy - 8), (0, cy + 8), (14, cy)], fill="#ff3333")
+            lw = max(2, int(BOX_WIDTH * self.zoom))
+            r = tuple(int(c) for c in BOX_COLOR)
+            for t in range(lw):
+                draw.rectangle(
+                    [(bx - t, by - t), (bx + bw + t, by + bh + t)],
+                    outline=r
+                )
 
         self._tk_image = ImageTk.PhotoImage(resized)
         self.img_canvas.delete("all")
@@ -555,13 +760,57 @@ class SlotInspector(tk.Tk):
             parts.append(f"Title: {slot['title'][:120]}")
         self.detail_var.set("   |   ".join(parts))
 
-        # Scroll image to approximate position
-        total = slot["total_slots"]
-        if total > 0:
-            frac = slot["slot"] / total
-            self._crosshair_y = frac
+        # Look up DOM coords from sidecar
+        slot_idx = slot["slot"]
+        total    = slot["total_slots"]
+        pid      = slot.get("product_id") or ""
+        box      = None
+
+        if self._slot_coords:
+            # Try by ASIN/product_id first
+            rect = self._slot_coords.get(pid)
+            if not rect and slot.get("ad_type") not in ("Product_Listing", "Sponsored_Product"):
+                # Try cel_widget keys for non-product slots
+                # Match by slot_within_type index into matching cel: entries
+                at = slot["ad_type"]
+                cel_prefix_map = {
+                    "Sponsored_Brand":       "cel:sb-",
+                    "SBA":                   "cel:sb-",
+                    "Sponsored_Brand_Video": "cel:VIDEO_SINGLE_PRODUCT",
+                    "SBV":                   "cel:VIDEO_SINGLE_PRODUCT",
+                    "Sponsored_Carousel":    "cel:FEATURED_ASINS_LIST",
+                    "Sponsored_Display":     "cel:loom-desktop",
+                }
+                prefix = cel_prefix_map.get(at, "")
+                if prefix:
+                    matches = sorted(k for k in self._slot_coords if k.startswith(prefix))
+                    idx_in_type = slot.get("slot_within_type", 0)
+                    if idx_in_type < len(matches):
+                        rect = self._slot_coords[matches[idx_in_type]]
+            if rect:
+                # Scale coords: sidecar uses VIEWPORT_W=1385, screenshot may differ
+                img_w = self._orig_image.width if self._orig_image else 1385
+                scale = img_w / 1385
+                box = (
+                    int(rect["x"] * scale),
+                    int(rect["y"] * scale),
+                    int(rect["w"] * scale),
+                    int(rect["h"] * scale),
+                )
+
+        if box:
+            self._highlight_box = box
+            ox, oy, ow, oh = box
+            img_h = self._orig_image.height if self._orig_image else 1
+            frac  = oy / img_h if img_h else 0
             self._render_image()
             self._scroll_image_to_fraction(frac)
+        else:
+            # Fallback: linear fraction
+            self._highlight_box = None
+            if total > 0:
+                self._render_image()
+                self._scroll_image_to_fraction(slot_idx / total)
 
         self.status_var.set(
             f"Slot {slot['slot']}  ·  {slot['ad_type']}{loc}  "

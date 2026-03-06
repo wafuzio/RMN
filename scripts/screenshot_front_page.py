@@ -472,30 +472,62 @@ def get_profile_dir(retailer: str, cli_profile: str = None):
         frontpage_profile = chrome_profiles / f"{retailer}_frontpage_profile"
         
         if main_profile.exists():
-            # Always fresh-clone from main profile to get latest cookies/trust
-            # This ensures we benefit from main scraper's accumulated trust
-            # while avoiding profile lock conflicts
             import shutil
             
-            # Remove old frontpage profile if it exists
+            # Check if main profile is currently locked (Chrome is running on it)
+            main_locked = (main_profile / 'SingletonLock').exists() or (main_profile / 'SingletonLock').is_symlink()
+            
+            # Reuse existing frontpage profile if it's recent (< 24h) to avoid
+            # destructive re-clones that race with the main scraper and trigger
+            # Akamai's multi-session detection from the same IP.
             if frontpage_profile.exists():
-                print(f"[{retailer}] Removing stale frontpage profile...")
-                shutil.rmtree(str(frontpage_profile), ignore_errors=True)
+                profile_age_h = (time.time() - frontpage_profile.stat().st_mtime) / 3600
+                if profile_age_h < 24:
+                    print(f"[{retailer}] Reusing frontpage profile (age: {profile_age_h:.1f}h)")
+                    # Just clean lock files from any previous run
+                    for lock in ['SingletonLock', 'SingletonCookie', 'SingletonSocket']:
+                        lock_path = frontpage_profile / lock
+                        if lock_path.exists() or lock_path.is_symlink():
+                            try:
+                                lock_path.unlink()
+                            except:
+                                pass
+                    return str(frontpage_profile)
+                elif main_locked:
+                    print(f"[{retailer}] Frontpage profile stale ({profile_age_h:.0f}h) but main profile locked — reusing anyway")
+                    for lock in ['SingletonLock', 'SingletonCookie', 'SingletonSocket']:
+                        lock_path = frontpage_profile / lock
+                        if lock_path.exists() or lock_path.is_symlink():
+                            try:
+                                lock_path.unlink()
+                            except:
+                                pass
+                    return str(frontpage_profile)
+                else:
+                    print(f"[{retailer}] Removing stale frontpage profile ({profile_age_h:.0f}h)...")
+                    shutil.rmtree(str(frontpage_profile), ignore_errors=True)
             
-            print(f"[{retailer}] Fresh-cloning from main scraper profile...")
-            shutil.copytree(str(main_profile), str(frontpage_profile), dirs_exist_ok=True)
+            if main_locked:
+                print(f"[{retailer}] Main profile locked by scraper — creating empty frontpage profile")
+                frontpage_profile.mkdir(parents=True, exist_ok=True)
+                return str(frontpage_profile)
             
-            # Remove lock files from the clone
-            for lock in ['SingletonLock', 'SingletonCookie', 'SingletonSocket']:
-                lock_path = frontpage_profile / lock
-                if lock_path.exists() or lock_path.is_symlink():
-                    try:
-                        lock_path.unlink()
-                    except:
-                        pass
-            
-            print(f"[{retailer}] Using freshly cloned profile: {frontpage_profile}")
-            return str(frontpage_profile)
+            print(f"[{retailer}] Cloning from main scraper profile...")
+            try:
+                shutil.copytree(str(main_profile), str(frontpage_profile), dirs_exist_ok=True)
+                # Remove lock files from the clone
+                for lock in ['SingletonLock', 'SingletonCookie', 'SingletonSocket']:
+                    lock_path = frontpage_profile / lock
+                    if lock_path.exists() or lock_path.is_symlink():
+                        try:
+                            lock_path.unlink()
+                        except:
+                            pass
+                print(f"[{retailer}] Using freshly cloned profile: {frontpage_profile}")
+                return str(frontpage_profile)
+            except Exception as clone_err:
+                print(f"[{retailer}] WARNING: profile clone failed (profile may be locked by scraper): {clone_err}")
+                # Fall through to use existing frontpage profile or create a fresh one
     
     # Priority 4: ~/ChromeProfiles/<retailer>_frontpage_profile (dedicated for screenshots)
     if chrome_profiles.is_dir():
@@ -995,19 +1027,31 @@ def check_page_errors(page, retailer: str) -> tuple[bool, str]:
         "Error loading",
         "Unable to load",
         "Page not found",
-        "404",
         "500 Internal Server Error",
         "Service Unavailable",
+    ]
+    
+    # These only count as errors on very short pages (actual block/error pages),
+    # not when buried in a large real page's footer or policy text.
+    short_page_only_indicators = [
         "Access Denied",
+        "404",
     ]
     
     try:
         # Get visible text from page
         body_text = page.evaluate("() => document.body.innerText")
+        text_len = len(body_text.strip())
         
         for indicator in error_indicators:
             if indicator.lower() in body_text.lower():
                 return True, f"Found error indicator: '{indicator}'"
+        
+        # Only flag these on short pages (< 500 chars = likely a block/error page)
+        if text_len < 500:
+            for indicator in short_page_only_indicators:
+                if indicator.lower() in body_text.lower():
+                    return True, f"Found error indicator: '{indicator}' (page only {text_len} chars)"
         
         # Check for error containers (Kroger-specific)
         error_containers = page.locator('.error-container, [class*="error"], [class*="Error"]').count()
@@ -1162,8 +1206,8 @@ def capture_front_page(retailer: str, profile_dir: str = None, timeout: int = 30
                 '--use-angle=metal',  # Force ANGLE→Metal backend on macOS
                 '--enable-gpu-rasterization',  # Prefer GPU raster
                 '--ignore-gpu-blocklist',  # Don't let Chrome silently disable GPU
-                '--disable-focus-on-load',  # Keep window visible but don't steal focus
                 '--noerrdialogs',
+                # NOTE: --disable-focus-on-load removed — crashes Chrome 145
             ]
             
             if not resolved_profile:

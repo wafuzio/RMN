@@ -17,7 +17,7 @@
     "17:00",
     "17:05"
   ],
-  "enabled": true,
+  "enabled": false,
   "created_at": "2025-10-16T18:32:00.029215Z",
   "updated_at": "2025-11-25T04:41:59Z"
 }

@@ -28,8 +28,8 @@ from tools.tiktok_captcha_solver import solve_captcha, download_image, find_slot
 
 
 def now_iso_z() -> str:
-    """Return current timestamp in ISO 8601 format with Z suffix."""
-    return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    """Return current timestamp in ISO 8601 format (local time)."""
+    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def build_run_id() -> str:
@@ -385,6 +385,24 @@ async def search_and_capture_async(keyword: str, output_dir: str, **kwargs) -> b
                 await context.close()
                 return False
             
+            # Login state check — TikTok shows "Log in" div when not authenticated
+            try:
+                _tt_login_vis = await page.locator('div:has-text("Log in"):not(:has(*:has-text("Log in")))').first.is_visible(timeout=2000)
+                if _tt_login_vis:
+                    print("   ⚠️ Not logged in — 'Log in' button visible")
+                    try:
+                        from utils.profile_health import prompt_relogin_async
+                        _relogged = await prompt_relogin_async(page, "tiktokshop", keyword)
+                        if not _relogged:
+                            from utils.profile_health import record_login_outcome
+                            record_login_outcome("tiktokshop", keyword, logged_in=False)
+                    except Exception:
+                        pass
+                else:
+                    print("   ✅ Logged-in session detected")
+            except Exception:
+                pass
+
             # Wait for content to load
             await asyncio.sleep(3)
             

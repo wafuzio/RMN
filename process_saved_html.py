@@ -181,7 +181,19 @@ def extract_toa_images(json_file, html_file=None, client_name=None, output_overr
         
         # Build command to run extractors/screenshot_toa_image.py (headed by default)
         json_abs = os.path.abspath(json_file)
-        cmd = ["python3", script_path, "--json", json_abs]
+        # Use venv python if available
+        venv_python = os.path.join(here, ".venv", "bin", "python3")
+        python_exec = venv_python if os.path.isfile(venv_python) else "python3"
+        cmd = [python_exec, script_path, "--json", json_abs]
+
+        # Pass profile dir so the image extractor reuses warm Kroger cookies
+        # instead of launching a cold browser context that triggers Akamai
+        kroger_profile = (
+            os.environ.get("KROGER_PROFILE_DIR")
+            or os.path.expanduser("~/ChromeProfiles/kroger_clean_profile")
+        )
+        if os.path.isdir(kroger_profile):
+            cmd.extend(["--profile-dir", kroger_profile])
 
         # Add HTML file if provided; otherwise enable safe batch mode
         if html_file:

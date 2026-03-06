@@ -273,10 +273,10 @@ def safe_filename(name: str) -> str:
 
 def build_run_id() -> str:
     """
-    Build 14-digit run ID in UTC, e.g., 20251026161402.
+    Build 14-digit run ID in local time, e.g., 20251026161402.
     Walmart uses nested timestamp directories: runs/<run_id>/
     """
-    return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    return datetime.now().strftime("%Y%m%d%H%M%S")
 
 def build_run_payload(retailer: str, client: str, keyword: str, run_id: str, ads: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
@@ -314,7 +314,7 @@ def save_run_artifacts(client_root: Path, run_id: str, html_content: str, run_pa
     (run_dir / f"search_results_{run_id}.html").write_text(html_content, encoding="utf-8")
 
     # Save canonical JSON
-    (run_dir / f"run_results_{run_id}.json").write_text(json.dumps(run_payload, indent=2, ensure_ascii=False))
+    (run_dir / f"run_results_{run_id}.json").write_text(json.dumps(run_payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
     return run_dir
 
@@ -1414,6 +1414,21 @@ def _capture_gallery_cards(page, base_dir: str, keyword: str, meta: Dict, SL=Non
                 hero_img_elem = soup.select_one("#img")
                 if hero_img_elem:
                     hero_image_url = hero_img_elem.get("src")
+                
+                # Detect Walmart house ads (Walmart+ promotions)
+                # These use descriptive alt text instead of brand patterns
+                if not advertiser:
+                    # Check logo alt text for walmart plus indicators
+                    if logo_elem:
+                        logo_alt_lower = (logo_elem.get("alt") or "").lower()
+                        if "walmart plus" in logo_alt_lower or "walmart+" in logo_alt_lower:
+                            advertiser = "Walmart"
+                    
+                    # Also check headline for walmart plus
+                    if not advertiser and headline:
+                        headline_lower = headline.lower()
+                        if "walmart+" in headline_lower or "walmart plus" in headline_lower:
+                            advertiser = "Walmart"
                 
                 if SL: SL.log("gallery_card_extracted", 
                              index=idx, 
@@ -2937,6 +2952,37 @@ def search_and_capture(
             except:
                 pass
             
+            # Login state check — missing login means fewer ad types captured
+            # Walmart shows "Hi, <user>" with data-testid="logged-in-account-button-name"
+            # when authenticated. That element is absent when not logged in.
+            try:
+                _wm_logged_in = False
+                try:
+                    _wm_logged_in = page.locator('[data-testid="logged-in-account-button-name"]').first.is_visible(timeout=2000)
+                except Exception:
+                    _wm_logged_in = False
+
+                if _wm_logged_in:
+                    say("info", f"[{retailer}] ✅ Logged-in session detected")
+                    SL.log("login_check", logged_in=True)
+                else:
+                    say("warn", f"[{retailer}] ⚠️ Not logged in — some ad types may not appear")
+                    SL.log("login_check", logged_in=False)
+                    try:
+                        from utils.profile_health import prompt_relogin
+                        _relogged = prompt_relogin(page, "walmart", keyword, log_fn=lambda m: say("info", m))
+                        if _relogged:
+                            say("info", f"[{retailer}] ✅ User completed re-login — continuing")
+                            SL.log("login_relogin", success=True)
+                        else:
+                            from utils.profile_health import record_login_outcome
+                            record_login_outcome("walmart", keyword, logged_in=False)
+                            SL.log("login_relogin", success=False)
+                    except Exception:
+                        pass
+            except Exception as _login_err:
+                SL.log("login_check_error", error=str(_login_err))
+
             # Directly type into search – do not scroll the homepage
             say("info", f"[{retailer}] Typing search query")
             
@@ -3218,6 +3264,15 @@ def search_and_capture(
                 html_saved = 1
                 artifacts["saved_html"] = html_path
                 say("info", f"[{retailer}] HTML captured (1/1)")
+
+                # Track profile health (block detection + persistent ledger)
+                try:
+                    from utils.profile_health import check_and_record
+                    blk, blk_reason = check_and_record(content, "walmart", keyword, alert=True)
+                    if blk:
+                        say("warn", f"[{retailer}] Page blocked: {blk_reason}")
+                except Exception:
+                    pass
             except Exception as e:
                 say("warn", f"[{retailer}] HTML save failed: {e}")
             

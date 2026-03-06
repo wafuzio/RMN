@@ -224,6 +224,47 @@ for i, container in enumerate(sba_containers, 1):
         print(f"⚠️ Failed to extract SBA ad #{i}: {e}")
 ```
 
+### Step 7.5: Wire Profile Health
+
+**Edit:** `utils/profile_health.py`
+
+Add block-detection patterns for your retailer:
+
+```python
+_BLOCK_PATTERNS = {
+    # ... existing retailers ...
+    "newretailer": [
+        {"pattern": "access denied", "reason": "access_denied", "fixed": True},
+        {"pattern": "verify you are human", "reason": "captcha", "fixed": True},
+    ],
+}
+```
+
+**Edit:** `newretailer_search_and_capture.py`
+
+1. **Login detection** (after homepage loads, before search):
+```python
+try:
+    # Replace with your retailer's not-logged-in selector
+    not_logged_in = page.locator('#sign-in-link').first.is_visible(timeout=2000)
+    if not_logged_in:
+        from utils.profile_health import record_login_outcome
+        record_login_outcome("newretailer", keyword, logged_in=False)
+except Exception:
+    pass
+```
+
+2. **Block detection** (after HTML save):
+```python
+try:
+    from utils.profile_health import check_and_record
+    check_and_record(html_content, "newretailer", keyword, alert=True)
+except Exception:
+    pass
+```
+
+**Selector reference:** See `docs/ADDING_NEW_RETAILER.md` → Step 4.5.3 for all existing login selectors.
+
 ### Step 8: Test Search Script
 ```bash
 python3 newretailer_search_and_capture.py "test keyword" \

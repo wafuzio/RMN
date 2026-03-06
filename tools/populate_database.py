@@ -461,6 +461,10 @@ def populate_runs(conn):
         # Insert slots[] — the full ordered page view including SPs, PLs, etc.
         # Each slot becomes an ads row; slots already covered by ads[] are skipped
         # via the original_id dedup key "slot:<run_id_val>:<slot_idx>".
+        # NOTE: Skip individual product items within ad units (e.g. products
+        # inside a Sponsored Carousel or Sponsored Logo). Those inherit the
+        # parent ad_type but are NOT ad units — the parent ad with its
+        # products[] array is already captured via the ads[] pass above.
         slots_list = data.get("slots", [])
         if isinstance(slots_list, list):
             for slot_entry in slots_list:
@@ -468,6 +472,15 @@ def populate_runs(conn):
                     continue
                 slot_idx = slot_entry.get("slot")
                 if slot_idx is None:
+                    continue
+
+                # Skip product-level slots: these are items within an ad unit,
+                # not standalone ads. They have product_id and/or image paths
+                # pointing to product_images/.
+                _slot_product_id = slot_entry.get("product_id") or ""
+                _slot_img_path = slot_entry.get("image_path") or ""
+                _slot_ad_type_lower = (slot_entry.get("ad_type") or "").lower().replace(" ", "_")
+                if _slot_product_id or "product_images/" in _slot_img_path:
                     continue
 
                 # Stable dedup key for this slot within this run

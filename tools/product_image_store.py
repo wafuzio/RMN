@@ -58,13 +58,17 @@ def _image_dir(retailer: str) -> Path:
 
 def _find_existing(retailer: str, product_id: str) -> Path | None:
     """Find an existing image file for a product ID (any extension)."""
-    d = _image_dir(retailer)
-    if not d.is_dir():
-        return None
-    for ext in ('jpg', 'jpeg', 'png', 'webp', 'gif'):
-        p = d / f"{product_id}.{ext}"
-        if p.exists() and p.stat().st_size > 100:
-            return p
+    search_dirs = [_image_dir(retailer)]
+    # Also check legacy Amazon path
+    if retailer == 'amazon':
+        search_dirs.append(ASSETS_DIR / 'amazon' / 'ASIN_Images')
+    for d in search_dirs:
+        if not d.is_dir():
+            continue
+        for ext in ('jpg', 'jpeg', 'png', 'webp', 'gif'):
+            p = d / f"{product_id}.{ext}"
+            if p.exists() and p.stat().st_size > 100:
+                return p
     return None
 
 
@@ -177,7 +181,7 @@ def _collect_image_urls_from_json(retailer: str) -> list[dict]:
         except Exception:
             continue
 
-        # Check product_listings key
+        # Check product_listings key (legacy)
         listings = data.get('product_listings', [])
         # Also check ads array for Product_Listing type
         for ad in data.get('ads', []):
@@ -187,6 +191,14 @@ def _collect_image_urls_from_json(retailer: str) -> list[dict]:
         for item in listings:
             pid = item.get('product_id') or item.get('asin') or ''
             url = item.get('image_url') or ''
+            if pid and url and pid not in seen:
+                seen.add(pid)
+                pairs.append({'product_id': pid, 'image_url': url})
+
+        # Also scan slots[] — primary source for all retailers after backfill
+        for slot in data.get('slots', []):
+            pid = slot.get('product_id') or ''
+            url = slot.get('image_url') or ''
             if pid and url and pid not in seen:
                 seen.add(pid)
                 pairs.append({'product_id': pid, 'image_url': url})

@@ -1,0 +1,24 @@
+{
+  "_comment": "Notification config for daily_report.py --email. Fill in SMTP credentials.",
+
+  "email": {
+    "enabled": true,
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "smtp_user": "dmaguire@gmail.com",
+    "smtp_password": "pkui wnih duuc fony",
+    "from_addr": "dmaguire@gmail.com",
+    "to_addrs": ["dan.maguire@galepartners.com", "dmaguire@gmail.com"],
+    "subject_prefix": "[RMN Scraper]",
+
+    "_hint_gmail": "Use an App Password (not your account password). Generate at: https://myaccount.google.com/apppasswords",
+    "_hint_to_addrs": "List of recipient email addresses, e.g. ['dan@example.com', 'ops@example.com']"
+  },
+
+  "send_on": {
+    "always": true,
+    "_comment_always": "If false, only send when there are failures or missing scrapes",
+    "min_missing_pct": 10,
+    "_comment_min_missing_pct": "Send alert if >10% of scheduled slots were missed"
+  }
+}

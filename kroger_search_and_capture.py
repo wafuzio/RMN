@@ -12,6 +12,7 @@ The captured HTML can be processed by process_saved_html.py to extract TOA data.
 """
 
 import os
+import random
 from datetime import datetime
 import subprocess
 import time
@@ -22,9 +23,11 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 from browser_lock import single_browser_lock
 from playwright._impl._errors import Error as PWError
-from kroger_login import save_cookies  # Removed load_cookies as it's redundant with user_data_dir
+from Kroger_login import save_cookies  # Removed load_cookies as it's redundant with user_data_dir
 from filename_utils import generate_ad_filename
 from core.brands import canonicalize, add_brand
+from utils.profile_health import check_and_record, record_login_outcome, should_bail, send_relogin_alert
+from utils.kroger_diagnostics import KrogerDiagnostics
 
 # Brand logo database for centralized logo storage
 # Note: Kroger TOA ads are product carousels without brand logos.
@@ -41,6 +44,66 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 USER_DATA_DIR = os.path.expanduser("~/ChromeProfiles/kroger_clean_profile")
 DEFAULT_SEARCH_TERM = "black forest ham"
 DEFAULT_OUTPUT_DIR = "output"
+
+# --- Human Behavior Simulation (ported from Walmart) ---
+def human_type(element, text: str):
+    """Type with human-like delays and occasional pauses."""
+    for ch in text:
+        element.type(ch, delay=random.uniform(80, 220))
+        if random.random() < 0.10:
+            time.sleep(random.uniform(0.05, 0.15))
+    if len(text) >= 10 and random.random() < 0.6:
+        time.sleep(random.uniform(0.20, 0.45))
+
+def micro_mouse_attention(page, around=(8, 15), jitter=10):
+    """Subtle mouse micro-movements to simulate attention."""
+    try:
+        pos = page.mouse.position
+        mx, my = pos['x'], pos['y']
+    except Exception:
+        mx, my = (random.randint(300, 700), random.randint(300, 600))
+    steps = random.randint(*around)
+    for i in range(steps):
+        dx = random.randint(-jitter, jitter)
+        dy = random.randint(-jitter, jitter)
+        mx += dx
+        my += dy
+        page.mouse.move(mx, my)
+        time.sleep(random.uniform(0.01, 0.03))
+
+def random_delay(a=0.6, b=1.4):
+    """Random delay between actions."""
+    time.sleep(random.uniform(a, b))
+
+def scroll_like_human(page, bursts=2, lines_min=4, lines_max=8):
+    """Natural wheel scrolling with random bursts."""
+    for _ in range(bursts):
+        lines = random.randint(lines_min, lines_max)
+        for _ in range(lines):
+            page.mouse.wheel(0, random.randint(48, 140))
+            time.sleep(random.uniform(0.045, 0.12))
+        time.sleep(random.uniform(0.25, 0.9))
+
+def drift_reading(page, seconds=2.0):
+    """Simulate reading by pausing with occasional micro mouse movements."""
+    end_time = time.time() + seconds
+    while time.time() < end_time:
+        if random.random() < 0.3:
+            micro_mouse_attention(page, around=(3, 6), jitter=5)
+        time.sleep(random.uniform(0.3, 0.7))
+
+def backscroll_peek(page):
+    """Scroll up a bit then back down (human curiosity behavior)."""
+    if random.random() < 0.4:
+        for _ in range(random.randint(2, 4)):
+            page.mouse.wheel(0, -random.randint(60, 120))
+            time.sleep(random.uniform(0.05, 0.1))
+        time.sleep(random.uniform(0.4, 0.8))
+        for _ in range(random.randint(2, 4)):
+            page.mouse.wheel(0, random.randint(60, 120))
+            time.sleep(random.uniform(0.05, 0.1))
+
+# --- End Human Behavior Simulation ---
 
 def pick_app_frame(page):
     """Safely pick the best frame to use for DOM operations
@@ -98,6 +161,76 @@ def eval_safe(page, script, retries=3):
                 page.wait_for_load_state("domcontentloaded")
                 continue
             raise
+
+# ---------------------------------------------------------------------------
+# Human-like interaction helpers (ported from Walmart's proven cadence)
+# ---------------------------------------------------------------------------
+
+def _human_type(element, text: str):
+    """Type with human-like per-character delays and occasional micro-pauses."""
+    for ch in text:
+        element.type(ch, delay=random.uniform(80, 220))
+        if random.random() < 0.10:
+            time.sleep(random.uniform(0.05, 0.15))
+    # Longer words get a natural trailing pause
+    if len(text) >= 10 and random.random() < 0.6:
+        time.sleep(random.uniform(0.20, 0.45))
+
+
+def _micro_mouse_attention(page, around=(8, 15), jitter=10):
+    """Subtle mouse micro-movements to simulate reading/attention."""
+    try:
+        pos = page.mouse.position
+        mx, my = pos['x'], pos['y']
+    except Exception:
+        mx, my = (random.randint(300, 700), random.randint(300, 600))
+    steps = random.randint(*around)
+    for _ in range(steps):
+        dx = random.randint(-jitter, jitter)
+        dy = random.randint(-jitter, jitter)
+        mx += dx
+        my += dy
+        page.mouse.move(mx, my)
+        time.sleep(random.uniform(0.01, 0.03))
+
+
+def _random_delay(a=0.6, b=1.4):
+    """Random delay between actions."""
+    time.sleep(random.uniform(a, b))
+
+
+def _scroll_burst_wheel(page, lines=8):
+    """Emit a small burst of native wheel events (trackpad-like)."""
+    for _ in range(lines):
+        page.mouse.wheel(0, random.randint(48, 140))
+        time.sleep(random.uniform(0.045, 0.12))
+
+
+def _scroll_like_human(page, bursts=3, lines_min=6, lines_max=12,
+                       pause_min=0.25, pause_max=0.9):
+    """Several short wheel bursts with pauses — feels like a real user scrolling."""
+    for b in range(bursts):
+        _scroll_burst_wheel(page, lines=random.randint(lines_min, lines_max))
+        time.sleep(random.uniform(pause_min, pause_max))
+        # First burst: longer idle to avoid action-storm fingerprint
+        if b == 0:
+            time.sleep(random.uniform(1.0, 2.2))
+
+
+def _drift_reading(page, seconds=2.0):
+    """Simulate idle reading — small mouse drifts, no scrolling."""
+    t0 = time.time()
+    while time.time() - t0 < seconds:
+        _micro_mouse_attention(page, around=(3, 6), jitter=5)
+        time.sleep(random.uniform(0.3, 0.7))
+
+
+def _backscroll_peek(page, chance=0.35):
+    """Occasionally scroll back up slightly, like re-reading."""
+    if random.random() < chance:
+        page.mouse.wheel(0, random.randint(-200, -60))
+        time.sleep(random.uniform(0.4, 0.8))
+
 
 def scroll_results(page, max_loops=120, step_ratio=0.85, sleep_ms=300):
     """
@@ -403,29 +536,32 @@ def _launch_context_resilient(pw, client_name: str):
                 headless=False,
                 channel=cand['channel'],
                 ignore_https_errors=True,
+                ignore_default_args=['--enable-automation'],  # CRITICAL: Prevents navigator.webdriver=true
+                chromium_sandbox=True,  # CRITICAL: Enables sandbox (no --no-sandbox banner)
                 args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--no-sandbox",
+                    # Chrome 145-compatible args only (9 old flags removed — they crash Chrome 145)
+                    # NOTE: --no-sandbox REMOVED - conflicts with chromium_sandbox=True and triggers Akamai
                     "--disable-dev-shm-usage",
                     "--disable-infobars",
-                    "--disable-web-security",
                     "--no-first-run",
                     "--disable-default-apps",
-                    "--disable-popup-blocking",
-                    "--disable-translate",
-                    "--disable-background-timer-throttling",
-                    "--disable-renderer-backgrounding",
                     "--disable-backgrounding-occluded-windows",
-                    "--disable-restore-session-state",
-                    "--disable-ipc-flooding-protection",
                     "--window-size=1280,720",
                     "--disable-notifications",
                     "--disable-quic",
-                    # Keep window visible but don't steal focus
-                    "--disable-focus-on-load",
                     "--noerrdialogs",
+                    # GPU acceleration args (CRITICAL: Prevents SwiftShader software rendering)
+                    "--use-angle=metal",  # Force ANGLE→Metal backend on macOS
+                    "--enable-gpu-rasterization",  # Prefer GPU raster
+                    "--ignore-gpu-blocklist",  # Don't let Chrome silently disable GPU
                 ],
             )
+            # CRITICAL: Force navigator.webdriver to undefined (ignore_default_args doesn't always work with persistent context)
+            ctx.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+            """)
             print(f"   ✅ Launched persistent context using profile: {cand['user_data_dir']}")
             return ctx
         except Exception as e:
@@ -479,6 +615,10 @@ def search_and_capture(search_term=None, output_dir=None):
     print(f"Output directory: {output_dir}")
     
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    
+    # Initialize diagnostic logging for this run
+    diag = KrogerDiagnostics(output_dir=output_dir, run_id=timestamp.replace("-", "").replace("_", ""))
+    diag.log("search_and_capture_start", search_term=search_term, output_dir=output_dir)
     os.makedirs(output_dir, exist_ok=True)
     
     # Step 1: Check if cookies exist
@@ -508,20 +648,46 @@ def search_and_capture(search_term=None, output_dir=None):
 
             try:
                 page = context.pages[0] if context.pages else context.new_page()
+                diag.log("browser_launched", pages=len(context.pages))
 
                 # Be more lenient with transient network delays
                 try:
                     context.set_default_navigation_timeout(45000)
                 except Exception:
                     pass
+                
+                # Collect initial diagnostics before navigation
+                diag.collect_diagnostics(page, context, "before_navigation")
+
+                # Early bail: if profile is already known-blocked, skip the browser work
+                if should_bail("kroger"):
+                    print("⚠️ Kroger profile is blocked (consecutive failures). Skipping scrape.")
+                    print("   Run the profile in a real Chrome window to clear the block.")
+                    send_relogin_alert("kroger", "consecutive_failures")
+                    return False
 
                 # Navigate to Kroger homepage (non-fatal; continue even if it fails)
                 try:
+                    diag.log("homepage_navigation_start", url="https://www.kroger.com/")
                     goto_with_retries(page, "https://www.kroger.com/", attempts=4, wait_until="domcontentloaded", timeout_ms=45000)
                     page.wait_for_timeout(5000)
+                    diag.log("homepage_loaded", url=page.url)
+                    
+                    # Collect diagnostics after homepage load
+                    diag.collect_diagnostics(page, context, "after_homepage_load")
+                    
+                    # Check for Akamai block
+                    is_blocked, reason, details = diag.check_akamai_block(page)
+                    if is_blocked:
+                        diag.save_forensics(page, "blocked_at_homepage")
+                        print(f"❌ AKAMAI BLOCK DETECTED AT HOMEPAGE: {reason} - {details}")
+                        diag.finalize()
+                        return False
+                    
                     # Dismiss any homepage popups
                     dismiss_kroger_popups(page)
                 except Exception as e:
+                    diag.log("homepage_navigation_error", error=str(e))
                     print(f"   Homepage navigate failed: {e} — proceeding directly to search.")
 
                 # Logged-in check
@@ -529,6 +695,9 @@ def search_and_capture(search_term=None, output_dir=None):
                     is_logged_in = not page.is_visible("text=Sign In")
                 except Exception:
                     is_logged_in = False
+                
+                diag.log("login_check", is_logged_in=is_logged_in)
+                
                 if is_logged_in:
                     print("✅ Logged in session detected.")
                 else:
@@ -565,14 +734,207 @@ def search_and_capture(search_term=None, output_dir=None):
                             except Exception as e:
                                 print(f"   Note: could not save cookies backup: {e}")
                         else:
-                            print("❌ Still not logged in after waiting. Will proceed but some content may be limited.")
+                            print("❌ Still not logged in after waiting.")
+                            try:
+                                from utils.profile_health import prompt_relogin
+                                _relogged = prompt_relogin(page, "kroger", search_term)
+                                if _relogged:
+                                    print("✅ User completed re-login — continuing")
+                                    is_logged_in = True
+                                else:
+                                    if should_bail("kroger"):
+                                        print("   Profile needs manual re-login. Aborting scrape.")
+                                        return False
+                                    print("   Will proceed but some content may be limited.")
+                            except Exception:
+                                stale, _ = record_login_outcome("kroger", search_term, logged_in=False)
+                                if should_bail("kroger"):
+                                    print("   Profile needs manual re-login. Aborting scrape.")
+                                    return False
+                                print("   Will proceed but some content may be limited.")
                     except Exception as e:
                         print(f"   Login attempt encountered an issue: {e}")
 
-                # Step 3: Perform the search query
+                # Step 3: Perform the search query (organic search box — Walmart cadence)
                 print("\n🔎 Step 3: Performing search...")
-                search_url = "https://www.kroger.com/search?query={}".format(urllib.parse.quote_plus(search_term))
-                goto_with_retries(page, search_url, attempts=4, wait_until="domcontentloaded", timeout_ms=45000)
+                diag.log("search_step_start", search_term=search_term)
+                
+                # CRITICAL: Initial homepage dwell to show browsing intent (Akamai Jan 2026 update)
+                # Akamai's intent-based detection flags instant searches as scraping
+                print("   Initial browsing simulation...")
+                diag.log("browsing_simulation_start")
+                random_delay(3.0, 6.0)  # Humans browse before searching
+                
+                # Optional: Scroll homepage a bit (shows exploration intent)
+                if random.random() < 0.5:
+                    diag.log("homepage_scroll_start")
+                    scroll_like_human(page, bursts=1, lines_min=2, lines_max=4)
+                    random_delay(1.0, 2.0)
+                    diag.log("homepage_scroll_complete")
+                
+                _search_typed = False
+                try:
+                    # Kroger search box selectors (try multiple)
+                    _search_sels = [
+                        'input[data-testid="SearchBox-input"]',
+                        'input[aria-label="search"]',
+                        'input[name="query"]',
+                        'input[type="search"]',
+                        '#SearchBox-input',
+                        'input[placeholder*="Search"]',
+                    ]
+                    _box = None
+                    _matched_sel = None
+                    for _sel in _search_sels:
+                        try:
+                            _candidate = page.locator(_sel).first
+                            if _candidate.is_visible(timeout=2000):
+                                _box = _candidate
+                                _matched_sel = _sel
+                                break
+                        except Exception:
+                            continue
+
+                    if not _box:
+                        # Some Kroger pages hide the input behind a search icon
+                        print("   ⚠️ Search box not visible — trying search icon first")
+                        for _btn_sel in [
+                            '[data-testid="SearchBox-button"]',
+                            'button[aria-label="search"]',
+                            '[data-testid="SearchIcon"]',
+                        ]:
+                            try:
+                                _btn = page.locator(_btn_sel).first
+                                if _btn.is_visible(timeout=2000):
+                                    _btn.click()
+                                    page.wait_for_timeout(1000)
+                                    # Re-check inputs
+                                    for _sel in _search_sels:
+                                        try:
+                                            _candidate = page.locator(_sel).first
+                                            if _candidate.is_visible(timeout=2000):
+                                                _box = _candidate
+                                                _matched_sel = _sel
+                                                break
+                                        except Exception:
+                                            continue
+                                    if _box:
+                                        break
+                            except Exception:
+                                continue
+
+                    if _box:
+                        # --- Walmart-proven cadence ---
+                        # 1) Click search box
+                        print(f"   Found search box: {_matched_sel}")
+                        diag.log("search_box_click", selector=_matched_sel)
+                        _box.click()
+                        random_delay(0.2, 0.4)
+
+                        # 2) Pre-type dwell (adds entropy — avoids "home → submit in ~4s")
+                        time.sleep(random.uniform(2.0, 4.0))
+
+                        # 3) Clear any stale text, then human-type
+                        _box.fill("")
+                        random_delay(0.15, 0.35)
+                        print(f"   Typing: {search_term}")
+                        diag.log("search_typing_start", search_term=search_term)
+                        human_type(_box, search_term)
+                        diag.log("search_typing_complete")
+
+                        # 4) Post-type dwell (humans pause before submitting)
+                        random_delay(0.60, 1.20)
+
+                        # 5) Subtle mouse movement (40% chance)
+                        if random.random() < 0.4:
+                            micro_mouse_attention(page, around=(5, 9), jitter=6)
+
+                        # 6) Submit: prefer clicking a visible search button
+                        _submitted = False
+                        for _btn_sel in [
+                            'button[data-testid="SearchBox-submitButton"]',
+                            'button[aria-label="search"]',
+                            'button[type="submit"]',
+                        ]:
+                            try:
+                                _btn = page.locator(_btn_sel).first
+                                if _btn.is_visible(timeout=1500):
+                                    # Move mouse to button naturally
+                                    try:
+                                        _bbox = _btn.bounding_box()
+                                        if _bbox:
+                                            _mx = _bbox["x"] + _bbox["width"] * random.uniform(0.3, 0.7)
+                                            _my = _bbox["y"] + _bbox["height"] * random.uniform(0.3, 0.7)
+                                            page.mouse.move(_mx, _my, steps=random.randint(6, 12))
+                                            random_delay(0.05, 0.12)
+                                    except Exception:
+                                        pass
+                                    _btn.click()
+                                    _submitted = True
+                                    diag.log("search_submitted", method="button", selector=_btn_sel)
+                                    print(f"   ✅ Submitted via button ({_btn_sel})")
+                                    break
+                            except Exception:
+                                continue
+
+                        # 7) Fallback: press Enter (double-Enter for typeahead dismiss)
+                        if not _submitted:
+                            try:
+                                _box.focus()
+                            except Exception:
+                                try:
+                                    _box.click()
+                                except Exception:
+                                    pass
+                            page.keyboard.press("Enter")
+                            time.sleep(random.uniform(0.25, 0.6))
+                            # Second Enter in case the first just closed autocomplete
+                            page.keyboard.press("Enter")
+                            diag.log("search_submitted", method="enter_key")
+                            print("   ✅ Submitted via Enter key")
+
+                        # 8) Wait for search results page to load
+                        try:
+                            page.wait_for_load_state("domcontentloaded", timeout=30000)
+                        except Exception:
+                            pass
+                        page.wait_for_timeout(random.randint(2500, 4000))
+                        
+                        diag.log("search_results_loaded", url=page.url)
+                        
+                        # Collect diagnostics after search results load
+                        diag.collect_diagnostics(page, context, "after_search_results")
+                        
+                        # Check for Akamai block on search results
+                        is_blocked, reason, details = diag.check_akamai_block(page)
+                        if is_blocked:
+                            diag.save_forensics(page, "blocked_at_search_results")
+                            print(f"❌ AKAMAI BLOCK DETECTED AT SEARCH RESULTS: {reason} - {details}")
+                            diag.finalize()
+                            return False
+
+                        _search_typed = True
+                    else:
+                        print("   ⚠️ Could not find search box at all")
+
+                except Exception as _search_err:
+                    print(f"   ⚠️ Organic search failed: {_search_err}")
+
+                if not _search_typed:
+                    # Fallback: direct URL (may trigger Akamai)
+                    print("   ⚠️ Falling back to direct URL navigation")
+                    diag.log("search_fallback_url", method="direct_navigation")
+                    search_url = "https://www.kroger.com/search?query={}".format(urllib.parse.quote_plus(search_term))
+                    goto_with_retries(page, search_url, attempts=4, wait_until="domcontentloaded", timeout_ms=45000)
+                    
+                    # Check for block after direct navigation
+                    is_blocked, reason, details = diag.check_akamai_block(page)
+                    if is_blocked:
+                        diag.save_forensics(page, "blocked_at_direct_navigation")
+                        print(f"❌ AKAMAI BLOCK DETECTED AFTER DIRECT NAVIGATION: {reason} - {details}")
+                        diag.finalize()
+                        return False
+
                 # Dismiss any search-page popups
                 dismiss_kroger_popups(page)
 
@@ -632,6 +994,7 @@ def search_and_capture(search_term=None, output_dir=None):
                 is_still_logged_in = not page.is_visible("text=Sign In")
                 if not is_still_logged_in:
                     print("❌ Session lost during search")
+                    record_login_outcome("kroger", search_term, logged_in=False)
                     return False
                 print("✅ Still logged in after search")
 
@@ -642,15 +1005,60 @@ def search_and_capture(search_term=None, output_dir=None):
                 os.makedirs(main_dir, exist_ok=True)
                 os.makedirs(toa_dir, exist_ok=True)
 
-                # Scroll for full content
+                # Scroll for full content (human-like native wheel events)
                 print("   Scrolling page before screenshot...")
-                # Ensure no overlays block scrolling/screenshot
                 dismiss_kroger_popups(page)
+
+                # Pre-scroll idle (humans don't scroll instantly)
+                diag.log("pre_scroll_idle_start")
+                random_delay(2.2, 3.5)
+
+                # Human-like wheel scrolling in bursts
+                diag.log("scrolling_start")
+                scroll_like_human(page, bursts=random.randint(3, 5),
+                                   lines_min=6, lines_max=12)
+                diag.log("scrolling_complete")
+
+                # Exploratory behavior: drift reading + back-scroll peek
+                drift_reading(page, seconds=random.uniform(1.8, 3.0))
+                backscroll_peek(page)
+
+                # Hover on a random product tile (adds realism)
                 try:
-                    scroll_result = scroll_results(page)
-                    print(f"   Scrolling completed. Scrolled to Y={scroll_result['finalY']} of {scroll_result['finalH']}")
-                except Exception as e:
-                    print(f"   Warning: Scrolling failed: {e}")
+                    _tiles = page.locator('[data-testid*="product"], [class*="product-card"]')
+                    _tile_count = _tiles.count()
+                    if _tile_count > 0:
+                        _n = random.randint(0, min(5, _tile_count - 1))
+                        _tiles.nth(_n).hover()
+                        time.sleep(random.uniform(0.4, 0.9))
+                except Exception:
+                    pass
+
+                # More scrolling to load lazy content
+                scroll_like_human(page, bursts=random.randint(2, 3),
+                                   lines_min=8, lines_max=14)
+
+                # Idle before capture
+                time.sleep(random.uniform(0.5, 0.9))
+
+                # Random mouse movement
+                try:
+                    page.mouse.move(
+                        random.randint(300, 800),
+                        random.randint(400, 600)
+                    )
+                    time.sleep(random.uniform(0.2, 0.4))
+                except Exception:
+                    pass
+
+                # Scroll back to top for full-page screenshot
+                try:
+                    page.evaluate("window.scrollTo(0, 0)")
+                    page.wait_for_timeout(500)
+                except Exception:
+                    pass
+
+                print("   Scrolling completed.")
 
                 # Wait for carousel products to load after scrolling (prevents gray boxes in main screenshot)
                 try:
@@ -838,9 +1246,20 @@ def search_and_capture(search_term=None, output_dir=None):
                 runs_dir = os.path.join(output_dir, "runs")
                 os.makedirs(runs_dir, exist_ok=True)  # Create runs directory if it doesn't exist
                 html_path = os.path.join(runs_dir, f"{file_prefix}.html")
+                page_html = page.content()
                 with open(html_path, "w", encoding="utf-8") as f:
-                    f.write(page.content())
+                    f.write(page_html)
                 print(f"💾 HTML saved to {html_path}")
+
+                # Check if the search results page is actually blocked
+                srp_blocked, srp_reason = check_and_record(page_html, "kroger", search_term, alert=True)
+                if srp_blocked:
+                    print(f"❌ Kroger search results blocked: {srp_reason}")
+                    print("   Saved HTML is an error page. Profile needs manual re-login.")
+                    return False
+                else:
+                    # Successful page — record healthy outcome
+                    check_and_record(page_html, "kroger", search_term, alert=False)
                 
                 # Save path for post-processing AFTER browser lock is released
                 saved_html_path = html_path
@@ -863,6 +1282,13 @@ def search_and_capture(search_term=None, output_dir=None):
                     context.close()
                 except Exception:
                     pass
+                
+                # Finalize diagnostics after browser closes
+                try:
+                    diag.log("browser_closed")
+                    diag.finalize()
+                except Exception as diag_err:
+                    print(f"⚠️ Diagnostic finalization error: {diag_err}")
 
     # Post-processing happens AFTER browser lock is released to prevent deadlock
     if saved_html_path:

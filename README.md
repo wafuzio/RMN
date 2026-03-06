@@ -23,6 +23,9 @@ Supported Retailers
 - **Kroger:** Captures TOA, Skyscraper, and Carousel ads
 - **Instacart:** Captures Shoppable Display Ads, Shoppable Video Ads, and Display Ads
 - **Amazon:** Captures Sponsored Brands (TOA), Sponsored Display (Skyscraper), and Sponsored Products (Carousel)
+- **Walmart:** Captures SBA, SBV, Tile Takeover, and Gallery Cards (PerimeterX evasion)
+- **Target:** Captures ListingPageBannerAd and Sponsored Logo
+- **TikTok Shop:** Captures Products, Featured Brands, and Main page screenshots
 
 ## Retailer Taxonomy (Auto-Generated)
 
@@ -31,9 +34,12 @@ Supported Retailers
 <!-- TAXONOMY_START -->
 | Retailer | Allowed subfolders |
 |----------|-------------------|
-| **Amazon** | `Carousel`, `Main`, `Skyscraper`, `TOA`, `runs` |
-| **Instacart** | `Display_Ads`, `Main`, `Shoppable_Display_Ads`, `Shoppable_Video_Ads`, `runs` |
+| **Amazon** | `Main`, `Sponsored_Brand`, `Sponsored_Display`, `Sponsored_Product`, `runs` |
+| **Instacart** | `Display_Ads`, `Main`, `Shoppable_Display_Ad`, `Shoppable_Display_Ads`, `Shoppable_Recipe_Ads`, `Shoppable_Video_Ad`, `Shoppable_Video_Ads`, `runs` |
 | **Kroger** | `Carousel`, `Display_Ads`, `Main`, `Skyscraper`, `TOA`, `runs` |
+| **Target** | `ListingPageBannerAd`, `Main`, `Sponsored_Logo`, `runs` |
+| **TikTok Shop** | `Featured_Brands`, `Main`, `Products`, `runs` |
+| **Walmart** | `Gallery_Cards`, `Main`, `SBA`, `SBV`, `Tile_Takeover`, `runs` |
 <!-- TAXONOMY_END -->
 
 logs/<retailer>/...
@@ -198,7 +204,7 @@ Per‑retailer profiles
 
 Kroger: export KROGER_PROFILE_DIR="/Users/<you>/ChromeProfiles/kroger_clean_profile"
 Amazon: export AMZ_PROFILE_DIR="/Users/<you>/Documents/Amazon_Scrape/profiles/amazon"
-For additional retailers, each adapter declares its profile env var (e.g., WMT_PROFILE_DIR for Walmart).
+For additional retailers, each adapter declares its profile env var (e.g., WALMART_PROFILE_DIR for Walmart, TARGET_PROFILE_DIR for Target, TIKTOKSHOP_PROFILE_DIR for TikTok Shop).
 
 Setting up retailer profiles:
 
@@ -291,7 +297,7 @@ from core.retailers import RetailerAdapter, register
 class WalmartAdapter(RetailerAdapter):
     slug = "walmart"
     display_name = "Walmart"
-    profile_env = "WMT_PROFILE_DIR"
+    profile_env = "WALMART_PROFILE_DIR"
 
     def search_and_capture(self, keyword, ctx) -> bool:
         # implement Playwright flow (or wrap an existing script)

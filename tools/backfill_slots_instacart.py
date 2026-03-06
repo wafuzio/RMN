@@ -164,8 +164,23 @@ def parse_instacart_html(html_path):
         pos = html_str.find(car_id_str)
         carousel_positions.append((pos, car))
 
-    # Collect all item_list_item elements
-    items = soup.find_all(attrs={'data-testid': re.compile(r'^item_list_item_')})
+    # Collect all item_list_item elements (older Instacart DOM pattern)
+    items = list(soup.find_all(attrs={'data-testid': re.compile(r'^item_list_item_')}))
+    seen_item_ids = {id(el) for el in items}
+
+    # Also collect li-based product cards (newer Instacart DOM: item-card-image anchor)
+    for img in soup.find_all(attrs={'data-testid': 'item-card-image'}):
+        # Walk up to the li card root
+        p = img
+        li_root = None
+        for _ in range(12):
+            if getattr(p, 'name', None) == 'li':
+                li_root = p
+                break
+            p = p.parent if p.parent else p
+        if li_root is not None and id(li_root) not in seen_item_ids:
+            seen_item_ids.add(id(li_root))
+            items.append(li_root)
 
     # Separate items into carousel items and organic items
     carousel_item_groups = defaultdict(list)  # carousel_id -> [item_detail]

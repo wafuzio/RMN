@@ -786,10 +786,10 @@ export function TopBrandModal({
             {displayBrands.map((brand, idx) => {
               const percentage = totalCount > 0 ? Math.round((brand.count / totalCount) * 100) : 0;
               return (
-                <button
+                <div
                   key={brand.brand}
                   onClick={() => onRetailerClick?.(brand.brand)}
-                  className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors text-left"
+                  className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors cursor-pointer"
                 >
                   <div className="font-bold bg-gradient-to-r from-[#e91e63] via-[#06b6d4] to-[#a855f7] bg-clip-text text-transparent text-xl flex-shrink-0 w-6 text-center">
                     #{idx + 1}
@@ -818,7 +818,7 @@ export function TopBrandModal({
                       </div>
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })}
             {remainingCount > 0 && (

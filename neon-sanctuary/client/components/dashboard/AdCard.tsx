@@ -109,10 +109,12 @@ function AdMedia({ imageUrl, videoUrl, posterUrl, alt, isTOA, isSBA, adType, slo
     }
   }
 
-  // Prefer video if available, otherwise use image, then poster (for Skyscraper ads)
-  // BUT: if showVideoOverlay is true AND we have overlay data, use image as base and overlay video on top
-  // If showVideoOverlay is true but no overlay data exists, fall back to regular video playback
-  const hasVideo = !!videoUrl && !(showVideoOverlay && !!videoOverlay);
+  // Always prefer the screenshot image on cards. Video only plays:
+  // 1) As an overlay on top of the screenshot (when videoOverlay data exists), or
+  // 2) In the detail modal when the user clicks the card.
+  // Only fall back to bare video if there is truly no image at all.
+  const hasImage = !!(imageUrl || posterUrl);
+  const hasVideo = !!videoUrl && !hasImage;
   const relUrl = hasVideo ? videoUrl : (imageUrl || posterUrl || null);
 
   if (!relUrl) {

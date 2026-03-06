@@ -207,6 +207,47 @@ def canonicalize(text: str | None, mark_ambiguous: bool = True) -> str | None:
     return None
 
 
+def smart_title(s: str) -> str:
+    """Title-case that fixes the possessive-'s bug in Python's str.title().
+
+    str.title() capitalises after every non-alpha character, turning
+    "maud's" into "Maud'S".  This function corrects possessive 's
+    (letter + apostrophe + S) while preserving intentional mid-word
+    capitals like L'Oréal, Ka'Chava, Dell'Amore.
+    """
+    t = s.title()
+    # Only lowercase 'S after a word character (possessive pattern).
+    # Matches: Maud'S -> Maud's, Welch'S -> Welch's, Hellmann'S -> Hellmann's
+    # Preserves: L'Oréal (O is not 's'), Ka'Chava (C is not 's')
+    return re.sub(r"(['\u2019])[Ss]\b", lambda m: m.group(1) + "s", t)
+
+
+def _is_guid_like(s: str) -> bool:
+    """Return True if s looks like a GUID/UUID or hex hash, not a real brand.
+
+    Uses two checks:
+    1. Standard UUID pattern (8-4-4-4-12 hex digits with any separator).
+    2. Long hex string (≥16 chars after stripping separators, ≥90% hex, ≥2 digits).
+    This avoids false positives on real brands like 'Bacha Coffee'.
+    """
+    clean = s.strip()
+    # Check 1: UUID pattern
+    if re.match(
+        r'^[0-9A-Fa-f]{8}[\s_-]?[0-9A-Fa-f]{4}[\s_-]?[0-9A-Fa-f]{4}'
+        r'[\s_-]?[0-9A-Fa-f]{4}[\s_-]?[0-9A-Fa-f]{12}$',
+        clean,
+    ):
+        return True
+    # Check 2: long hex-heavy string with digits
+    stripped = re.sub(r'[\s_-]', '', clean)
+    if len(stripped) >= 16:
+        hex_chars = sum(1 for c in stripped if c in '0123456789abcdefABCDEF')
+        digit_chars = sum(1 for c in stripped if c.isdigit())
+        if hex_chars / len(stripped) >= 0.90 and digit_chars >= 2:
+            return True
+    return False
+
+
 def add_brand(brand_name: str) -> bool:
     """
     Add a new brand to the lexicon if it doesn't already exist.
@@ -220,6 +261,8 @@ def add_brand(brand_name: str) -> bool:
     """
     if not brand_name or brand_name.lower() in ('unknown', ''):
         return False
+    if _is_guid_like(brand_name):
+        return False
     
     _load()
     
@@ -228,7 +271,7 @@ def add_brand(brand_name: str) -> bool:
         return False  # Already in lexicon
     
     # Clean up brand name - title case, strip whitespace
-    clean_name = brand_name.strip().title()
+    clean_name = smart_title(brand_name.strip())
     
     # Don't add very short names (likely noise)
     if len(clean_name) < 2:

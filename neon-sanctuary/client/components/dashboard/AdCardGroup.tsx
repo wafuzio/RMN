@@ -32,10 +32,15 @@ export function AdCardGroup({
     ? `BADGE_START${group.count}BADGE_END — ${new Date(group.first_seen).toLocaleDateString()} → ${new Date(group.last_seen).toLocaleDateString()}`
     : group.last_seen;
   
+  // Show all clients if group spans multiple
+  const clientDisplay = group.clients && group.clients.length > 1
+    ? group.clients.join(', ')
+    : group.cover.client;
+
   const ad: Ad = {
     id: group.group_id,
     retailer: group.cover.retailer,
-    client: group.cover.client,
+    client: clientDisplay,
     keyword: keywordDisplay,
     ad_type: group.cover.ad_type,
     brand: group.cover.brand || '',

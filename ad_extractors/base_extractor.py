@@ -309,7 +309,8 @@ class AdExtractor:
             brand_slug = re.search(r'/pr/kpm-([a-z0-9-]+)', href)
             if brand_slug:
                 # Convert slug to readable format (e.g., "brand-name" -> "Brand Name")
-                brand = brand_slug.group(1).replace('-', ' ').title()
+                from core.brands import smart_title
+                brand = smart_title(brand_slug.group(1).replace('-', ' '))
                 return brand
         except re.error:
             pass

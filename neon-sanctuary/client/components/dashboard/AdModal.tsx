@@ -169,7 +169,7 @@ export function AdModal({ open, ad, group, onOpenChange, onCompare }: { open: bo
                   loading="eager"
                   onLoad={() => setPopupImageLoaded(prev => !prev)}
                 />
-                {ad.video_url && overlayBox && (
+                {ad.video_url && metadataBox && (
                   <video
                     key={`popup-${ad.id}-${popupImageLoaded}`}
                     src={toLocalImageUrl(ad.video_url)}
@@ -180,10 +180,10 @@ export function AdModal({ open, ad, group, onOpenChange, onCompare }: { open: bo
                     preload="metadata"
                     style={{
                       position: 'absolute',
-                      top: `${overlayBox.y * 100}%`,
-                      left: `${overlayBox.x * 100}%`,
-                      width: `${overlayBox.w * 100}%`,
-                      height: `${overlayBox.h * 100}%`,
+                      top: `${metadataBox.y * 100}%`,
+                      left: `${metadataBox.x * 100}%`,
+                      width: `${metadataBox.w * 100}%`,
+                      height: `${metadataBox.h * 100}%`,
                       objectFit: 'fill',
                       zIndex: 2,
                       pointerEvents: 'none',
@@ -286,7 +286,7 @@ export function AdModal({ open, ad, group, onOpenChange, onCompare }: { open: bo
                     setFullscreenImageLoaded(prev => !prev);
                   }}
                 />
-                {ad.video_url && overlayBox && (
+                {ad.video_url && metadataBox && (
                   <video
                     key={`fullscreen-${ad.id}-${fullscreenImageLoaded}`}
                     src={toLocalImageUrl(ad.video_url)}
@@ -297,10 +297,10 @@ export function AdModal({ open, ad, group, onOpenChange, onCompare }: { open: bo
                     preload="metadata"
                     style={{
                       position: 'absolute',
-                      top: `${overlayBox.y * 100}%`,
-                      left: `${overlayBox.x * 100}%`,
-                      width: `${overlayBox.w * 100}%`,
-                      height: `${overlayBox.h * 100}%`,
+                      top: `${metadataBox.y * 100}%`,
+                      left: `${metadataBox.x * 100}%`,
+                      width: `${metadataBox.w * 100}%`,
+                      height: `${metadataBox.h * 100}%`,
                       objectFit: 'fill',
                       zIndex: 2,
                       pointerEvents: 'none',

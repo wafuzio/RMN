@@ -21,8 +21,9 @@ import requests
 import shutil
 import hashlib
 import re
+import threading
 import time
-from core.brands import canonicalize, add_brand
+from core.brands import canonicalize, add_brand, smart_title
 
 # Brand logo database for centralized logo storage
 try:
@@ -77,7 +78,9 @@ CAROUSEL_HEADINGS = [
     "Trending now",
     "Popular products in this category",
     "Customers who viewed this item also viewed",
-    "Customers mention"
+    "Customers mention",
+    "Picks from Amazon Influencers",
+    "From Amazon influencer storefronts"
 ]
 
 
@@ -331,6 +334,26 @@ def _extract_brand_and_message(container):
             if m:
                 brand = m.group(1).strip()
     
+    # Strip Amazon promotional prefixes (e.g. "Buy And Save : Bubly" -> "Bubly")
+    if brand:
+        brand = re.sub(r'^Buy\s+And\s+Save\s*:\s*', '', brand, flags=re.IGNORECASE).strip() or None
+
+    # Reject GUID/hex-like strings that leak from DOM attributes
+    if brand:
+        _b = brand.strip()
+        _is_uuid = bool(re.match(
+            r'^[0-9A-Fa-f]{8}[\s_-]?[0-9A-Fa-f]{4}[\s_-]?[0-9A-Fa-f]{4}'
+            r'[\s_-]?[0-9A-Fa-f]{4}[\s_-]?[0-9A-Fa-f]{12}$', _b))
+        if not _is_uuid:
+            _stripped = re.sub(r'[\s_-]', '', _b)
+            if len(_stripped) >= 16:
+                _hx = sum(1 for c in _stripped if c in '0123456789abcdefABCDEF')
+                _dg = sum(1 for c in _stripped if c.isdigit())
+                if _hx / len(_stripped) >= 0.90 and _dg >= 2:
+                    _is_uuid = True
+        if _is_uuid:
+            brand = None
+
     # Canonicalize brand
     brand_canon = None
     try:
@@ -339,7 +362,7 @@ def _extract_brand_and_message(container):
             # Add new brand to lexicon if not already there
             if not brand_canon and brand.lower() not in ('unknown', ''):
                 add_brand(brand)
-                brand_canon = brand.strip().title()
+                brand_canon = smart_title(brand.strip())
     except Exception:
         brand_canon = None
     return brand, brand_canon, (message or "")
@@ -406,12 +429,18 @@ def _try_hybrid_extraction(container):
                                             if m_store:
                                                 store_slug = m_store.group(1).replace('-', ' ').replace('_', ' ')
                                                 if len(store_slug) > 2:
-                                                    brand = store_slug.title()
+                                                    brand = smart_title(store_slug)
                                     
                                     # Last resort: use first word only (safest — avoids product descriptors)
+                                    # But skip generic UI words that leak through prefix stripping
+                                    _GENERIC_WORDS = {"page", "click", "shop", "buy", "new", "save",
+                                                      "deal", "free", "best", "top", "get", "see",
+                                                      "view", "more", "add", "now", "off", "sale",
+                                                      "learn", "discover", "explore", "try", "image",
+                                                      "logo", "branded", "product", "sponsored"}
                                     if not brand and len(parts[0]) > 2:
                                         cand = re.sub(r'[^\w\s&\'\.-]', '', parts[0]).strip()
-                                        if len(cand) > 2:
+                                        if len(cand) > 2 and cand.lower() not in _GENERIC_WORDS:
                                             brand = cand
                     except Exception:
                         pass
@@ -696,10 +725,16 @@ def _wait_for_iframe_content(page, el, timeout_ms=4000):
     """
     Wait for iframe-based display ads to load their creative content.
     Returns True if content appears loaded, False otherwise.
+    Hard Python-side timeout prevents page.evaluate from blocking on
+    Amazon's JS network-retry loops (which cause 429-induced hangs).
     """
-    try:
-        ad_handle = el.element_handle()
-        loaded = page.evaluate("""
+    result_holder = [None]
+    error_holder  = [None]
+
+    def _eval():
+        try:
+            ad_handle = el.element_handle()
+            result_holder[0] = page.evaluate("""
           (el) => new Promise((resolve) => {
             const sleep = (ms) => new Promise(r => setTimeout(r, ms));
             (async () => {
@@ -753,9 +788,18 @@ def _wait_for_iframe_content(page, el, timeout_ms=4000):
             })()
           })
         """, ad_handle)
-        return bool(loaded)
-    except Exception:
+        except Exception as exc:
+            error_holder[0] = exc
+
+    t = threading.Thread(target=_eval, daemon=True)
+    t.start()
+    timeout_sec = (timeout_ms / 1000) + 1.0
+    t.join(timeout=timeout_sec)
+    if t.is_alive():
         return False
+    if error_holder[0]:
+        return False
+    return bool(result_holder[0])
 
 
 def _creative_fingerprint(el):
@@ -986,6 +1030,26 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                 accept_amazon_cookies(page)
                 ensure_amazon_logged_in(page)
 
+                # Login state check — Amazon shows "Hello, sign in" when not authenticated
+                try:
+                    _amz_nav = page.locator('#nav-link-accountList-nav-line-1').first
+                    if _amz_nav.is_visible(timeout=2000):
+                        _amz_text = (_amz_nav.text_content() or "").lower()
+                        if "sign in" in _amz_text:
+                            log("login: ⚠️ Not logged in — 'Hello, sign in' visible")
+                            try:
+                                from utils.profile_health import prompt_relogin
+                                _relogged = prompt_relogin(page, "amazon", keyword, log_fn=lambda m: log(f"login: {m}"))
+                                if not _relogged:
+                                    from utils.profile_health import record_login_outcome
+                                    record_login_outcome("amazon", keyword, logged_in=False)
+                            except Exception:
+                                pass
+                        else:
+                            log("login: ✅ Logged-in session detected")
+                except Exception:
+                    pass
+
                 # Wait readiness heuristics
                 try:
                     page.wait_for_selector('div[data-component-type="s-search-result"]', timeout=8000)
@@ -1153,12 +1217,15 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                           st.type = 'text/css';
                           st.textContent = css;
                           document.head.appendChild(st);
-                          // Also force-remove position:fixed from all elements to prevent
-                          // duplication in Playwright's full-page stitching
+                          // Hide all fixed/sticky elements to prevent duplication
+                          // in Playwright's full-page stitching. Converting to
+                          // position:absolute leaves them at their document Y and
+                          // they get re-captured as Playwright scrolls each viewport
+                          // chunk — hiding is the only safe approach.
                           document.querySelectorAll('*').forEach(el => {
                             const cs = getComputedStyle(el);
                             if (cs.position === 'fixed' || cs.position === 'sticky') {
-                              el.style.setProperty('position', 'absolute', 'important');
+                              el.style.setProperty('display', 'none', 'important');
                             }
                           });
                         }
@@ -2181,8 +2248,22 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                     left_display_count = 0
                     bottom_display_count = 0
                     other_display_count = 0
+                    _display_429_count = 0  # Track consecutive 429s to bail early
+
+                    def _on_response(resp):
+                        nonlocal _display_429_count
+                        if resp.status == 429:
+                            _display_429_count += 1
+                        elif resp.status < 400:
+                            _display_429_count = 0  # Reset on any successful response
+
+                    page.on("response", _on_response)
+
                     for i, raw_ad in enumerate(all_display_ads[:10]):  # Soft limit for performance
                         if time_left() < 10:
+                            break
+                        if _display_429_count >= 3:
+                            log(f"display: skipping remaining ads — {_display_429_count} consecutive 429s (rate limited)")
                             break
                         
                         # Normalize to canonical container so cropping is consistent
@@ -2272,7 +2353,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                         brand_canon = canonicalize(brand_txt)
                                         if not brand_canon and brand_txt.lower() != "unknown":
                                             add_brand(brand_txt)
-                                            brand_canon = brand_txt.strip().title()
+                                            brand_canon = smart_title(brand_txt.strip())
                                     except Exception as e:
                                         log(f"display: hybrid canonicalize error -> {e}")
                             # --------------------------------------------------
@@ -2319,9 +2400,10 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             try:
                                 ad.scroll_into_view_if_needed()
                                 time.sleep(0.5)  # Initial wait
-                                
-                                # Wait for iframe/image content to actually load
-                                content_loaded = _wait_for_iframe_content(page, ad, timeout_ms=5000)
+
+                                # Shorten wait if we're already seeing 429s
+                                hydration_ms = 2000 if _display_429_count > 0 else 5000
+                                content_loaded = _wait_for_iframe_content(page, ad, timeout_ms=hydration_ms)
                                 
                                 # Additional wait for any remaining lazy content
                                 time.sleep(0.5)
@@ -2379,6 +2461,20 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 log(f"display: targeting inner creative for ad {display_idx}")
                             shot_el.screenshot(path=fpath, timeout=4000)
                             
+                            # Probe image dimensions for portrait/landscape detection
+                            img_width, img_height = None, None
+                            card_format = None
+                            try:
+                                from PIL import Image as PILImage
+                                with PILImage.open(fpath) as img:
+                                    img_width, img_height = img.size
+                                    # Portrait ads (height > width * 1.5) should go to RHS column
+                                    if img_height > img_width * 1.5:
+                                        card_format = "tile"
+                                    log(f"display: dimensions {img_width}x{img_height}, format={card_format or 'banner'}")
+                            except Exception as e:
+                                log(f"display: dimension probe error -> {e}")
+                            
                             # Post-screenshot blank detection: skip if the capture is blank
                             if _is_blank_screenshot(fpath):
                                 log(f"display: BLANK screenshot detected ({os.path.getsize(fpath)} bytes), deleting -> {fname}")
@@ -2434,7 +2530,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             
                             # Add to ads array
                             module_id, eid = _build_ids("Sponsored_Display", "Display_Ad", brand_canon, anchor, run_id, display_idx)
-                            ads.append({
+                            ad_data = {
                                 "id": eid,
                                 "module_id": module_id,
                                 "type": "Sponsored_Display",
@@ -2457,7 +2553,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 "metadata": {
                                     "has_product_description": bool(product_description)
                                 },
-                            })
+                            }
+                            # Add dimensions and card_format for frontend routing
+                            if img_width and img_height:
+                                ad_data["dimensions"] = {"width": img_width, "height": img_height}
+                            if card_format:
+                                ad_data["card_format"] = card_format
+                            ads.append(ad_data)
                             log(f"display: saved -> {fname}")
                             display_idx += 1
                         except Exception as e:
@@ -2896,6 +2998,26 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
             log("cookies/login")
             accept_amazon_cookies(page)
             ensure_amazon_logged_in(page)
+
+            # Login state check — Amazon shows "Hello, sign in" when not authenticated
+            try:
+                _amz_nav = page.locator('#nav-link-accountList-nav-line-1').first
+                if _amz_nav.is_visible(timeout=2000):
+                    _amz_text = (_amz_nav.text_content() or "").lower()
+                    if "sign in" in _amz_text:
+                        log("login: ⚠️ Not logged in — 'Hello, sign in' visible")
+                        try:
+                            from utils.profile_health import prompt_relogin
+                            _relogged = prompt_relogin(page, "amazon", keyword, log_fn=lambda m: log(f"login: {m}"))
+                            if not _relogged:
+                                from utils.profile_health import record_login_outcome
+                                record_login_outcome("amazon", keyword, logged_in=False)
+                        except Exception:
+                            pass
+                    else:
+                        log("login: ✅ Logged-in session detected")
+            except Exception:
+                pass
 
             # Wait readiness heuristics
             try:
@@ -3537,7 +3659,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             log(f"display: left duplicate module skipped -> {module_id}")
                             continue
                         captured_modules.add(module_id)
-                        ads.append({
+                        ad_data = {
                             "id": eid,
                             "module_id": module_id,
                             "type": "Sponsored_Display",
@@ -3550,7 +3672,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             "video_path": None,
                             "message": message,
                             "metadata": {},
-                        })
+                        }
+                        # Add dimensions and card_format for frontend routing
+                        if img_width and img_height:
+                            ad_data["dimensions"] = {"width": img_width, "height": img_height}
+                        if card_format:
+                            ad_data["card_format"] = card_format
+                        ads.append(ad_data)
                         log(f"display: left saved -> {fpath} module_id={module_id}")
                     except Exception as e:
                         log(f"display: left screenshot fail -> {e}")
@@ -3623,6 +3751,21 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                         if shot_el is not el:
                             log(f"display: bottom targeting inner creative for ad {i}")
                         shot_el.screenshot(path=fpath, timeout=4000)
+                        
+                        # Probe image dimensions for portrait/landscape detection
+                        img_width, img_height = None, None
+                        card_format = None
+                        try:
+                            from PIL import Image as PILImage
+                            with PILImage.open(fpath) as img:
+                                img_width, img_height = img.size
+                                # Portrait ads (height > width * 1.5) should go to RHS column
+                                if img_height > img_width * 1.5:
+                                    card_format = "tile"
+                                log(f"display: bottom dimensions {img_width}x{img_height}, format={card_format or 'banner'}")
+                        except Exception as e:
+                            log(f"display: bottom dimension probe error -> {e}")
+                        
                         # Post-screenshot blank detection
                         if _is_blank_screenshot(fpath):
                             log(f"display: bottom BLANK screenshot detected ({os.path.getsize(fpath)} bytes), deleting -> {fname}")
@@ -3665,7 +3808,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             log(f"display: bottom duplicate module skipped -> {module_id}")
                             continue
                         captured_modules.add(module_id)
-                        ads.append({
+                        ad_data = {
                             "id": eid,
                             "module_id": module_id,
                             "type": "Sponsored_Display",
@@ -3678,7 +3821,13 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             "video_path": None,
                             "message": message,
                             "metadata": {},
-                        })
+                        }
+                        # Add dimensions and card_format for frontend routing
+                        if img_width and img_height:
+                            ad_data["dimensions"] = {"width": img_width, "height": img_height}
+                        if card_format:
+                            ad_data["card_format"] = card_format
+                        ads.append(ad_data)
                         log(f"display: bottom saved -> {fpath} module_id={module_id}")
                     except Exception as e:
                         log(f"display: bottom screenshot fail -> {e}")
@@ -3918,7 +4067,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
             "search_url": _search_url(keyword),
             "html": os.path.basename(html_path),
             "ads": ads,
-            "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
             "run_id": run_id,
         }
         try:

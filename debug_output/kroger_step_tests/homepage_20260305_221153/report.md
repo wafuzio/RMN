@@ -1,0 +1,33 @@
+# Kroger Step Test: homepage
+
+**Timestamp**: 20260305_221153
+**Outcome**: blocked_at_homepage
+**Blocked**: True
+**Block Reason**: access_denied
+**Block Details**: Title: Access Denied
+
+## Timings
+
+- launch_ms: 2817ms
+- homepage_ms: 3461ms
+
+## Diagnostics
+
+### Navigator
+- webdriver: True
+- userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like ...
+- platform: MacIntel
+- hardwareConcurrency: 10
+- deviceMemory: None
+- pluginsLength: 5
+
+### WebGL
+- vendor: WebKit
+- renderer: WebKit WebGL
+- unmaskedVendor: Google Inc. (Apple)
+- unmaskedRenderer: ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)
+
+### Cookies
+- count: 136
+- names: pid, rxVisitorg9i8dbl7, s_ecid, _fbp, _ga, UTID, UTID_ENC, MUID, ai_user, _cc-x
+- akamai_cookies: _abck, bm_ss, ak_bmsc, bm_sv, _abck, bm_s, bm_sc, bm_so, bm_sz, bm_lso

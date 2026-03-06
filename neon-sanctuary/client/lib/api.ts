@@ -79,13 +79,17 @@ async function timeFetch(input: RequestInfo, init?: RequestInit, label?: string)
 
 async function http<T>(path: string, init?: RequestInit, label?: string): Promise<T> {
   const url = `${API_BASE}${path}`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...init?.headers as Record<string, string>,
+  };
+  // Only send ngrok header when talking directly to ngrok (not via proxy)
+  if (API_BASE.includes('ngrok')) {
+    headers['ngrok-skip-browser-warning'] = '1';
+  }
   const res = await timeFetch(url, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': '1',  // Required for ngrok tunnel
-      ...init?.headers
-    }
+    headers,
   }, label);
 
   if (!res.ok) {

@@ -81,14 +81,25 @@ class InstacartAdapter(RetailerAdapter):
             return False
 
     def collect_pairs_for_run(self, ctx, run_start_ts: float):
-        """Collect JSON/HTML pairs from the most recent run."""
+        """Collect JSON/HTML pairs from the most recent run.
+
+        Instacart saves JSONs under runs/<timestamp>/run_results_*.json (date subdirs).
+        """
         runs = os.path.join(ctx.output_dir, "runs")
-        jsons = sorted([p for p in glob.glob(os.path.join(runs, "run_results_*.json"))
+        candidates = glob.glob(os.path.join(runs, "run_results_*.json")) + \
+                     glob.glob(os.path.join(runs, "*", "run_results_*.json"))
+        jsons = sorted([p for p in candidates
                         if os.path.getmtime(p) >= run_start_ts - 2],
                        key=os.path.getmtime)
         pairs = []
         for j in jsons:
+            # Try standard rename first
             h = j.replace("run_results_", "search_results_").replace(".json", ".html")
+            if not os.path.exists(h):
+                # Instacart HTML uses keyword in name: search_results_<keyword>_<ts>.html
+                # Find any HTML in the same directory
+                sibling_htmls = glob.glob(os.path.join(os.path.dirname(j), "search_results_*.html"))
+                h = sibling_htmls[0] if sibling_htmls else h
             if os.path.exists(h):
                 pairs.append((j, h))
         return pairs

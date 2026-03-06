@@ -48,3 +48,6 @@ cache/
 
 # Flask lib copies (not needed in repo)
 web/libs/
+
+# Local Netlify folder
+.netlify

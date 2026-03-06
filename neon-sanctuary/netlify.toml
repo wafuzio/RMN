@@ -1,15 +1,18 @@
 [build]
   command = "npm run build:client"
-  functions = "netlify/functions"
   publish = "dist/spa"
 
-
-[functions]
-  external_node_modules = ["express"]
-  node_bundler = "esbuild"
-  
+# Proxy all /api/* requests to the Flask backend via ngrok
 [[redirects]]
-  force = true
   from = "/api/*"
+  to = "https://foilable-ruthie-consultive.ngrok-free.dev/api/:splat"
   status = 200
-  to = "/.netlify/functions/api/:splat"
+  force = true
+  [redirects.headers]
+    ngrok-skip-browser-warning = "1"
+
+# SPA fallback: serve index.html for all other routes
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

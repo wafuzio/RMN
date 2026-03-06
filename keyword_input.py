@@ -486,7 +486,13 @@ class KeywordInputApp:
         
         self.retailer_picker = RetailerPicker(retailer_frame, unavailable=unavailable, columns=4)
         self.retailer_picker.pack(fill=tk.X, padx=5, pady=5)
-        
+
+        # --- Profile Health Status Bar ---
+        self._health_frame = ttk.Frame(retailer_frame, style='Card.TFrame')
+        self._health_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
+        self._health_labels: dict[str, tk.Label] = {}
+        self._build_health_bar()
+
         # Restore saved retailer selections or use defaults
         if saved_state and "selected_retailers" in saved_state:
             # Restore from saved state
@@ -801,6 +807,80 @@ class KeywordInputApp:
             pass
         return "kroger"
     
+    # --- Profile Health Bar ---------------------------------------------------
+
+    def _build_health_bar(self):
+        """Build per-retailer health indicators in self._health_frame."""
+        from utils.profile_health import get_all_statuses
+        statuses = get_all_statuses()
+
+        # Clear existing widgets
+        for w in self._health_frame.winfo_children():
+            w.destroy()
+        self._health_labels.clear()
+
+        _STATUS_ICON = {"healthy": "🟢", "degraded": "🟡", "blocked": "🔴"}
+        registered_slugs = sorted(self._retailer_by_name.values())
+
+        for slug in registered_slugs:
+            entry = statuses.get(slug, {})
+            status = entry.get("status", "healthy")
+            icon = _STATUS_ICON.get(status, "⚪")
+            consec = entry.get("consecutive_failures", 0)
+            tip = f"{slug.title()}: {status}"
+            if consec:
+                tip += f" ({consec} consecutive failures)"
+
+            lbl = tk.Label(
+                self._health_frame,
+                text=f" {icon} {slug.title()} ",
+                font=("Inter", 9),
+                bg="#2b2b2b" if status == "healthy" else ("#3d3520" if status == "degraded" else "#3d2020"),
+                fg="#e0e0e0",
+                padx=4, pady=1,
+            )
+            lbl.pack(side=tk.LEFT, padx=(0, 4))
+            self._health_labels[slug] = lbl
+
+        # Reset button (only shown if any retailer is blocked)
+        any_blocked = any(
+            statuses.get(s, {}).get("status") == "blocked"
+            for s in registered_slugs
+        )
+        if any_blocked:
+            reset_btn = tk.Button(
+                self._health_frame,
+                text="🔄 Reset after re-login",
+                font=("Inter", 9),
+                bg="#3a5a3a", fg="#e0e0e0",
+                activebackground="#4a7a4a", activeforeground="#ffffff",
+                relief="flat", padx=6, pady=1,
+                command=self._reset_profile_health,
+            )
+            reset_btn.pack(side=tk.RIGHT, padx=(4, 0))
+
+    def _refresh_health_bar(self):
+        """Rebuild the health bar (call after scrapes complete)."""
+        try:
+            self._build_health_bar()
+        except Exception:
+            pass
+
+    def _reset_profile_health(self):
+        """Reset all blocked retailers to healthy (after manual re-login)."""
+        from utils.profile_health import get_all_statuses, reset_retailer
+        statuses = get_all_statuses()
+        reset_names = []
+        for slug, entry in statuses.items():
+            if entry.get("status") in ("blocked", "degraded"):
+                reset_retailer(slug)
+                reset_names.append(slug.title())
+        if reset_names:
+            self.notify(f"Reset profile health for: {', '.join(reset_names)}", "info")
+        self._build_health_bar()
+
+    # --- End Profile Health Bar -----------------------------------------------
+
     def log(self, msg: str):
         """Log to stdout and to client-specific logger if configured."""
         try:
@@ -1029,6 +1109,7 @@ class KeywordInputApp:
             
             # End-of-run summary
             self._activity_line("All retailers finished.", "success")
+            self._refresh_health_bar()
             
         except Exception as e:
             self.log(f"❌ Error: {str(e)}")
@@ -1043,8 +1124,8 @@ class KeywordInputApp:
         out_dir = output_dir_for(base, retailer_slug, folder_name)
         logs_dir = logs_dir_for(base, retailer_slug)
 
-        profile_dir = os.environ.get(adapter.profile_env) or os.environ.get("KROGER_PROFILE_DIR") or DEFAULT_PROFILE
-        
+        profile_dir = os.environ.get(adapter.profile_env) or None
+
         if profile_dir and not os.path.isdir(profile_dir):
             self.log(f"[{retailer_name}] profile dir not found or not a directory: {profile_dir} (continuing without persistent profile)")
             profile_dir = None
@@ -1240,7 +1321,10 @@ class KeywordInputApp:
                 # Safety: if for some reason collection missed files, fallback minimally
                 if not run_pairs:
                     # Collect ONLY files created during this GUI session (mtime gate)
-                    cands = sorted([p for p in glob.glob(os.path.join(runs_dir, "run_results_*.json"))
+                    # Search both flat (runs/run_results_*.json) and date subdirs (runs/*/run_results_*.json)
+                    all_cands = glob.glob(os.path.join(runs_dir, "run_results_*.json")) + \
+                                glob.glob(os.path.join(runs_dir, "*", "run_results_*.json"))
+                    cands = sorted([p for p in all_cands
                                     if os.path.getmtime(p) >= run_start_ts - 2], key=os.path.getmtime)
                     for jpath in cands:
                         hpath = jpath.replace("run_results_", "search_results_").replace(".json", ".html")
@@ -1275,7 +1359,11 @@ class KeywordInputApp:
                         popup.update()
                 
                 # Summarize across all terms from this run
-                if (total_toa + total_sky) > 0:
+                # TOA/Skyscraper is only meaningful for Kroger; other retailers
+                # capture images during search_and_capture and don't produce TOA output.
+                requires_toa = (retailer_slug == "kroger")
+                toa_ok = (total_toa + total_sky) > 0
+                if toa_ok or not requires_toa:
                     total_imgs = total_toa + total_sky + total_car
                     self.step(retailer_name, f"Images captured ({total_imgs})")
                     print("✅ Image extraction completed for this run:")
@@ -2810,41 +2898,69 @@ Captured: {timestamp_str}
             self.notify(f"Error starting daemon: {e}", "error")
     
     def stop_daemon_manual(self):
-        """Manually stop the daemon (called by button)"""
+        """Manually stop the daemon AND all child scraper processes."""
         if not self.daemon_status:
             self.notify("Daemon is not running", "info")
             return
         
         try:
-            # Find scheduler_daemon.py process
+            # Collect PIDs for the full process tree:
+            #   scheduler_entry.py, scheduler_daemon.py, and all scraper scripts
+            scraper_scripts = [
+                "scheduler_entry.py", "scheduler_daemon.py",
+                "kroger_search_and_capture.py", "walmart_search_and_capture.py",
+                "target_search_and_capture.py", "amazon_search_and_capture.py",
+                "instacart_search_and_capture.py", "tiktokshop_search_and_capture.py",
+                "screenshot_front_page.py",
+            ]
+            
             result = subprocess.run(
                 ["ps", "aux"],
-                capture_output=True,
-                text=True,
-                timeout=5
+                capture_output=True, text=True, timeout=5
             )
             
-            daemon_pid = None
+            pids_to_kill = []
             for line in result.stdout.splitlines():
-                if "scheduler_daemon.py" in line and "grep" not in line:
+                if "grep" in line:
+                    continue
+                if any(s in line for s in scraper_scripts):
                     parts = line.split()
-                    if len(parts) > 1:
-                        daemon_pid = parts[1]
-                        break
+                    if len(parts) > 1 and parts[1].isdigit():
+                        pids_to_kill.append(int(parts[1]))
             
-            if daemon_pid and daemon_pid.isdigit():
-                # Send SIGTERM to gracefully stop
-                os.kill(int(daemon_pid), 15)
-                self.notify("Stopping daemon...", "info")
+            if not pids_to_kill:
+                self.notify("Could not find daemon/scraper processes", "error")
+                return
+            
+            # Phase 1: SIGTERM all
+            for pid in pids_to_kill:
+                try:
+                    os.kill(pid, 15)  # SIGTERM
+                except (ProcessLookupError, PermissionError):
+                    pass
+            
+            self.notify(f"Stopping {len(pids_to_kill)} process(es)...", "info")
+            
+            # Phase 2: after 4 seconds, SIGKILL any survivors and clean up
+            def _force_kill_and_cleanup():
+                for pid in pids_to_kill:
+                    try:
+                        os.kill(pid, 9)  # SIGKILL
+                    except (ProcessLookupError, PermissionError):
+                        pass
+                # Clean up stale lock/pid files
+                base = get_base_dir()
+                for f in ["logs/scheduler.lock", "logs/scheduler.pid"]:
+                    path = os.path.join(base, f)
+                    try:
+                        if os.path.exists(path):
+                            os.remove(path)
+                    except Exception:
+                        pass
+                self.refresh_daemon_status_manual()
+            
+            self.root.after(4000, _force_kill_and_cleanup)
                 
-                # Wait a moment then check status
-                self.root.after(1500, lambda: self.refresh_daemon_status_manual())
-            else:
-                self.notify("Could not find daemon process", "error")
-                
-        except ProcessLookupError:
-            self.notify("Daemon process not found (already stopped?)", "warn")
-            self.refresh_daemon_status_manual()
         except Exception as e:
             self.notify(f"Error stopping daemon: {e}", "error")
     
@@ -4209,6 +4325,17 @@ Captured: {timestamp_str}
         if "days" in self.schedule_config:
             for day in self.day_vars:
                 self.day_vars[day].set(day in self.schedule_config["days"])
+        
+        # Schedule keywords are the source of truth — override client_history if present
+        if "keywords" in self.schedule_config and self.schedule_config["keywords"]:
+            kws = self.schedule_config["keywords"]
+            self.keyword_input.delete(1.0, tk.END)
+            self.keyword_input.insert(tk.END, "\n".join(kws))
+            self.status_label.config(text=f"Loaded {len(kws)} keywords for {sel} (from schedule)")
+            # Keep client_history in sync
+            if sel in self.client_history and self.client_history[sel] != kws:
+                self.client_history[sel] = kws
+                self.save_to_history(sel, kws)
 
         self.logger = self.setup_logging(sel)
         try:

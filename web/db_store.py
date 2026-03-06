@@ -18,6 +18,12 @@ DB_URL = os.environ.get(
     "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
 )
 
+# Ad types that should never appear as cards in the dashboard
+EXCLUDED_AD_TYPES = ["product_listing", "sponsored_product", "shoppable_ad_item"]
+
+# Message/title patterns that indicate Amazon house ads (not third-party advertising)
+EXCLUDED_MESSAGES = ["seen on social media"]
+
 _pool = None
 
 
@@ -247,8 +253,8 @@ def count_ads(
         conn = _get_conn()
         cur = conn.cursor()
 
-        where = []
-        params = []
+        where = ["lower(a.ad_type) != ALL(%s)", "(a.image_path IS NULL OR a.image_path NOT LIKE '%%product_images/%%')", "NOT (lower(COALESCE(a.title,'') || ' ' || COALESCE(a.message,'')) LIKE ANY(%s))"]
+        params = [EXCLUDED_AD_TYPES, [f"%{p}%" for p in EXCLUDED_MESSAGES]]
 
         if retailer:
             where.append("r.retailer = %s")
@@ -279,7 +285,7 @@ def count_ads(
                 params.append(f"%{t.lower().replace('_', ' ')}%")
             where.append(f"({' OR '.join(type_conditions)})")
 
-        where_clause = " AND ".join(where) if where else "TRUE"
+        where_clause = " AND ".join(where)
 
         cur.execute(f"""
             SELECT COUNT(*)
@@ -319,8 +325,8 @@ def query_ads(
         conn = _get_conn()
         cur = conn.cursor()
 
-        where = []
-        params = []
+        where = ["lower(a.ad_type) != ALL(%s)", "(a.image_path IS NULL OR a.image_path NOT LIKE '%%product_images/%%')", "NOT (lower(COALESCE(a.title,'') || ' ' || COALESCE(a.message,'')) LIKE ANY(%s))"]
+        params = [EXCLUDED_AD_TYPES, [f"%{p}%" for p in EXCLUDED_MESSAGES]]
 
         if retailer:
             where.append("r.retailer = %s")
@@ -350,7 +356,7 @@ def query_ads(
                 params.append(f"%{t.lower().replace('_', ' ')}%")
             where.append(f"({' OR '.join(type_conditions)})")
 
-        where_clause = " AND ".join(where) if where else "TRUE"
+        where_clause = " AND ".join(where)
 
         # Sort
         order = "r.timestamp DESC"
@@ -447,8 +453,8 @@ def get_ad_types(
         conn = _get_conn()
         cur = conn.cursor()
 
-        where = []
-        params = []
+        where = ["lower(a.ad_type) != ALL(%s)", "a.ad_type IS NOT NULL", "(a.image_path IS NULL OR a.image_path NOT LIKE '%%product_images/%%')", "NOT (lower(COALESCE(a.title,'') || ' ' || COALESCE(a.message,'')) LIKE ANY(%s))"]
+        params = [EXCLUDED_AD_TYPES, [f"%{p}%" for p in EXCLUDED_MESSAGES]]
         if retailer:
             where.append("r.retailer = %s")
             params.append(retailer)
@@ -462,12 +468,12 @@ def get_ad_types(
             where.append("r.day <= %s")
             params.append(end)
 
-        where_clause = " AND ".join(where) if where else "TRUE"
+        where_clause = " AND ".join(where)
 
         cur.execute(f"""
             SELECT DISTINCT upper(a.ad_type) as ad_type_upper
             FROM ads a JOIN runs r ON a.run_id = r.id
-            WHERE {where_clause} AND a.ad_type IS NOT NULL
+            WHERE {where_clause}
             ORDER BY ad_type_upper
         """, params)
         types = [row[0] for row in cur.fetchall()]
@@ -493,8 +499,8 @@ def get_brands_filtered(
         conn = _get_conn()
         cur = conn.cursor()
 
-        where = ["a.brand IS NOT NULL", "a.brand != ''", "a.brand != 'Unknown'"]
-        params = []
+        where = ["a.brand IS NOT NULL", "a.brand != ''", "a.brand != 'Unknown'", "lower(a.ad_type) != ALL(%s)", "(a.image_path IS NULL OR a.image_path NOT LIKE '%%product_images/%%')", "NOT (lower(COALESCE(a.title,'') || ' ' || COALESCE(a.message,'')) LIKE ANY(%s))"]
+        params = [EXCLUDED_AD_TYPES, [f"%{p}%" for p in EXCLUDED_MESSAGES]]
 
         if retailer:
             if isinstance(retailer, list):

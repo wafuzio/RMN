@@ -246,8 +246,8 @@ from filename_utils import generate_ad_filename
 
 
 def build_run_id() -> str:
-    """Generate 14-digit run ID: YYYYMMDDHHMMSS"""
-    return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    """Generate 14-digit run ID: YYYYMMDDHHMMSS (local time)"""
+    return datetime.now().strftime("%Y%m%d%H%M%S")
 
 
 def build_ad_object(run_id: str, index: int, ad_type: str, brand: str, 

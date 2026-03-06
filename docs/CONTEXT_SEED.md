@@ -104,6 +104,21 @@ Select a retailer, enter a keyword (e.g., "ice cream"), and click "Start Scrapin
 - Outputs: run_report.md + images in ad-type folders
 - See: `docs/WALMART_PERIMETERX_COMPLETE.md`
 
+### target (stable)
+- Persistent profile via TARGET_PROFILE_DIR.
+- URL: https://www.target.com/s?searchTerm={keyword}
+- Ad types: ListingPageBannerAd, Sponsored_Logo
+- Uses organic search box interaction with fallback to direct URL
+- Login detection via `#account-sign-in` element
+
+### tiktokshop (stable)
+- Persistent profile via TIKTOKSHOP_PROFILE_DIR.
+- URL: https://www.tiktok.com/shop/search?q={keyword}
+- Async scraper (uses Playwright async API)
+- Captures: Products, Featured_Brands, Main screenshots
+- CAPTCHA solver integrated (`tools/tiktok_captcha_solver.py`)
+- Login detection via `div:has-text("Log in")`
+
 ## Authentication & Browser Profiles
 Each retailer requires a one-time human login using Playwright with persistent browser profiles.
 
@@ -118,6 +133,26 @@ python3 auth/retailer_auth.py --retailer kroger --profile-dir ~/ChromeProfiles/k
 - `INSTACART_PROFILE_DIR` - Instacart browser profile path
 - `INSTACART_STORE` - Instacart store slug (default: publix)
 - `WALMART_PROFILE_DIR` - Walmart browser profile path
+- `TARGET_PROFILE_DIR` - Target browser profile path
+- `TIKTOKSHOP_PROFILE_DIR` - TikTok Shop browser profile path
+
+## Profile Health Monitoring
+
+**Module:** `utils/profile_health.py`
+**Ledger:** `config/profile_health.json`
+
+Centralized system that detects two failure modes per retailer:
+1. **Page blocked** — Akamai, PerimeterX, CAPTCHA, access denied (pattern-matched from HTML)
+2. **Not logged in** — stale session detected via retailer-specific DOM selectors
+
+**Behavior:**
+- Each scraper calls `check_and_record()` after HTML save (block detection) and `record_login_outcome()` after homepage loads (login detection)
+- Consecutive failures tracked in persistent JSON ledger
+- After 3 failures: scheduler skips retailer, macOS notification + email alert sent
+- GUI shows per-retailer health: 🟢 healthy, 🟡 degraded (1-2 failures), 🔴 blocked (3+)
+- "Reset after re-login" button in GUI clears the ledger after manual profile warmup
+
+**Adding a new retailer:** See `docs/ADDING_NEW_RETAILER.md` → Step 4.5
 
 ## macOS App Bundle (Kroger TOA Scraper)
 - **App:** "Kroger TOA Scraper.app" (built with py2app)

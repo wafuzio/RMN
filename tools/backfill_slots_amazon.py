@@ -628,8 +628,6 @@ def process_file(json_path, dry_run=False):
         return 0, 0, 0, f"JSON parse error: {e}"
 
     json_ads = data.get('ads', [])
-    if not json_ads:
-        return 0, 0, 0, None
 
     try:
         slots = parse_amazon_html(html_path)

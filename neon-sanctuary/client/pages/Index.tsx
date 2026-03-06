@@ -121,6 +121,13 @@ function isColumnAdType(ad: any): boolean {
   if (ad.ad_type === "Sponsored_Display" && ad.slot === "left_rail") {
     return true;
   }
+  // Portrait (skyscraper) Sponsored Display ads → RHS column
+  if ((ad.ad_type === "Sponsored_Display" || ad.ad_type === "Sponsored Display") && ad.card_format === "tile") {
+    return true;
+  }
+  if ((ad.ad_type === "Sponsored_Display" || ad.ad_type === "Sponsored Display") && ad.dimensions?.height > ad.dimensions?.width * 1.5) {
+    return true;
+  }
   return false;
 }
 
@@ -419,10 +426,14 @@ export default function Index() {
   // Debounce to prevent fetch storms while user is typing/changing filters
   const debouncedFilters = useDebouncedValue(normalizedFilters, 350);
 
+  // When grouping is enabled, fetch more cards per page for better cross-client grouping
+  const effectivePageSize = filters.groupIdentical ? 100 : 48;
+
   const isKrogerSelected = retailers.includes("kroger");
   const krogerQuery = useAds({
     retailer: isKrogerSelected ? "kroger" : undefined,
     client: selectedClient,
+    pageSize: effectivePageSize,
     ...debouncedFilters,
   });
 
@@ -430,6 +441,7 @@ export default function Index() {
   const walmartQuery = useAds({
     retailer: isWalmartSelected ? "walmart" : undefined,
     client: selectedClient,
+    pageSize: effectivePageSize,
     ...debouncedFilters,
   });
 
@@ -437,6 +449,7 @@ export default function Index() {
   const instacartQuery = useAds({
     retailer: isInstacartSelected ? "instacart" : undefined,
     client: selectedClient,
+    pageSize: effectivePageSize,
     ...debouncedFilters,
   });
 
@@ -444,6 +457,7 @@ export default function Index() {
   const amazonQuery = useAds({
     retailer: isAmazonSelected ? "amazon" : undefined,
     client: selectedClient,
+    pageSize: effectivePageSize,
     ...debouncedFilters,
   });
 
@@ -451,6 +465,7 @@ export default function Index() {
   const targetQuery = useAds({
     retailer: isTargetSelected ? "target" : undefined,
     client: selectedClient,
+    pageSize: effectivePageSize,
     ...debouncedFilters,
   });
 

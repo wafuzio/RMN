@@ -1,10 +1,9 @@
 {
-  "id": "kroger_land_o_frost_honey_ham_cad95639",
+  "id": "kroger_land_o_frost_honey_ham_f98628a4",
   "retailer": "kroger",
   "client": "land o frost",
   "keywords": [
-    "honey ham",
-    "black forest ham"
+    "honey ham"
   ],
   "days": [
     "friday",
@@ -18,12 +17,10 @@
   "times": [
     "09:05",
     "13:05",
-    "16:55",
-    "17:45",
-    "20:45"
+    "20:00"
   ],
-  "enabled": true,
+  "enabled": false,
   "tz": "",
-  "created_at": "2025-10-23T03:47:53Z",
-  "updated_at": "2025-11-25T04:46:44Z"
+  "created_at": "2026-03-04T02:44:58Z",
+  "updated_at": "2026-03-04T02:44:58Z"
 }

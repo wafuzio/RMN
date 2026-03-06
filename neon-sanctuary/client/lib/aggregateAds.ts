@@ -29,7 +29,8 @@ export type AdGroup = {
   group_id: string;            // stable key for React
   retailer: string;
   ad_type: string;
-  client: string;
+  client: string;              // client of the cover/first instance
+  clients: string[];           // all unique clients this ad appeared in
   brand?: string;              // brand of the first or the "mode"
   message?: string;            // message of the first (can vary across instances)
   media_key: string;           // canonical media identifier used for grouping
@@ -78,11 +79,10 @@ function normalizeBrand(brand: string): string {
 }
 
 function buildKey(ad: AdCardItem): string {
-  // Group by brand + message + ad_type for all retailers
-  // This works better than image URL since:
-  // - Instacart generates unique filenames per scrape
-  // - Other retailers may have cache-busting params or CDN variations
-  // - Brand + message is the actual semantic identity of the ad
+  // Group by retailer + brand + message + ad_type.
+  // Client and keyword are NOT included — we want the same ad creative
+  // to group together regardless of which client search it appeared in.
+  // Each instance still retains its client/keyword for drilldown.
 
   // Normalize message: remove extra whitespace, sort words for consistency
   const normalizedMessage = (ad.message || '')
@@ -95,11 +95,9 @@ function buildKey(ad: AdCardItem): string {
 
   const parts = [
     ad.retailer || '',
-    ad.ad_type || '', // Groups stay pure by ad_type
-    ad.client || '',
+    ad.ad_type || '',
     normalizeBrand(ad.brand),
     normalizedMessage,
-    // NOTE: keyword is NOT included - we want to group same ad across different keywords
   ];
   return parts.join('|');
 }
@@ -150,6 +148,7 @@ export function aggregateAds(ads: AdCardItem[]): AdGroup[] {
         retailer: ad.retailer,
         ad_type: ad.ad_type,
         client: ad.client,
+        clients: [],
         brand: ad.brand,
         message: ad.message,
         media_key,
@@ -171,6 +170,11 @@ export function aggregateAds(ads: AdCardItem[]): AdGroup[] {
     // Track unique keywords
     if (ad.keyword && !group.keywords.includes(ad.keyword)) {
       group.keywords.push(ad.keyword);
+    }
+
+    // Track unique clients
+    if (ad.client && !group.clients.includes(ad.client)) {
+      group.clients.push(ad.client);
     }
 
     if (!group.last_seen || ad.timestamp > group.last_seen) group.last_seen = ad.timestamp;

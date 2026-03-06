@@ -42,16 +42,24 @@ Document:
 Edit `auth/retailer_auth.py`:
 
 ```python
-RETAILERS = {
-    'kroger': {...},
-    'amazon': {...},
-    'newretailer': {  # Add new retailer
-        'name': 'NewRetailer',
-        'login_url': 'https://www.newretailer.com/login',
-        'success_indicators': ['text=/Account/i', 'button:has-text("Sign Out")'],
-        'profile_env': 'NEWRETAILER_PROFILE_DIR'
-    }
+# Add to RETAILER_URLS dict
+RETAILER_URLS = {
+    "amazon": "https://www.amazon.com/",
+    "kroger": "https://www.kroger.com/",
+    "walmart": "https://www.walmart.com/",
+    "instacart": "https://www.instacart.com/store/publix",
+    "target": "https://www.target.com/",
+    "tiktokshop": "https://www.tiktok.com/shop",
+    "newretailer": "https://www.newretailer.com/",  # ADD THIS
 }
+
+# Add login-detection heuristic in the ensure_profile() while loop:
+if retailer == "newretailer" and ("account" in content or "sign out" in content):
+    break
+
+# Add to argparse choices:
+ap.add_argument("--retailer", required=True,
+    choices=["kroger","amazon","walmart","instacart","target","tiktokshop","newretailer"])
 ```
 
 ### 2.2 Create Setup Script
@@ -171,10 +179,34 @@ def search_and_capture(keyword: str, output_dir: str, **kwargs) -> bool:
             # Wait for content to load (adjust as needed)
             time.sleep(5)
             
-            # Check authentication
-            # TODO: Add retailer-specific login check
-            
-            print("✅ Authenticated session active")
+            # Check authentication (profile health integration)
+            # Each retailer has a unique not-logged-in indicator.
+            # Identify the selector for your retailer and wire it here.
+            # Examples from existing retailers:
+            #   Kroger:    text=Sign In
+            #   Amazon:    #nav-link-accountList-nav-line-1 contains "sign in"
+            #   Walmart:   [data-testid="logged-in-account-button-name"] absent
+            #   Target:    #account-sign-in element present
+            #   Instacart: button:has-text("Log in")
+            #   TikTok:    div:has-text("Log in")
+            try:
+                _logged_in = False
+                # TODO: Replace with your retailer's logged-in indicator
+                try:
+                    _logged_in = not page.locator('a:has-text("Sign In"), button:has-text("Sign In")').first.is_visible(timeout=2000)
+                except Exception:
+                    _logged_in = True  # If selector not found, assume logged in
+                if _logged_in:
+                    print("   ✅ Logged-in session detected")
+                else:
+                    print("   ⚠️ Not logged in — some ad types may not appear")
+                    try:
+                        from utils.profile_health import record_login_outcome
+                        record_login_outcome("newretailer", keyword, logged_in=False)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             
             # Get page content
             html_content = page.content()
@@ -183,6 +215,15 @@ def search_and_capture(keyword: str, output_dir: str, **kwargs) -> bool:
             with open(html_file, 'w', encoding='utf-8') as f:
                 f.write(html_content)
             print(f"💾 HTML saved: {html_file}")
+            
+            # Block detection (profile health integration)
+            try:
+                from utils.profile_health import check_and_record
+                blk, blk_reason = check_and_record(html_content, "newretailer", keyword, alert=True)
+                if blk:
+                    print(f"   ⚠️ Page blocked: {blk_reason}")
+            except Exception:
+                pass
             
             # Extract ad data for JSON
             ad_data = {
@@ -417,6 +458,92 @@ Should print your folder set without errors.
 
 ---
 
+## Step 4.5: Profile Health Integration
+
+The profile health system (`utils/profile_health.py`) monitors two conditions per retailer:
+1. **Page blocked** — bot detection, CAPTCHA, access denied
+2. **Not logged in** — stale session means fewer ad types captured
+
+After 3 consecutive failures, the scheduler skips the retailer and sends an alert (macOS notification + email). The GUI shows 🟢🟡🔴 status per retailer.
+
+### 4.5.1 Add Block-Detection Patterns
+
+Edit `utils/profile_health.py` and add your retailer to `_BLOCK_PATTERNS`:
+
+```python
+_BLOCK_PATTERNS = {
+    # ... existing retailers ...
+    "newretailer": [
+        {"pattern": "access denied", "reason": "access_denied", "fixed": True},
+        {"pattern": "verify you are human", "reason": "captcha", "fixed": True},
+        # Add any retailer-specific block indicators here
+    ],
+}
+```
+
+Universal patterns (Access Denied title, rate limits) apply automatically to all retailers.
+
+### 4.5.2 Add Login Detection
+
+In your `{retailer}_search_and_capture.py`, after the page loads:
+
+1. **Identify the not-logged-in indicator** — inspect the page in DevTools:
+   - Look for a "Sign In" / "Log in" button or link
+   - Look for a stable `id`, `data-testid`, or `aria-label` attribute
+   - Avoid matching on visible text like "Account" if it appears in both states
+
+2. **Wire the check** (after homepage loads, before search):
+```python
+# Login state check
+try:
+    # TODO: Replace selector with your retailer's not-logged-in indicator
+    not_logged_in = page.locator('#sign-in-link').first.is_visible(timeout=2000)
+    if not_logged_in:
+        print("   ⚠️ Not logged in — some ad types may not appear")
+        try:
+            from utils.profile_health import record_login_outcome
+            record_login_outcome("newretailer", keyword, logged_in=False)
+        except Exception:
+            pass
+    else:
+        print("   ✅ Logged-in session detected")
+except Exception:
+    pass
+```
+
+3. **Wire block detection** (after HTML save):
+```python
+try:
+    from utils.profile_health import check_and_record
+    blk, blk_reason = check_and_record(html_content, "newretailer", keyword, alert=True)
+    if blk:
+        print(f"   ⚠️ Page blocked: {blk_reason}")
+except Exception:
+    pass
+```
+
+### 4.5.3 Existing Login Detection Selectors (Reference)
+
+| Retailer | Not-Logged-In Signal | Selector |
+|---|---|---|
+| Kroger | `<span>Sign In</span>` | `text=Sign In` (exact) |
+| Instacart | `<button>Log in</button>` | `button:has-text("Log in")` + modal check |
+| Walmart | Absence of `Hi, <user>` | `[data-testid="logged-in-account-button-name"]` |
+| Target | `id="account-sign-in"` | `#account-sign-in` + `aria-label` contains "sign in" |
+| TikTok Shop | `<div>Log in</div>` | `div:has-text("Log in")` (leaf-only) |
+| Amazon | `<span>Hello, sign in</span>` | `#nav-link-accountList-nav-line-1` text contains "sign in" |
+
+### 4.5.4 Verify Health Ledger
+
+After a test run, check the ledger:
+```bash
+cat config/profile_health.json | python3 -m json.tool
+```
+
+You should see an entry for your retailer with `consecutive_failures`, `last_success`, and `status`.
+
+---
+
 ## Step 5: Register with GUI
 
 ### 5.1 Import Adapter in GUI
@@ -458,6 +585,10 @@ PYTHON_EXEC=/Users/dan.maguire/Documents/Amazon_Scrape/.venv/bin/python
 KROGER_PROFILE_DIR=/Users/dan.maguire/Documents/Amazon_Scrape/profiles/kroger
 INSTACART_PROFILE_DIR=/Users/dan.maguire/Documents/Amazon_Scrape/profiles/instacart
 INSTACART_STORE=publix
+WALMART_PROFILE_DIR=/Users/dan.maguire/Documents/Amazon_Scrape/profiles/walmart
+TARGET_PROFILE_DIR=/Users/dan.maguire/Documents/Amazon_Scrape/profiles/target
+AMZ_PROFILE_DIR=/Users/dan.maguire/Documents/Amazon_Scrape/profiles/amazon
+TIKTOKSHOP_PROFILE_DIR=/Users/dan.maguire/Documents/Amazon_Scrape/profiles/tiktokshop
 NEWRETAILER_PROFILE_DIR=/Users/dan.maguire/Documents/Amazon_Scrape/profiles/newretailer  # ADD THIS
 ```
 
@@ -678,6 +809,13 @@ Use this checklist when adding a new retailer:
 - [ ] Import adapter in `keyword_input.py`
 - [ ] **Add environment variables to `config/launcher.env`** ⚠️ CRITICAL #2
 - [ ] Add environment variables to `~/.zshrc` (for CLI)
+
+### Profile Health Integration ⚠️ REQUIRED
+- [ ] Add block-detection patterns to `utils/profile_health.py` `_BLOCK_PATTERNS` dict
+- [ ] Add login-detection check in scraper (after homepage loads, before search)
+- [ ] Wire `record_login_outcome()` call when not-logged-in detected
+- [ ] Wire `check_and_record()` call after HTML save (block detection)
+- [ ] Test: verify `config/profile_health.json` updates after a run
 
 ### Canonical Schema Implementation ⚠️ REQUIRED
 - [ ] Run JSON has `retailer`, `client`, `keyword`, `timestamp` (ISO Z), `run_id`, `ads[]`

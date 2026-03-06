@@ -33,12 +33,12 @@ ADTYPE_MAP = {
 }
 
 def now_iso_z() -> str:
-    """Return current UTC time in ISO 8601 Z format"""
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    """Return current local time in ISO 8601 format"""
+    return datetime.now().isoformat(timespec="seconds")
 
 def build_run_id(dt: datetime | None = None) -> str:
-    """Generate run_id from timestamp (YYYYMMDDHHMMSS)"""
-    dt = dt or datetime.now(timezone.utc)
+    """Generate run_id from timestamp (YYYYMMDDHHMMSS, local time)"""
+    dt = dt or datetime.now()
     return dt.strftime("%Y%m%d%H%M%S")
 
 def ensure_ad_type(t: str | None) -> str:
@@ -598,9 +598,34 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             
             # If a login modal is present on home, pause for interactive login
             if not _handle_login_if_needed(page, log, max_wait_sec=300):
+                try:
+                    from utils.profile_health import record_login_outcome
+                    record_login_outcome("instacart", keyword, logged_in=False)
+                except Exception:
+                    pass
                 context.close()
                 return False
-            
+
+            # Header login button check — Instacart may not show a modal but still
+            # display a "Log in" button when the session is stale.
+            # Class names are hashed/unstable, so match on visible text only.
+            try:
+                _ic_login_btn = page.locator('button:has-text("Log in")').first
+                if _ic_login_btn.is_visible(timeout=2000):
+                    log("   ⚠️ Not logged in — 'Log in' button visible in header")
+                    try:
+                        from utils.profile_health import prompt_relogin
+                        _relogged = prompt_relogin(page, "instacart", keyword, log_fn=log)
+                        if not _relogged:
+                            from utils.profile_health import record_login_outcome
+                            record_login_outcome("instacart", keyword, logged_in=False)
+                    except Exception:
+                        pass
+                else:
+                    log("   ✅ Logged-in session detected")
+            except Exception:
+                pass  # Element not found = likely logged in (no button to find)
+
             # Organic search interaction (robust version)
             log(f"Searching for: {keyword}")
             try:
@@ -694,6 +719,11 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             
             # Some flows can trigger the auth modal on the results page — handle again
             if not _handle_login_if_needed(page, log, max_wait_sec=300):
+                try:
+                    from utils.profile_health import record_login_outcome
+                    record_login_outcome("instacart", keyword, logged_in=False)
+                except Exception:
+                    pass
                 context.close()
                 return False
             
@@ -738,12 +768,15 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
                     # This is a border container with a carousel!
                     try:
                         div_bbox = div.bounding_box()
+                        inner_bbox = inner.bounding_box()
                         log(f"\n✅ Found ad container: id={div_id}")
-                        log(f"   ↳ Bbox: x={div_bbox['x']:.1f}, y={div_bbox['y']:.1f}, w={div_bbox['width']:.1f}, h={div_bbox['height']:.1f}")
+                        log(f"   ↳ Outer bbox: x={div_bbox['x']:.1f}, y={div_bbox['y']:.1f}, w={div_bbox['width']:.1f}, h={div_bbox['height']:.1f}")
+                        log(f"   ↳ Inner bbox: x={inner_bbox['x']:.1f}, y={inner_bbox['y']:.1f}, w={inner_bbox['width']:.1f}, h={inner_bbox['height']:.1f}")
                     except:
                         pass
                     
-                    elements.append(('Shoppable Display Ad', div))
+                    # Screenshot the INNER element to avoid capturing container padding/borders
+                    elements.append(('Shoppable Display Ad', inner))
                     
                 except Exception as e:
                     continue
@@ -979,6 +1012,17 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             log("\n💾 Capturing HTML content...")
             html_content = page.content()
             log(f"   ✅ HTML captured")
+
+            # Track profile health (block detection + persistent ledger)
+            try:
+                from utils.profile_health import check_and_record
+                blk, blk_reason = check_and_record(html_content, "instacart", keyword, alert=True)
+                if blk:
+                    log(f"❌ Instacart page blocked: {blk_reason}")
+                    log("   Profile needs manual re-login in a real Chrome window.")
+                    return False
+            except Exception:
+                pass
             
             # Take screenshots of ads
             log("\n📸 Taking screenshots...")

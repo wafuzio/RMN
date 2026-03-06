@@ -30,7 +30,7 @@ import re
 from datetime import datetime, timezone, timedelta
 from time import perf_counter, time
 from utils.path_taxonomy import allowed_subdirs, ADTYPE_TO_FOLDER
-from core.brands import canonicalize, is_blacklisted
+from core.brands import canonicalize, is_blacklisted, smart_title
 import hashlib
 _USE_DB = False
 try:
@@ -629,9 +629,12 @@ _AD_TYPE_CANONICAL = {
     "sbv":                    "Sponsored Brand Video",
     "sponsored_brand_video":  "Sponsored Brand Video",
     "shoppable_video_ad":     "Shoppable Video Ad",
+    "shoppable_ad_item":      "Shoppable Ad Item",
     "toa":                    "TOA",
     "sba":                    "SBA",
     "sponsored_brand":        "Sponsored Brand",
+    "sponsored_brand_card":   "Sponsored Brand Card",
+    "sponsored_product":      "Sponsored Product",
     "listingpagebannerad":    "Listing Page Banner Ad",
     "shoppable_display_ad":   "Shoppable Display Ad",
     "sponsored_display":      "Sponsored Display",
@@ -2053,16 +2056,22 @@ def api_ads_cards():
                             parts = oid.rsplit('-', 1)
                             if len(parts) == 2 and parts[1].isdigit():
                                 int_idx = int(parts[1]) - 1
+                            # Amazon format: 'amazon::20260226093300::hash::0'
+                            elif '::' in oid:
+                                last_seg = oid.rsplit('::', 1)[-1]
+                                if last_seg.isdigit():
+                                    int_idx = int(last_seg)
                             elif oid.isdigit():
                                 int_idx = int(oid)
                     if int_idx is not None and 0 <= int_idx < len(all_ads):
                         orig_ad = all_ads[int_idx]
                     else:
-                        # Fallback: match by brand + ad_type (case-insensitive, partial brand match)
+                        # Fallback: match by brand + ad_type (case-insensitive, normalize underscores)
+                        _norm = lambda s: s.lower().replace("_", " ")
                         for a in all_ads:
                             ab = (a.get("brand") or a.get("advertiser") or "").strip()
                             at = (a.get("type") or a.get("ad_type") or "")
-                            if at.lower() == ad_type.lower() and (
+                            if _norm(at) == _norm(ad_type) and (
                                 ab.lower() == brand.lower() or
                                 ab.lower() in brand.lower() or
                                 brand.lower() in ab.lower()
@@ -2080,17 +2089,15 @@ def api_ads_cards():
                     advertisers = orig_ad.get("advertisers") or []
                     if not advertisers and brand and brand != "Unknown":
                         advertisers = [brand]
-                    # Slot fallback
-                    if not slot:
-                        ad_type_raw = (orig_ad.get("type") or orig_ad.get("ad_type") or "").lower()
-                        subtype_raw = (orig_ad.get("subtype") or "").lower()
-                        if "sponsored_display" in ad_type_raw or "sponsored display" in ad_type_raw:
-                            if "left_rail" in subtype_raw:
-                                slot = "left_rail"
-                            elif "bottom" in subtype_raw:
-                                slot = "bottom"
-                            else:
-                                slot = "top"
+                    # Use the JSON's semantic slot value. The DB column is integer
+                    # so strings like "left_rail" / "bottom" are lost there.
+                    # Numeric slots (DOM position indices) are meaningless for
+                    # the dashboard — only pass semantic labels to the frontend.
+                    json_slot = orig_ad.get("slot")
+                    if isinstance(json_slot, str) and json_slot in ("left_rail", "bottom", "top"):
+                        slot = json_slot
+                    else:
+                        slot = None  # strip numeric noise
                 else:
                     # No JSON match — build a synthetic ad dict from DB fields
                     # and use build_media_urls_for_ad for proper URL construction
@@ -2218,6 +2225,10 @@ def api_ads_cards():
                             continue
                         
                         message = ad.get("title") or ad.get("message") or ad.get("description") or ""
+                        
+                        # Skip ads whose message is blacklisted (MSG: prefix in brand_blacklist.json)
+                        if message and is_blacklisted(f"MSG:{message.strip()}"):
+                            continue
 
                         # Build image URL (always returns non-empty URL)
                         image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, ad)
@@ -2228,18 +2239,13 @@ def api_ads_cards():
                         video_url_api = media_urls.get("video_url")
                         print(f"[API DEBUG] {file_retailer}/{file_client} ad_type={ad_type} media_urls={media_urls}")
 
-                        # Extract slot field, with fallback for legacy Sponsored_Display scrapes
-                        slot = ad.get("slot")
-                        if not slot:
-                            ad_type_raw = (ad.get("type") or ad.get("ad_type") or "").lower()
-                            subtype_raw = (ad.get("subtype") or "").lower()
-                            if "sponsored_display" in ad_type_raw or "sponsored display" in ad_type_raw:
-                                if "left_rail" in subtype_raw:
-                                    slot = "left_rail"
-                                elif "bottom" in subtype_raw:
-                                    slot = "bottom"
-                                else:
-                                    slot = "top"
+                        # Only pass semantic slot labels to the frontend.
+                        # Numeric slots (DOM position indices) are noise.
+                        raw_slot = ad.get("slot")
+                        if isinstance(raw_slot, str) and raw_slot in ("left_rail", "bottom", "top"):
+                            slot = raw_slot
+                        else:
+                            slot = None
 
                         cards.append({
                             "retailer": file_retailer,
@@ -2403,6 +2409,13 @@ def api_ads_cards():
 
             # Build brand display string from advertisers
             brand = ' + '.join(advertisers) if advertisers else "Unknown"
+            
+            # Detect Walmart house ads in old data (Gallery Cards with Walmart+ messaging)
+            if brand == "Unknown" and file_retailer == "walmart" and ad_type == "Gallery Cards":
+                msg_lower = message.lower()
+                if "walmart+" in msg_lower or "walmart plus" in msg_lower:
+                    brand = "Walmart"
+                    advertisers = ["Walmart"]
 
             # Apply brands filter if specified
             if brands_filter:
@@ -2420,18 +2433,16 @@ def api_ads_cards():
 
             message = ad.get("title") or ad.get("message") or ad.get("description") or ""
 
-            # Extract slot field, with fallback for legacy Sponsored_Display scrapes
-            slot = ad.get("slot")
-            if not slot:
-                ad_type_raw = (ad.get("type") or ad.get("ad_type") or "").lower()
-                subtype_raw = (ad.get("subtype") or "").lower()
-                if "sponsored_display" in ad_type_raw or "sponsored display" in ad_type_raw:
-                    if "left_rail" in subtype_raw:
-                        slot = "left_rail"
-                    elif "bottom" in subtype_raw:
-                        slot = "bottom"
-                    else:
-                        slot = "top"
+            # Skip ads whose message is blacklisted (MSG: prefix in brand_blacklist.json)
+            if message and is_blacklisted(f"MSG:{message.strip()}"):
+                continue
+
+            # Extract slot field — only pass semantic labels, strip numeric noise
+            raw_slot = ad.get("slot")
+            if isinstance(raw_slot, str) and raw_slot in ("left_rail", "bottom", "top"):
+                slot = raw_slot
+            else:
+                slot = None
 
             # Build image URL (always returns non-empty URL)
             image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, ad)
@@ -2929,7 +2940,7 @@ def api_ads_cards():
                         # Split on + for co-branded ads
                         parsed_advertisers = advertiser_segment.split('+')
                         # Clean up (remove underscores, capitalize)
-                        parsed_advertisers = [adv.replace('_', ' ').title() for adv in parsed_advertisers if adv and adv != 'unknown']
+                        parsed_advertisers = [smart_title(adv.replace('_', ' ')) for adv in parsed_advertisers if adv and adv != 'unknown']
                         # Canonicalize brand names
                         parsed_advertisers = [canonicalize(adv) or adv for adv in parsed_advertisers]
                         # Filter out blocked brands (ad types)
@@ -2957,6 +2968,18 @@ def api_ads_cards():
                 # Extract message/headline
                 message = ad.get("message") or ad.get("headline") or ad.get("description") or ""
                 
+                # Detect Walmart house ads in old data (Gallery Cards with Walmart+ messaging)
+                ad_type_raw = ad.get("type") or ad.get("ad_type") or ""
+                if brand == "Unknown" and retailer == "walmart" and "gallery" in ad_type_raw.lower():
+                    msg_lower = message.lower()
+                    if "walmart+" in msg_lower or "walmart plus" in msg_lower:
+                        brand = "Walmart"
+                        advertisers = ["Walmart"]
+                
+                # Skip ads whose message is blacklisted (MSG: prefix in brand_blacklist.json)
+                if message and is_blacklisted(f"MSG:{message.strip()}"):
+                    continue
+
                 # Normalize timestamp to ISO Z (UTC)
                 raw_ts = data.get("timestamp") or data.get("ts") or ""
                 run_id = data.get("run_id")
@@ -3023,8 +3046,12 @@ def api_ads_cards():
                     card["poster_url"] = media_urls["poster_url"]
                 
                 # Include video_overlay metadata if present
-                if ad.get("video_overlay"):
-                    card["video_overlay"] = ad["video_overlay"]
+                # For DB-sourced ads, video_overlay lives inside the metadata JSONB
+                _vo = ad.get("video_overlay")
+                if not _vo and isinstance(ad.get("metadata"), dict):
+                    _vo = ad["metadata"].get("video_overlay")
+                if _vo:
+                    card["video_overlay"] = _vo
 
                 all_cards.append(card)
         except Exception as e:
@@ -3163,7 +3190,24 @@ def api_ads_cards():
     all_cards = deduped_cards
     if duplicates_removed > 0:
         print(f"[{retailer}/{client}] ⚠️  Deduplication: Removed {duplicates_removed} duplicate cards")
-    
+
+    # Replace scraper-artifact brand names with "Unknown".
+    # These are generic UI words the iframe parser falsely extracted as brands.
+    _BOGUS_BRANDS = {"page", "click"}
+    for c in all_cards:
+        if (c.get("brand") or "").lower() in _BOGUS_BRANDS:
+            c["brand"] = "Unknown"
+
+    # Filter out ads whose message is blacklisted (MSG: prefix in brand_blacklist.json)
+    pre_house = len(all_cards)
+    all_cards = [
+        c for c in all_cards
+        if not (c.get("message") and is_blacklisted(f"MSG:{(c.get('message') or '').strip()}"))
+    ]
+    _house_removed = pre_house - len(all_cards)
+    if _house_removed > 0:
+        print(f"[{retailer}/{client}] 🏠 Filtered {_house_removed} house ads (blacklisted messages)")
+
     # Calculate brand aggregations from ALL cards (before pagination)
     brand_counts = {}
     for card in all_cards:
@@ -3183,7 +3227,36 @@ def api_ads_cards():
     end = start + page_size
     cards = all_cards[start:end]
     has_more = end < len(all_cards)
-    
+
+    # Probe image dimensions for Sponsored Display cards that lack them.
+    # This lets the frontend route portrait (skyscraper) ads to the RHS column.
+    # Only runs on the paginated subset (~24 cards) so the cost is minimal.
+    for card in cards:
+        if card.get("ad_type") in ("Sponsored Display", "Sponsored_Display") and not card.get("dimensions"):
+            img_url = card.get("image_url") or ""
+            # Extract the file path from the API URL: /api/image/<retailer>/<client>/<folder>/<filename>
+            if img_url.startswith("/api/image/"):
+                parts = img_url.split("/api/image/", 1)[1].split("/", 1)
+                if len(parts) == 2:
+                    _ret, _rest = parts[0], parts[1]
+                    # Try to find client from the next path segment
+                    _rest_parts = _rest.split("/", 1)
+                    if len(_rest_parts) == 2:
+                        _cli, _rel = _rest_parts
+                        _full = OUTPUT_ROOT / _ret / _cli / _rel
+                        # Strip query string
+                        _full = pathlib.Path(str(_full).split("?")[0])
+                        if _full.exists():
+                            try:
+                                from PIL import Image as _PILImage
+                                with _PILImage.open(_full) as _img:
+                                    _w, _h = _img.size
+                                    card["dimensions"] = {"width": _w, "height": _h}
+                                    if _h > _w * 1.5:
+                                        card["card_format"] = "tile"  # portrait → RHS column
+                            except Exception:
+                                pass
+
     result = {
         "retailer": retailer,
         "client": client,
@@ -4607,11 +4680,11 @@ def api_logo(retailer):
     
     # Mapping of retailer IDs to actual filenames
     logo_map = {
-        'kroger': 'Kroger.png',
+        'kroger': 'Kroger_Cart.png',
         'walmart': 'WMT.png',
         'amazon': 'AMZ.png',
         'amazonfresh': 'AMZFresh.png',
-        'instacart': 'Instacart Long.png',
+        'instacart': 'Instacart_Carrot.png',
         'target': 'Target.png',
         'albertsons': 'Albertsons_(logo).svg.png',
         'meijer': 'Meijer.png',
@@ -4646,6 +4719,7 @@ def api_logo(retailer):
     return jsonify({"error": f"logo not found for {retailer}"}), 404
 
 
+@app.route("/api/logo/brand/<path:brand_name>")
 @app.route("/api/brand_logo/<path:brand_name>")
 def api_brand_logo(brand_name: str):
     """Serve brand logo files from output/brand_logos.

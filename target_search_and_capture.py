@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import time
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -36,12 +37,12 @@ try:
 except Exception:
     # Fallback if utils is not on path
     def now_iso_z(timespec: str = "seconds") -> str:
-        return datetime.now(timezone.utc).isoformat(timespec=timespec).replace("+00:00", "Z")
+        return datetime.now().isoformat(timespec=timespec)
 
 
 def build_run_id(dt: Optional[datetime] = None) -> str:
-    """Generate 14-digit run ID: YYYYMMDDHHMMSS (UTC)."""
-    dt = dt or datetime.now(timezone.utc)
+    """Generate 14-digit run ID: YYYYMMDDHHMMSS (local time)."""
+    dt = dt or datetime.now()
     return dt.strftime("%Y%m%d%H%M%S")
 
 
@@ -552,6 +553,44 @@ def search_and_capture(keyword: str, output_dir: str, *, headless: bool = False)
     log(f"   Profile: {profile_dir}")
     log(f"   Output:  {output_dir}")
 
+    # Handle Chromium lock files before launching.
+    # SingletonLock is a symlink whose target encodes the holding PID.
+    # If the PID is alive → profile is in use; wait up to 60s for it to release.
+    # If the PID is dead (stale lock) → safe to remove.
+    if profile_dir:
+        singleton = Path(profile_dir) / "SingletonLock"
+        wait_deadline = time.time() + 60
+        while singleton.exists() or singleton.is_symlink():
+            holding_pid = None
+            try:
+                target = os.readlink(str(singleton))
+                # Chromium encodes "hostname-PID" or just "PID" in the symlink target
+                holding_pid = int(target.split("-")[-1])
+            except Exception:
+                pass
+            if holding_pid:
+                try:
+                    os.kill(holding_pid, 0)  # 0 = check existence only
+                    # PID is alive — profile is in active use
+                    if time.time() > wait_deadline:
+                        log(f"   ⚠️ Profile still locked by PID {holding_pid} after 60s — aborting to avoid crash")
+                        return False
+                    log(f"   Profile locked by PID {holding_pid}, waiting...")
+                    time.sleep(5)
+                    continue
+                except (ProcessLookupError, PermissionError):
+                    pass  # PID is dead — stale lock, safe to remove
+            # Lock exists but no live PID — remove stale locks
+            for lock_name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+                lock_path = Path(profile_dir) / lock_name
+                if lock_path.exists() or lock_path.is_symlink():
+                    try:
+                        lock_path.unlink()
+                        log(f"   Removed stale lock: {lock_name}")
+                    except Exception:
+                        pass
+            break
+
     try:
         with sync_playwright() as p:
             log("   Launching persistent Chromium context for Target")
@@ -569,7 +608,39 @@ def search_and_capture(keyword: str, output_dir: str, *, headless: bool = False)
 
             log(f"   Navigating to {base_url}...")
             page.goto(base_url, wait_until="domcontentloaded", timeout=45000)
-            time.sleep(2)
+            # Wait for React header to hydrate (domcontentloaded fires too early)
+            try:
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                pass  # timeout is fine — just best-effort
+            time.sleep(3)
+
+            # Login state check — missing login means fewer ad types captured
+            # NOTE: Target's #account-sign-in element and aria-label="Account, sign in"
+            # persist in the DOM even when logged in (SSR pre-render placeholder that
+            # React doesn't always replace in Playwright). DOM checks are unreliable.
+            # Use auth cookies as the ground truth instead.
+            try:
+                _tgt_logged_in = False
+                cookies = ctx.cookies()
+                tgt_auth = [c for c in cookies
+                            if c['name'] in ('accessToken', 'idToken', 'refreshToken')
+                            and 'target' in c.get('domain', '')]
+                if len(tgt_auth) >= 2:
+                    _tgt_logged_in = True
+                    log(f"   ✅ Logged-in session detected ({len(tgt_auth)} auth cookies)")
+                else:
+                    log(f"   ⚠️ Not logged in — only {len(tgt_auth)} auth cookie(s) found")
+                    try:
+                        from utils.profile_health import prompt_relogin
+                        _relogged = prompt_relogin(page, "target", keyword, log_fn=log)
+                        if not _relogged:
+                            from utils.profile_health import record_login_outcome
+                            record_login_outcome("target", keyword, logged_in=False)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
             used_search_box = False
             try:
@@ -662,6 +733,17 @@ def search_and_capture(keyword: str, output_dir: str, *, headless: bool = False)
                 f.write(html_content)
             log(f"💾 HTML saved: {html_file}")
 
+            # Track profile health (block detection + persistent ledger)
+            try:
+                from utils.profile_health import check_and_record
+                blk, blk_reason = check_and_record(html_content, "target", keyword, alert=True)
+                if blk:
+                    log(f"❌ Target page blocked: {blk_reason}")
+                    log("   Profile needs manual re-login in a real Chrome window.")
+                    return False
+            except Exception:
+                pass
+
             # Take a full-page SRP screenshot after HTML capture so the PNG
             # reflects the same hydrated DOM we just wrote to disk.
             try:
@@ -677,10 +759,170 @@ def search_and_capture(keyword: str, output_dir: str, *, headless: bool = False)
                     advertiser=None,
                 )
                 fullpage_path = main_dir / fullpage_filename
+                # Hide sticky/fixed headers before full-page screenshot to prevent
+                # duplicate content at Playwright's viewport-stitch boundaries.
+                page.evaluate("window.scrollTo(0, 0)")
+                page.wait_for_timeout(300)
+                page.evaluate("""() => {
+                    document.querySelectorAll('header, nav, [class*="sticky"], [class*="Sticky"]')
+                        .forEach(el => {
+                            const style = window.getComputedStyle(el);
+                            if (style.position === 'fixed' || style.position === 'sticky') {
+                                el.dataset._origPosition = style.position;
+                                el.style.position = 'absolute';
+                            }
+                        });
+                }""")
                 page.screenshot(path=str(fullpage_path), full_page=True)
+                # Restore sticky headers
+                page.evaluate("""() => {
+                    document.querySelectorAll('[data-_orig-position]')
+                        .forEach(el => {
+                            el.style.position = el.dataset._origPosition;
+                            delete el.dataset._origPosition;
+                        });
+                }""")
                 log(f"   Full-page screenshot saved: {fullpage_path}")
             except Exception as e:
                 log(f"[target] Full-page screenshot failed (continuing anyway): {e}")
+
+            # Screenshot individual ad elements from the live page before
+            # extracting metadata from HTML. This gives us actual ad images.
+            _ad_screenshots = {"banner": [], "logo": []}
+            try:
+                # Restore sticky headers for accurate ad positioning
+                page.evaluate("window.scrollTo(0, 0)")
+                page.wait_for_timeout(500)
+
+                # ListingPageBannerAd modules
+                banner_els = page.locator("div[data-module-type='ListingPageBannerAd']")
+                banner_count = banner_els.count()
+                if banner_count:
+                    banner_dir = ensure_subdir("target", output_root, "ListingPageBannerAd")
+                    for bi in range(banner_count):
+                        try:
+                            container = banner_els.nth(bi)
+                            container.scroll_into_view_if_needed(timeout=3000)
+                            time.sleep(0.3)
+                            
+                            # Screenshot the actual ad content (anchor/image) instead of the container
+                            # to avoid capturing empty space or incorrect dimensions
+                            shot_el = container
+                            try:
+                                # Try to find the actual ad anchor with image
+                                anchor = container.locator("a[href*='adclick.g.doubleclick.net']").first
+                                if anchor.count() > 0:
+                                    shot_el = anchor
+                                    log(f"   [target] Banner {bi+1}: targeting anchor element")
+                                else:
+                                    # Fallback: try any anchor with an image
+                                    anchor_with_img = container.locator("a:has(img)").first
+                                    if anchor_with_img.count() > 0:
+                                        shot_el = anchor_with_img
+                                        log(f"   [target] Banner {bi+1}: targeting anchor with image")
+                                    else:
+                                        # Last resort: screenshot the image directly
+                                        img = container.locator("img.heroImg, img").first
+                                        if img.count() > 0:
+                                            shot_el = img
+                                            log(f"   [target] Banner {bi+1}: targeting image element")
+                            except Exception as e:
+                                log(f"   [target] Banner {bi+1}: element targeting failed, using container: {e}")
+                            
+                            # Wait for ad images to load (Target uses lazy loading)
+                            try:
+                                img_locator = shot_el.locator("img").first
+                                if img_locator.count() > 0:
+                                    img_locator.wait_for(state="visible", timeout=3000)
+                                    time.sleep(0.5)
+                            except Exception:
+                                pass
+                            
+                            fname = generate_ad_filename(
+                                retailer="target", ad_type="listingpagebannerad",
+                                client=client, search_term=keyword,
+                                timestamp=run_id, index=bi + 1,
+                                extension="png", advertiser=None,
+                            )
+                            fpath = banner_dir / fname
+                            shot_el.screenshot(path=str(fpath))
+                            
+                            # Verify screenshot isn't blank
+                            try:
+                                from PIL import Image as PILImage
+                                with PILImage.open(fpath) as img:
+                                    pixels = img.load()
+                                    width, height = img.size
+                                    white_count = 0
+                                    total = 0
+                                    for x in range(0, width, max(1, width//20)):
+                                        for y in range(0, height, max(1, height//20)):
+                                            r, g, b = pixels[x, y]
+                                            if r > 240 and g > 240 and b > 240:
+                                                white_count += 1
+                                            total += 1
+                                    white_pct = 100 * white_count / total if total > 0 else 100
+                                    
+                                    if white_pct > 95:
+                                        log(f"   ⚠️ Banner ad {bi+1} is blank ({white_pct:.0f}% white), skipping")
+                                        fpath.unlink()
+                                        _ad_screenshots["banner"].append(None)
+                                    else:
+                                        _ad_screenshots["banner"].append(str(fpath))
+                                        log(f"   📸 Banner ad {bi+1} saved: {fpath.name}")
+                            except Exception as e:
+                                _ad_screenshots["banner"].append(str(fpath))
+                                log(f"   📸 Banner ad {bi+1} saved: {fpath.name} (verification skipped: {e})")
+                        except Exception as e:
+                            log(f"   [target] Banner ad {bi+1} screenshot failed: {e}")
+                            _ad_screenshots["banner"].append(None)
+
+                # Sponsored Logo (adDesktopWrapperContainer)
+                # The ad creative lives inside an iframe within the wrapper.
+                # Screenshotting the wrapper clips the creative, so we pierce
+                # the iframe and screenshot its body for the full uncropped image.
+                logo_els = page.locator("div#adDesktopWrapperContainer")
+                logo_count = logo_els.count()
+                if logo_count:
+                    logo_dir = ensure_subdir("target", output_root, "Sponsored_Logo")
+                    for li in range(logo_count):
+                        try:
+                            el = logo_els.nth(li)
+                            el.scroll_into_view_if_needed(timeout=3000)
+                            time.sleep(0.5)
+                            fname = generate_ad_filename(
+                                retailer="target", ad_type="sponsored_logo",
+                                client=client, search_term=keyword,
+                                timestamp=run_id, index=li + 1,
+                                extension="png", advertiser=None,
+                            )
+                            fpath = logo_dir / fname
+                            # Try to screenshot the iframe content for a full uncropped capture
+                            _logo_captured = False
+                            try:
+                                iframe_handle = el.locator("iframe").first
+                                if iframe_handle.count() > 0:
+                                    frame = iframe_handle.content_frame()
+                                    if frame:
+                                        frame_body = frame.locator("body")
+                                        if frame_body.count() > 0:
+                                            frame_body.screenshot(path=str(fpath))
+                                            _logo_captured = True
+                                            log(f"   📸 Sponsored logo {li+1} saved (iframe): {fpath.name}")
+                            except Exception as e_iframe:
+                                log(f"   [target] Sponsored logo {li+1} iframe screenshot failed, falling back to wrapper: {e_iframe}")
+                            # Fallback: screenshot the wrapper element directly
+                            if not _logo_captured:
+                                el.screenshot(path=str(fpath))
+                                log(f"   📸 Sponsored logo {li+1} saved (wrapper): {fpath.name}")
+                            _ad_screenshots["logo"].append(str(fpath))
+                        except Exception as e:
+                            log(f"   [target] Sponsored logo {li+1} screenshot failed: {e}")
+                            _ad_screenshots["logo"].append(None)
+
+                log(f"   Ad screenshots: {len(_ad_screenshots['banner'])} banners, {len(_ad_screenshots['logo'])} logos")
+            except Exception as e:
+                log(f"   [target] Ad screenshot pass failed (continuing): {e}")
 
             # Extract ads from the saved HTML using BeautifulSoup (iframe-safe).
             # Pass the live Playwright context so we can resolve brands from the
@@ -695,6 +937,61 @@ def search_and_capture(keyword: str, output_dir: str, *, headless: bool = False)
                 ctx,
             )
             log(f"   Extracted {len(ads)} Target ad units from HTML")
+
+            # Match ad screenshots to extracted ad objects by type + index
+            _banner_idx = 0
+            _logo_idx = 0
+            for ad in ads:
+                img_path = None
+                if ad["type"] == "ListingPageBannerAd":
+                    if _banner_idx < len(_ad_screenshots["banner"]):
+                        img_path = _ad_screenshots["banner"][_banner_idx]
+                    _banner_idx += 1
+                elif ad["type"] == "Sponsored_Logo":
+                    if _logo_idx < len(_ad_screenshots["logo"]):
+                        img_path = _ad_screenshots["logo"][_logo_idx]
+                    _logo_idx += 1
+                if img_path:
+                    ad["image_path"] = str(Path(img_path).relative_to(output_root))
+
+            # CDN fallback: download image_url for any ad still missing image_path
+            # (e.g. safeframe-only ads that had no live DOM element to screenshot)
+            _cdn_downloaded = 0
+            for idx, ad in enumerate(ads, start=1):
+                if ad.get("image_path") or not ad.get("image_url"):
+                    continue
+                ad_type = ad.get("type", "ListingPageBannerAd")
+                folder = "ListingPageBannerAd" if ad_type == "ListingPageBannerAd" else (
+                    "Sponsored_Logo" if ad_type == "Sponsored_Logo" else "Main")
+                try:
+                    target_dir = ensure_subdir("target", output_root, folder)
+                    brand_tag = (ad.get("brand") or "unknown").strip() or "unknown"
+                    fname = generate_ad_filename(
+                        retailer="target", ad_type=ad_type.lower(),
+                        client=client, search_term=keyword,
+                        timestamp=run_id, index=idx,
+                        extension="png", advertiser=brand_tag,
+                    )
+                    dest = target_dir / fname
+                    req = urllib.request.Request(
+                        ad["image_url"],
+                        headers={
+                            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                                          "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                            "Referer": page.url,
+                            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+                        },
+                    )
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        with open(dest, "wb") as f:
+                            f.write(resp.read())
+                    ad["image_path"] = str(dest.relative_to(output_root))
+                    _cdn_downloaded += 1
+                    log(f"   📥 CDN fallback: ad #{idx} ({ad_type}) -> {dest.name}")
+                except Exception as e:
+                    log(f"   [target] CDN fallback failed for ad #{idx}: {e}")
+            if _cdn_downloaded:
+                log(f"   CDN fallback downloaded {_cdn_downloaded} additional ad image(s)")
 
             run_payload = {
                 "retailer": "target",

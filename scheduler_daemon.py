@@ -186,6 +186,7 @@ class SchedulerDaemon:
         "instacart": "instacart_search_and_capture.py",
         "walmart": "walmart_search_and_capture.py",
         "amazon": "amazon_search_and_capture.py",
+        "target": "target_search_and_capture.py",
     }
     
     # Retailers that support front page capture
@@ -205,6 +206,7 @@ class SchedulerDaemon:
         self.threads = {}
         self.last_run_times = {}  # Track last run times to avoid duplicates
         self.inflight = {}  # run_key -> thread for async jobs
+        self.child_procs = set()  # Track spawned subprocess PIDs for clean shutdown
         
         # Prefer .venv Python for all subprocesses
         venv_python = self.code_dir / ".venv" / "bin" / "python3"
@@ -213,7 +215,7 @@ class SchedulerDaemon:
         # Configurable timeouts and concurrency
         self.keyword_timeout = int(os.environ.get("SCHEDULER_KEYWORD_TIMEOUT", "180"))  # 3 minutes default
         self.job_budget = int(os.environ.get("SCHEDULER_JOB_BUDGET_SEC", "600"))  # 10 minutes per job
-        self.max_concurrent = int(os.environ.get("SCHEDULER_MAX_CONCURRENCY", "2"))  # 2 concurrent retailers
+        self.max_concurrent = int(os.environ.get("SCHEDULER_MAX_CONCURRENCY", "5"))  # 5 concurrent retailers (one per retailer)
         self.due_window_min = int(os.environ.get("SCHEDULER_DUE_WINDOW_MIN", "2"))  # fire if within ±2 min
         self.missing_gap_sec = int(os.environ.get("SCHEDULER_MISSING_GAP_SEC", "120"))  # wait 2 min before extraction
         self.process_timeout = int(os.environ.get("SCHEDULER_PROCESS_TIMEOUT_SEC", "300"))  # 5 min for HTML processing
@@ -494,21 +496,34 @@ class SchedulerDaemon:
         
         Args:
             retailers: List of retailer slugs to check
-            date_str: Date string in YYYY-MM-DD format
+            date_str: Date string in YYYY-MM-DD format (e.g. '2026-03-03')
         """
         screen_capture_root = self.root_dir / "output" / "screen_capture"
+        # Directory names use compact date (YYYYMMDD), file names use D<YYYY-MM-DD>
+        compact_date = date_str.replace('-', '')  # '20260303'
         
         for retailer in retailers:
             front_pages_dir = screen_capture_root / retailer / "front_pages"
             if not front_pages_dir.exists():
                 return False
             
-            # Look for files matching today's date pattern
-            # Filename format: <retailer>__front_page__D<YYYY-MM-DD>_*.png
-            date_pattern = f"{retailer}__front_page__D{date_str}_*.png"
-            matches = list(front_pages_dir.glob(date_pattern))
+            # Strategy 1: Check timestamped subdirs (current layout)
+            # Subdirs are named like 20260303201234 — match today's date prefix
+            found = False
+            for subdir in front_pages_dir.iterdir():
+                if subdir.is_dir() and subdir.name.startswith(compact_date):
+                    # Check subdir has at least one .png (not just an empty dir)
+                    if any(subdir.glob('*.png')):
+                        found = True
+                        break
             
-            if not matches:
+            # Strategy 2: Fallback — check flat files (legacy layout)
+            if not found:
+                date_pattern = f"{retailer}__front_page__D{date_str}_*.png"
+                if list(front_pages_dir.glob(date_pattern)):
+                    found = True
+            
+            if not found:
                 self.logger.debug(f"[frontpage] No capture found for {retailer} on {date_str}")
                 return False
         
@@ -627,6 +642,17 @@ class SchedulerDaemon:
         self.execution_logger.debug(f"FUNCTION_ENTRY: run_scraper_for_client(retailer={retailer}, client={client_name}, dir={client_dir}, keywords={len(keywords)})")
         
         try:
+            # Check profile health before starting — skip if blocked
+            try:
+                from utils.profile_health import should_bail, send_relogin_alert
+                if should_bail(retailer):
+                    self.logger.warning(f"[{retailer}] Profile is blocked — skipping scrape for {client_name}. Manual re-login needed.")
+                    self.execution_logger.warning(f"PROFILE_BLOCKED_SKIP: Retailer={retailer}, Client={client_name}")
+                    send_relogin_alert(retailer, "consecutive_failures")
+                    return
+            except Exception as e:
+                self.execution_logger.debug(f"PROFILE_HEALTH_CHECK_ERROR: {e}")
+
             # Get retailer script
             script = self.SCRIPT_MAP.get(retailer)
             if not script:
@@ -643,15 +669,6 @@ class SchedulerDaemon:
             self.logger.info(f"Starting scheduled scrape for client: {client_name} (retailer: {retailer}, keywords: {len(keywords)})")
             self.execution_logger.info(f"SCRAPE_START: Retailer={retailer}, Client={client_name}, Keywords={len(keywords)}")
             
-            # Create keywords file for this run
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            keywords_file = Path(client_dir) / f"scheduled_keywords_{timestamp}.txt"
-            self.execution_logger.debug(f"KEYWORDS_FILE_CREATE: {keywords_file}")
-            
-            with open(keywords_file, "w", encoding="utf-8") as f:
-                f.write("\n".join(keywords))
-            self.execution_logger.debug(f"KEYWORDS_FILE_WRITTEN: {len(keywords)} keywords")
-                
             # Run scraper for each keyword with job budget enforcement
             success_count = 0
             job_start = time.time()
@@ -708,8 +725,10 @@ class SchedulerDaemon:
                         cwd=str(self.code_dir),
                         env=self._proc_env(),
                     )
+                    self.child_procs.add(proc.pid)
                     
                     stdout, stderr = proc.communicate(timeout=self.keyword_timeout)
+                    self.child_procs.discard(proc.pid)
                     rc = proc.returncode
                     
                     self.execution_logger.debug(f"SUBPROCESS_RETURN_CODE: {rc}")
@@ -752,55 +771,58 @@ class SchedulerDaemon:
                 self.execution_logger.info(f"HTML_PROCESSING_SKIPPED: Retailer={retailer}, Client={client_name}")
                 return
             
-            # Give the newest runs a moment so '--latest-missing --missing-gap-minutes 2' won't skip them
-            if self.missing_gap_sec > 0:
-                self.logger.info(f"[{retailer}] Waiting {self.missing_gap_sec}s before HTML processing")
-                time.sleep(self.missing_gap_sec)
-            
-            # Process only newest HTMLs missing images (per-run, no mixing)
-            self.execution_logger.info(f"HTML_PROCESSING_START: {client_dir} (latest-missing)")
-            try:
-                process_cmd = [
-                    self._python_exec,
-                    str(self.code_dir / "process_saved_html.py"),
-                    "--input-dir",
-                    str(client_dir),
-                    "--output-dir",
-                    str(client_dir),
-                    "--latest-missing",
-                    "--missing-gap-minutes",
-                    "2",
-                    "--force-images",  # Always force image extraction regardless of existing files
-                ]
-                
-                self.execution_logger.debug(f"HTML_PROCESS_CMD: {' '.join(process_cmd)}")
-                self.execution_logger.debug(f"SUBPROCESS_START: process_saved_html.py")
-                
-                result = subprocess.run(
-                    process_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=self.process_timeout,
-                    cwd=str(self.code_dir),
-                    env=self._proc_env(),
-                )
-                
-                self.execution_logger.debug(f"HTML_PROCESS_RETURN_CODE: {result.returncode}")
-                if result.stdout:
-                    self.execution_logger.debug(f"HTML_PROCESS_STDOUT: {result.stdout[:500]}...")
-                if result.stderr:
-                    self.execution_logger.debug(f"HTML_PROCESS_STDERR: {result.stderr[:500]}...")
-                
-                if result.returncode == 0:
-                    self.logger.info(f"[{retailer}] Successfully processed HTML files for {client_name}")
-                    self.execution_logger.info(f"HTML_PROCESSING_SUCCESS: Retailer={retailer}, Client={client_name}")
-                else:
-                    self.logger.error(f"[{retailer}] Failed to process HTML files for {client_name}: {result.stderr}")
-                    self.execution_logger.error(f"HTML_PROCESSING_FAILED: Retailer={retailer}, Client={client_name}, Error={result.stderr}")
-                    
-            except Exception as e:
-                self.logger.error(f"[{retailer}] Error processing HTML files for {client_name}: {e}")
-                self.execution_logger.error(f"HTML_PROCESSING_EXCEPTION: Retailer={retailer}, Client={client_name}, Error={e}")
+            # process_saved_html.py is Kroger-only: it extracts TOA/Skyscraper/Carousel images
+            # from saved HTML. Running it for other retailers creates spurious TOA/ folders.
+            if retailer == "kroger":
+                # Give the newest runs a moment so '--latest-missing --missing-gap-minutes 2' won't skip them
+                if self.missing_gap_sec > 0:
+                    self.logger.info(f"[{retailer}] Waiting {self.missing_gap_sec}s before HTML processing")
+                    time.sleep(self.missing_gap_sec)
+
+                # Process only newest HTMLs missing images (per-run, no mixing)
+                self.execution_logger.info(f"HTML_PROCESSING_START: {client_dir} (latest-missing)")
+                try:
+                    process_cmd = [
+                        self._python_exec,
+                        str(self.code_dir / "process_saved_html.py"),
+                        "--input-dir",
+                        str(client_dir),
+                        "--output-dir",
+                        str(client_dir),
+                        "--latest-missing",
+                        "--missing-gap-minutes",
+                        "2",
+                        "--force-images",
+                    ]
+
+                    self.execution_logger.debug(f"HTML_PROCESS_CMD: {' '.join(process_cmd)}")
+                    self.execution_logger.debug(f"SUBPROCESS_START: process_saved_html.py")
+
+                    result = subprocess.run(
+                        process_cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=self.process_timeout,
+                        cwd=str(self.code_dir),
+                        env=self._proc_env(),
+                    )
+
+                    self.execution_logger.debug(f"HTML_PROCESS_RETURN_CODE: {result.returncode}")
+                    if result.stdout:
+                        self.execution_logger.debug(f"HTML_PROCESS_STDOUT: {result.stdout[:500]}...")
+                    if result.stderr:
+                        self.execution_logger.debug(f"HTML_PROCESS_STDERR: {result.stderr[:500]}...")
+
+                    if result.returncode == 0:
+                        self.logger.info(f"[{retailer}] Successfully processed HTML files for {client_name}")
+                        self.execution_logger.info(f"HTML_PROCESSING_SUCCESS: Retailer={retailer}, Client={client_name}")
+                    else:
+                        self.logger.error(f"[{retailer}] Failed to process HTML files for {client_name}: {result.stderr}")
+                        self.execution_logger.error(f"HTML_PROCESSING_FAILED: Retailer={retailer}, Client={client_name}, Error={result.stderr}")
+
+                except Exception as e:
+                    self.logger.error(f"[{retailer}] Error processing HTML files for {client_name}: {e}")
+                    self.execution_logger.error(f"HTML_PROCESSING_EXCEPTION: Retailer={retailer}, Client={client_name}, Error={e}")
                 
             self.logger.info(f"[{retailer}] Completed scheduled scrape for {client_name}: {success_count}/{len(keywords)} keywords successful")
             self.execution_logger.info(f"SCRAPE_COMPLETE: Retailer={retailer}, Client={client_name}, Success={success_count}/{len(keywords)}")
@@ -905,8 +927,23 @@ class SchedulerDaemon:
                         client_name = s.client
                         retailer = s.retailer
                         check_hhmm = check_time.strftime("%H:%M")
-                        self.logger.info(f"→ DUE: [{retailer}] {client_name} @ {check_hhmm} ({s.source_path})")
+                        
+                        # Create run key for duplicate prevention using SCHEDULED time, not current time
+                        # This ensures the same scheduled slot produces the same key across the ±window
+                        matching_time = next((t for t in s.times if self._within_window(now_min, t, self.due_window_min)), None)
+                        if matching_time:
+                            run_key = f"{s.id}_{check_time.strftime('%Y-%m-%d')}_{matching_time}"
+                        else:
+                            run_key = f"{s.id}_{check_time.strftime('%Y-%m-%d%H:%M')}"
+                        
+                        if run_key in self.last_run_times:
+                            self.execution_logger.debug(f"DUPLICATE_RUN_PREVENTED: [{retailer}] {client_name} run_key={run_key}")
+                            continue
+                        
+                        # Log DUE only after dedup check passes (avoid log spam within ±window)
+                        self.logger.info(f"→ DUE: [{retailer}] {client_name} @ {check_hhmm} (slot={matching_time}) ({s.source_path})")
                         self.execution_logger.info(f"SCHEDULE_MATCH: [{retailer}] {client_name} @ {check_hhmm}")
+                        self.last_run_times[run_key] = now
                         
                         # Check for keywords
                         keywords = s.keywords
@@ -921,20 +958,6 @@ class SchedulerDaemon:
                             self.logger.warning(f"[{retailer}] No keywords found for {client_name}")
                             self.execution_logger.warning(f"NO_KEYWORDS_FOUND: [{retailer}] {client_name}")
                             continue
-                        
-                        # Create run key for duplicate prevention using SCHEDULED time, not current time
-                        # This ensures the same scheduled slot produces the same key across the window
-                        matching_time = next((t for t in s.times if self._within_window(now_min, t, self.due_window_min)), None)
-                        if matching_time:
-                            run_key = f"{s.id}_{check_time.strftime('%Y-%m-%d')}_{matching_time}"
-                        else:
-                            run_key = f"{s.id}_{check_time.strftime('%Y-%m-%d%H:%M')}"
-                        
-                        if run_key in self.last_run_times:
-                            self.execution_logger.debug(f"DUPLICATE_RUN_PREVENTED: {run_key}")
-                            continue
-                        
-                        self.last_run_times[run_key] = now
                         
                         # Convert Schedule object to dict for _start_job_async
                         schedule_dict = {
@@ -954,12 +977,16 @@ class SchedulerDaemon:
                 # 4) Check for front page capture schedule
                 self._check_frontpage_schedule(now, today, hhmm)
                 
-                # 5) Clean up old run time entries (keep only last 2 hours)
-                cutoff_time = now - timedelta(hours=2)
+                # 5) Clean up old run time entries
+                # Frontpage keys use a longer window (24h) since they're once-daily
+                # and the 2h window was causing repeated catch-up runs.
+                # Regular scrape keys use 2h as before.
+                cutoff_2h = now - timedelta(hours=2)
+                cutoff_24h = now - timedelta(hours=24)
                 old_count = len(self.last_run_times)
                 self.last_run_times = {
-                    k: v for k, v in self.last_run_times.items() 
-                    if v >= cutoff_time
+                    k: v for k, v in self.last_run_times.items()
+                    if v >= (cutoff_24h if k.startswith('frontpage_') else cutoff_2h)
                 }
                 new_count = len(self.last_run_times)
                 
@@ -980,14 +1007,42 @@ class SchedulerDaemon:
         self.monitor_schedules()
         
     def stop(self):
-        """Stop the scheduler daemon"""
+        """Stop the scheduler daemon and kill all child scraper processes"""
         self.running = False
+        self._kill_children()
         self.logger.info("Scheduler daemon stopped")
+    
+    def _kill_children(self):
+        """Send SIGTERM then SIGKILL to all tracked child processes."""
+        for pid in list(self.child_procs):
+            try:
+                os.kill(pid, signal.SIGTERM)
+                self.logger.info(f"Sent SIGTERM to child PID {pid}")
+            except (ProcessLookupError, PermissionError):
+                self.child_procs.discard(pid)
+        # Give children 3 seconds to exit, then SIGKILL stragglers
+        time.sleep(3)
+        for pid in list(self.child_procs):
+            try:
+                os.kill(pid, signal.SIGKILL)
+                self.logger.info(f"Sent SIGKILL to child PID {pid}")
+            except (ProcessLookupError, PermissionError):
+                pass
+            self.child_procs.discard(pid)
 
 
 def main():
     """Main entry point - single-instance enforcement handled by scheduler_entry.py"""
     daemon = SchedulerDaemon()
+    
+    def _handle_term(signum, frame):
+        daemon.logger.info(f"Received signal {signum} — shutting down")
+        daemon.stop()
+        sys.exit(0)
+    
+    signal.signal(signal.SIGTERM, _handle_term)
+    signal.signal(signal.SIGINT, _handle_term)
+    
     try:
         daemon.start()
     except KeyboardInterrupt:

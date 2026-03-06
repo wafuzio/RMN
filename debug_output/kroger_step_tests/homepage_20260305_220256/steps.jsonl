@@ -1,0 +1,17 @@
+{"ts": 1772769776.908726, "elapsed_ms": 0, "event": "test_start", "step": "homepage", "headless": false, "profile": "/Users/dan.maguire/ChromeProfiles/kroger_clean_profile"}
+{"ts": 1772769777.677388, "elapsed_ms": 768, "event": "browser_launch", "args": ["--disable-dev-shm-usage", "--disable-infobars", "--no-first-run", "--disable-default-apps", "--disable-backgrounding-occluded-windows", "--window-size=1280,720", "--disable-notifications", "--disable-quic", "--noerrdialogs", "--use-angle=metal", "--enable-gpu-rasterization", "--ignore-gpu-blocklist"]}
+{"ts": 1772769780.372535, "elapsed_ms": 2695, "event": "browser_launched"}
+{"ts": 1772769780.372604, "elapsed_ms": 3463, "event": "collecting_initial_diagnostics"}
+{"ts": 1772769780.3928058, "elapsed_ms": 3484, "event": "navigator_diag", "webdriver": true, "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36", "platform": "MacIntel", "language": "en-US", "languages": ["en-US", "en"], "hardwareConcurrency": 10, "deviceMemory": null, "pluginsLength": 5, "vendor": "Google Inc.", "vendorSub": "", "productSub": "20030107", "maxTouchPoints": 0}
+{"ts": 1772769780.4081438, "elapsed_ms": 3499, "event": "webgl_diag", "vendor": "WebKit", "renderer": "WebKit WebGL", "unmaskedVendor": "Google Inc. (Apple)", "unmaskedRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)", "version": "WebGL 1.0 (OpenGL ES 2.0 Chromium)", "shadingLanguageVersion": "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)"}
+{"ts": 1772769780.4152079, "elapsed_ms": 3506, "event": "cookies_diag", "count": 135, "names": ["pid", "rxVisitorg9i8dbl7", "s_ecid", "_fbp", "_ga", "UTID", "UTID_ENC", "MUID", "ai_user", "_cc-x"]}
+{"ts": 1772769780.415296, "elapsed_ms": 3506, "event": "akamai_cookies_found", "cookies": ["_abck", "bm_ss", "ak_bmsc", "bm_sv", "_abck", "bm_s", "bm_so", "bm_sz", "bm_lso"]}
+{"ts": 1772769780.415308, "elapsed_ms": 3506, "event": "viewport_diag", "width": 1280, "height": 720}
+{"ts": 1772769780.418793, "elapsed_ms": 3510, "event": "page_info", "url": "about:blank", "title": ""}
+{"ts": 1772769780.418813, "elapsed_ms": 3510, "event": "step_1_homepage_start"}
+{"ts": 1772769788.7348511, "elapsed_ms": 8316, "event": "step_1_homepage_complete"}
+{"ts": 1772769788.839788, "elapsed_ms": 11931, "event": "kroger_page_webdriver_check", "webdriver": null, "url": "https://www.kroger.com/"}
+{"ts": 1772769788.877255, "elapsed_ms": 11968, "event": "no_block_detected", "url": "https://www.kroger.com/", "content_size": 696862}
+{"ts": 1772769789.2664099, "elapsed_ms": 12357, "event": "screenshot_saved", "path": "/Users/dan.maguire/Documents/Amazon_Scrape/debug_output/kroger_step_tests/homepage_20260305_220256/step1_homepage_screenshot.png"}
+{"ts": 1772769789.323406, "elapsed_ms": 12414, "event": "html_saved", "path": "/Users/dan.maguire/Documents/Amazon_Scrape/debug_output/kroger_step_tests/homepage_20260305_220256/step1_homepage_page.html", "size": 696925}
+{"ts": 1772769789.323447, "elapsed_ms": 12414, "event": "test_complete", "step": "homepage", "result": "no_block"}

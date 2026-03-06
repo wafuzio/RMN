@@ -1,0 +1,85 @@
+{
+  "step": "homepage",
+  "timestamp": "20260305_220750",
+  "profile": "/Users/dan.maguire/ChromeProfiles/kroger_clean_profile",
+  "outcome": "blocked_at_homepage",
+  "blocked": true,
+  "block_reason": "access_denied",
+  "diagnostics": {
+    "initial": {
+      "navigator": {
+        "webdriver": true,
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "platform": "MacIntel",
+        "language": "en-US",
+        "languages": [
+          "en-US",
+          "en"
+        ],
+        "hardwareConcurrency": 10,
+        "deviceMemory": null,
+        "pluginsLength": 5,
+        "vendor": "Google Inc.",
+        "vendorSub": "",
+        "productSub": "20030107",
+        "maxTouchPoints": 0
+      },
+      "webgl": {
+        "vendor": "WebKit",
+        "renderer": "WebKit WebGL",
+        "unmaskedVendor": "Google Inc. (Apple)",
+        "unmaskedRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)",
+        "version": "WebGL 1.0 (OpenGL ES 2.0 Chromium)",
+        "shadingLanguageVersion": "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)"
+      },
+      "cookies": {
+        "count": 136,
+        "names": [
+          "pid",
+          "rxVisitorg9i8dbl7",
+          "s_ecid",
+          "_fbp",
+          "_ga",
+          "UTID",
+          "UTID_ENC",
+          "MUID",
+          "ai_user",
+          "_cc-x",
+          "_cc",
+          "_cid_cc",
+          "loggedIn",
+          "OptanonAlertBoxClosed",
+          "JVMID",
+          "kndctr_664516D751E565010A490D4C_AdobeOrg_identity",
+          "kndctr_664516D751E565010A490D4C_AdobeOrg_consent",
+          "AMCV_664516D751E565010A490D4C%40AdobeOrg",
+          "_abck",
+          "_cls_v"
+        ]
+      },
+      "akamai_cookies": [
+        "_abck",
+        "bm_ss",
+        "ak_bmsc",
+        "bm_sv",
+        "bm_so",
+        "bm_sz",
+        "bm_lso",
+        "bm_s",
+        "bm_sc",
+        "_abck"
+      ],
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "url": "about:blank",
+      "title": ""
+    }
+  },
+  "timings": {
+    "launch_ms": 2797,
+    "homepage_ms": 4538
+  },
+  "block_details": "Title: Access Denied"
+}
