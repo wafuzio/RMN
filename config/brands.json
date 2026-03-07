@@ -281,6 +281,10 @@
     "verified": true
   },
   {
+    "name": "Astro",
+    "synonyms": []
+  },
+  {
     "name": "Atkins",
     "synonyms": [],
     "verified": true
@@ -583,6 +587,10 @@
     "verified": true
   },
   {
+    "name": "Bodymed",
+    "synonyms": []
+  },
+  {
     "name": "Boiron",
     "synonyms": [],
     "verified": true
@@ -782,6 +790,10 @@
     "synonyms": []
   },
   {
+    "name": "By Indigo Wild",
+    "synonyms": []
+  },
+  {
     "name": "BYOMA",
     "synonyms": [
       "BYOMA US Inc.",
@@ -861,6 +873,10 @@
     "name": "Calvin Klein",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Canoa",
+    "synonyms": []
   },
   {
     "name": "Canon",
@@ -1487,6 +1503,10 @@
     "name": "Doritos",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Dots",
+    "synonyms": []
   },
   {
     "name": "Dove",
@@ -3005,6 +3025,10 @@
     "verified": true
   },
   {
+    "name": "Laifen",
+    "synonyms": []
+  },
+  {
     "name": "Laird Superfood",
     "synonyms": [
       "Laird Super Food"
@@ -3378,6 +3402,10 @@
     "name": "Mccafe",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Mccormick Gourmet",
+    "synonyms": []
   },
   {
     "name": "medicube",
@@ -4750,6 +4778,10 @@
     "verified": true
   },
   {
+    "name": "Reese's",
+    "synonyms": []
+  },
+  {
     "name": "Refresh",
     "synonyms": [
       "Refresh Lubricant Eye Drops"
@@ -4760,6 +4792,10 @@
     "name": "Refresher Sparkling Water",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Remedy",
+    "synonyms": []
   },
   {
     "name": "Renew Life",
@@ -4860,6 +4896,10 @@
     "verified": true
   },
   {
+    "name": "Roscato",
+    "synonyms": []
+  },
+  {
     "name": "Roscato Wine",
     "synonyms": [],
     "verified": true
@@ -4944,6 +4984,10 @@
     "name": "Samsung",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "San Francisco Bay",
+    "synonyms": []
   },
   {
     "name": "Sangtree",
@@ -5084,6 +5128,10 @@
   },
   {
     "name": "Shock",
+    "synonyms": []
+  },
+  {
+    "name": "Shokz",
     "synonyms": []
   },
   {
@@ -5605,6 +5653,10 @@
     "verified": true
   },
   {
+    "name": "That’s",
+    "synonyms": []
+  },
+  {
     "name": "Thayers",
     "synonyms": [],
     "verified": true
@@ -5896,6 +5948,10 @@
     "verified": true
   },
   {
+    "name": "Upgrade Your Kitchen With Ninja",
+    "synonyms": []
+  },
+  {
     "name": "USDA",
     "synonyms": [],
     "verified": true
@@ -6087,6 +6143,10 @@
     "name": "Waterwipes",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Wawa",
+    "synonyms": []
   },
   {
     "name": "weesprout",

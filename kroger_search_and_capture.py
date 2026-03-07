@@ -541,6 +541,7 @@ def _launch_context_resilient(pw, client_name: str):
                 args=[
                     # Chrome 145-compatible args only (9 old flags removed — they crash Chrome 145)
                     # NOTE: --no-sandbox REMOVED - conflicts with chromium_sandbox=True and triggers Akamai
+                    "--disable-blink-features=AutomationControlled",  # CRITICAL: Prevents navigator.webdriver=true
                     "--disable-dev-shm-usage",
                     "--disable-infobars",
                     "--no-first-run",
@@ -955,9 +956,10 @@ def search_and_capture(search_term=None, output_dir=None):
                                     let attempts = 0;
                                     const interval = setInterval(() => {
                                         attempts++;
-                                        if (checkProducts() || attempts >= 10) {
+                                        if (checkProducts() || attempts >= 50) {
                                             clearInterval(interval);
-                                            if (attempts >= 10) resolve('products_timeout');
+                                            if (attempts >= 50) resolve('products_timeout');
+                                            else resolve('products_found');
                                         }
                                     }, 300);
                                 }),
@@ -989,6 +991,35 @@ def search_and_capture(search_term=None, output_dir=None):
                 # Wait a bit longer for stability
                 print("   Waiting for page to stabilize...")
                 page.wait_for_timeout(5000)  # Reduced from 10000ms to 5000ms
+                
+                # Verify products actually loaded
+                product_count = page.evaluate("""
+                    () => document.querySelectorAll('[data-testid*="product"], [class*="product-card"]').length
+                """)
+                diag.log("products_check", count=product_count)
+                
+                if product_count == 0:
+                    print(f"   ⚠️ WARNING: No product elements found after waiting")
+                    # Take screenshot to see what's actually on the page
+                    diag.save_forensics(page, "no_products_initial")
+                    print(f"   📸 Screenshot saved to diagnostics - check what Kroger is showing")
+                    print(f"   Page may not have fully hydrated - waiting additional 10 seconds...")
+                    page.wait_for_timeout(10000)
+                    
+                    # Check again
+                    product_count = page.evaluate("""
+                        () => document.querySelectorAll('[data-testid*="product"], [class*="product-card"]').length
+                    """)
+                    diag.log("products_recheck", count=product_count)
+                    
+                    if product_count == 0:
+                        print(f"   ❌ Still no products found - page failed to hydrate")
+                        diag.save_forensics(page, "no_products_hydrated")
+                        print(f"   📸 Second screenshot saved - check for error messages")
+                    else:
+                        print(f"   ✅ Found {product_count} products after extended wait")
+                else:
+                    print(f"   ✅ Found {product_count} products on page")
 
                 # Confirm still logged in
                 is_still_logged_in = not page.is_visible("text=Sign In")
