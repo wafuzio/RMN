@@ -541,7 +541,7 @@ def _launch_context_resilient(pw, client_name: str):
                 args=[
                     # Chrome 145-compatible args only (9 old flags removed — they crash Chrome 145)
                     # NOTE: --no-sandbox REMOVED - conflicts with chromium_sandbox=True and triggers Akamai
-                    "--disable-blink-features=AutomationControlled",  # CRITICAL: Prevents navigator.webdriver=true
+                    # NOTE: --disable-blink-features=AutomationControlled REMOVED - unsupported in Chrome 145, causes instability
                     "--disable-dev-shm-usage",
                     "--disable-infobars",
                     "--no-first-run",
@@ -563,6 +563,17 @@ def _launch_context_resilient(pw, client_name: str):
                     get: () => undefined
                 });
             """)
+            
+            # WORKAROUND: Navigate to dummy page first to ensure init script takes effect
+            # The init script only applies to pages created AFTER it's called
+            # Initial about:blank page has webdriver=true, so we navigate away and back
+            try:
+                dummy_page = ctx.pages[0] if ctx.pages else ctx.new_page()
+                dummy_page.goto("data:text/html,<html><body>Initializing...</body></html>", wait_until="domcontentloaded", timeout=5000)
+                dummy_page.wait_for_timeout(500)  # Let override settle
+            except Exception:
+                pass  # Non-fatal if dummy navigation fails
+            
             print(f"   ✅ Launched persistent context using profile: {cand['user_data_dir']}")
             return ctx
         except Exception as e:
