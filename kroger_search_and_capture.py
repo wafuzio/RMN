@@ -668,6 +668,9 @@ def search_and_capture(search_term=None, output_dir=None):
                 except Exception:
                     pass
                 
+                # Track pre-run cookies for reputation analysis
+                diag.track_cookies(context, "pre")
+                
                 # Collect initial diagnostics before navigation
                 diag.collect_diagnostics(page, context, "before_navigation")
 
@@ -684,6 +687,23 @@ def search_and_capture(search_term=None, output_dir=None):
                     goto_with_retries(page, "https://www.kroger.com/", attempts=4, wait_until="domcontentloaded", timeout_ms=45000)
                     page.wait_for_timeout(5000)
                     diag.log("homepage_loaded", url=page.url)
+                    
+                    # Track timing to homepage
+                    diag.track_timing("to_home_ms")
+                    
+                    # Capture environment info
+                    try:
+                        ua = page.evaluate("() => navigator.userAgent")
+                        diag.env_info["ua"] = ua
+                    except Exception:
+                        pass
+                    
+                    try:
+                        webgl_vendor = page.evaluate("() => { const gl = document.createElement('canvas').getContext('webgl'); return gl ? gl.getParameter(gl.VENDOR) : null; }")
+                        webgl_renderer = page.evaluate("() => { const gl = document.createElement('canvas').getContext('webgl'); const ext = gl ? gl.getExtension('WEBGL_debug_renderer_info') : null; return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null; }")
+                        diag.env_info["webgl"] = {"vendor": webgl_vendor, "renderer": webgl_renderer}
+                    except Exception:
+                        pass
                     
                     # Collect diagnostics after homepage load
                     diag.collect_diagnostics(page, context, "after_homepage_load")
@@ -1321,18 +1341,20 @@ def search_and_capture(search_term=None, output_dir=None):
                 return False
             finally:
                 try:
+                    # Track post-run cookies before closing
+                    try:
+                        diag.track_cookies(context, "post")
+                    except Exception:
+                        pass
+                    
+                    # Close browser and finalize diagnostics
                     context.close()
-                except Exception:
-                    pass
-                
-                # Finalize diagnostics after browser closes
-                try:
                     diag.log("browser_closed")
                     diag.finalize()
                 except Exception as diag_err:
                     print(f"⚠️ Diagnostic finalization error: {diag_err}")
 
-    # Post-processing happens AFTER browser lock is released to prevent deadlock
+# ... (rest of the code remains the same)
     if saved_html_path:
         print("\n🔍 Starting post-processing (browser lock released)...")
         try:
