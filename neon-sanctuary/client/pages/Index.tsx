@@ -407,7 +407,7 @@ export default function Index() {
       end: formatLocalDate(filters.end),
       tz_offset_minutes: new Date().getTimezoneOffset(), // e.g., -360 for UTC-6
       types: dedupSorted(filters.types),
-      brands: dedupSorted(filters.brands),
+      // brands: dedupSorted(filters.brands), // REMOVED: Apply brand filter client-side for instant filtering
       search: filters.search?.trim() || undefined,
       sort: sortBy,
     };
@@ -418,7 +418,7 @@ export default function Index() {
     filters.start?.getTime(),     // Use epoch for date comparison
     filters.end?.getTime(),
     filters.types?.join(","),     // Stable string representation
-    filters.brands?.join(","),    // Stable string representation
+    // filters.brands?.join(","),    // REMOVED: Brand filter now client-side only
     filters.search,
     sortBy,
   ]);
@@ -603,7 +603,16 @@ export default function Index() {
         // else duplicate from another page/query; ignore it
       }
 
-      const result = Array.from(uniq.values());
+      let result = Array.from(uniq.values());
+
+      // CLIENT-SIDE BRAND FILTER: Apply brand filter here instead of backend for instant filtering
+      if (filters.brands && filters.brands.length > 0) {
+        const brandSet = new Set(filters.brands.map(b => b.toLowerCase()));
+        result = result.filter(ad => {
+          const adBrand = (ad.brand || '').toLowerCase();
+          return brandSet.has(adBrand);
+        });
+      }
 
       return result;
     } catch (error) {
@@ -616,7 +625,8 @@ export default function Index() {
     instacartQuery.data,
     amazonQuery.data,
     targetQuery.data,
-    retailers
+    retailers,
+    filters.brands // Added: Re-filter when brand selection changes
   ]);
 
   // Fetch available ad types WITHOUT the types filter applied

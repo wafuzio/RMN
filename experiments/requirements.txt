@@ -1,0 +1,4 @@
+# Experimental curl_cffi dependencies
+# Install with: pip install -r experiments/requirements.txt
+
+curl-cffi>=0.6.0
