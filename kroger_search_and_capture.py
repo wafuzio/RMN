@@ -28,6 +28,7 @@ from filename_utils import generate_ad_filename
 from core.brands import canonicalize, add_brand
 from utils.profile_health import check_and_record, record_login_outcome, should_bail, send_relogin_alert
 from utils.kroger_diagnostics import KrogerDiagnostics
+from kroger_step_logger import StepLogger, step, attach_network_listeners, log_navigator_diagnostics, log_webgl_diagnostics, log_akamai_trip
 
 # Brand logo database for centralized logo storage
 # Note: Kroger TOA ads are product carousels without brand logos.
@@ -41,7 +42,7 @@ except ImportError:
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 # Constants
-USER_DATA_DIR = os.path.expanduser("~/ChromeProfiles/kroger_clean_profile")
+USER_DATA_DIR = os.path.expanduser("~/ChromeProfiles/kroger_playwright_profile")
 DEFAULT_SEARCH_TERM = "black forest ham"
 DEFAULT_OUTPUT_DIR = "output"
 
@@ -161,6 +162,108 @@ def eval_safe(page, script, retries=3):
                 page.wait_for_load_state("domcontentloaded")
                 continue
             raise
+
+
+def bail_on_block(page, diag, SL, stage: str, forensic_label: str):
+    """Check for Akamai block and bail immediately with consistent logging."""
+    is_blocked, reason, details = diag.check_akamai_block(page)
+    if not is_blocked:
+        return False
+
+    log_akamai_trip(SL, f"{stage}_{reason}", url=page.url, details=details)
+    SL.log(
+        "blocked_bail",
+        stage=stage,
+        reason=reason,
+        details=details,
+        url=page.url,
+        step_log_path=SL.path,
+        step_log_error=SL.last_write_error,
+    )
+    diag.save_forensics(page, forensic_label)
+    print(f"❌ AKAMAI BLOCK DETECTED AT {stage.upper()}: {reason} - {details}")
+    return True
+
+
+def purge_akamai_cookies(context, SL=None):
+    """Clear stale Akamai reputation cookies before the first Kroger request."""
+    names = [
+        "_abck",
+        "ak_bmsc",
+        "AKA_A2",
+        "bm_s",
+        "bm_so",
+        "bm_ss",
+        "bm_sz",
+        "bm_lso",
+        "bm_mi",
+        "bm_sv",
+    ]
+    cleared = []
+    errors = []
+    for name in names:
+        try:
+            context.clear_cookies(name=name)
+            cleared.append(name)
+        except Exception as e:
+            errors.append({"name": name, "error": str(e)})
+    if SL:
+        SL.log("akamai_cookies_purged", cleared=cleared, errors=errors)
+    return cleared, errors
+
+
+def attempt_homepage_rehab(page, context, diag, SL):
+    """Allow Akamai's challenge page script a chance to rehabilitate, then retry once."""
+    is_blocked, reason, details = diag.check_akamai_block(page)
+    if not is_blocked:
+        return False
+
+    if reason not in {"access_denied_title", "access_denied_small_page"}:
+        return False
+
+    try:
+        challenge_scripts = page.locator('script[src*="/U9_"], script[src*="edgesuite"], script[defer]').count()
+    except Exception:
+        challenge_scripts = 0
+
+    SL.log(
+        "homepage_rehab_start",
+        reason=reason,
+        details=details,
+        url=page.url,
+        challenge_scripts=challenge_scripts,
+    )
+
+    wait_ms = random.randint(3500, 5500)
+    try:
+        page.wait_for_timeout(wait_ms)
+    except Exception:
+        pass
+
+    SL.snapshot_abck(context, "after_homepage_rehab_wait")
+    diag.track_cookies(context, "after_homepage_rehab_wait")
+
+    try:
+        with step(SL, "homepage_rehab_retry"):
+            goto_with_retries(page, "https://www.kroger.com/", attempts=1, wait_until="domcontentloaded", timeout_ms=45000)
+        page.wait_for_timeout(2000)
+        diag.collect_diagnostics(page, context, "after_homepage_rehab_retry")
+        log_navigator_diagnostics(page, SL, "after_homepage_rehab_retry")
+        log_webgl_diagnostics(page, SL, "after_homepage_rehab_retry")
+        SL.snapshot_abck(context, "after_homepage_rehab_retry")
+    except Exception as e:
+        SL.log("homepage_rehab_retry_error", error=str(e))
+        return False
+
+    retry_blocked, retry_reason, retry_details = diag.check_akamai_block(page)
+    SL.log(
+        "homepage_rehab_result",
+        blocked=retry_blocked,
+        reason=retry_reason,
+        details=retry_details,
+        url=page.url,
+    )
+    return not retry_blocked
 
 # ---------------------------------------------------------------------------
 # Human-like interaction helpers (ported from Walmart's proven cadence)
@@ -522,25 +625,36 @@ def _launch_context_resilient(pw, client_name: str):
     # The global file lock will serialize actual launches across our tools.
     if not ensure_low_chromium(threshold=1, timeout=60):
         print("⚠️ Detected other Chrome/Chromium processes using the shared profile. Proceeding due to global lock; launch may wait or reuse session.")
-    # Use the system Chrome channel exclusively with our shared profile.
-    # Mixing different Chromium builds with the same user_data_dir can break session persistence.
+    # Use Playwright's bundled Chrome for Testing 145.0.7632.6
+    # - Real Chrome UA and feature surface (not Chromium)
+    # - CDP protocol compatible with Playwright 1.58.0
+    # - Pinned version prevents auto-update breakage
     candidates = [
-        {"user_data_dir": USER_DATA_DIR, "channel": "chrome"},
+        {"user_data_dir": USER_DATA_DIR},
     ]
     last_error = None
     for cand in candidates:
         try:
-            print(f"   Attempting persistent context with profile: {cand['user_data_dir']} channel={cand['channel'] or 'default'}")
+            print(f"   Attempting persistent context with profile: {cand['user_data_dir']}")
             ctx = pw.chromium.launch_persistent_context(
                 user_data_dir=cand['user_data_dir'],
                 headless=False,
-                channel=cand['channel'],
                 ignore_https_errors=True,
-                ignore_default_args=['--enable-automation'],  # CRITICAL: Prevents navigator.webdriver=true
-                chromium_sandbox=True,  # CRITICAL: Enables sandbox (no --no-sandbox banner)
+                # Remove ALL Playwright automation flags that Akamai fingerprints
+                ignore_default_args=[
+                    '--enable-automation',
+                    '--disable-component-extensions-with-background-pages',
+                    '--disable-extensions',
+                    '--disable-sync',
+                    '--use-mock-keychain',
+                    '--password-store=basic',
+                    '--metrics-recording-only',
+                    '--enable-unsafe-swiftshader',  # Conflicts with GPU acceleration
+                ],
+                chromium_sandbox=True,  # Enable sandbox - Akamai detects --no-sandbox
                 args=[
                     # Chrome 145-compatible args only (9 old flags removed — they crash Chrome 145)
-                    # NOTE: --no-sandbox REMOVED - conflicts with chromium_sandbox=True and triggers Akamai
+                    # NOTE: --no-sandbox REMOVED per HAR analysis - triggers Akamai detection
                     # NOTE: --disable-blink-features=AutomationControlled REMOVED - unsupported in Chrome 145, causes instability
                     "--disable-dev-shm-usage",
                     "--disable-infobars",
@@ -557,22 +671,76 @@ def _launch_context_resilient(pw, client_name: str):
                     "--ignore-gpu-blocklist",  # Don't let Chrome silently disable GPU
                 ],
             )
-            # CRITICAL: Force navigator.webdriver to undefined (ignore_default_args doesn't always work with persistent context)
+            # CRITICAL: Comprehensive anti-detection measures for Akamai's JavaScript sensor
+            # Akamai detects automation through multiple signals beyond just navigator.webdriver
             ctx.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
+                // 1. Override navigator.webdriver (must be false, not undefined)
+                delete Object.getPrototypeOf(navigator).webdriver;
+                Object.defineProperty(Object.getPrototypeOf(navigator), 'webdriver', {
+                    value: false,
+                    configurable: true,
+                    writable: true
+                });
+                
+                // 2. Hide Chrome DevTools Protocol (CDP) runtime
+                // Akamai checks for window.cdc_* properties that Playwright/CDP adds
+                const cdcProps = Object.keys(window).filter(p => /^(cdc_|__webdriver|__nightmare|__fxdriver)/.test(p));
+                cdcProps.forEach(prop => {
+                    try { delete window[prop]; } catch(e) {}
+                });
+                
+                // 3. Fix Permissions API - automation browsers return 'denied' for notifications
+                // Real Chrome returns 'default' or 'granted'
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: 'default', onchange: null }) :
+                        originalQuery(parameters)
+                );
+                
+                // 4. Add chrome.runtime if missing (present in real Chrome extensions)
+                if (!window.chrome) {
+                    window.chrome = {};
+                }
+                if (!window.chrome.runtime) {
+                    window.chrome.runtime = {};
+                }
+                
+                // 5. Fix plugins array - Playwright returns empty, real Chrome has PDF plugin
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [
+                        {
+                            0: { type: 'application/pdf' },
+                            description: 'Portable Document Format',
+                            filename: 'internal-pdf-viewer',
+                            length: 1,
+                            name: 'PDF Viewer'
+                        },
+                        {
+                            0: { type: 'application/x-google-chrome-pdf' },
+                            description: 'Portable Document Format',
+                            filename: 'internal-pdf-viewer',
+                            length: 1,
+                            name: 'Chrome PDF Viewer'
+                        }
+                    ]
+                });
+                
+                // 6. Override languages to match real Chrome pattern
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en']
                 });
             """)
             
-            # WORKAROUND: Navigate to dummy page first to ensure init script takes effect
-            # The init script only applies to pages created AFTER it's called
-            # Initial about:blank page has webdriver=true, so we navigate away and back
+            # Force init script to take effect by navigating to a real page first
+            # This ensures webdriver=false BEFORE Kroger page loads and Akamai sensor fires
+            # Using google.com avoids data: URL pollution while being a neutral, fast-loading page
             try:
-                dummy_page = ctx.pages[0] if ctx.pages else ctx.new_page()
-                dummy_page.goto("data:text/html,<html><body>Initializing...</body></html>", wait_until="domcontentloaded", timeout=5000)
-                dummy_page.wait_for_timeout(500)  # Let override settle
+                page = ctx.pages[0] if ctx.pages else ctx.new_page()
+                page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=5000)
+                page.wait_for_timeout(500)  # Let init script settle
             except Exception:
-                pass  # Non-fatal if dummy navigation fails
+                pass  # Non-fatal
             
             print(f"   ✅ Launched persistent context using profile: {cand['user_data_dir']}")
             return ctx
@@ -631,6 +799,9 @@ def search_and_capture(search_term=None, output_dir=None):
     # Initialize diagnostic logging for this run
     diag = KrogerDiagnostics(output_dir=output_dir, run_id=timestamp.replace("-", "").replace("_", ""))
     diag.log("search_and_capture_start", search_term=search_term, output_dir=output_dir)
+    SL = StepLogger(base_dir=output_dir, keyword=search_term)
+    SL.log("session_init", search_term=search_term, output_dir=output_dir)
+    diag.log("step_logger_initialized", path=SL.path)
     os.makedirs(output_dir, exist_ok=True)
     
     # Step 1: Check if cookies exist
@@ -656,11 +827,15 @@ def search_and_capture(search_term=None, output_dir=None):
         with sync_playwright() as p:
             client_name = _derive_client_from_output_dir(output_dir)
             print(f"Browser launch: client context = {client_name or 'unknown'}")
-            context = _launch_context_resilient(p, client_name)
+            with step(SL, "browser_launch"):
+                context = _launch_context_resilient(p, client_name)
 
             try:
                 page = context.pages[0] if context.pages else context.new_page()
                 diag.log("browser_launched", pages=len(context.pages))
+                SL.log("browser_launched", pages=len(context.pages))
+
+                attach_network_listeners(page, SL)
 
                 # Be more lenient with transient network delays
                 try:
@@ -670,12 +845,20 @@ def search_and_capture(search_term=None, output_dir=None):
                 
                 # Track pre-run cookies for reputation analysis
                 diag.track_cookies(context, "pre")
+                SL.snapshot_abck(context, "pre_navigation")
+                cleared_cookies, purge_errors = purge_akamai_cookies(context, SL)
+                diag.log("akamai_cookies_purged", cleared=cleared_cookies, purge_errors=purge_errors)
+                diag.track_cookies(context, "post_akamai_cookie_purge")
+                SL.snapshot_abck(context, "post_akamai_cookie_purge")
                 
                 # Collect initial diagnostics before navigation
                 diag.collect_diagnostics(page, context, "before_navigation")
+                log_navigator_diagnostics(page, SL, "before_navigation")
+                log_webgl_diagnostics(page, SL, "before_navigation")
 
                 # Early bail: if profile is already known-blocked, skip the browser work
                 if should_bail("kroger"):
+                    SL.log("profile_health_bail", reason="consecutive_failures")
                     print("⚠️ Kroger profile is blocked (consecutive failures). Skipping scrape.")
                     print("   Run the profile in a real Chrome window to clear the block.")
                     send_relogin_alert("kroger", "consecutive_failures")
@@ -683,9 +866,15 @@ def search_and_capture(search_term=None, output_dir=None):
 
                 # Navigate to Kroger homepage (non-fatal; continue even if it fails)
                 try:
+                    SL.log("home_goto_start", url="https://www.kroger.com/")
                     diag.log("homepage_navigation_start", url="https://www.kroger.com/")
-                    goto_with_retries(page, "https://www.kroger.com/", attempts=4, wait_until="domcontentloaded", timeout_ms=45000)
-                    page.wait_for_timeout(5000)
+                    with step(SL, "homepage_navigation"):
+                        goto_with_retries(page, "https://www.kroger.com/", attempts=4, wait_until="domcontentloaded", timeout_ms=45000)
+                    page.wait_for_timeout(2000)  # Initial DOM settle
+                    SL.log("home_dom_settled")
+                    SL.snapshot_abck(context, "after_homepage_dom")
+                    drift_reading(page, seconds=random.uniform(2.0, 3.5))  # Generate mouse telemetry during dwell
+                    SL.log("home_drift_complete")
                     diag.log("homepage_loaded", url=page.url)
                     
                     # Track timing to homepage
@@ -707,12 +896,13 @@ def search_and_capture(search_term=None, output_dir=None):
                     
                     # Collect diagnostics after homepage load
                     diag.collect_diagnostics(page, context, "after_homepage_load")
+                    log_navigator_diagnostics(page, SL, "after_homepage_load")
+                    SL.snapshot_abck(context, "after_homepage_load")
                     
                     # Check for Akamai block
-                    is_blocked, reason, details = diag.check_akamai_block(page)
-                    if is_blocked:
-                        diag.save_forensics(page, "blocked_at_homepage")
-                        print(f"❌ AKAMAI BLOCK DETECTED AT HOMEPAGE: {reason} - {details}")
+                    if attempt_homepage_rehab(page, context, diag, SL):
+                        SL.log("homepage_rehab_success", url=page.url)
+                    elif bail_on_block(page, diag, SL, "homepage", "blocked_at_homepage"):
                         diag.finalize()
                         return False
                     
@@ -794,14 +984,19 @@ def search_and_capture(search_term=None, output_dir=None):
                 # CRITICAL: Initial homepage dwell to show browsing intent (Akamai Jan 2026 update)
                 # Akamai's intent-based detection flags instant searches as scraping
                 print("   Initial browsing simulation...")
+                SL.log("browsing_sim_start")
                 diag.log("browsing_simulation_start")
-                random_delay(3.0, 6.0)  # Humans browse before searching
+                drift_reading(page, seconds=random.uniform(3.0, 6.0))  # Generate mouse telemetry during browsing
+                SL.log("browsing_sim_drift_done")
+                SL.snapshot_abck(context, "after_browsing_sim")
                 
                 # Optional: Scroll homepage a bit (shows exploration intent)
                 if random.random() < 0.5:
+                    SL.log("homepage_scroll_start")
                     diag.log("homepage_scroll_start")
                     scroll_like_human(page, bursts=1, lines_min=2, lines_max=4)
-                    random_delay(1.0, 2.0)
+                    drift_reading(page, seconds=random.uniform(1.0, 2.0))  # Active dwell after scroll
+                    SL.log("homepage_scroll_done")
                     diag.log("homepage_scroll_complete")
                 
                 _search_typed = False
@@ -859,19 +1054,24 @@ def search_and_capture(search_term=None, output_dir=None):
                         # --- Walmart-proven cadence ---
                         # 1) Click search box
                         print(f"   Found search box: {_matched_sel}")
+                        SL.log("search_box_click", selector=_matched_sel)
                         diag.log("search_box_click", selector=_matched_sel)
                         _box.click()
                         random_delay(0.2, 0.4)
 
                         # 2) Pre-type dwell (adds entropy — avoids "home → submit in ~4s")
-                        time.sleep(random.uniform(2.0, 4.0))
+                        SL.log("pre_type_dwell_start")
+                        drift_reading(page, seconds=random.uniform(2.0, 4.0))  # Mouse drift while user thinks
+                        SL.log("pre_type_dwell_end")
 
                         # 3) Clear any stale text, then human-type
                         _box.fill("")
                         random_delay(0.15, 0.35)
                         print(f"   Typing: {search_term}")
+                        SL.log("typing_start", keyword=search_term)
                         diag.log("search_typing_start", search_term=search_term)
                         human_type(_box, search_term)
+                        SL.log("typing_end")
                         diag.log("search_typing_complete")
 
                         # 4) Post-type dwell (humans pause before submitting)
@@ -903,6 +1103,7 @@ def search_and_capture(search_term=None, output_dir=None):
                                         pass
                                     _btn.click()
                                     _submitted = True
+                                    SL.log("submit_click", method="button", selector=_btn_sel)
                                     diag.log("search_submitted", method="button", selector=_btn_sel)
                                     print(f"   ✅ Submitted via button ({_btn_sel})")
                                     break
@@ -918,10 +1119,12 @@ def search_and_capture(search_term=None, output_dir=None):
                                     _box.click()
                                 except Exception:
                                     pass
+                            SL.log("submit_click", method="enter_key")
                             page.keyboard.press("Enter")
                             time.sleep(random.uniform(0.25, 0.6))
                             # Second Enter in case the first just closed autocomplete
                             page.keyboard.press("Enter")
+                            SL.log("submit_enter_double")
                             diag.log("search_submitted", method="enter_key")
                             print("   ✅ Submitted via Enter key")
 
@@ -932,16 +1135,16 @@ def search_and_capture(search_term=None, output_dir=None):
                             pass
                         page.wait_for_timeout(random.randint(2500, 4000))
                         
+                        SL.log("search_results_loaded", url=page.url[:200])
+                        SL.snapshot_abck(context, "after_search_results")
                         diag.log("search_results_loaded", url=page.url)
                         
                         # Collect diagnostics after search results load
                         diag.collect_diagnostics(page, context, "after_search_results")
+                        log_navigator_diagnostics(page, SL, "after_search_results")
                         
                         # Check for Akamai block on search results
-                        is_blocked, reason, details = diag.check_akamai_block(page)
-                        if is_blocked:
-                            diag.save_forensics(page, "blocked_at_search_results")
-                            print(f"❌ AKAMAI BLOCK DETECTED AT SEARCH RESULTS: {reason} - {details}")
+                        if bail_on_block(page, diag, SL, "search_results", "blocked_at_search_results"):
                             diag.finalize()
                             return False
 
@@ -960,10 +1163,7 @@ def search_and_capture(search_term=None, output_dir=None):
                     goto_with_retries(page, search_url, attempts=4, wait_until="domcontentloaded", timeout_ms=45000)
                     
                     # Check for block after direct navigation
-                    is_blocked, reason, details = diag.check_akamai_block(page)
-                    if is_blocked:
-                        diag.save_forensics(page, "blocked_at_direct_navigation")
-                        print(f"❌ AKAMAI BLOCK DETECTED AFTER DIRECT NAVIGATION: {reason} - {details}")
+                    if bail_on_block(page, diag, SL, "direct_nav", "blocked_at_direct_navigation"):
                         diag.finalize()
                         return False
 
@@ -1072,13 +1272,17 @@ def search_and_capture(search_term=None, output_dir=None):
                 dismiss_kroger_popups(page)
 
                 # Pre-scroll idle (humans don't scroll instantly)
+                SL.log("pre_scroll_idle_start")
                 diag.log("pre_scroll_idle_start")
-                random_delay(2.2, 3.5)
+                drift_reading(page, seconds=random.uniform(2.2, 3.5))  # Scan results with mouse drift
+                SL.log("pre_scroll_idle_end")
 
                 # Human-like wheel scrolling in bursts
+                SL.log("scrolling_start")
                 diag.log("scrolling_start")
                 scroll_like_human(page, bursts=random.randint(3, 5),
                                    lines_min=6, lines_max=12)
+                SL.log("scrolling_complete")
                 diag.log("scrolling_complete")
 
                 # Exploratory behavior: drift reading + back-scroll peek
@@ -1344,12 +1548,17 @@ def search_and_capture(search_term=None, output_dir=None):
                     # Track post-run cookies before closing
                     try:
                         diag.track_cookies(context, "post")
+                        SL.snapshot_abck(context, "pre_close")
                     except Exception:
                         pass
                     
                     # Close browser and finalize diagnostics
                     context.close()
+                    SL.log("browser_closed", sensor_posts=SL.sensor_posts, rum_beacons=SL.rum_beacons, blocks=SL.blocks)
+                    SL.log("session_end", abck_snapshots=len(SL._abck_history), jsonl_path=SL.path, write_error=SL.last_write_error)
                     diag.log("browser_closed")
+                    if SL.last_write_error:
+                        diag.log("step_logger_write_error", path=SL.path, error=SL.last_write_error)
                     diag.finalize()
                 except Exception as diag_err:
                     print(f"⚠️ Diagnostic finalization error: {diag_err}")
