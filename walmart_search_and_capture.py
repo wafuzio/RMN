@@ -1799,6 +1799,106 @@ def random_delay(a=0.6, b=1.4):
     time.sleep(random.uniform(a, b))
 
 
+def _bezier_mouse_move(page, from_x: float, from_y: float, to_x: float, to_y: float,
+                       duration_ms: int = None, steps: int = None):
+    """
+    Move mouse along a cubic bezier curve with natural easing.
+
+    Real mouse movements follow curved paths with ease-in/ease-out speed.
+    page.mouse.move(steps=N) uses linear interpolation — PX sensor can detect
+    this as non-human. This function generates natural-looking trajectories.
+    """
+    dist = ((to_x - from_x) ** 2 + (to_y - from_y) ** 2) ** 0.5
+    if steps is None:
+        steps = max(25, min(100, int(dist / 7)))
+    if duration_ms is None:
+        # Natural speed: ~400-900px/sec with fixed overhead
+        duration_ms = int(180 + dist * random.uniform(0.5, 1.1))
+
+    dx = to_x - from_x
+    dy = to_y - from_y
+    length = max(dist, 1.0)
+
+    # Perpendicular unit vector for wobble
+    perp_x = -dy / length
+    perp_y = dx / length
+    wobble = dist * random.uniform(0.04, 0.12)
+    side = random.choice([-1, 1])
+
+    cp1_x = from_x + dx * 0.3 + perp_x * wobble * side
+    cp1_y = from_y + dy * 0.3 + perp_y * wobble * side
+    cp2_x = from_x + dx * 0.7 + perp_x * wobble * side * random.uniform(0.5, 1.5)
+    cp2_y = from_y + dy * 0.7 + perp_y * wobble * side * random.uniform(0.5, 1.5)
+
+    def _bez(t):
+        u = 1 - t
+        x = u**3*from_x + 3*u**2*t*cp1_x + 3*u*t**2*cp2_x + t**3*to_x
+        y = u**3*from_y + 3*u**2*t*cp1_y + 3*u*t**2*cp2_y + t**3*to_y
+        return x, y
+
+    def _ease(t):
+        return t * t * (3 - 2 * t)  # cubic smoothstep
+
+    step_base_ms = duration_ms / max(steps, 1)
+    for i in range(steps + 1):
+        t_lin = i / max(steps, 1)
+        x, y = _bez(_ease(t_lin))
+        try:
+            page.mouse.move(x, y)
+        except Exception:
+            return
+        if i < steps:
+            # Bell-curve: faster in the middle, slower at start/end
+            bell = 1.0 + 0.6 * (1 - (2 * t_lin - 1) ** 2)
+            time.sleep(max(0.001, step_base_ms / 1000.0 / bell + random.uniform(-0.002, 0.002)))
+
+
+def _homepage_warmup(page, SL=None):
+    """
+    Natural mouse warm-up after homepage load.
+
+    A real user who just loaded the page glances at the nav and content
+    before deciding to search. PX builds a trust score during this window —
+    movement quality and duration both matter.
+    """
+    start_x = random.uniform(380, 820)
+    start_y = random.uniform(180, 380)
+    try:
+        page.mouse.move(start_x, start_y)
+    except Exception:
+        time.sleep(random.uniform(1.5, 2.5))
+        return
+
+    time.sleep(random.uniform(0.9, 1.6))  # initial "page loaded, reading" pause
+
+    # Move toward nav bar (orientation behavior)
+    nav_x = random.uniform(180, 680)
+    nav_y = random.uniform(52, 78)
+    _bezier_mouse_move(page, start_x, start_y, nav_x, nav_y,
+                       duration_ms=random.randint(380, 680))
+    time.sleep(random.uniform(0.25, 0.60))
+
+    # Maybe drift to a second nav point (65% chance)
+    cur_x, cur_y = nav_x, nav_y
+    if random.random() < 0.65:
+        nav2_x = nav_x + random.uniform(-220, 220)
+        nav2_y = nav_y + random.uniform(-8, 12)
+        _bezier_mouse_move(page, cur_x, cur_y, nav2_x, nav2_y,
+                           duration_ms=random.randint(220, 440))
+        time.sleep(random.uniform(0.18, 0.45))
+        cur_x, cur_y = nav2_x, nav2_y
+
+    # Glance down at hero/featured content area
+    content_x = random.uniform(280, 920)
+    content_y = random.uniform(190, 340)
+    _bezier_mouse_move(page, cur_x, cur_y, content_x, content_y,
+                       duration_ms=random.randint(320, 580))
+    time.sleep(random.uniform(0.45, 1.10))
+
+    if SL:
+        SL.log("homepage_warmup_done")
+
+
 def _wait_results_stable(page, timeout_ms=4000, still_ms=350):
     """Wait for results count to stabilize (avoid acting on mid-render DOM)."""
     t0 = time.time()
@@ -2341,6 +2441,42 @@ def _press_and_hold_sync(*args, **kwargs):
     raise RuntimeError("Deprecated solver path with jitter: do not call. Use _press_and_hold_until_complete.")
 # --- END: PX press-and-hold solver (sync) - DEPRECATED ---
 
+def _clear_bot_detection_cookies(ctx, SL=None) -> int:
+    """
+    Surgically remove Akamai/PX bot-detection cookies while preserving auth cookies.
+
+    These cookies carry an encrypted reputation score. When a session has been
+    flagged as bot-like, the score embedded in abck/bm_sz causes future requests
+    to be pre-challenged. Clearing them forces Walmart to issue a fresh score on
+    the next page load — without discarding the login session.
+
+    Returns the number of bot-detection cookies removed.
+    """
+    BOT_COOKIE_NAMES = {"abck", "_abck", "bm_sz", "bm_sv", "bm_mi", "ak_bmsc", "adblocked"}
+    try:
+        all_cookies = ctx.cookies()
+        bot_cookies = [c for c in all_cookies if c["name"].lower() in BOT_COOKIE_NAMES]
+        if not bot_cookies:
+            return 0
+        auth_cookies = [c for c in all_cookies if c["name"].lower() not in BOT_COOKIE_NAMES]
+        ctx.clear_cookies()
+        if auth_cookies:
+            try:
+                ctx.add_cookies(auth_cookies)
+            except Exception:
+                pass
+        cleared_names = [c["name"] for c in bot_cookies]
+        if SL:
+            SL.log("bot_cookies_cleared", cleared=cleared_names, preserved=len(auth_cookies))
+        print(f"[cookies] 🧹 Cleared {len(bot_cookies)} bot-detection cookies: {cleared_names}")
+        print(f"[cookies] Preserved {len(auth_cookies)} auth/session cookies")
+        return len(bot_cookies)
+    except Exception as e:
+        if SL:
+            SL.log("bot_cookies_clear_error", error=str(e))
+        return 0
+
+
 def _should_refresh_cookies(profile_dir: Optional[str]) -> bool:
     """Check if cookies should be refreshed (every 24 hours)."""
     if not profile_dir:
@@ -2699,6 +2835,13 @@ def search_and_capture(
                 SL.log("cookie_suspicious", names=suspicious)
                 say("warn", f"[{retailer}] ⚠️  Suspicious cookies present: {suspicious}")
                 cookies_info["suspicious"] = suspicious
+                # Auto-clear poisoned bot-detection cookies before first navigation.
+                # These carry an encrypted bot reputation score — clearing them forces
+                # Walmart to issue a fresh score. Auth cookies are preserved.
+                n_cleared = _clear_bot_detection_cookies(ctx, SL=SL)
+                if n_cleared:
+                    say("info", f"[{retailer}] 🧹 Auto-cleared {n_cleared} poisoned bot-detection cookies")
+                    cookies_info["bot_cookies_cleared"] = n_cleared
 
             # CRITICAL: Verify cookie persistence for debugging
             if len(pre_cookies) == 0:
@@ -2942,8 +3085,9 @@ def search_and_capture(
                     _write_run_report(base_dir, report)
                     return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
             
-            # Idle before any action (no scrolling - triggers PX)
-            time.sleep(random.uniform(1.0, 2.0))
+            # Natural mouse warm-up (builds PX trust score before search)
+            # Replaces bare sleep — real movement matters more than just waiting
+            _homepage_warmup(page, SL=SL)
             
             # Accept cookie consent if present (optional)
             try:
@@ -3067,7 +3211,13 @@ def search_and_capture(
                             if box:
                                 mx = box["x"] + box["width"] * random.uniform(0.35, 0.65)
                                 my = box["y"] + box["height"] * random.uniform(0.35, 0.65)
-                                page.mouse.move(mx, my, steps=random.randint(6, 12))
+                                try:
+                                    cur = page.mouse.position
+                                    cur_x, cur_y = cur.get("x", mx - 80), cur.get("y", my)
+                                except Exception:
+                                    cur_x, cur_y = mx - 80, my
+                                _bezier_mouse_move(page, cur_x, cur_y, mx, my,
+                                                   duration_ms=random.randint(280, 500))
                             random_delay(0.05, 0.12)
                         except:
                             pass
