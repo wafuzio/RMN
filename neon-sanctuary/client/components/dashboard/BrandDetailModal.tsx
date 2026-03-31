@@ -36,6 +36,7 @@ type ViewState = { type: 'detail' } | { type: 'retailer-ads'; retailer: string }
 export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetailModalProps) {
   const [viewState, setViewState] = useState<ViewState>({ type: 'detail' });
   const [previousViewState, setPreviousViewState] = useState<ViewState>({ type: 'detail' });
+  const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
   const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
   const [competitorColorMap, setCompetitorColorMap] = useState<Map<string, string>>(new Map());
   const [imageZoom, setImageZoom] = useState(100);
@@ -70,12 +71,15 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
   });
 
   const { data: competitorDetails } = useQuery({
-    queryKey: ["competitor-details", Array.from(selectedCompetitors), retailers, brandDetail?.top_keywords],
+    queryKey: ["competitor-details", Array.from(selectedCompetitors), retailers, Array.from(selectedKeywords), brandDetail?.top_keywords],
     queryFn: async () => {
       if (selectedCompetitors.size === 0 || !brandDetail?.top_keywords) return {};
 
       const retailerParam = retailers.join(',');
-      const keywordsParam = brandDetail.top_keywords.map(k => k.keyword).join(',');
+      const keywordsToQuery = selectedKeywords.size > 0
+        ? Array.from(selectedKeywords)
+        : brandDetail.top_keywords.map(k => k.keyword);
+      const keywordsParam = keywordsToQuery.join(',');
 
       // Fetch all competitor details in parallel
       const competitorPromises = Array.from(selectedCompetitors).map(async (competitorBrand) => {
@@ -105,6 +109,26 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
     },
     enabled: selectedCompetitors.size > 0 && !!brandDetail?.top_keywords,
   });
+
+  const displayedCompetitors = useMemo(() => {
+    if (!brandDetail?.top_competitors) return [];
+    if (selectedKeywords.size === 0) return brandDetail.top_competitors;
+
+    return brandDetail.top_competitors
+      .map((competitor) => {
+        const filteredKeywords = Object.fromEntries(
+          Object.entries(competitor.keywords).filter(([kw]) => selectedKeywords.has(kw))
+        );
+        const total = Object.values(filteredKeywords).reduce((sum, count) => sum + count, 0);
+        return {
+          ...competitor,
+          keywords: filteredKeywords,
+          total,
+        };
+      })
+      .filter((competitor) => competitor.total > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [brandDetail?.top_competitors, selectedKeywords]);
 
   // Fetch a single page of ads at a time instead of exhaustively loading all pages
   const { data: adsPageData, isLoading: adsLoading, isFetching: adsFetching } = useQuery({
@@ -176,6 +200,18 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
     setViewState({ type: 'ad-fullsize', ad });
     setImageZoom(100);
     setShowZoomedImage(false);
+  };
+
+  const toggleKeyword = (keyword: string) => {
+    setSelectedKeywords((prev) => {
+      const next = new Set(prev);
+      if (next.has(keyword)) {
+        next.delete(keyword);
+      } else {
+        next.add(keyword);
+      }
+      return next;
+    });
   };
   const handleCloseAdFullsize = () => {
     setViewState(previousViewState);
@@ -418,25 +454,40 @@ export function BrandDetailModal({ brand, retailers, onOpenChange }: BrandDetail
                 <h3 className="text-lg font-bold text-gray-900 mb-3">Top Keywords</h3>
                 <div className="space-y-2">
                   {brandDetail.top_keywords.map((item, idx) => (
-                    <button
+                    <div
                       key={idx}
                       onClick={() => setViewState({ type: 'keyword-ads', keyword: item.keyword })}
                       className="w-full flex items-center justify-between bg-gray-50 hover:bg-gray-100 rounded-lg p-3 transition-colors text-left cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && setViewState({ type: 'keyword-ads', keyword: item.keyword })}
                     >
                       <span className="font-medium text-gray-900">{item.keyword}</span>
-                      <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">{item.count} ads</span>
-                    </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleKeyword(item.keyword);
+                          }}
+                          className={`text-xs px-2 py-1 rounded border ${selectedKeywords.has(item.keyword) ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-600 border-gray-200'}`}
+                        >
+                          {selectedKeywords.has(item.keyword) ? 'Filtered' : 'Filter'}
+                        </button>
+                        <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">{item.count} ads</span>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {brandDetail.top_competitors.length > 0 && (
+            {displayedCompetitors.length > 0 && (
               <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-3">Top Competitors on Keywords</h3>
                 <p className="text-xs text-gray-600 mb-2">Click a competitor to compare activity on the chart</p>
                 <div className="space-y-2">
-                  {brandDetail.top_competitors.map((item, idx) => {
+                  {displayedCompetitors.map((item, idx) => {
                     const isSelected = selectedCompetitors.has(item.brand);
                     const color = getCompetitorColor(item.brand);
                     const keywordList = Object.entries(item.keywords)

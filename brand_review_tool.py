@@ -554,7 +554,13 @@ class BrandReviewTool:
                                 print(f"✓ Skipping blacklisted message: '{message[:60]}...'")
                                 continue
                         
-                        advertisers = ad.get('advertisers', [])
+                        advertisers = ad.get('advertisers') or []
+                        
+                        # Fall back to 'brand' field if 'advertisers' is missing/empty
+                        if not advertisers:
+                            brand_field = ad.get('brand')
+                            if brand_field:
+                                advertisers = [brand_field]
                         
                         # Check if unknown or uncertain in JSON
                         is_unknown_in_json = (
@@ -1102,7 +1108,16 @@ class BrandReviewTool:
         )
         
         # Update current brand(s) - show all if co-branded, with proper display names
-        advertisers = ad.get('advertisers', ['unknown'])
+        advertisers = ad.get('advertisers') or []
+        
+        # Fall back to 'brand' field if 'advertisers' is missing/empty
+        if not advertisers:
+            brand_field = ad.get('brand')
+            if brand_field:
+                advertisers = [brand_field]
+            else:
+                advertisers = ['unknown']
+        
         display_brands = []
         for adv in advertisers:
             canonical = self.get_canonical_brand_name(adv) if adv and adv.lower() != 'unknown' else None
@@ -1798,6 +1813,17 @@ class BrandReviewTool:
         
         # Sort: verified first, then alphabetical
         ranked.sort(key=lambda x: (not x[2], x[0]))
+        
+        # Auto-populate first brand entry with top verified suggestion if current brand is unknown
+        if ranked and ranked[0][2]:  # If we have a verified suggestion
+            current_brand = (ad.get('brand') or '').strip().lower()
+            current_advertisers = [a.lower() for a in (ad.get('advertisers') or []) if a]
+            if current_brand == 'unknown' or 'unknown' in current_advertisers:
+                # Auto-fill with top verified suggestion
+                top_suggestion = ranked[0][1]
+                if self.brand_entries and not self.brand_entries[0].get():
+                    self.brand_entries[0].delete(0, tk.END)
+                    self.brand_entries[0].insert(0, top_suggestion)
         
         # Display up to 6 suggestions as buttons
         for i, (display_text, brand_name, _) in enumerate(ranked[:6]):

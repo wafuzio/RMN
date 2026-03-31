@@ -373,10 +373,29 @@ class LogoMergeDialog(tk.Toplevel):
         if self.source_logo_info:
             try:
                 img = Image.open(self.source_logo_info["path"])
+                orig_size = img.size
+                
+                # Analyze image quality
+                quality_info = self._analyze_image_quality(img, self.source_logo_info["path"])
+                
                 img.thumbnail((190, 190), Image.Resampling.LANCZOS)
                 self.source_photo = ImageTk.PhotoImage(img)
                 source_canvas.create_image(100, 100, image=self.source_photo, anchor="center")
-            except Exception:
+                
+                # Display quality info
+                info_text = f"{quality_info['resolution']}\n{quality_info['format']}\n{quality_info['transparency']}\n{quality_info['file_size']}"
+                if quality_info['recommendation']:
+                    info_text += f"\n\n{quality_info['recommendation']}"
+                
+                info_label = ttk.Label(
+                    source_frame,
+                    text=info_text,
+                    font=("Arial", 9),
+                    justify="center"
+                )
+                info_label.pack(pady=5)
+                
+            except Exception as e:
                 source_canvas.create_text(100, 100, text="Error loading", fill="red")
             
             ttk.Button(
@@ -397,10 +416,29 @@ class LogoMergeDialog(tk.Toplevel):
         if self.target_logo_info:
             try:
                 img = Image.open(self.target_logo_info["path"])
+                orig_size = img.size
+                
+                # Analyze image quality
+                quality_info = self._analyze_image_quality(img, self.target_logo_info["path"])
+                
                 img.thumbnail((190, 190), Image.Resampling.LANCZOS)
                 self.target_photo = ImageTk.PhotoImage(img)
                 target_canvas.create_image(100, 100, image=self.target_photo, anchor="center")
-            except Exception:
+                
+                # Display quality info
+                info_text = f"{quality_info['resolution']}\n{quality_info['format']}\n{quality_info['transparency']}\n{quality_info['file_size']}"
+                if quality_info['recommendation']:
+                    info_text += f"\n\n{quality_info['recommendation']}"
+                
+                info_label = ttk.Label(
+                    target_frame,
+                    text=info_text,
+                    font=("Arial", 9),
+                    justify="center"
+                )
+                info_label.pack(pady=5)
+                
+            except Exception as e:
                 target_canvas.create_text(100, 100, text="Error loading", fill="red")
             
             ttk.Button(
@@ -426,6 +464,57 @@ class LogoMergeDialog(tk.Toplevel):
             text="Cancel Merge",
             command=self.cancel
         ).pack(side="left", padx=10)
+    
+    def _analyze_image_quality(self, img, path):
+        """Analyze image quality metrics"""
+        from pathlib import Path
+        
+        width, height = img.size
+        file_size = Path(path).stat().st_size
+        
+        # Resolution info
+        resolution = f"{width} × {height} px"
+        total_pixels = width * height
+        
+        # Format info
+        format_name = img.format or "Unknown"
+        
+        # Transparency check
+        has_alpha = img.mode in ('RGBA', 'LA', 'PA')
+        if has_alpha:
+            alpha = img.getchannel('A')
+            alpha_data = list(alpha.getdata())
+            min_alpha = min(alpha_data)
+            transparency = "✓ Transparent" if min_alpha < 250 else "White BG"
+        else:
+            transparency = "White BG"
+        
+        # File size
+        if file_size < 1024:
+            size_str = f"{file_size} B"
+        elif file_size < 1024 * 1024:
+            size_str = f"{file_size / 1024:.1f} KB"
+        else:
+            size_str = f"{file_size / (1024 * 1024):.1f} MB"
+        
+        # Quality recommendation
+        recommendation = ""
+        if total_pixels >= 200 * 200:
+            if has_alpha and min_alpha < 250:
+                recommendation = "✅ High Quality"
+            elif total_pixels >= 300 * 300:
+                recommendation = "✅ Good Quality"
+        elif total_pixels < 150 * 150:
+            recommendation = "⚠️ Low Resolution"
+        
+        return {
+            "resolution": resolution,
+            "format": format_name,
+            "transparency": transparency,
+            "file_size": size_str,
+            "recommendation": recommendation,
+            "total_pixels": total_pixels
+        }
     
     def select(self, choice):
         self.result = choice

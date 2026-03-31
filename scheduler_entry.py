@@ -12,6 +12,7 @@ import time
 import atexit
 import signal
 import subprocess
+import json
 from pathlib import Path
 
 # fcntl is POSIX-only (macOS/Linux). This solution targets those platforms.
@@ -62,6 +63,27 @@ def acquire_lock(lock_file: Path):
 
 def main():
     root = get_root()
+    
+    # Check master override config FIRST
+    config_file = root / "config" / "scheduler_control.json"
+    if config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+                if not config.get("enabled", True):
+                    print("🛑 Scheduler is DISABLED via master override (config/scheduler_control.json)")
+                    print("   Set 'enabled': true to re-enable")
+                    sys.exit(0)
+        except Exception as e:
+            print(f"⚠️  Error reading scheduler control config: {e}")
+    
+    # Check for pause file (temporary pause via GUI)
+    pause_file = root / ".scheduler_paused"
+    if pause_file.exists():
+        print("⏸️  Scheduler is PAUSED (.scheduler_paused file exists)")
+        print("   Delete this file or click 'Start' in the GUI to resume")
+        sys.exit(0)
+    
     logs = ensure_logs_dir(root)
     lock_path = logs / "scheduler.lock"
     pid_path = logs / "scheduler.pid"

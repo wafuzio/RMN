@@ -1,0 +1,5625 @@
+{
+  "has_logo_verified": [
+    {
+      "brand": "3m",
+      "path": "verified/3m.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "4sisters Rice",
+      "path": "verified/4sisters_rice.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Abreva",
+      "path": "verified/abreva.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Activia",
+      "path": "verified/activia.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Advil",
+      "path": "verified/advil.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Afia",
+      "path": "verified/afia.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Allegra",
+      "path": "verified/allegra.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Almond Breeze",
+      "path": "verified/almond_breeze.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ancient Harvest",
+      "path": "verified/ancient_harvest.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Applegate",
+      "path": "verified/applegate.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Artesano Bread",
+      "path": "verified/artesano_bread.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Aspercreme",
+      "path": "verified/aspercreme.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Atkins",
+      "path": "verified/atkins.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bare",
+      "path": "verified/bare.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Barilla",
+      "path": "verified/barilla.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Betty Crocker",
+      "path": "verified/betty_crocker.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bibigo",
+      "path": "verified/bibigo.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Birds Eye",
+      "path": "verified/birds_eye.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Blue Bunny",
+      "path": "verified/blue_bunny.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bluey",
+      "path": "verified/bluey.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Boiron",
+      "path": "verified/boiron.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bomb Pop",
+      "path": "verified/bomb_pop.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Boost",
+      "path": "verified/boost.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Boulder Canyon",
+      "path": "verified/boulder_canyon.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Boursin Crumbles",
+      "path": "unverified/boursin_crumbles.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Brawny",
+      "path": "verified/brawny.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Breathe Right",
+      "path": "verified/breathe_right.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Breyers",
+      "path": "verified/breyers.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Butterfinger",
+      "path": "verified/butterfinger.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Caraseoul",
+      "path": "unverified/caraseoul.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Carvel",
+      "path": "verified/carvel.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cascade",
+      "path": "verified/cascade.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Celsius",
+      "path": "verified/celsius.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cerave",
+      "path": "verified/cerave.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Charmin",
+      "path": "verified/charmin.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cheerios",
+      "path": "verified/cheerios.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chex",
+      "path": "verified/chex.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chinet",
+      "path": "verified/chinet.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chobani",
+      "path": "verified/chobani.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chomps",
+      "path": "verified/chomps.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Clearly Canadian",
+      "path": "verified/clearly_canadian.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Clif",
+      "path": "verified/clif.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Clio",
+      "path": "verified/clio.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Clorox",
+      "path": "verified/clorox.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Coca Cola",
+      "path": "verified/coca-cola.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Colgate",
+      "path": "verified/colgate.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Core Power",
+      "path": "verified/core_power.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cottonelle",
+      "path": "verified/cottonelle.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Country Crock",
+      "path": "verified/country_crock.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Crest",
+      "path": "verified/crest.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Curology",
+      "path": "verified/curology.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dairy Farmers Of America",
+      "path": "verified/dairy_farmers_of_america.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Danone",
+      "path": "verified/danone.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dave's Killer Bread",
+      "path": "verified/daves_killer_bread.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Degree",
+      "path": "verified/degree.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Del Monte",
+      "path": "verified/del_monte.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Depend",
+      "path": "verified/depend.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dole",
+      "path": "verified/dole.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dolly Partons",
+      "path": "verified/Dolly_Partons.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Doritos",
+      "path": "verified/doritos.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dove",
+      "path": "verified/dove.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dr Pepper",
+      "path": "verified/dr_pepper.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dream",
+      "path": "verified/dream.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dreyers",
+      "path": "verified/dreyers.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dulcolax",
+      "path": "verified/dulcolax.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Duncan Hines",
+      "path": "verified/duncan_hines.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Duracell",
+      "path": "verified/duracell.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dweasyderm",
+      "path": "verified/dweasyderm.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eat Just",
+      "path": "verified/eat_just.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eckrich",
+      "path": "verified/eckrich.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Edwards",
+      "path": "verified/edwards.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eggo",
+      "path": "verified/eggo.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Elmhurst 1925",
+      "path": "verified/elmhurst_1925.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Emerald Nuts",
+      "path": "verified/emerald_nuts.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Energizer",
+      "path": "verified/energizer.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Enfamil",
+      "path": "verified/enfamil.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ensure",
+      "path": "verified/ensure.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Envy",
+      "path": "verified/envy.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fabuloso",
+      "path": "verified/fabuloso.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fairlife",
+      "path": "verified/fairlife.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ferrero",
+      "path": "verified/ferrero.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fiji Water",
+      "path": "verified/fiji_water.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Flipz",
+      "path": "verified/flipz.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Folgers",
+      "path": "verified/folgers.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fresh Gourmet",
+      "path": "verified/fresh_gourmet.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fresh Press Farms",
+      "path": "verified/fresh_press_farms.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Frito Lay",
+      "path": "verified/frito_lay.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Frollies",
+      "path": "verified/Frollies.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Garden Of Life",
+      "path": "verified/garden_of_life.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Garnier",
+      "path": "verified/garnier.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gatorade",
+      "path": "verified/gatorade.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "General Mills",
+      "path": "verified/general_mills.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gerber",
+      "path": "verified/gerber.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ghirardelli",
+      "path": "verified/ghirardelli.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gold Bond",
+      "path": "verified/gold_bond.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Goldfish",
+      "path": "verified/goldfish.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gomacro",
+      "path": "verified/gomacro.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Goodles",
+      "path": "verified/goodles.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Goodpop",
+      "path": "verified/goodpop.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Greenfield",
+      "path": "verified/greenfield.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Grown In Idaho",
+      "path": "verified/grown_in_idaho.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Haleon",
+      "path": "verified/haleon.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Halo Top",
+      "path": "verified/halo_top.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Healthy Choice",
+      "path": "verified/healthy_choice.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hefty",
+      "path": "verified/hefty.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Heinz",
+      "path": "verified/heinz.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hello",
+      "path": "verified/hello.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hillshire Farm",
+      "path": "verified/hillshire_farm.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Honey Bunches Of Oats",
+      "path": "verified/honey_bunches_of_oats.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Honey Maid",
+      "path": "verified/honey_maid.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Honey Pot Company",
+      "path": "verified/honey_pot_company.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Honey Stinger",
+      "path": "unverified/honey_stinger.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Horizon",
+      "path": "verified/horizon.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hostess",
+      "path": "verified/hostess.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hot Pockets",
+      "path": "verified/hot_pockets.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Icy Hot",
+      "path": "verified/icy_hot.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Idahoan",
+      "path": "verified/idahoan.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Impossible Burger",
+      "path": "verified/impossible_burger.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Irish Spring",
+      "path": "verified/irish_spring.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ithaca",
+      "path": "verified/ithaca.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jennie-O",
+      "path": "verified/jennie-o.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jimmy Dean",
+      "path": "verified/jimmy_dean.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jonnypops",
+      "path": "verified/jonnypops.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kashi",
+      "path": "verified/kashi.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kellanova",
+      "path": "verified/kellanova.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kentucky Legend",
+      "path": "verified/kentucky_legend.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kenvue",
+      "path": "verified/kenvue.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kettle",
+      "path": "verified/kettle.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kimberly Clark",
+      "path": "verified/kimberly_clark.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kleenex",
+      "path": "verified/kleenex.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kodiak",
+      "path": "verified/kodiak.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kraft",
+      "path": "verified/kraft.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lactaid",
+      "path": "verified/lactaid.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Land O Frost",
+      "path": "verified/land_o_frost.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Land O Lakes",
+      "path": "verified/land_o_lakes.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lavazza",
+      "path": "verified/lavazza.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lego",
+      "path": "verified/lego.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lemonhead",
+      "path": "verified/lemonhead.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lesserevil",
+      "path": "verified/lesserevil.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Libbys",
+      "path": "verified/libbys.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Life Extension",
+      "path": "verified/life_extension.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lifewater",
+      "path": "verified/lifewater.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lindt",
+      "path": "verified/lindt.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Little Debbie",
+      "path": "verified/little_debbie.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Local Hive",
+      "path": "verified/local_hive.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Loreal",
+      "path": "verified/loreal.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lumify",
+      "path": "verified/lumify.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lunchables",
+      "path": "verified/lunchables.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Madegood",
+      "path": "verified/madegood.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Magic Spoon",
+      "path": "verified/magic_spoon.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Malk",
+      "path": "verified/malk.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Marie Callenders",
+      "path": "verified/marie_callenders.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Marzetti",
+      "path": "verified/marzetti.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Maybelline",
+      "path": "verified/maybelline.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mccormick",
+      "path": "verified/mccormick.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Meow Mix",
+      "path": "verified/meow_mix.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Method",
+      "path": "verified/method.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Meyers Clean Day",
+      "path": "verified/meyers_clean_day.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mezcla",
+      "path": "verified/mezcla.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mifroma",
+      "path": "verified/mifroma.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Milk Bone",
+      "path": "verified/milk-bone.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Miracle Whip",
+      "path": "verified/miracle_whip.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Miralax",
+      "path": "verified/miralax.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Momofuku",
+      "path": "verified/momofuku.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Monster",
+      "path": "verified/monster.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Morningstar Farms",
+      "path": "verified/morningstar_farms.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Motts",
+      "path": "verified/motts.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Muscle Milk",
+      "path": "verified/muscle_milk.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mush",
+      "path": "verified/mush.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Myprotein",
+      "path": "verified/myprotein.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Natural Vitality",
+      "path": "verified/natural_vitality.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nature Valley",
+      "path": "verified/nature_valley.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nellies Free Range",
+      "path": "verified/nellies_free_range.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nestle",
+      "path": "verified/nestle.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nestle Toll House",
+      "path": "verified/nestle_toll_house.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Neutrogena",
+      "path": "verified/neutrogena.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "New York Bakery",
+      "path": "verified/new_york_bakery.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nivea",
+      "path": "verified/nivea.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nutrail",
+      "path": "verified/nutrail.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ocean Spray",
+      "path": "verified/ocean_spray.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Olibites Olive",
+      "path": "verified/olibites_olive.jpeg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Olipop",
+      "path": "verified/olipop.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Olly",
+      "path": "verified/olly.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Orgain",
+      "path": "verified/orgain.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oscar Mayer",
+      "path": "verified/oscar_mayer.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Outshine",
+      "path": "verified/Outshine.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oxy",
+      "path": "verified/oxy.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pace",
+      "path": "verified/pace.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Panera Bread",
+      "path": "verified/panera_bread.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Peach Slices",
+      "path": "verified/peach_slices.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pecans",
+      "path": "verified/pecans.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pedigree",
+      "path": "verified/pedigree.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Peets Coffee",
+      "path": "verified/peets_coffee.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pepperidge Farm",
+      "path": "verified/pepperidge_farm.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pepsi",
+      "path": "verified/pepsi.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pepsico",
+      "path": "verified/pepsico.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pepto Bismol",
+      "path": "verified/pepto_bismol.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Perfect Bar",
+      "path": "verified/perfect_bar.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pf Changs",
+      "path": "verified/pf_changs.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Philadelphia",
+      "path": "verified/philadelphia.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pillsbury",
+      "path": "verified/pillsbury.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Planters",
+      "path": "verified/planters.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Poise",
+      "path": "verified/poise.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pompeian",
+      "path": "verified/pompeian.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Prequel",
+      "path": "unverified/prequel.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Preservision",
+      "path": "unverified/preservision.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "President",
+      "path": "verified/president.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Prevagen",
+      "path": "verified/prevagen.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pringles",
+      "path": "verified/pringles.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Progresso",
+      "path": "verified/progresso.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Purina",
+      "path": "verified/purina.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Quest",
+      "path": "verified/quest.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Qunol",
+      "path": "verified/qunol.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Red Baron",
+      "path": "verified/red_baron.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Refresh",
+      "path": "verified/refresh.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ripple Foods",
+      "path": "verified/ripple_foods.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ritual Zero Proof",
+      "path": "verified/ritual_zero_proof.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rohto",
+      "path": "verified/rohto.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sabra",
+      "path": "verified/sabra.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Salonpas",
+      "path": "verified/salonpas.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Saratoga",
+      "path": "verified/saratoga.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Schweppes",
+      "path": "verified/schweppes.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Scott",
+      "path": "verified/scott.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Serenity Kids",
+      "path": "verified/serenity_kids.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Seven Sundays",
+      "path": "verified/seven_sundays.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Siete Foods",
+      "path": "verified/siete_foods.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Six Star",
+      "path": "unverified/six_star.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Slim Jim",
+      "path": "verified/slim_jim.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Smartfood",
+      "path": "verified/smartfood.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Smithfield",
+      "path": "verified/smithfield.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Snack Factory",
+      "path": "verified/snack_factory.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Softsoap",
+      "path": "verified/softsoap.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sour Patch Kids",
+      "path": "verified/sour_patch_kids.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Spice World",
+      "path": "verified/spice_world.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Spk",
+      "path": "verified/spk.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Starbucks",
+      "path": "verified/starbucks.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Stonyfield Organic",
+      "path": "verified/stonyfield_organic.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Suja Organic",
+      "path": "verified/suja_organic.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sun-Maid",
+      "path": "unverified/sun-maid.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Surprisingly Snackable Pecans",
+      "path": "verified/surprisingly_snackable_pecans.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Swanson",
+      "path": "verified/swanson.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Swerve",
+      "path": "verified/swerve.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Systane",
+      "path": "verified/systane.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Terra Delyssa",
+      "path": "verified/terra_delyssa.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Thayers",
+      "path": "unverified/thayers.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Thomas",
+      "path": "verified/thomas.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tide",
+      "path": "verified/tide.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tosowoong",
+      "path": "unverified/tosowoong.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Trolli",
+      "path": "verified/trolli.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tru Fru",
+      "path": "verified/tru_fru.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Truvia",
+      "path": "verified/truvia.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tyson",
+      "path": "verified/tyson.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Undeniably Dairy",
+      "path": "verified/undeniably_dairy.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Unilever",
+      "path": "verified/unilever.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Utz",
+      "path": "verified/utz.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vaseline",
+      "path": "verified/vaseline.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vita Coco",
+      "path": "verified/vita_coco.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vital Proteins",
+      "path": "verified/vital_proteins.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Viva",
+      "path": "verified/viva.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Volpi Foods",
+      "path": "verified/volpi_foods.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Waterloo Sparkling Water",
+      "path": "verified/waterloo_sparkling_water.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Wild Planet",
+      "path": "verified/wild_planet.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Wonderful Pistachios",
+      "path": "verified/wonderful_pistachios.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Yoplait",
+      "path": "verified/yoplait.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zicam",
+      "path": "verified/zicam.jpg",
+      "brand_verified": true
+    }
+  ],
+  "has_logo_unverified": [],
+  "has_logo_unclear": [
+    {
+      "brand": "Always",
+      "path": "always.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Baked",
+      "path": "baked.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bertolli",
+      "path": "bertolli.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bodyarmor",
+      "path": "bodyarmor.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Carnation",
+      "path": "carnation.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Catalina Crunch",
+      "path": "catalina_crunch.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cheez-It",
+      "path": "cheez-it.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Columbus Craft Meats",
+      "path": "columbus_craft_meats.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eos",
+      "path": "eos.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gevalia",
+      "path": "gevalia.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Go-Gurt",
+      "path": "go-gurt.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jell-O",
+      "path": "jell-o.svg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jet-Puffed",
+      "path": "jet-puffed.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kool-Aid",
+      "path": "kool-aid.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Milk-Bone",
+      "path": "milk-bone.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Munchies",
+      "path": "munchies.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nature Made Vitamins",
+      "path": "nature_made_vitamins.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Olay",
+      "path": "olay.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Opti-Free",
+      "path": "opti-free.jpeg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Premier Protein",
+      "path": "premier_protein.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Reddi-Wip",
+      "path": "reddi-wip.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tillamook",
+      "path": "tillamook.png",
+      "brand_verified": true
+    },
+    {
+      "brand": "Trolli Gummi Pop",
+      "path": "trolli_gummi_pop_2.jpg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Udim",
+      "path": "udim.jpg",
+      "brand_verified": true
+    }
+  ],
+  "no_logo": [
+    {
+      "brand": "47 Skin",
+      "brand_verified": true
+    },
+    {
+      "brand": "4Patriots",
+      "brand_verified": true
+    },
+    {
+      "brand": "7Am2M",
+      "brand_verified": true
+    },
+    {
+      "brand": "7Magic",
+      "brand_verified": true
+    },
+    {
+      "brand": "a2",
+      "brand_verified": true
+    },
+    {
+      "brand": "a2 Milk\u00ae",
+      "brand_verified": true
+    },
+    {
+      "brand": "Acropass",
+      "brand_verified": true
+    },
+    {
+      "brand": "Act Anticavity Fluoride Rinse, Wild Watermelon",
+      "brand_verified": false
+    },
+    {
+      "brand": "Adellina",
+      "brand_verified": true
+    },
+    {
+      "brand": "Adidas",
+      "brand_verified": true
+    },
+    {
+      "brand": "Afrin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ahava",
+      "brand_verified": true
+    },
+    {
+      "brand": "Airthings",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ajinomoto",
+      "brand_verified": true
+    },
+    {
+      "brand": "Alani Nu",
+      "brand_verified": true
+    },
+    {
+      "brand": "Algaecal",
+      "brand_verified": true
+    },
+    {
+      "brand": "All Sport",
+      "brand_verified": true
+    },
+    {
+      "brand": "Allday",
+      "brand_verified": true
+    },
+    {
+      "brand": "Alpha Lion",
+      "brand_verified": true
+    },
+    {
+      "brand": "Alumbre",
+      "brand_verified": true
+    },
+    {
+      "brand": "Amara",
+      "brand_verified": true
+    },
+    {
+      "brand": "Amazon",
+      "brand_verified": true
+    },
+    {
+      "brand": "American Dairy Association Northeast",
+      "brand_verified": true
+    },
+    {
+      "brand": "American Express",
+      "brand_verified": true
+    },
+    {
+      "brand": "American Lung Association",
+      "brand_verified": true
+    },
+    {
+      "brand": "Amlactin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Anastasia Beverly Hills",
+      "brand_verified": true
+    },
+    {
+      "brand": "Anbesol",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ancestral Supplements",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ancient Nutrition",
+      "brand_verified": false
+    },
+    {
+      "brand": "Angel Soft",
+      "brand_verified": true
+    },
+    {
+      "brand": "Animal Pak",
+      "brand_verified": true
+    },
+    {
+      "brand": "Annie Chun's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Anua",
+      "brand_verified": true
+    },
+    {
+      "brand": "Apple",
+      "brand_verified": true
+    },
+    {
+      "brand": "APRILSKIN",
+      "brand_verified": true
+    },
+    {
+      "brand": "Aquaphor",
+      "brand_verified": true
+    },
+    {
+      "brand": "Aquasonic",
+      "brand_verified": true
+    },
+    {
+      "brand": "Arbonne",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ardor Energy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Arencia",
+      "brand_verified": true
+    },
+    {
+      "brand": "Arey",
+      "brand_verified": false
+    },
+    {
+      "brand": "Arizona",
+      "brand_verified": false
+    },
+    {
+      "brand": "Arm & Hammer",
+      "brand_verified": true
+    },
+    {
+      "brand": "Arshiner",
+      "brand_verified": true
+    },
+    {
+      "brand": "Artist Hand",
+      "brand_verified": true
+    },
+    {
+      "brand": "Aussie Bubs, Inc.",
+      "brand_verified": true
+    },
+    {
+      "brand": "Avaline",
+      "brand_verified": true
+    },
+    {
+      "brand": "Avarelle",
+      "brand_verified": true
+    },
+    {
+      "brand": "Aveeno",
+      "brand_verified": true
+    },
+    {
+      "brand": "Az",
+      "brand_verified": true
+    },
+    {
+      "brand": "Babybel",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bacha Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Back To Nature Foods",
+      "brand_verified": true
+    },
+    {
+      "brand": "balega",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ballast",
+      "brand_verified": false
+    },
+    {
+      "brand": "Balvive",
+      "brand_verified": true
+    },
+    {
+      "brand": "Band-Aid",
+      "brand_verified": true
+    },
+    {
+      "brand": "Banquet",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bar-S",
+      "brand_verified": true
+    },
+    {
+      "brand": "Barbie",
+      "brand_verified": false
+    },
+    {
+      "brand": "Batiste",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bayer",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bays",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bean of Fire",
+      "brand_verified": true
+    },
+    {
+      "brand": "Beaniac",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bedspick",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bedsure",
+      "brand_verified": true
+    },
+    {
+      "brand": "Beekeeper's Naturals",
+      "brand_verified": true
+    },
+    {
+      "brand": "Belgian Boys",
+      "brand_verified": true
+    },
+    {
+      "brand": "Belif",
+      "brand_verified": true
+    },
+    {
+      "brand": "Belkin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ben And Jerrys",
+      "brand_verified": true
+    },
+    {
+      "brand": "Benadryl Extra Strength Anti-Itch Topical Cream With 2% Diphenhydramine Hci For Itch Relief Of Outdoor Itches Associated With Poison Ivy, Insect Bites & More, 1 Oz",
+      "brand_verified": false
+    },
+    {
+      "brand": "Benebone",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bero",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bessies Best Lactation Cookies",
+      "brand_verified": true
+    },
+    {
+      "brand": "Best Western",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bestway",
+      "brand_verified": true
+    },
+    {
+      "brand": "Better Than Gravy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Beyond",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bigelow",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bior\u00e9",
+      "brand_verified": true
+    },
+    {
+      "brand": "BioSilk",
+      "brand_verified": true
+    },
+    {
+      "brand": "Biotera",
+      "brand_verified": true
+    },
+    {
+      "brand": "Biscoff",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bissell",
+      "brand_verified": true
+    },
+    {
+      "brand": "Black Creek",
+      "brand_verified": true
+    },
+    {
+      "brand": "Black+Decker",
+      "brand_verified": true
+    },
+    {
+      "brand": "Blackout Coffee Co",
+      "brand_verified": true
+    },
+    {
+      "brand": "Blank",
+      "brand_verified": false
+    },
+    {
+      "brand": "Bliss",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bloom",
+      "brand_verified": true
+    },
+    {
+      "brand": "Blue Pet Foods",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bluebonnet",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bluestone",
+      "brand_verified": true
+    },
+    {
+      "brand": "Boar's Head",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bob's Red Mill",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bodyhealth",
+      "brand_verified": false
+    },
+    {
+      "brand": "Bodymed",
+      "brand_verified": true
+    },
+    {
+      "brand": "Boka",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bones Coffee Company",
+      "brand_verified": true
+    },
+    {
+      "brand": "Booph",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bose",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bounty",
+      "brand_verified": true
+    },
+    {
+      "brand": "Boxer Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Brachs",
+      "brand_verified": true
+    },
+    {
+      "brand": "Brami",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bravo Bravissimo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bravocon",
+      "brand_verified": true
+    },
+    {
+      "brand": "Brea Co",
+      "brand_verified": true
+    },
+    {
+      "brand": "Breiboz",
+      "brand_verified": true
+    },
+    {
+      "brand": "Broadway Basketeers",
+      "brand_verified": true
+    },
+    {
+      "brand": "Brooklyn Beans",
+      "brand_verified": true
+    },
+    {
+      "brand": "Brownie Brittle",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bsn",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bubble Skincare",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bubly",
+      "brand_verified": true
+    },
+    {
+      "brand": "Buddig",
+      "brand_verified": true
+    },
+    {
+      "brand": "Buena Mesa",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bulletproof Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Burst",
+      "brand_verified": true
+    },
+    {
+      "brand": "Burt's Bees",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bush's",
+      "brand_verified": true
+    },
+    {
+      "brand": "buttah.",
+      "brand_verified": true
+    },
+    {
+      "brand": "Butterball",
+      "brand_verified": true
+    },
+    {
+      "brand": "Butterfinger Ice Cream Bars",
+      "brand_verified": true
+    },
+    {
+      "brand": "Bye Bye Blemish",
+      "brand_verified": true
+    },
+    {
+      "brand": "BYOMA",
+      "brand_verified": true
+    },
+    {
+      "brand": "C4",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ca'Lefort",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cacique Foods",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cafe Britt",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cafe Bustelo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Caffe Vergnano",
+      "brand_verified": true
+    },
+    {
+      "brand": "Caff\u00e8 Borbone",
+      "brand_verified": true
+    },
+    {
+      "brand": "Caf\u00e9 Bustelo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Caf\u00e9 Santo Domingo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Califia Farms",
+      "brand_verified": true
+    },
+    {
+      "brand": "California",
+      "brand_verified": false
+    },
+    {
+      "brand": "California Milk Advisory Board",
+      "brand_verified": true
+    },
+    {
+      "brand": "California Olive Ranch",
+      "brand_verified": true
+    },
+    {
+      "brand": "Caliwater",
+      "brand_verified": true
+    },
+    {
+      "brand": "Calvin Klein",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cambio Roasters",
+      "brand_verified": true
+    },
+    {
+      "brand": "Canoa",
+      "brand_verified": true
+    },
+    {
+      "brand": "Canon",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cap",
+      "brand_verified": true
+    },
+    {
+      "brand": "Capital One",
+      "brand_verified": true
+    },
+    {
+      "brand": "Capn Crunch",
+      "brand_verified": true
+    },
+    {
+      "brand": "Capri Sun",
+      "brand_verified": true
+    },
+    {
+      "brand": "Caramels.Com",
+      "brand_verified": true
+    },
+    {
+      "brand": "Carbe Diem",
+      "brand_verified": true
+    },
+    {
+      "brand": "Carbou",
+      "brand_verified": true
+    },
+    {
+      "brand": "Care Free Kitchen",
+      "brand_verified": true
+    },
+    {
+      "brand": "Carmel Valley Coffee Roasting",
+      "brand_verified": true
+    },
+    {
+      "brand": "Carnation Breakfast Essentials",
+      "brand_verified": true
+    },
+    {
+      "brand": "Carroten",
+      "brand_verified": false
+    },
+    {
+      "brand": "Castello Cheese",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cathy Wraps",
+      "brand_verified": true
+    },
+    {
+      "brand": "Caudalie",
+      "brand_verified": true
+    },
+    {
+      "brand": "Caulipower",
+      "brand_verified": true
+    },
+    {
+      "brand": "Caulipuffs",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cavit",
+      "brand_verified": true
+    },
+    {
+      "brand": "Celimax",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cellucor",
+      "brand_verified": true
+    },
+    {
+      "brand": "Central Perk",
+      "brand_verified": true
+    },
+    {
+      "brand": "Centrum",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cetaphil",
+      "brand_verified": true
+    },
+    {
+      "brand": "CForce",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cheesecake Factory",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cheetos",
+      "brand_verified": true
+    },
+    {
+      "brand": "CHI CleanCare",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chicduo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chicken Of The Sea",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chilly Churn",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chips Ahoy!",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chocoperfection",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cholula",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chosen Foods",
+      "brand_verified": true
+    },
+    {
+      "brand": "Chromebook",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cicatricure",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cinique",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cinnamon Pebbles",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cirkul",
+      "brand_verified": true
+    },
+    {
+      "brand": "ciz",
+      "brand_verified": true
+    },
+    {
+      "brand": "Claussen",
+      "brand_verified": true
+    },
+    {
+      "brand": "Clean Simple Eats",
+      "brand_verified": true
+    },
+    {
+      "brand": "Clear Collective",
+      "brand_verified": true
+    },
+    {
+      "brand": "Clearshield",
+      "brand_verified": true
+    },
+    {
+      "brand": "Clearstem",
+      "brand_verified": true
+    },
+    {
+      "brand": "Coach",
+      "brand_verified": true
+    },
+    {
+      "brand": "Coffee Mate",
+      "brand_verified": true
+    },
+    {
+      "brand": "Coffeemate Nescafe",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cole Haan",
+      "brand_verified": true
+    },
+    {
+      "brand": "Colibri",
+      "brand_verified": true
+    },
+    {
+      "brand": "Colonial Coffee Roasters",
+      "brand_verified": true
+    },
+    {
+      "brand": "Comfort Zone",
+      "brand_verified": true
+    },
+    {
+      "brand": "Community Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Compleat",
+      "brand_verified": true
+    },
+    {
+      "brand": "Contour Next Brand",
+      "brand_verified": true
+    },
+    {
+      "brand": "Converse",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cooked Perfect",
+      "brand_verified": true
+    },
+    {
+      "brand": "Copper Cow Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Coslus",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cosrx",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cosyuree",
+      "brand_verified": true
+    },
+    {
+      "brand": "Covergirl",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cozy Up",
+      "brand_verified": true
+    },
+    {
+      "brand": "Crazy Cups",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cream of Wheat",
+      "brand_verified": true
+    },
+    {
+      "brand": "Crisp Power",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cuisinart",
+      "brand_verified": true
+    },
+    {
+      "brand": "Cupcake Vineyards",
+      "brand_verified": true
+    },
+    {
+      "brand": "Curad",
+      "brand_verified": true
+    },
+    {
+      "brand": "CyberPower",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dairy West",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dan O's Dips",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dan-O's Dips",
+      "brand_verified": true
+    },
+    {
+      "brand": "Danger Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Danimals",
+      "brand_verified": true
+    },
+    {
+      "brand": "Darigold",
+      "brand_verified": true
+    },
+    {
+      "brand": "Daring Foods, Inc",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dash",
+      "brand_verified": true
+    },
+    {
+      "brand": "Day To Day Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Death Wish Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "DeeBee's Organics",
+      "brand_verified": true
+    },
+    {
+      "brand": "Defahn",
+      "brand_verified": true
+    },
+    {
+      "brand": "Delectables",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dell'Amore",
+      "brand_verified": true
+    },
+    {
+      "brand": "Derma Angel",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dermalogica",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dermalogy By Neogenlab",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dermated",
+      "brand_verified": false
+    },
+    {
+      "brand": "Designs for Health",
+      "brand_verified": true
+    },
+    {
+      "brand": "Diet Coke",
+      "brand_verified": true
+    },
+    {
+      "brand": "Differin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dimora",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dipug",
+      "brand_verified": true
+    },
+    {
+      "brand": "Disaur",
+      "brand_verified": true
+    },
+    {
+      "brand": "Disney",
+      "brand_verified": true
+    },
+    {
+      "brand": "Disney+",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dolly Parton's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Don Francisco's Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Door County",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dots for Spots",
+      "brand_verified": true
+    },
+    {
+      "brand": "Double Donut",
+      "brand_verified": true
+    },
+    {
+      "brand": "Downy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dr. Althea",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dr. Brown's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dr.Ceuracle",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dr.Melaxin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Drano",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dreft",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dripdrop",
+      "brand_verified": true
+    },
+    {
+      "brand": "Drive Medical",
+      "brand_verified": true
+    },
+    {
+      "brand": "Driven Nutrition",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dukes Mayo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dum-Dums",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dunkin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Dymatize",
+      "brand_verified": true
+    },
+    {
+      "brand": "e.l.f.",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eagle Brand",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eagle Foods",
+      "brand_verified": true
+    },
+    {
+      "brand": "Easy Spirit",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eataly",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ebl",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ecco",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eco Soul",
+      "brand_verified": true
+    },
+    {
+      "brand": "Edgestar",
+      "brand_verified": true
+    },
+    {
+      "brand": "Egglands Best",
+      "brand_verified": true
+    },
+    {
+      "brand": "Egglife",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ehome",
+      "brand_verified": true
+    },
+    {
+      "brand": "EHP Labs",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eight O Clock Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eight O\u2019Clock 100% Colombian Peaks Medium Roast Coffee Value Pack K-Cup Pods",
+      "brand_verified": false
+    },
+    {
+      "brand": "Eight O\u2019Clock Medium Roast Ground The Original Coffee",
+      "brand_verified": false
+    },
+    {
+      "brand": "Elemis",
+      "brand_verified": true
+    },
+    {
+      "brand": "Elevate Superwater",
+      "brand_verified": true
+    },
+    {
+      "brand": "Emergen-C",
+      "brand_verified": true
+    },
+    {
+      "brand": "Emuaid",
+      "brand_verified": true
+    },
+    {
+      "brand": "England Dairy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eqqualberry",
+      "brand_verified": true
+    },
+    {
+      "brand": "Erborian",
+      "brand_verified": true
+    },
+    {
+      "brand": "Essenherb",
+      "brand_verified": false
+    },
+    {
+      "brand": "Essentia",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eternal Water",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eucerin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Everyday Dose",
+      "brand_verified": true
+    },
+    {
+      "brand": "Evian",
+      "brand_verified": true
+    },
+    {
+      "brand": "Evol",
+      "brand_verified": true
+    },
+    {
+      "brand": "Exposed Skincare",
+      "brand_verified": true
+    },
+    {
+      "brand": "Eyean",
+      "brand_verified": true
+    },
+    {
+      "brand": "Family Feeling",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fancy Feast",
+      "brand_verified": true
+    },
+    {
+      "brand": "Farm Rich",
+      "brand_verified": true
+    },
+    {
+      "brand": "Farmley",
+      "brand_verified": true
+    },
+    {
+      "brand": "Feel Good Foods",
+      "brand_verified": true
+    },
+    {
+      "brand": "Feidoog",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fellowes",
+      "brand_verified": false
+    },
+    {
+      "brand": "Fever Tree",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fire Department Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Firehook",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fireman's Brew Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fischers Honey",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fisher",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fitbit",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fitright",
+      "brand_verified": false
+    },
+    {
+      "brand": "Fitrx",
+      "brand_verified": true
+    },
+    {
+      "brand": "Five Hour Energy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fi\u00e8ra",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fla-Vor-Ice",
+      "brand_verified": true
+    },
+    {
+      "brand": "Flavcity",
+      "brand_verified": true
+    },
+    {
+      "brand": "Flerish",
+      "brand_verified": true
+    },
+    {
+      "brand": "Florida Dairy Farmers",
+      "brand_verified": true
+    },
+    {
+      "brand": "Focus",
+      "brand_verified": false
+    },
+    {
+      "brand": "Fonhtg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Foodology",
+      "brand_verified": true
+    },
+    {
+      "brand": "Four Sigmatic",
+      "brand_verified": true
+    },
+    {
+      "brand": "Frigo Cheese Heads",
+      "brand_verified": true
+    },
+    {
+      "brand": "Friskies",
+      "brand_verified": true
+    },
+    {
+      "brand": "Frog Fuel",
+      "brand_verified": true
+    },
+    {
+      "brand": "Froot Loops",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fruit Riot",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fud",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fufil",
+      "brand_verified": true
+    },
+    {
+      "brand": "Fullfamous",
+      "brand_verified": true
+    },
+    {
+      "brand": "Functional",
+      "brand_verified": false
+    },
+    {
+      "brand": "Funpops",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gallo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Garofalo",
+      "brand_verified": true
+    },
+    {
+      "brand": "GE",
+      "brand_verified": true
+    },
+    {
+      "brand": "Geologie",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ghost",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ghost Cereal",
+      "brand_verified": true
+    },
+    {
+      "brand": "Giadzy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gillette",
+      "brand_verified": true
+    },
+    {
+      "brand": "Glade",
+      "brand_verified": true
+    },
+    {
+      "brand": "Glytone",
+      "brand_verified": true
+    },
+    {
+      "brand": "GNC",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gobena",
+      "brand_verified": false
+    },
+    {
+      "brand": "Gogosqueez",
+      "brand_verified": true
+    },
+    {
+      "brand": "Goldwell",
+      "brand_verified": true
+    },
+    {
+      "brand": "Good Eat'n",
+      "brand_verified": true
+    },
+    {
+      "brand": "Good Humor",
+      "brand_verified": true
+    },
+    {
+      "brand": "Good Molecules",
+      "brand_verified": true
+    },
+    {
+      "brand": "Goodnites",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gordo's Cheese Dip",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gorgie",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gorilla Glue",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gortons",
+      "brand_verified": true
+    },
+    {
+      "brand": "Govee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Grauici",
+      "brand_verified": true
+    },
+    {
+      "brand": "Great Grains",
+      "brand_verified": true
+    },
+    {
+      "brand": "Green Mountain",
+      "brand_verified": true
+    },
+    {
+      "brand": "Greenies",
+      "brand_verified": true
+    },
+    {
+      "brand": "Greenworks",
+      "brand_verified": true
+    },
+    {
+      "brand": "Grencian",
+      "brand_verified": true
+    },
+    {
+      "brand": "Grillos Pickles",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gspim",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gurunanda",
+      "brand_verified": true
+    },
+    {
+      "brand": "Gymboree",
+      "brand_verified": true
+    },
+    {
+      "brand": "G\u00f6t2b",
+      "brand_verified": true
+    },
+    {
+      "brand": "Haagen Dazs",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hallmark",
+      "brand_verified": true
+    },
+    {
+      "brand": "Halls",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hamburger Helper",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hammermill",
+      "brand_verified": true
+    },
+    {
+      "brand": "Handi-Snacks",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hanes",
+      "brand_verified": true
+    },
+    {
+      "brand": "Happy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Happy Viking",
+      "brand_verified": true
+    },
+    {
+      "brand": "Harry Potter",
+      "brand_verified": true
+    },
+    {
+      "brand": "Harry's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hask",
+      "brand_verified": true
+    },
+    {
+      "brand": "Healthwtr",
+      "brand_verified": false
+    },
+    {
+      "brand": "Hearth & Hand",
+      "brand_verified": true
+    },
+    {
+      "brand": "Heineken",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hellmann's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Heluva Good",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hero",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hero Bread",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hero Cosmetics",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hershey's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hertz",
+      "brand_verified": true
+    },
+    {
+      "brand": "HICC PET",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hidden Valley",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hill's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hims",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hint",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hipea",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hippeas",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hiya",
+      "brand_verified": false
+    },
+    {
+      "brand": "HMR",
+      "brand_verified": true
+    },
+    {
+      "brand": "Home Chef",
+      "brand_verified": true
+    },
+    {
+      "brand": "HomeBuddy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Honest Kids",
+      "brand_verified": true
+    },
+    {
+      "brand": "Honey Mamas",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hoosier",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hoover",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hormel Foods",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hormel Natural Choice",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hpn",
+      "brand_verified": false
+    },
+    {
+      "brand": "Huaco Care",
+      "brand_verified": true
+    },
+    {
+      "brand": "Huel",
+      "brand_verified": true
+    },
+    {
+      "brand": "Huggies",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hum",
+      "brand_verified": true
+    },
+    {
+      "brand": "Huntsinger Farms",
+      "brand_verified": true
+    },
+    {
+      "brand": "Hydroxycut",
+      "brand_verified": true
+    },
+    {
+      "brand": "Iams",
+      "brand_verified": true
+    },
+    {
+      "brand": "Iberia",
+      "brand_verified": true
+    },
+    {
+      "brand": "Icee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Icelandic Glacial",
+      "brand_verified": true
+    },
+    {
+      "brand": "Iconic",
+      "brand_verified": true
+    },
+    {
+      "brand": "Illy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Image Skincare",
+      "brand_verified": true
+    },
+    {
+      "brand": "Indigo Wild",
+      "brand_verified": true
+    },
+    {
+      "brand": "Instinct",
+      "brand_verified": false
+    },
+    {
+      "brand": "Intelligent Blends",
+      "brand_verified": false
+    },
+    {
+      "brand": "International Delight",
+      "brand_verified": true
+    },
+    {
+      "brand": "Intuit",
+      "brand_verified": true
+    },
+    {
+      "brand": "Iqbar",
+      "brand_verified": true
+    },
+    {
+      "brand": "Is Clinical",
+      "brand_verified": true
+    },
+    {
+      "brand": "Isopure",
+      "brand_verified": true
+    },
+    {
+      "brand": "Javvy",
+      "brand_verified": false
+    },
+    {
+      "brand": "JB SKRUB",
+      "brand_verified": true
+    },
+    {
+      "brand": "JBL",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jecson",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jel Sert",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jergens",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jiexily",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jingmore",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jisculo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jockey",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jocko",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jocko Fuel",
+      "brand_verified": true
+    },
+    {
+      "brand": "Joi",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jordan's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jose Ole",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jovial",
+      "brand_verified": true
+    },
+    {
+      "brand": "Joycat",
+      "brand_verified": true
+    },
+    {
+      "brand": "Jtf",
+      "brand_verified": true
+    },
+    {
+      "brand": "Juanitas Foods",
+      "brand_verified": true
+    },
+    {
+      "brand": "Just Ingredients",
+      "brand_verified": true
+    },
+    {
+      "brand": "K&K",
+      "brand_verified": true
+    },
+    {
+      "brand": "K9 Advantix",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ka'Chava",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kahawa 1893",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kahi",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kaizen",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kamoji",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kar's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kate Farms Inc",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kate Somerville",
+      "brand_verified": true
+    },
+    {
+      "brand": "Keds",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kelloggs",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kelloggs Cereal",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ken's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kernel Season's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kernel Seasons",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kerrygold",
+      "brand_verified": true
+    },
+    {
+      "brand": "Keto",
+      "brand_verified": true
+    },
+    {
+      "brand": "Keto Pint",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kettle & Fire",
+      "brand_verified": true
+    },
+    {
+      "brand": "Keurig",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kidscool Space",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kiehls Since 1851",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kiki",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kikizye",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kind",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kize",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kms",
+      "brand_verified": true
+    },
+    {
+      "brand": "Knorr",
+      "brand_verified": true
+    },
+    {
+      "brand": "Koia",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kolally",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kolice",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kotex",
+      "brand_verified": true
+    },
+    {
+      "brand": "Krusteaz",
+      "brand_verified": true
+    },
+    {
+      "brand": "Kuli Kuli",
+      "brand_verified": true
+    },
+    {
+      "brand": "l'ange",
+      "brand_verified": true
+    },
+    {
+      "brand": "L'Or\u00e9al",
+      "brand_verified": true
+    },
+    {
+      "brand": "L.",
+      "brand_verified": true
+    },
+    {
+      "brand": "La Colombe",
+      "brand_verified": true
+    },
+    {
+      "brand": "La Croix",
+      "brand_verified": true
+    },
+    {
+      "brand": "La Crosse Technology",
+      "brand_verified": true
+    },
+    {
+      "brand": "La Roche-Posay",
+      "brand_verified": true
+    },
+    {
+      "brand": "Labrada",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lactalis",
+      "brand_verified": true
+    },
+    {
+      "brand": "Laifen",
+      "brand_verified": true
+    },
+    {
+      "brand": "Laird Superfood",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lanbena",
+      "brand_verified": true
+    },
+    {
+      "brand": "LANEIGE",
+      "brand_verified": true
+    },
+    {
+      "brand": "Late July",
+      "brand_verified": true
+    },
+    {
+      "brand": "Laughing Cow",
+      "brand_verified": true
+    },
+    {
+      "brand": "Layerone",
+      "brand_verified": true
+    },
+    {
+      "brand": "Layinsun",
+      "brand_verified": false
+    },
+    {
+      "brand": "Lays",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lean Cuisine",
+      "brand_verified": true
+    },
+    {
+      "brand": "Legendary",
+      "brand_verified": true
+    },
+    {
+      "brand": "Legendary Foods",
+      "brand_verified": true
+    },
+    {
+      "brand": "Legion",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lehoo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lemme Live",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lenny & Larry's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lepro",
+      "brand_verified": true
+    },
+    {
+      "brand": "Levels",
+      "brand_verified": true
+    },
+    {
+      "brand": "Levi Strauss Signature",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lifeboost",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lifeway",
+      "brand_verified": true
+    },
+    {
+      "brand": "Liomengzi",
+      "brand_verified": true
+    },
+    {
+      "brand": "Liquid Death",
+      "brand_verified": true
+    },
+    {
+      "brand": "Liquid IV",
+      "brand_verified": true
+    },
+    {
+      "brand": "Listerine",
+      "brand_verified": true
+    },
+    {
+      "brand": "Litehouse",
+      "brand_verified": true
+    },
+    {
+      "brand": "Little Farmer",
+      "brand_verified": true
+    },
+    {
+      "brand": "Little2Big",
+      "brand_verified": true
+    },
+    {
+      "brand": "Livaclean",
+      "brand_verified": true
+    },
+    {
+      "brand": "LmiiSanHoo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Logitech",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lotus Biscoff",
+      "brand_verified": true
+    },
+    {
+      "brand": "Love Corn",
+      "brand_verified": true
+    },
+    {
+      "brand": "Love Wellness",
+      "brand_verified": true
+    },
+    {
+      "brand": "Lume",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ma&Baby",
+      "brand_verified": true
+    },
+    {
+      "brand": "Magnum",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mahatma",
+      "brand_verified": true
+    },
+    {
+      "brand": "Maison Perrier",
+      "brand_verified": true
+    },
+    {
+      "brand": "Maizly",
+      "brand_verified": true
+    },
+    {
+      "brand": "Makari",
+      "brand_verified": true
+    },
+    {
+      "brand": "Malk Almond Milk, Unsweetened",
+      "brand_verified": false
+    },
+    {
+      "brand": "Malk Oat Milk, Original",
+      "brand_verified": false
+    },
+    {
+      "brand": "Malt O Meal",
+      "brand_verified": true
+    },
+    {
+      "brand": "Malt O' Meal",
+      "brand_verified": true
+    },
+    {
+      "brand": "Marena",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mario Badescu",
+      "brand_verified": true
+    },
+    {
+      "brand": "Marketside",
+      "brand_verified": true
+    },
+    {
+      "brand": "MarketWatch",
+      "brand_verified": true
+    },
+    {
+      "brand": "Marlincare",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mars",
+      "brand_verified": true
+    },
+    {
+      "brand": "Martinelli's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Maruchan",
+      "brand_verified": true
+    },
+    {
+      "brand": "Marylous",
+      "brand_verified": false
+    },
+    {
+      "brand": "Mas+",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mateos Gourmet Salsa",
+      "brand_verified": true
+    },
+    {
+      "brand": "Matter Of Fact",
+      "brand_verified": true
+    },
+    {
+      "brand": "MAUD'S",
+      "brand_verified": true
+    },
+    {
+      "brand": "Maud's Coffee & Tea",
+      "brand_verified": true
+    },
+    {
+      "brand": "Maxwell House",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mccafe",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mcombo",
+      "brand_verified": false
+    },
+    {
+      "brand": "medicube",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mediheal",
+      "brand_verified": true
+    },
+    {
+      "brand": "Medik8",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mega Patch",
+      "brand_verified": true
+    },
+    {
+      "brand": "Meland",
+      "brand_verified": true
+    },
+    {
+      "brand": "Meta",
+      "brand_verified": true
+    },
+    {
+      "brand": "Meyenberg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mielle Organics",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mighty Life Cereal",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mighty Paw",
+      "brand_verified": true
+    },
+    {
+      "brand": "Milk Magic",
+      "brand_verified": true
+    },
+    {
+      "brand": "Milkadamia",
+      "brand_verified": true
+    },
+    {
+      "brand": "Miltons Craft Bakers",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mings",
+      "brand_verified": true
+    },
+    {
+      "brand": "Minimalist",
+      "brand_verified": true
+    },
+    {
+      "brand": "Minor Figures",
+      "brand_verified": true
+    },
+    {
+      "brand": "Minute",
+      "brand_verified": true
+    },
+    {
+      "brand": "Minute Rice",
+      "brand_verified": true
+    },
+    {
+      "brand": "Miracle-Gro",
+      "brand_verified": true
+    },
+    {
+      "brand": "Miseyo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Miss Vickies",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mission",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mixsoon",
+      "brand_verified": true
+    },
+    {
+      "brand": "Moen",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mojgar",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mojo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Momcozy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Momentous",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mompush",
+      "brand_verified": true
+    },
+    {
+      "brand": "Moon Cheese",
+      "brand_verified": true
+    },
+    {
+      "brand": "Moonrise Foods",
+      "brand_verified": true
+    },
+    {
+      "brand": "Morelli",
+      "brand_verified": true
+    },
+    {
+      "brand": "Moroccanoil",
+      "brand_verified": true
+    },
+    {
+      "brand": "Motrin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mountain Dew",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mrs Butterworths",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mrs. T's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mt. Capra",
+      "brand_verified": true
+    },
+    {
+      "brand": "Murad",
+      "brand_verified": true
+    },
+    {
+      "brand": "Muscle Feast",
+      "brand_verified": true
+    },
+    {
+      "brand": "Mush Vanilla Bean Overnight Oats",
+      "brand_verified": false
+    },
+    {
+      "brand": "Mysmile",
+      "brand_verified": true
+    },
+    {
+      "brand": "M\u00e1s+",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nabisco Premium",
+      "brand_verified": true
+    },
+    {
+      "brand": "Naked Nutrition",
+      "brand_verified": true
+    },
+    {
+      "brand": "NANO FIT",
+      "brand_verified": true
+    },
+    {
+      "brand": "National Pork Board",
+      "brand_verified": true
+    },
+    {
+      "brand": "Native",
+      "brand_verified": true
+    },
+    {
+      "brand": "Natural Bliss",
+      "brand_verified": true
+    },
+    {
+      "brand": "Natural Outcome",
+      "brand_verified": true
+    },
+    {
+      "brand": "NaturaSmile",
+      "brand_verified": true
+    },
+    {
+      "brand": "Natures Bounty",
+      "brand_verified": true
+    },
+    {
+      "brand": "Natures Path",
+      "brand_verified": true
+    },
+    {
+      "brand": "Natures Truth",
+      "brand_verified": true
+    },
+    {
+      "brand": "NatureWise",
+      "brand_verified": true
+    },
+    {
+      "brand": "Naturium",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nav\u00e4ge",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nba",
+      "brand_verified": true
+    },
+    {
+      "brand": "Near East",
+      "brand_verified": true
+    },
+    {
+      "brand": "Neocate",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nerds",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nespresso",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nestle Carnation",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nestle Pure Life",
+      "brand_verified": true
+    },
+    {
+      "brand": "Neurosonic",
+      "brand_verified": false
+    },
+    {
+      "brand": "New England Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nex",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nexcare",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nexium Clear Mini Acid Reducer Delayed Release",
+      "brand_verified": false
+    },
+    {
+      "brand": "Nextmug",
+      "brand_verified": true
+    },
+    {
+      "brand": "Niagara",
+      "brand_verified": true
+    },
+    {
+      "brand": "Niceful",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nido",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ninja",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nissan",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nissin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Noosa",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nora",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nordic Naturals",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nos",
+      "brand_verified": true
+    },
+    {
+      "brand": "Now",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nubest",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nuogo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nurri",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nutrafol",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nutri-Vet",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nutricost",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nuun",
+      "brand_verified": true
+    },
+    {
+      "brand": "Nyx",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oatly",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oats Overnight",
+      "brand_verified": true
+    },
+    {
+      "brand": "Odoms Tennessee Pride",
+      "brand_verified": true
+    },
+    {
+      "brand": "Off!",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oh Snap!",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oikos",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oklady",
+      "brand_verified": true
+    },
+    {
+      "brand": "Old Bay",
+      "brand_verified": true
+    },
+    {
+      "brand": "Old El Paso",
+      "brand_verified": true
+    },
+    {
+      "brand": "Omma",
+      "brand_verified": true
+    },
+    {
+      "brand": "Omorovicza",
+      "brand_verified": true
+    },
+    {
+      "brand": "ON Optimum Nutrition",
+      "brand_verified": true
+    },
+    {
+      "brand": "On The Border",
+      "brand_verified": true
+    },
+    {
+      "brand": "Once Upon A Farm",
+      "brand_verified": true
+    },
+    {
+      "brand": "One A Day",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oneskin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Onlyone",
+      "brand_verified": true
+    },
+    {
+      "brand": "Onnit",
+      "brand_verified": true
+    },
+    {
+      "brand": "Onyx",
+      "brand_verified": false
+    },
+    {
+      "brand": "Opalhouse",
+      "brand_verified": true
+    },
+    {
+      "brand": "Open Water",
+      "brand_verified": true
+    },
+    {
+      "brand": "Openbank By Santander",
+      "brand_verified": true
+    },
+    {
+      "brand": "Opportuniteas",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oral-B",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oreo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oreo Frozen",
+      "brand_verified": true
+    },
+    {
+      "brand": "Organic Valley",
+      "brand_verified": true
+    },
+    {
+      "brand": "Organixx",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oribe",
+      "brand_verified": true
+    },
+    {
+      "brand": "Orville Redenbachers",
+      "brand_verified": true
+    },
+    {
+      "brand": "Osmell",
+      "brand_verified": true
+    },
+    {
+      "brand": "OSMOSIS",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ouai",
+      "brand_verified": true
+    },
+    {
+      "brand": "Outlaw Snax",
+      "brand_verified": true
+    },
+    {
+      "brand": "Owyn",
+      "brand_verified": true
+    },
+    {
+      "brand": "Oxiclean",
+      "brand_verified": true
+    },
+    {
+      "brand": "P&G",
+      "brand_verified": true
+    },
+    {
+      "brand": "Paleovalley",
+      "brand_verified": true
+    },
+    {
+      "brand": "Palmini",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pampers",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pancho's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Panoxyl",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pantene",
+      "brand_verified": true
+    },
+    {
+      "brand": "Parents Choice",
+      "brand_verified": true
+    },
+    {
+      "brand": "Parmalat",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pataday",
+      "brand_verified": true
+    },
+    {
+      "brand": "Patchology",
+      "brand_verified": true
+    },
+    {
+      "brand": "Patchrx",
+      "brand_verified": true
+    },
+    {
+      "brand": "PBfit",
+      "brand_verified": true
+    },
+    {
+      "brand": "Peach & Lily",
+      "brand_verified": true
+    },
+    {
+      "brand": "Peacock",
+      "brand_verified": true
+    },
+    {
+      "brand": "Peanuts",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pedialyte",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pen+Gear Elevated",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pendaflex",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pepcid",
+      "brand_verified": true
+    },
+    {
+      "brand": "Perdue",
+      "brand_verified": true
+    },
+    {
+      "brand": "Perfect Hydration",
+      "brand_verified": true
+    },
+    {
+      "brand": "Perfect Pod",
+      "brand_verified": true
+    },
+    {
+      "brand": "Perfect Samplers",
+      "brand_verified": true
+    },
+    {
+      "brand": "Petes Pasta",
+      "brand_verified": true
+    },
+    {
+      "brand": "Petit Pot",
+      "brand_verified": true
+    },
+    {
+      "brand": "Philips",
+      "brand_verified": true
+    },
+    {
+      "brand": "Philips Sonicare",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pioneer Pastures",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pirate's Booty Full",
+      "brand_verified": true
+    },
+    {
+      "brand": "PJ's Coffee of New Orleans",
+      "brand_verified": true
+    },
+    {
+      "brand": "PKN",
+      "brand_verified": true
+    },
+    {
+      "brand": "Planet Oat",
+      "brand_verified": true
+    },
+    {
+      "brand": "Play-Doh",
+      "brand_verified": true
+    },
+    {
+      "brand": "Playology",
+      "brand_verified": true
+    },
+    {
+      "brand": "Plezi",
+      "brand_verified": true
+    },
+    {
+      "brand": "Plum",
+      "brand_verified": true
+    },
+    {
+      "brand": "Plum Organics",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pokphand Authentic Asia",
+      "brand_verified": true
+    },
+    {
+      "brand": "Poland Springs",
+      "brand_verified": true
+    },
+    {
+      "brand": "Polar",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pom Wonderful",
+      "brand_verified": true
+    },
+    {
+      "brand": "PopCorners",
+      "brand_verified": true
+    },
+    {
+      "brand": "Poppi",
+      "brand_verified": true
+    },
+    {
+      "brand": "Popsicle",
+      "brand_verified": true
+    },
+    {
+      "brand": "Power Crunch",
+      "brand_verified": true
+    },
+    {
+      "brand": "Power Play Fuel",
+      "brand_verified": true
+    },
+    {
+      "brand": "Powerade",
+      "brand_verified": true
+    },
+    {
+      "brand": "PowerStep",
+      "brand_verified": true
+    },
+    {
+      "brand": "Prairie Fresh",
+      "brand_verified": true
+    },
+    {
+      "brand": "Prego",
+      "brand_verified": true
+    },
+    {
+      "brand": "Primabiotic",
+      "brand_verified": true
+    },
+    {
+      "brand": "Primal Kitchen",
+      "brand_verified": true
+    },
+    {
+      "brand": "Prime",
+      "brand_verified": true
+    },
+    {
+      "brand": "Proactiv",
+      "brand_verified": true
+    },
+    {
+      "brand": "Procell",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pronamel",
+      "brand_verified": true
+    },
+    {
+      "brand": "Propel",
+      "brand_verified": true
+    },
+    {
+      "brand": "Protein2O",
+      "brand_verified": true
+    },
+    {
+      "brand": "Public Goods",
+      "brand_verified": true
+    },
+    {
+      "brand": "Publix Milk, Chocolate",
+      "brand_verified": false
+    },
+    {
+      "brand": "Publix Milk, Reduced Fat, 2% Milkfat",
+      "brand_verified": false
+    },
+    {
+      "brand": "Puffs",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pull-Ups",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pup-Peroni",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pure Champ",
+      "brand_verified": true
+    },
+    {
+      "brand": "Pure Life Purified Water, 16.9 Fl Oz, Plastic Bottled Water (12 Pack)",
+      "brand_verified": false
+    },
+    {
+      "brand": "Pureology",
+      "brand_verified": true
+    },
+    {
+      "brand": "Purist",
+      "brand_verified": true
+    },
+    {
+      "brand": "Purito",
+      "brand_verified": true
+    },
+    {
+      "brand": "Purity Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Qmakup",
+      "brand_verified": true
+    },
+    {
+      "brand": "Quaker",
+      "brand_verified": true
+    },
+    {
+      "brand": "Quaker Life",
+      "brand_verified": true
+    },
+    {
+      "brand": "Quia",
+      "brand_verified": true
+    },
+    {
+      "brand": "Quilted Northern",
+      "brand_verified": true
+    },
+    {
+      "brand": "Quip",
+      "brand_verified": true
+    },
+    {
+      "brand": "Quiyum",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rachel Moayer",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rachel Moayer Skin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rael",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ragu",
+      "brand_verified": true
+    },
+    {
+      "brand": "raindrop",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ranvoo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Raos",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ratio",
+      "brand_verified": true
+    },
+    {
+      "brand": "Raw Nutrition",
+      "brand_verified": true
+    },
+    {
+      "brand": "Readywise",
+      "brand_verified": true
+    },
+    {
+      "brand": "Real",
+      "brand_verified": true
+    },
+    {
+      "brand": "Recess",
+      "brand_verified": true
+    },
+    {
+      "brand": "Recover 180",
+      "brand_verified": true
+    },
+    {
+      "brand": "Red Bull",
+      "brand_verified": true
+    },
+    {
+      "brand": "Redken",
+      "brand_verified": true
+    },
+    {
+      "brand": "Reese's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Refresher Sparkling Water",
+      "brand_verified": true
+    },
+    {
+      "brand": "Reign Storm",
+      "brand_verified": false
+    },
+    {
+      "brand": "Remedy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Renew Life",
+      "brand_verified": true
+    },
+    {
+      "brand": "Replere",
+      "brand_verified": true
+    },
+    {
+      "brand": "Reveal Natural Wet Cat Food",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rice A Roni",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rice Select",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ripple Kids",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ritz",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rival Nutrition",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rmxscns",
+      "brand_verified": true
+    },
+    {
+      "brand": "ROAR",
+      "brand_verified": true
+    },
+    {
+      "brand": "roborock",
+      "brand_verified": true
+    },
+    {
+      "brand": "Roc",
+      "brand_verified": true
+    },
+    {
+      "brand": "Roller Rabbit",
+      "brand_verified": true
+    },
+    {
+      "brand": "Romperinbox",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ronzoni",
+      "brand_verified": true
+    },
+    {
+      "brand": "Roots Farm",
+      "brand_verified": true
+    },
+    {
+      "brand": "Roscato",
+      "brand_verified": true
+    },
+    {
+      "brand": "Roscato Wine",
+      "brand_verified": true
+    },
+    {
+      "brand": "Royal Designs Inc",
+      "brand_verified": true
+    },
+    {
+      "brand": "ROYO",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ruffles",
+      "brand_verified": true
+    },
+    {
+      "brand": "RUGGEDBUTTS",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rule 1",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rummo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Russell Stover",
+      "brand_verified": true
+    },
+    {
+      "brand": "Rxbar",
+      "brand_verified": true
+    },
+    {
+      "brand": "R\u0113l",
+      "brand_verified": true
+    },
+    {
+      "brand": "S Pellegrino",
+      "brand_verified": true
+    },
+    {
+      "brand": "Safirst",
+      "brand_verified": true
+    },
+    {
+      "brand": "Salads Of The Sea",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sambucol",
+      "brand_verified": true
+    },
+    {
+      "brand": "Samsung",
+      "brand_verified": true
+    },
+    {
+      "brand": "San Francisco Bay Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sangtree",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sanmio",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sanofi",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sanzo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sara Lee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sargento",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sascha",
+      "brand_verified": true
+    },
+    {
+      "brand": "Savannah Bee Company",
+      "brand_verified": true
+    },
+    {
+      "brand": "Schick",
+      "brand_verified": true
+    },
+    {
+      "brand": "Schutz",
+      "brand_verified": true
+    },
+    {
+      "brand": "Scotts",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sea Cuisine",
+      "brand_verified": true
+    },
+    {
+      "brand": "Seattle's Best",
+      "brand_verified": true
+    },
+    {
+      "brand": "Seed",
+      "brand_verified": true
+    },
+    {
+      "brand": "Segafredo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sejardin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sensodyne",
+      "brand_verified": true
+    },
+    {
+      "brand": "Seresto",
+      "brand_verified": false
+    },
+    {
+      "brand": "Seveclotree",
+      "brand_verified": true
+    },
+    {
+      "brand": "Seventh Generation",
+      "brand_verified": true
+    },
+    {
+      "brand": "Shakeology",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sharpie",
+      "brand_verified": true
+    },
+    {
+      "brand": "Shea Mositure",
+      "brand_verified": true
+    },
+    {
+      "brand": "SheaMoisture",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sheba",
+      "brand_verified": true
+    },
+    {
+      "brand": "Shock Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Shokz",
+      "brand_verified": true
+    },
+    {
+      "brand": "shopbop",
+      "brand_verified": true
+    },
+    {
+      "brand": "Siete",
+      "brand_verified": true
+    },
+    {
+      "brand": "Siggis",
+      "brand_verified": true
+    },
+    {
+      "brand": "Signature Design by Ashley",
+      "brand_verified": true
+    },
+    {
+      "brand": "Silk",
+      "brand_verified": true
+    },
+    {
+      "brand": "Silver Star Nutrition",
+      "brand_verified": true
+    },
+    {
+      "brand": "Simple Mills",
+      "brand_verified": true
+    },
+    {
+      "brand": "Simply",
+      "brand_verified": true
+    },
+    {
+      "brand": "Simply Snacks",
+      "brand_verified": true
+    },
+    {
+      "brand": "Skinmedica",
+      "brand_verified": true
+    },
+    {
+      "brand": "Skinnydipped",
+      "brand_verified": true
+    },
+    {
+      "brand": "Skinnyfit",
+      "brand_verified": true
+    },
+    {
+      "brand": "Skinsmart",
+      "brand_verified": true
+    },
+    {
+      "brand": "Slate",
+      "brand_verified": false
+    },
+    {
+      "brand": "Smartwater",
+      "brand_verified": true
+    },
+    {
+      "brand": "Smartypants",
+      "brand_verified": true
+    },
+    {
+      "brand": "Smirly",
+      "brand_verified": true
+    },
+    {
+      "brand": "Snack Pack",
+      "brand_verified": true
+    },
+    {
+      "brand": "Snakkidz",
+      "brand_verified": true
+    },
+    {
+      "brand": "Snickers Ice Cream",
+      "brand_verified": true
+    },
+    {
+      "brand": "Snyder's of Hanover",
+      "brand_verified": true
+    },
+    {
+      "brand": "So Delicious",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sol",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sol-Ti Immuni-Ti Supershot",
+      "brand_verified": false
+    },
+    {
+      "brand": "SOLY HUX",
+      "brand_verified": true
+    },
+    {
+      "brand": "SOME BY MI",
+      "brand_verified": true
+    },
+    {
+      "brand": "Something & Nothing",
+      "brand_verified": true
+    },
+    {
+      "brand": "Soocas",
+      "brand_verified": true
+    },
+    {
+      "brand": "Soputry",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sosky",
+      "brand_verified": true
+    },
+    {
+      "brand": "Soylent",
+      "brand_verified": true
+    },
+    {
+      "brand": "Spaghettios",
+      "brand_verified": false
+    },
+    {
+      "brand": "Sparkle",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sparkling Ice",
+      "brand_verified": true
+    },
+    {
+      "brand": "Special K",
+      "brand_verified": true
+    },
+    {
+      "brand": "Spectrum",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sperry",
+      "brand_verified": true
+    },
+    {
+      "brand": "Spindrift Sparkling Water",
+      "brand_verified": true
+    },
+    {
+      "brand": "Splat",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sports",
+      "brand_verified": true
+    },
+    {
+      "brand": "Spring Chef",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sqwincher",
+      "brand_verified": true
+    },
+    {
+      "brand": "Star Pimple Patches",
+      "brand_verified": true
+    },
+    {
+      "brand": "Starface",
+      "brand_verified": true
+    },
+    {
+      "brand": "Starface World",
+      "brand_verified": true
+    },
+    {
+      "brand": "Starkist",
+      "brand_verified": true
+    },
+    {
+      "brand": "Starry",
+      "brand_verified": true
+    },
+    {
+      "brand": "Stone And Skillet",
+      "brand_verified": true
+    },
+    {
+      "brand": "Stonewall Kitchen",
+      "brand_verified": true
+    },
+    {
+      "brand": "Stouffers",
+      "brand_verified": true
+    },
+    {
+      "brand": "Strive Soda",
+      "brand_verified": true
+    },
+    {
+      "brand": "Strivectin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Strongroots",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sublue",
+      "brand_verified": true
+    },
+    {
+      "brand": "Suerox",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sumsae",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sun Bum",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sun Warrior",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sunbelt Bakery",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sunbutter",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sunchips",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sunday Riley",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sunsweet",
+      "brand_verified": true
+    },
+    {
+      "brand": "Super Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Superieur",
+      "brand_verified": false
+    },
+    {
+      "brand": "Suritch",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sven's Island",
+      "brand_verified": true
+    },
+    {
+      "brand": "Sweet Nothings",
+      "brand_verified": true
+    },
+    {
+      "brand": "Swiss Miss",
+      "brand_verified": true
+    },
+    {
+      "brand": "Swissmar",
+      "brand_verified": true
+    },
+    {
+      "brand": "Swisspers",
+      "brand_verified": true
+    },
+    {
+      "brand": "T3",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tabitha Brown",
+      "brand_verified": true
+    },
+    {
+      "brand": "Taco Bell",
+      "brand_verified": true
+    },
+    {
+      "brand": "Takis",
+      "brand_verified": true
+    },
+    {
+      "brand": "Talenti",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tampax",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tangle",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tao Clean",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tapatio",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tasteless",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tasty Bite",
+      "brand_verified": true
+    },
+    {
+      "brand": "Taylor Farms",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tayst Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "TAZO",
+      "brand_verified": true
+    },
+    {
+      "brand": "Teenology",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tellshun",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tempur-Pedic",
+      "brand_verified": true
+    },
+    {
+      "brand": "Texas Roadhouse",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tgs Nutrition",
+      "brand_verified": true
+    },
+    {
+      "brand": "Thai Kitchen",
+      "brand_verified": true
+    },
+    {
+      "brand": "That\u2019s It.",
+      "brand_verified": true
+    },
+    {
+      "brand": "The Cheesecake Factory",
+      "brand_verified": true
+    },
+    {
+      "brand": "The Children's Place",
+      "brand_verified": true
+    },
+    {
+      "brand": "The Honey Pot",
+      "brand_verified": true
+    },
+    {
+      "brand": "The Jel Sert Company",
+      "brand_verified": true
+    },
+    {
+      "brand": "The New York Times",
+      "brand_verified": true
+    },
+    {
+      "brand": "The Ordinary",
+      "brand_verified": true
+    },
+    {
+      "brand": "Therabreath",
+      "brand_verified": true
+    },
+    {
+      "brand": "Three Farm Daughters",
+      "brand_verified": true
+    },
+    {
+      "brand": "Three Wishes",
+      "brand_verified": true
+    },
+    {
+      "brand": "Threshold Designed W/Studio Mcgee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tiege Hanley",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tim Horton's Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tineco",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tiny Twinkle",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tirtir",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tktk",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tonnino",
+      "brand_verified": true
+    },
+    {
+      "brand": "Too Good",
+      "brand_verified": true
+    },
+    {
+      "brand": "too good & co.",
+      "brand_verified": true
+    },
+    {
+      "brand": "Torani",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tostitos",
+      "brand_verified": true
+    },
+    {
+      "brand": "Totino's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tphon",
+      "brand_verified": true
+    },
+    {
+      "brand": "Traeger",
+      "brand_verified": false
+    },
+    {
+      "brand": "Treeactiv",
+      "brand_verified": true
+    },
+    {
+      "brand": "Triple Bristle",
+      "brand_verified": true
+    },
+    {
+      "brand": "True Lemon",
+      "brand_verified": true
+    },
+    {
+      "brand": "Truefit",
+      "brand_verified": true
+    },
+    {
+      "brand": "TruHeight",
+      "brand_verified": true
+    },
+    {
+      "brand": "Truly Hard Seltzer",
+      "brand_verified": true
+    },
+    {
+      "brand": "Trung Nguyen Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Truskin",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tsomtto",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tula",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tums",
+      "brand_verified": true
+    },
+    {
+      "brand": "Turbotax",
+      "brand_verified": true
+    },
+    {
+      "brand": "Tuttorosso",
+      "brand_verified": true
+    },
+    {
+      "brand": "Twang",
+      "brand_verified": true
+    },
+    {
+      "brand": "Twin Peaks Ingredients",
+      "brand_verified": true
+    },
+    {
+      "brand": "Two",
+      "brand_verified": false
+    },
+    {
+      "brand": "Two Rivers Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Two Rivers Llc",
+      "brand_verified": false
+    },
+    {
+      "brand": "Tylenol",
+      "brand_verified": true
+    },
+    {
+      "brand": "Ultimate Ears",
+      "brand_verified": true
+    },
+    {
+      "brand": "Uncle Matt's Organic",
+      "brand_verified": true
+    },
+    {
+      "brand": "Uncrustables",
+      "brand_verified": true
+    },
+    {
+      "brand": "Unreal Snacks",
+      "brand_verified": true
+    },
+    {
+      "brand": "Unwell",
+      "brand_verified": true
+    },
+    {
+      "brand": "Uppababy",
+      "brand_verified": true
+    },
+    {
+      "brand": "USDA",
+      "brand_verified": true
+    },
+    {
+      "brand": "V-White",
+      "brand_verified": true
+    },
+    {
+      "brand": "V8",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vaenait Baby",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vagisil",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vavsea",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vegamour",
+      "brand_verified": true
+    },
+    {
+      "brand": "Velveeta",
+      "brand_verified": true
+    },
+    {
+      "brand": "Venus",
+      "brand_verified": true
+    },
+    {
+      "brand": "Verena Street",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vet's Best",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vicco",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vicks",
+      "brand_verified": true
+    },
+    {
+      "brand": "Victor Allen's Coffee",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vinia",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vitafusion",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vitahustle",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vital Pursuit",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vitaminwater",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vitauthority",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vivo",
+      "brand_verified": true
+    },
+    {
+      "brand": "VOCIC",
+      "brand_verified": true
+    },
+    {
+      "brand": "Voniko",
+      "brand_verified": true
+    },
+    {
+      "brand": "Voss Water",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vp",
+      "brand_verified": true
+    },
+    {
+      "brand": "Vtcosmetics",
+      "brand_verified": true
+    },
+    {
+      "brand": "Wai\u0101kea",
+      "brand_verified": true
+    },
+    {
+      "brand": "Wall Street Journal",
+      "brand_verified": true
+    },
+    {
+      "brand": "Waterpik",
+      "brand_verified": true
+    },
+    {
+      "brand": "Waterwipes",
+      "brand_verified": true
+    },
+    {
+      "brand": "Wawa",
+      "brand_verified": true
+    },
+    {
+      "brand": "weesprout",
+      "brand_verified": true
+    },
+    {
+      "brand": "Welch's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Weleda",
+      "brand_verified": true
+    },
+    {
+      "brand": "Welly",
+      "brand_verified": true
+    },
+    {
+      "brand": "Wesson",
+      "brand_verified": true
+    },
+    {
+      "brand": "Whoholl",
+      "brand_verified": true
+    },
+    {
+      "brand": "Whole Foods Market",
+      "brand_verified": true
+    },
+    {
+      "brand": "Willo",
+      "brand_verified": true
+    },
+    {
+      "brand": "Worx",
+      "brand_verified": true
+    },
+    {
+      "brand": "Wpunwen",
+      "brand_verified": true
+    },
+    {
+      "brand": "Wright Brand",
+      "brand_verified": true
+    },
+    {
+      "brand": "Wyler's",
+      "brand_verified": true
+    },
+    {
+      "brand": "Wyok",
+      "brand_verified": true
+    },
+    {
+      "brand": "Xyzal",
+      "brand_verified": true
+    },
+    {
+      "brand": "Yaktrax",
+      "brand_verified": true
+    },
+    {
+      "brand": "Yankee Candle",
+      "brand_verified": true
+    },
+    {
+      "brand": "Yasso",
+      "brand_verified": true
+    },
+    {
+      "brand": "Yellowstone",
+      "brand_verified": true
+    },
+    {
+      "brand": "Yesly",
+      "brand_verified": true
+    },
+    {
+      "brand": "Yeswelder",
+      "brand_verified": true
+    },
+    {
+      "brand": "Yhovid",
+      "brand_verified": true
+    },
+    {
+      "brand": "Young Goose",
+      "brand_verified": true
+    },
+    {
+      "brand": "Yuho",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zagg",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zang",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zapps",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zarbee\u2019s",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zbar",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zelus",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zena Nutrition",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zevia",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zing Skin Care",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zitsticka",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zoa Energy",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zupreem",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zyrtec",
+      "brand_verified": true
+    },
+    {
+      "brand": "Zzzquil",
+      "brand_verified": true
+    },
+    {
+      "brand": "\u2022Mdrn-Life",
+      "brand_verified": false
+    }
+  ],
+  "total_brands": 1331,
+  "total_with_logos": 289,
+  "total_without": 1042
+}

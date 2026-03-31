@@ -3,7 +3,7 @@ import { RequestHandler } from "express";
 const FLASK_BASE_URL = process.env.FLASK_BASE_URL || "http://localhost:5006";
 
 export const handleBrandDetails: RequestHandler = async (req, res) => {
-  const { brand, retailers } = req.query;
+  const { brand, retailers, keywords } = req.query;
 
   if (!brand) {
     return res.status(400).json({ error: "brand parameter is required" });
@@ -13,6 +13,7 @@ export const handleBrandDetails: RequestHandler = async (req, res) => {
   const params = new URLSearchParams();
   params.set("brand", String(brand));
   if (retailers) params.set("retailers", String(retailers));
+  if (keywords) params.set("keywords", String(keywords));
 
   const flaskUrl = `${FLASK_BASE_URL}/api/brand-details?${params.toString()}`;
 
@@ -20,6 +21,7 @@ export const handleBrandDetails: RequestHandler = async (req, res) => {
     console.debug("[brand-details] Proxying request to Flask", {
       brand,
       retailers: retailers || "all",
+      keywords: keywords || null,
     });
 
     const response = await fetch(flaskUrl);

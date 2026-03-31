@@ -51,6 +51,8 @@ def save_database(db):
     LOGOS_DB.write_text(json.dumps(db, indent=2, ensure_ascii=False))
 
 
+
+
 def load_lexicon():
     """Load the brand lexicon"""
     if BRANDS_LEXICON.exists():
@@ -230,8 +232,18 @@ class LogoVerifier:
                     if rel_path not in db_files and logo_file.name not in db_files:
                         # NEW file - create a placeholder entry for review
                         # Derive brand name from filename (e.g., "annie_chun.png" -> "Annie Chun")
-                        brand_key = logo_file.stem.lower().replace('-', '_')
-                        brand_name = logo_file.stem.replace('_', ' ').replace('-', ' ').title()
+                        # Strip version suffixes like _2, _3, etc.
+                        stem = logo_file.stem
+                        # Remove version suffix pattern: _2, _3, _v2, etc.
+                        import re
+                        stem_clean = re.sub(r'_\d+$', '', stem)  # Remove trailing _2, _3, etc.
+                        stem_clean = re.sub(r'_v\d+$', '', stem_clean)  # Remove trailing _v2, _v3, etc.
+                        
+                        brand_key = stem_clean.lower().replace('-', '_')
+                        brand_name = stem_clean.replace('_', ' ').replace('-', ' ').title()
+                        
+                        # Mark as potential duplicate if version suffix was found
+                        is_duplicate = stem != stem_clean
                         
                         brand_data = {
                             "brand_name": brand_name,
@@ -241,6 +253,8 @@ class LogoVerifier:
                             "first_seen": self.get_timestamp(),
                             "source": "unknown",
                             "_is_new": True,  # Flag to indicate this needs to be added to DB
+                            "_is_duplicate": is_duplicate,  # Flag for potential duplicate logo
+                            "_original_filename": logo_file.name,  # Keep original filename for comparison
                         }
                         self.brands.append((brand_key, brand_data))
                         new_files += 1
@@ -413,20 +427,32 @@ class LogoVerifier:
         brand_key, brand_data = self.brands[self.current_index]
         logo_file = brand_data.get("logo_file", "")
         
-        # Check if this is a NEW entry
+        # Check if this is a NEW entry or DUPLICATE
         is_new = brand_data.get("_is_new", False)
+        is_duplicate = brand_data.get("_is_duplicate", False)
         
         # Update progress
-        status = " [NEW]" if is_new else ""
+        status = ""
+        if is_new:
+            status = " [NEW]"
+        if is_duplicate:
+            status += " [DUPLICATE - needs comparison]"
+        
         self.progress_label.config(
             text=f"Logo {self.current_index + 1} of {len(self.brands)}{status}"
         )
         
         # Update brand name (use brand_name if available, else convert key)
         brand_name = brand_data.get("brand_name") or brand_key.replace("_", " ").title()
+        display_name = brand_name
         if is_new:
-            brand_name = f"➕ {brand_name}"
-        self.brand_label.config(text=brand_name)
+            display_name = f"➕ {display_name}"
+        if is_duplicate:
+            display_name = f"🔄 {display_name}"
+            original_file = brand_data.get("_original_filename", "")
+            if original_file:
+                display_name += f" (from: {original_file})"
+        self.brand_label.config(text=display_name)
         
         # Update metadata
         source = brand_data.get("source", "unknown")
@@ -547,6 +573,7 @@ class LogoVerifier:
         
         # Check if this is a NEW entry (from unverified folder scan)
         is_new = brand_data.get("_is_new", False)
+        is_duplicate = brand_data.get("_is_duplicate", False)
         
         if is_new:
             # ADD new entry to database
@@ -564,10 +591,22 @@ class LogoVerifier:
             self.db["brands"][brand_key] = new_entry
             entry = new_entry
             print(f"➕ Added new brand to database: {brand_key}")
+            
+            # If this is a duplicate, notify user
+            if is_duplicate:
+                print(f"⚠️  DUPLICATE LOGO: {brand_name}")
+                print(f"   Use Brand Name Verifier tool to compare and merge logos")
+                print(f"   Command: .venv/bin/python3 tools/brand_name_verifier.py")
         elif brand_key in self.db["brands"]:
             entry = self.db["brands"][brand_key]
             entry["verified"] = True
             entry["verified_at"] = self.get_timestamp()
+            
+            # If this is a duplicate, notify user
+            if is_duplicate:
+                print(f"⚠️  DUPLICATE LOGO: {brand_data.get('brand_name')}")
+                print(f"   Use Brand Name Verifier tool to compare and merge logos")
+                print(f"   Command: .venv/bin/python3 tools/brand_name_verifier.py")
         else:
             # Shouldn't happen, but handle gracefully
             self.kept_count += 1

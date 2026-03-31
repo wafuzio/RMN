@@ -5,10 +5,6 @@
     "verified": true
   },
   {
-    "name": "3Pcs",
-    "synonyms": []
-  },
-  {
     "name": "47 Skin",
     "synonyms": [],
     "verified": true
@@ -24,11 +20,21 @@
     "verified": true
   },
   {
+    "name": "7Am2M",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "7Magic",
     "synonyms": [
       "seven_magic,_one_smart_life",
       "MSG:Smile Without Limits."
     ],
+    "verified": true
+  },
+  {
+    "name": "a2",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -48,6 +54,10 @@
     "name": "Acropass",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Act Anticavity Fluoride Rinse, Wild Watermelon",
+    "synonyms": []
   },
   {
     "name": "Activia",
@@ -105,7 +115,8 @@
   },
   {
     "name": "Algaecal",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "All Sport",
@@ -128,8 +139,16 @@
     "verified": true
   },
   {
-    "name": "Alpha",
-    "synonyms": []
+    "name": "Alpha Lion",
+    "synonyms": [
+      "Alpha"
+    ],
+    "verified": true
+  },
+  {
+    "name": "Alumbre",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Always",
@@ -150,7 +169,10 @@
       "Explore Medium Roast Products",
       "Find Moisturizing Beauty Items",
       "Browse Foods with Vitamins",
-      "Shop Single Serve Tasty Bites"
+      "Shop Single Serve Tasty Bites",
+      "Explore Korean Beauty Products",
+      "Discover Travel Beauty Products",
+      "Find Organic Wellness Items"
     ],
     "verified": true
   },
@@ -173,7 +195,10 @@
   },
   {
     "name": "Amlactin",
-    "synonyms": []
+    "synonyms": [
+      "MSG:AHA powered skin care for visibly smooth skin. Shop amlactin."
+    ],
+    "verified": true
   },
   {
     "name": "Anastasia Beverly Hills",
@@ -194,6 +219,10 @@
     "name": "Ancient Harvest",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Ancient Nutrition",
+    "synonyms": []
   },
   {
     "name": "Angel Soft",
@@ -238,7 +267,9 @@
   },
   {
     "name": "Aquaphor",
-    "synonyms": [],
+    "synonyms": [
+      "MSG:Your skins sidekick. Shop Aquaphor."
+    ],
     "verified": true
   },
   {
@@ -262,6 +293,21 @@
     "verified": true
   },
   {
+    "name": "Arey",
+    "synonyms": []
+  },
+  {
+    "name": "Arizona",
+    "synonyms": []
+  },
+  {
+    "name": "Arm & Hammer",
+    "synonyms": [
+      "And Hammer Pet"
+    ],
+    "verified": true
+  },
+  {
     "name": "Arshiner",
     "synonyms": [],
     "verified": true
@@ -272,17 +318,14 @@
     "verified": true
   },
   {
-    "name": "Artist",
-    "synonyms": []
+    "name": "Artist Hand",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Aspercreme",
     "synonyms": [],
     "verified": true
-  },
-  {
-    "name": "Astro",
-    "synonyms": []
   },
   {
     "name": "Atkins",
@@ -344,6 +387,10 @@
     "verified": true
   },
   {
+    "name": "Ballast",
+    "synonyms": []
+  },
+  {
     "name": "Balvive",
     "synonyms": [
       "MSG:4.8 out of 5 stars, rating details"
@@ -366,6 +413,10 @@
     "name": "Bar-S",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Barbie",
+    "synonyms": []
   },
   {
     "name": "Bare",
@@ -392,6 +443,16 @@
   },
   {
     "name": "Bays",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Bean of Fire",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Beaniac",
     "synonyms": [],
     "verified": true
   },
@@ -435,6 +496,10 @@
     "verified": true
   },
   {
+    "name": "Benadryl Extra Strength Anti-Itch Topical Cream With 2% Diphenhydramine Hci For Itch Relief Of Outdoor Itches Associated With Poison Ivy, Insect Bites & More, 1 Oz",
+    "synonyms": []
+  },
+  {
     "name": "Benebone",
     "synonyms": [],
     "verified": true
@@ -446,6 +511,16 @@
   },
   {
     "name": "Bertolli",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Bessies Best Lactation Cookies",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Best Western",
     "synonyms": [],
     "verified": true
   },
@@ -506,6 +581,13 @@
     "verified": true
   },
   {
+    "name": "Biscoff",
+    "synonyms": [
+      "Biscoff Muffins"
+    ],
+    "verified": true
+  },
+  {
     "name": "Bissell",
     "synonyms": [],
     "verified": true
@@ -526,6 +608,10 @@
     "verified": true
   },
   {
+    "name": "Blank",
+    "synonyms": []
+  },
+  {
     "name": "Bliss",
     "synonyms": [],
     "verified": true
@@ -537,7 +623,9 @@
   },
   {
     "name": "Blue Bunny",
-    "synonyms": [],
+    "synonyms": [
+      "Wells Enterprises"
+    ],
     "verified": true
   },
   {
@@ -587,8 +675,13 @@
     "verified": true
   },
   {
-    "name": "Bodymed",
+    "name": "Bodyhealth",
     "synonyms": []
+  },
+  {
+    "name": "Bodymed",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Boiron",
@@ -597,7 +690,8 @@
   },
   {
     "name": "Boka",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Bomb Pop",
@@ -616,6 +710,11 @@
   },
   {
     "name": "Boost",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Bose",
     "synonyms": [],
     "verified": true
   },
@@ -707,7 +806,8 @@
   },
   {
     "name": "Bsn",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Bubble Skincare",
@@ -717,7 +817,8 @@
   {
     "name": "Bubly",
     "synonyms": [
-      "MSG:Save when you buy 3, 3 for 11 Dollars on select bubly 8 pk drinks"
+      "MSG:Save when you buy 3, 3 for 11 Dollars on select bubly 8 pk drinks",
+      "Buy And Save : Bubly"
     ],
     "verified": true
   },
@@ -782,16 +883,9 @@
     "verified": true
   },
   {
-    "name": "Buy And Save : Bubly",
-    "synonyms": []
-  },
-  {
-    "name": "Buy And Save : P.F. Chang & Purple Carrot",
-    "synonyms": []
-  },
-  {
-    "name": "By Indigo Wild",
-    "synonyms": []
+    "name": "Bye Bye Blemish",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "BYOMA",
@@ -870,13 +964,31 @@
     "verified": true
   },
   {
+    "name": "California Olive Ranch",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Caliwater",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Calvin Klein",
     "synonyms": [],
     "verified": true
   },
   {
+    "name": "Cambio Roasters",
+    "synonyms": [
+      "Cambio"
+    ],
+    "verified": true
+  },
+  {
     "name": "Canoa",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Canon",
@@ -933,6 +1045,11 @@
     "verified": true
   },
   {
+    "name": "Carmel Valley Coffee Roasting",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Carnation",
     "synonyms": [
       "Carnation Milk"
@@ -945,7 +1062,7 @@
     "verified": true
   },
   {
-    "name": "Carolina",
+    "name": "Carroten",
     "synonyms": []
   },
   {
@@ -1005,6 +1122,11 @@
   },
   {
     "name": "Celsius",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Central Perk",
     "synonyms": [],
     "verified": true
   },
@@ -1081,6 +1203,11 @@
     "verified": true
   },
   {
+    "name": "Chilly Churn",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Chinet",
     "synonyms": [],
     "verified": true
@@ -1095,6 +1222,11 @@
   },
   {
     "name": "Chobani",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Chocoperfection",
     "synonyms": [],
     "verified": true
   },
@@ -1129,7 +1261,17 @@
     "verified": true
   },
   {
+    "name": "Cinnamon Pebbles",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Cirkul",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "ciz",
     "synonyms": [],
     "verified": true
   },
@@ -1155,6 +1297,11 @@
   },
   {
     "name": "Clearshield",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Clearstem",
     "synonyms": [],
     "verified": true
   },
@@ -1253,10 +1400,6 @@
     "verified": true
   },
   {
-    "name": "Cookie Favorites",
-    "synonyms": []
-  },
-  {
     "name": "Copper Cow Coffee",
     "synonyms": [],
     "verified": true
@@ -1277,6 +1420,11 @@
     "verified": true
   },
   {
+    "name": "Cosyuree",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Cottonelle",
     "synonyms": [],
     "verified": true
@@ -1287,15 +1435,22 @@
     "verified": true
   },
   {
-    "name": "Crazy",
-    "synonyms": []
+    "name": "Covergirl",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Cozy Up",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Crazy Cups",
     "synonyms": [
       "MSG:Go crazy for flavor",
       "custom_variety_pack",
-      "MSG:Explore More with Every Brew."
+      "MSG:Explore More with Every Brew.",
+      "Crazy"
     ],
     "verified": true
   },
@@ -1306,6 +1461,11 @@
   },
   {
     "name": "Crest",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Crisp Power",
     "synonyms": [],
     "verified": true
   },
@@ -1337,10 +1497,6 @@
     "verified": true
   },
   {
-    "name": "Cystic",
-    "synonyms": []
-  },
-  {
     "name": "Dairy Farmers Of America",
     "synonyms": [],
     "verified": true
@@ -1351,8 +1507,23 @@
     "verified": true
   },
   {
-    "name": "Danger",
-    "synonyms": []
+    "name": "Dan O's Dips",
+    "synonyms": [
+      "Os"
+    ],
+    "verified": true
+  },
+  {
+    "name": "Dan-O's Dips",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Danger Coffee",
+    "synonyms": [
+      "Danger"
+    ],
+    "verified": true
   },
   {
     "name": "Danimals",
@@ -1367,6 +1538,13 @@
   {
     "name": "Darigold",
     "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Daring Foods, Inc",
+    "synonyms": [
+      "Daring Foods, Inc - Wfm"
+    ],
     "verified": true
   },
   {
@@ -1419,6 +1597,11 @@
     "verified": true
   },
   {
+    "name": "Delectables",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Dell'Amore",
     "synonyms": [
       "MSG:Fresh - Homemade Marinara Sauce - Family Recipe"
@@ -1446,7 +1629,16 @@
     "verified": true
   },
   {
+    "name": "Dermated",
+    "synonyms": []
+  },
+  {
     "name": "Designs for Health",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Diet Coke",
     "synonyms": [],
     "verified": true
   },
@@ -1457,6 +1649,11 @@
   },
   {
     "name": "Dimora",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Dipug",
     "synonyms": [],
     "verified": true
   },
@@ -1477,6 +1674,11 @@
   },
   {
     "name": "Dole",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Dolly Parton's",
     "synonyms": [],
     "verified": true
   },
@@ -1505,19 +1707,29 @@
     "verified": true
   },
   {
-    "name": "Dots",
-    "synonyms": []
-  },
-  {
-    "name": "Dove",
+    "name": "Dots for Spots",
     "synonyms": [
-      "Dove Bird"
+      "Dots"
     ],
     "verified": true
   },
   {
-    "name": "Dove Serums+Oils",
-    "synonyms": []
+    "name": "Double Donut",
+    "synonyms": [
+      "Double"
+    ],
+    "verified": true
+  },
+  {
+    "name": "Dove",
+    "synonyms": [
+      "Dove Bird",
+      "Dove Serums+Oils",
+      "Shop Dove Deodorant",
+      "Shop Dove Men+Care Deodorant",
+      "MSG:Face care ingredients for the body Shop the Dove Serum Body Wash collection"
+    ],
+    "verified": true
   },
   {
     "name": "Downy",
@@ -1589,6 +1801,11 @@
     "verified": true
   },
   {
+    "name": "Driven Nutrition",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Dukes Mayo",
     "synonyms": [],
     "verified": true
@@ -1640,7 +1857,8 @@
       "e_l_f",
       "e.l.f. Skin",
       "MSG:Skincare that’s ready to go wherever you are!",
-      "MSG:High-key results. Low-key prices."
+      "MSG:High-key results. Low-key prices.",
+      "MSG:Get the new arrivals from e.l.f. SKIN Shop now"
     ],
     "verified": true
   },
@@ -1714,8 +1932,14 @@
   {
     "name": "Eggo",
     "synonyms": [
-      "MSG:Add more protein to your routine with Eggo. Shop now. At 5.29"
+      "MSG:Add more protein to your routine with Eggo. Shop now. At 5.29",
+      "Eggo Beverages"
     ],
+    "verified": true
+  },
+  {
+    "name": "Ehome",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -1729,7 +1953,24 @@
     "verified": true
   },
   {
+    "name": "Eight O’Clock 100% Colombian Peaks Medium Roast Coffee Value Pack K-Cup Pods",
+    "synonyms": []
+  },
+  {
+    "name": "Eight O’Clock Medium Roast Ground The Original Coffee",
+    "synonyms": []
+  },
+  {
+    "name": "Electric",
+    "synonyms": []
+  },
+  {
     "name": "Elemis",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Elevate Superwater",
     "synonyms": [],
     "verified": true
   },
@@ -1788,9 +2029,18 @@
     "verified": true
   },
   {
+    "name": "Eqqualberry",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Erborian",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Essenherb",
+    "synonyms": []
   },
   {
     "name": "Essentia",
@@ -1811,10 +2061,16 @@
   },
   {
     "name": "Everyday Dose",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Evian",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Evol",
     "synonyms": [],
     "verified": true
   },
@@ -1872,6 +2128,15 @@
     "verified": true
   },
   {
+    "name": "Feidoog",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Fellowes",
+    "synonyms": []
+  },
+  {
     "name": "Ferrero",
     "synonyms": [],
     "verified": true
@@ -1882,15 +2147,12 @@
     "verified": true
   },
   {
-    "name": "Fiji Natural",
-    "synonyms": []
-  },
-  {
     "name": "Fiji Water",
     "synonyms": [
       "Fiji Bottled Water",
       "Fiji_water",
-      "Fiji"
+      "Fiji",
+      "Fiji Natural"
     ],
     "verified": true
   },
@@ -1927,6 +2189,10 @@
     "verified": true
   },
   {
+    "name": "Fitright",
+    "synonyms": []
+  },
+  {
     "name": "Fitrx",
     "synonyms": [],
     "verified": true
@@ -1952,6 +2218,11 @@
     "verified": true
   },
   {
+    "name": "Flerish",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Flipz",
     "synonyms": [],
     "verified": true
@@ -1962,7 +2233,16 @@
     "verified": true
   },
   {
+    "name": "Focus",
+    "synonyms": []
+  },
+  {
     "name": "Folgers",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Fonhtg",
     "synonyms": [],
     "verified": true
   },
@@ -2045,6 +2325,10 @@
     "verified": true
   },
   {
+    "name": "Functional",
+    "synonyms": []
+  },
+  {
     "name": "Funpops",
     "synonyms": [],
     "verified": true
@@ -2065,7 +2349,10 @@
     "name": "Garnier",
     "synonyms": [
       "Garnier Micellar Water",
-      "MSG:Holiday makeup removal made easy with Garnier Micellar Water"
+      "MSG:Holiday makeup removal made easy with Garnier Micellar Water",
+      "MSG:Swipe away sand and makeup this spring break with Garnier Micellar Water Shop now",
+      "MSG:Gently remove your makeup with Garnier Micellar Water Shop now",
+      "MSG:Remove your glam not your glow Get Vitamin C Micellar Water in a new formula Shop Garnier"
     ],
     "verified": true
   },
@@ -2160,6 +2447,10 @@
     "verified": true
   },
   {
+    "name": "Gobena",
+    "synonyms": []
+  },
+  {
     "name": "Gogosqueez",
     "synonyms": [],
     "verified": true
@@ -2206,7 +2497,9 @@
   {
     "name": "Goodles",
     "synonyms": [
-      "Gluten-Free Cheddy Mac 6-pack, 6oz - 13g Protein & 4g Fiber per serving, 21 Nutrients from Plants and Made with REAL Cheese | Kosher | Certified Gluten Free"
+      "Gluten-Free Cheddy Mac 6-pack, 6oz - 13g Protein & 4g Fiber per serving, 21 Nutrients from Plants and Made with REAL Cheese | Kosher | Certified Gluten Free",
+      "Rainbow Stuffie",
+      "Cheddy Mac (Healthy Alternative Mac & Cheese)"
     ],
     "verified": true
   },
@@ -2233,8 +2526,11 @@
     "verified": true
   },
   {
-    "name": "Gorilla",
-    "synonyms": []
+    "name": "Gorilla Glue",
+    "synonyms": [
+      "Gorilla"
+    ],
+    "verified": true
   },
   {
     "name": "Gortons",
@@ -2243,7 +2539,8 @@
   },
   {
     "name": "Govee",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Grauici",
@@ -2255,6 +2552,11 @@
     "synonyms": [
       "Post Great Grains"
     ],
+    "verified": true
+  },
+  {
+    "name": "Green Mountain",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -2275,6 +2577,11 @@
     "verified": true
   },
   {
+    "name": "Grencian",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Grillos Pickles",
     "synonyms": [
       "Grillos Pickles Classic"
@@ -2283,6 +2590,11 @@
   },
   {
     "name": "Grown In Idaho",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Gspim",
     "synonyms": [],
     "verified": true
   },
@@ -2356,7 +2668,8 @@
   },
   {
     "name": "Happy",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Happy Viking",
@@ -2364,13 +2677,25 @@
     "verified": true
   },
   {
-    "name": "Harry Potter Items For Easter",
-    "synonyms": []
+    "name": "Harry Potter",
+    "synonyms": [
+      "Harry Potter Items For Easter"
+    ],
+    "verified": true
   },
   {
     "name": "Harry's",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Hask",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Healthwtr",
+    "synonyms": []
   },
   {
     "name": "Healthy Choice",
@@ -2442,6 +2767,11 @@
     "verified": true
   },
   {
+    "name": "Hertz",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "HICC PET",
     "synonyms": [],
     "verified": true
@@ -2484,6 +2814,10 @@
     "verified": true
   },
   {
+    "name": "Hiya",
+    "synonyms": []
+  },
+  {
     "name": "HMR",
     "synonyms": [],
     "verified": true
@@ -2495,6 +2829,11 @@
   },
   {
     "name": "HomeBuddy",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Honest Kids",
     "synonyms": [],
     "verified": true
   },
@@ -2525,7 +2864,8 @@
   },
   {
     "name": "Hoosier",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Hoover",
@@ -2560,6 +2900,10 @@
     "verified": true
   },
   {
+    "name": "Hpn",
+    "synonyms": []
+  },
+  {
     "name": "Huaco Care",
     "synonyms": [],
     "verified": true
@@ -2589,6 +2933,13 @@
   {
     "name": "Hydroxycut",
     "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Iams",
+    "synonyms": [
+      "Iams Cat Food"
+    ],
     "verified": true
   },
   {
@@ -2627,9 +2978,29 @@
     "verified": true
   },
   {
+    "name": "Image Skincare",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Impossible Burger",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Indigo Wild",
+    "synonyms": [
+      "By Indigo Wild"
+    ],
+    "verified": true
+  },
+  {
+    "name": "Instinct",
+    "synonyms": []
+  },
+  {
+    "name": "Intelligent Blends",
+    "synonyms": []
   },
   {
     "name": "International Delight",
@@ -2642,7 +3013,22 @@
     "verified": true
   },
   {
+    "name": "Iqbar",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Irish Spring",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Is Clinical",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Isopure",
     "synonyms": [],
     "verified": true
   },
@@ -2652,6 +3038,10 @@
       "Ithacahummus"
     ],
     "verified": true
+  },
+  {
+    "name": "Javvy",
+    "synonyms": []
   },
   {
     "name": "JB SKRUB",
@@ -2694,7 +3084,22 @@
     "verified": true
   },
   {
+    "name": "Jiexily",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Jimmy Dean",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Jingmore",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Jisculo",
     "synonyms": [],
     "verified": true
   },
@@ -2710,6 +3115,16 @@
   },
   {
     "name": "Jocko Fuel",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Joi",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Jonnypops",
     "synonyms": [],
     "verified": true
   },
@@ -2766,6 +3181,11 @@
     "verified": true
   },
   {
+    "name": "Kahawa 1893",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Kahi",
     "synonyms": [
       "Kahi Official"
@@ -2774,6 +3194,11 @@
   },
   {
     "name": "Kaizen",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Kamoji",
     "synonyms": [],
     "verified": true
   },
@@ -2827,6 +3252,13 @@
     "verified": true
   },
   {
+    "name": "Ken's",
+    "synonyms": [
+      "Foods"
+    ],
+    "verified": true
+  },
+  {
     "name": "Kentucky Legend",
     "synonyms": [],
     "verified": true
@@ -2867,6 +3299,11 @@
     "verified": true
   },
   {
+    "name": "Kettle & Fire",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Keurig",
     "synonyms": [],
     "verified": true
@@ -2885,7 +3322,8 @@
   },
   {
     "name": "Kiki",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Kikizye",
@@ -2938,6 +3376,11 @@
     "verified": true
   },
   {
+    "name": "Kolice",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Kool-Aid",
     "synonyms": [],
     "verified": true
@@ -2973,7 +3416,15 @@
       "L'Oréal Paris",
       "MSG:Get a sun kissed glow with Lumi Glotion and Lumi Bronze Soleil Shop L'Oréal Paris",
       "MSG:Lock in makeup all day with these finishing touches Shop now",
-      "MSG:Meet the award winning Infallible Setting Spray Shop now"
+      "MSG:Meet the award winning Infallible Setting Spray Shop now",
+      "MSG:The award winner is now 2x bigger. Meet Infallible Setting Spray XL.Shop now",
+      "MSG:Skin barrier repair in just 1 night dagger now in Fragrance Free Shop Midnight Cream  Dagger Vs. untreated",
+      "MSG:Get the viral filter look with Infallible Blur Fection Setting Powder Shop now",
+      "MSG:2 serums in 1 for 10 benefits Shop Serum Le Duo",
+      "MSG:Depuff eye bags in just 15 min Shop L'Oréal In a clinical test.",
+      "Lumi Glotion And Lumi Bronze Soleil",
+      "MSG:Luxurious skin care within reach Shop Age Perfect",
+      "MSG:Visibly reverse key signs of aging with 3-in-1 age-defying serum Shop L'Oréal"
     ],
     "verified": true
   },
@@ -3026,7 +3477,8 @@
   },
   {
     "name": "Laifen",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Laird Superfood",
@@ -3075,8 +3527,24 @@
     "verified": true
   },
   {
+    "name": "Layerone",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Layinsun",
+    "synonyms": []
+  },
+  {
     "name": "Lays",
     "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Lean Cuisine",
+    "synonyms": [
+      "Cuisine"
+    ],
     "verified": true
   },
   {
@@ -3096,7 +3564,9 @@
   },
   {
     "name": "Lego",
-    "synonyms": [],
+    "synonyms": [
+      "Lego® Duplo"
+    ],
     "verified": true
   },
   {
@@ -3256,8 +3726,9 @@
     "verified": true
   },
   {
-    "name": "Lumi Glotion And Lumi Bronze Soleil",
-    "synonyms": []
+    "name": "Lume",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Lumify",
@@ -3313,7 +3784,29 @@
   },
   {
     "name": "Malk",
+    "synonyms": [
+      "Malk Organics"
+    ],
+    "verified": true
+  },
+  {
+    "name": "Malk Almond Milk, Unsweetened",
+    "synonyms": []
+  },
+  {
+    "name": "Malk Oat Milk, Original",
+    "synonyms": []
+  },
+  {
+    "name": "Malt O Meal",
     "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Malt O' Meal",
+    "synonyms": [
+      "Red Banner"
+    ],
     "verified": true
   },
   {
@@ -3346,6 +3839,11 @@
     "verified": true
   },
   {
+    "name": "Marlincare",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Mars",
     "synonyms": [
       "Mars Wrigley",
@@ -3366,12 +3864,28 @@
     "verified": true
   },
   {
+    "name": "Marylous",
+    "synonyms": []
+  },
+  {
     "name": "Marzetti",
     "synonyms": [],
     "verified": true
   },
   {
+    "name": "Mas+",
+    "synonyms": [
+      "Mas+ Next Generation Beverage"
+    ],
+    "verified": true
+  },
+  {
     "name": "Mateos Gourmet Salsa",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Matter Of Fact",
     "synonyms": [],
     "verified": true
   },
@@ -3384,7 +3898,8 @@
   },
   {
     "name": "Maud's Coffee & Tea",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Maxwell House",
@@ -3394,7 +3909,13 @@
   {
     "name": "Maybelline",
     "synonyms": [
-      "MSG:Maybe its not just lipstick Its serum care in lush color Shop Maybelline Serum Lipstick"
+      "MSG:Maybe its not just lipstick Its serum care in lush color Shop Maybelline Serum Lipstick",
+      "MSG:Blurred matte lip color Shop Maybelline Super Stay Teddy Tint in 10 new shades.",
+      "MSG:Find your fit from 40 true-to-tone shades",
+      "MSG:8HR plumping moisture Shop Maybelline Serum Lipstick",
+      "MSG:Record-breaking Sky High mascara. Limitless length pulse volume.",
+      "MSG:Oil-free, natural looking coverage",
+      "MSG:Find your fit from 24 mattifying shades"
     ],
     "verified": true
   },
@@ -3404,12 +3925,26 @@
     "verified": true
   },
   {
-    "name": "Mccormick Gourmet",
+    "name": "Mccormick",
+    "synonyms": [
+      "Mccormick Gourmet"
+    ],
+    "verified": true
+  },
+  {
+    "name": "Mcombo",
     "synonyms": []
   },
   {
     "name": "medicube",
     "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Mediheal",
+    "synonyms": [
+      "Mediheal Cos"
+    ],
     "verified": true
   },
   {
@@ -3443,12 +3978,22 @@
     "verified": true
   },
   {
+    "name": "Meyenberg",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Meyers Clean Day",
     "synonyms": [],
     "verified": true
   },
   {
     "name": "Mezcla",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Mielle Organics",
     "synonyms": [],
     "verified": true
   },
@@ -3484,7 +4029,8 @@
   },
   {
     "name": "Milkadamia",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Miltons Craft Bakers",
@@ -3547,6 +4093,11 @@
     "verified": true
   },
   {
+    "name": "Mixsoon",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Moen",
     "synonyms": [],
     "verified": true
@@ -3563,6 +4114,11 @@
   },
   {
     "name": "Momcozy",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Momentous",
     "synonyms": [],
     "verified": true
   },
@@ -3588,6 +4144,16 @@
     "synonyms": [
       "Moon_cheese"
     ],
+    "verified": true
+  },
+  {
+    "name": "Moonrise Foods",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Morelli",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -3628,6 +4194,13 @@
     "verified": true
   },
   {
+    "name": "Mt. Capra",
+    "synonyms": [
+      "Mt Capra Since 1928"
+    ],
+    "verified": true
+  },
+  {
     "name": "Munchies",
     "synonyms": [],
     "verified": true
@@ -3657,6 +4230,10 @@
     "verified": true
   },
   {
+    "name": "Mush Vanilla Bean Overnight Oats",
+    "synonyms": []
+  },
+  {
     "name": "Myprotein",
     "synonyms": [],
     "verified": true
@@ -3668,9 +4245,7 @@
   },
   {
     "name": "Más+",
-    "synonyms": [
-      "Mas+"
-    ],
+    "synonyms": [],
     "verified": true
   },
   {
@@ -3817,8 +4392,16 @@
     "verified": true
   },
   {
+    "name": "Neurosonic",
+    "synonyms": []
+  },
+  {
     "name": "Neutrogena",
-    "synonyms": [],
+    "synonyms": [
+      "MSG:Treat acne and visibly fade marks Try Neutrogenas Evenly Clear Routine. Based on Independent Clinical Study with mild to moderate acne vulgaris and on OTC acne monograph for Salicylic acid.",
+      "MSG:Drive Up. Get Neutrogena sunscreen that wont cause breakouts. Shop now.",
+      "MSG:Treat acne and visibly fade marks with Neutrogena Shop now Based on Independent Clinical Study with mild to moderate acne vulgaris and on OTC acne monograph for Salicylic acid."
+    ],
     "verified": true
   },
   {
@@ -3844,6 +4427,10 @@
     "verified": true
   },
   {
+    "name": "Nexium Clear Mini Acid Reducer Delayed Release",
+    "synonyms": []
+  },
+  {
     "name": "Nextmug",
     "synonyms": [],
     "verified": true
@@ -3864,6 +4451,14 @@
     "verified": true
   },
   {
+    "name": "Ninja",
+    "synonyms": [
+      "Ninja Denim Collection",
+      "Upgrade Your Kitchen With Ninja"
+    ],
+    "verified": true
+  },
+  {
     "name": "Nissan",
     "synonyms": [],
     "verified": true
@@ -3875,7 +4470,9 @@
   },
   {
     "name": "Nivea",
-    "synonyms": [],
+    "synonyms": [
+      "MSG:Give your lips a pop of color and moisture Shop NIVEA"
+    ],
     "verified": true
   },
   {
@@ -3980,6 +4577,11 @@
     "verified": true
   },
   {
+    "name": "Off!",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Oh Snap!",
     "synonyms": [],
     "verified": true
@@ -4025,6 +4627,11 @@
   },
   {
     "name": "Olly",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Omma",
     "synonyms": [],
     "verified": true
   },
@@ -4075,10 +4682,19 @@
     "verified": true
   },
   {
+    "name": "Onyx",
+    "synonyms": []
+  },
+  {
     "name": "Opalhouse",
     "synonyms": [
       "Opalhouse Designed With Jungalow Decor"
     ],
+    "verified": true
+  },
+  {
+    "name": "Open Water",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -4103,7 +4719,10 @@
   },
   {
     "name": "Oreo",
-    "synonyms": [],
+    "synonyms": [
+      "Cookie Favorites",
+      "MSG:The cookies you love now with zero sugar. Try OREO Zero Sugar Cookies."
+    ],
     "verified": true
   },
   {
@@ -4189,7 +4808,9 @@
   },
   {
     "name": "Oxy",
-    "synonyms": [],
+    "synonyms": [
+      "Oxy Skin Care"
+    ],
     "verified": true
   },
   {
@@ -4382,6 +5003,18 @@
     "verified": true
   },
   {
+    "name": "Perfect Samplers",
+    "synonyms": [
+      "Showcasing Perfect Samplers"
+    ],
+    "verified": true
+  },
+  {
+    "name": "Petes Pasta",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Petit Pot",
     "synonyms": [],
     "verified": true
@@ -4412,6 +5045,11 @@
   },
   {
     "name": "Pillsbury",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Pioneer Pastures",
     "synonyms": [],
     "verified": true
   },
@@ -4480,6 +5118,11 @@
     "verified": true
   },
   {
+    "name": "Poland Springs",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Polar",
     "synonyms": [],
     "verified": true
@@ -4510,6 +5153,16 @@
     "verified": true
   },
   {
+    "name": "Power Crunch",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Power Play Fuel",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Powerade",
     "synonyms": [],
     "verified": true
@@ -4526,7 +5179,8 @@
   },
   {
     "name": "Prego",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Premier Protein",
@@ -4613,6 +5267,14 @@
     "verified": true
   },
   {
+    "name": "Publix Milk, Chocolate",
+    "synonyms": []
+  },
+  {
+    "name": "Publix Milk, Reduced Fat, 2% Milkfat",
+    "synonyms": []
+  },
+  {
     "name": "Puffs",
     "synonyms": [],
     "verified": true
@@ -4635,12 +5297,21 @@
     "verified": true
   },
   {
+    "name": "Pure Life Purified Water, 16.9 Fl Oz, Plastic Bottled Water (12 Pack)",
+    "synonyms": []
+  },
+  {
     "name": "Pureology",
     "synonyms": [],
     "verified": true
   },
   {
     "name": "Purina",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Purist",
     "synonyms": [],
     "verified": true
   },
@@ -4653,6 +5324,11 @@
   },
   {
     "name": "Purity Coffee",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Qmakup",
     "synonyms": [],
     "verified": true
   },
@@ -4677,13 +5353,22 @@
     "verified": true
   },
   {
+    "name": "Quia",
+    "synonyms": [
+      "Elire"
+    ],
+    "verified": true
+  },
+  {
     "name": "Quilted Northern",
     "synonyms": [],
     "verified": true
   },
   {
     "name": "Quip",
-    "synonyms": [],
+    "synonyms": [
+      "Ultra"
+    ],
     "verified": true
   },
   {
@@ -4753,6 +5438,21 @@
     "verified": true
   },
   {
+    "name": "Real",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Recess",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Recover 180",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Red Baron",
     "synonyms": [],
     "verified": true
@@ -4779,7 +5479,8 @@
   },
   {
     "name": "Reese's",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Refresh",
@@ -4794,8 +5495,13 @@
     "verified": true
   },
   {
-    "name": "Remedy",
+    "name": "Reign Storm",
     "synonyms": []
+  },
+  {
+    "name": "Remedy",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Renew Life",
@@ -4856,12 +5562,22 @@
     "verified": true
   },
   {
+    "name": "Rmxscns",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "ROAR",
     "synonyms": [],
     "verified": true
   },
   {
     "name": "roborock",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Roc",
     "synonyms": [],
     "verified": true
   },
@@ -4876,7 +5592,8 @@
     "name": "Roller Rabbit",
     "synonyms": [
       "Roller Rabbit X Target",
-      "MSG:ROLLER RABBIT Drops March 7 LIMITED TIME ONLY Explore Now"
+      "MSG:ROLLER RABBIT Drops March 7 LIMITED TIME ONLY Explore Now",
+      "MSG:ROLLER RABBIT Available for a limited time. Shop Now"
     ],
     "verified": true
   },
@@ -4897,7 +5614,8 @@
   },
   {
     "name": "Roscato",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Roscato Wine",
@@ -4944,6 +5662,11 @@
     "verified": true
   },
   {
+    "name": "Rxbar",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Rēl",
     "synonyms": [],
     "verified": true
@@ -4986,8 +5709,11 @@
     "verified": true
   },
   {
-    "name": "San Francisco Bay",
-    "synonyms": []
+    "name": "San Francisco Bay Coffee",
+    "synonyms": [
+      "San Francisco Bay"
+    ],
+    "verified": true
   },
   {
     "name": "Sangtree",
@@ -5008,7 +5734,8 @@
   },
   {
     "name": "Sanzo",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Sara Lee",
@@ -5026,13 +5753,21 @@
     "verified": true
   },
   {
+    "name": "Sascha",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Savannah Bee Company",
     "synonyms": [],
     "verified": true
   },
   {
     "name": "Schick",
-    "synonyms": []
+    "synonyms": [
+      "MSG:More gel. Lasting comfort. Do right by your skin. Shop Schick"
+    ],
+    "verified": true
   },
   {
     "name": "Schutz",
@@ -5055,6 +5790,11 @@
     "verified": true
   },
   {
+    "name": "Sea Cuisine",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Seattle's Best",
     "synonyms": [
       "Seattle’s Best Coffee"
@@ -5066,6 +5806,11 @@
     "synonyms": [
       "Seed Prebiotic And"
     ],
+    "verified": true
+  },
+  {
+    "name": "Segafredo",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -5085,6 +5830,10 @@
     "name": "Serenity Kids",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Seresto",
+    "synonyms": []
   },
   {
     "name": "Seveclotree",
@@ -5117,6 +5866,11 @@
     "verified": true
   },
   {
+    "name": "Shea Mositure",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "SheaMoisture",
     "synonyms": [],
     "verified": true
@@ -5127,25 +5881,21 @@
     "verified": true
   },
   {
-    "name": "Shock",
-    "synonyms": []
+    "name": "Shock Coffee",
+    "synonyms": [
+      "Shock"
+    ],
+    "verified": true
   },
   {
     "name": "Shokz",
-    "synonyms": []
-  },
-  {
-    "name": "Shop Dove Deodorant",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "shopbop",
     "synonyms": [],
     "verified": true
-  },
-  {
-    "name": "Showcasing Perfect Samplers",
-    "synonyms": []
   },
   {
     "name": "Siete",
@@ -5172,7 +5922,8 @@
   {
     "name": "Silk",
     "synonyms": [
-      "MSG:Almondmilk with 5 essential nutrients and great taste."
+      "MSG:Almondmilk with 5 essential nutrients and great taste.",
+      "MSG:Soymilk with 8g protein and 5 essential nutrients."
     ],
     "verified": true
   },
@@ -5220,6 +5971,10 @@
     "name": "Skinsmart",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Slate",
+    "synonyms": []
   },
   {
     "name": "Slim Jim",
@@ -5285,6 +6040,10 @@
     "verified": true
   },
   {
+    "name": "So Good So You Immunity Elderberry Blood Orange Probiotic Shot",
+    "synonyms": []
+  },
+  {
     "name": "Softsoap",
     "synonyms": [],
     "verified": true
@@ -5293,6 +6052,10 @@
     "name": "Sol",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Sol-Ti Immuni-Ti Supershot",
+    "synonyms": []
   },
   {
     "name": "SOLY HUX",
@@ -5307,11 +6070,23 @@
     "verified": true
   },
   {
+    "name": "Something & Nothing",
+    "synonyms": [
+      "Something"
+    ],
+    "verified": true
+  },
+  {
     "name": "Soocas",
     "synonyms": [
       "up to 20% off",
       "MSG:Cleaner, Healthier, Smarter"
     ],
+    "verified": true
+  },
+  {
+    "name": "Soputry",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -5323,6 +6098,15 @@
     "name": "Sour Patch Kids",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Soylent",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Spaghettios",
+    "synonyms": []
   },
   {
     "name": "Sparkle",
@@ -5355,7 +6139,17 @@
     "verified": true
   },
   {
+    "name": "Spindrift Sparkling Water",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Spk",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Splat",
     "synonyms": [],
     "verified": true
   },
@@ -5369,6 +6163,11 @@
     "synonyms": [
       "Spring Chef Ams"
     ],
+    "verified": true
+  },
+  {
+    "name": "Sqwincher",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -5418,10 +6217,6 @@
     "verified": true
   },
   {
-    "name": "Stonyfield",
-    "synonyms": []
-  },
-  {
     "name": "Stonyfield Organic",
     "synonyms": [],
     "verified": true
@@ -5433,7 +6228,8 @@
   },
   {
     "name": "Strive Soda",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Strivectin",
@@ -5447,11 +6243,13 @@
   },
   {
     "name": "Sublue",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Suerox",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Suja Organic",
@@ -5460,6 +6258,11 @@
   },
   {
     "name": "Sumsae",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Sun Bum",
     "synonyms": [],
     "verified": true
   },
@@ -5497,6 +6300,15 @@
     "name": "Sunsweet",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Super Coffee",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Superieur",
+    "synonyms": []
   },
   {
     "name": "Suritch",
@@ -5548,6 +6360,13 @@
   {
     "name": "Systane",
     "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "T3",
+    "synonyms": [
+      "T3 Shades"
+    ],
     "verified": true
   },
   {
@@ -5623,6 +6442,11 @@
     "verified": true
   },
   {
+    "name": "Teenology",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Tellshun",
     "synonyms": [],
     "verified": true
@@ -5653,8 +6477,11 @@
     "verified": true
   },
   {
-    "name": "That’s",
-    "synonyms": []
+    "name": "That’s It.",
+    "synonyms": [
+      "That’s"
+    ],
+    "verified": true
   },
   {
     "name": "Thayers",
@@ -5670,6 +6497,13 @@
     "name": "The Children's Place",
     "synonyms": [
       "Trending styles"
+    ],
+    "verified": true
+  },
+  {
+    "name": "The Honey Pot",
+    "synonyms": [
+      "The Honey"
     ],
     "verified": true
   },
@@ -5812,6 +6646,15 @@
     "verified": true
   },
   {
+    "name": "Traeger",
+    "synonyms": []
+  },
+  {
+    "name": "Treeactiv",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Triple Bristle",
     "synonyms": [
       "Triple"
@@ -5843,6 +6686,11 @@
     "verified": true
   },
   {
+    "name": "Truefit",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "TruHeight",
     "synonyms": [],
     "verified": true
@@ -5853,8 +6701,16 @@
     "verified": true
   },
   {
-    "name": "Trung",
-    "synonyms": []
+    "name": "Trung Nguyen Coffee",
+    "synonyms": [
+      "Trung"
+    ],
+    "verified": true
+  },
+  {
+    "name": "Truskin",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Truvia",
@@ -5863,6 +6719,11 @@
   },
   {
     "name": "Tsomtto",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Tula",
     "synonyms": [],
     "verified": true
   },
@@ -5890,6 +6751,19 @@
     "name": "Twin Peaks Ingredients",
     "synonyms": [],
     "verified": true
+  },
+  {
+    "name": "Two",
+    "synonyms": []
+  },
+  {
+    "name": "Two Rivers Coffee",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Two Rivers Llc",
+    "synonyms": []
   },
   {
     "name": "Tylenol",
@@ -5948,8 +6822,11 @@
     "verified": true
   },
   {
-    "name": "Upgrade Your Kitchen With Ninja",
-    "synonyms": []
+    "name": "Uppababy",
+    "synonyms": [
+      "988907d1 60bb 4f2c A851 3b3dd739edbc"
+    ],
+    "verified": true
   },
   {
     "name": "USDA",
@@ -5966,19 +6843,23 @@
   },
   {
     "name": "V-White",
-    "synonyms": []
-  },
-  {
-    "name": "V8",
     "synonyms": [],
     "verified": true
   },
   {
-    "name": "V8 Juice",
-    "synonyms": []
+    "name": "V8",
+    "synonyms": [
+      "V8 Juice"
+    ],
+    "verified": true
   },
   {
     "name": "Vaenait Baby",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Vagisil",
     "synonyms": [],
     "verified": true
   },
@@ -6009,15 +6890,20 @@
   },
   {
     "name": "Verena Street",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
-    "name": "Vet's",
-    "synonyms": []
+    "name": "Vet's Best",
+    "synonyms": [
+      "Vets"
+    ],
+    "verified": true
   },
   {
     "name": "Vicco",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Vicks",
@@ -6150,7 +7036,8 @@
   },
   {
     "name": "Wawa",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "weesprout",
@@ -6237,6 +7124,11 @@
     "verified": true
   },
   {
+    "name": "Yaktrax",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Yankee Candle",
     "synonyms": [],
     "verified": true
@@ -6258,7 +7150,8 @@
   },
   {
     "name": "Yesly",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Yeswelder",
@@ -6276,8 +7169,11 @@
     "verified": true
   },
   {
-    "name": "Young",
-    "synonyms": []
+    "name": "Young Goose",
+    "synonyms": [
+      "Young"
+    ],
+    "verified": true
   },
   {
     "name": "Yuho",
@@ -6296,6 +7192,11 @@
   },
   {
     "name": "Zapps",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Zarbee’s",
     "synonyms": [],
     "verified": true
   },
@@ -6335,6 +7236,11 @@
     "verified": true
   },
   {
+    "name": "Zoa Energy",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Zupreem",
     "synonyms": [],
     "verified": true
@@ -6348,6 +7254,11 @@
   },
   {
     "name": "Zzzquil",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "•Mdrn-Life",
     "synonyms": []
   }
 ]

@@ -1,14 +1,22 @@
 # Complete PerimeterX Bypass Strategy for Walmart
 
-## ⚠️ Current Status: BLOCKED AT SEARCH SUBMISSION (0% Success Rate)
+## Current Status: OPERATIONAL — Behavioral Hardening Complete, Pending Retest
 
-**Last Updated**: 2025-10-08 22:13
+**Last Updated**: 2026-03-24 (afternoon session)
 
-**Current Failure Mode**: We can successfully load walmart.com homepage with a fresh profile, but immediately trigger PX hard block when submitting search query. This indicates search submission behavior is the primary detection vector.
+**Current State**: Two critical bugs were found and fixed during the March 24 afternoon analysis session. Additionally, a round of behavioral hardening was applied to reduce CDP/bot fingerprint signals. **All fixes require a GUI restart to take effect** — the last test run (4 keywords) used stale code because the GUI was already running when changes were saved.
+
+**Latest test results** (March 24, 12:38–12:45 PM, pre-fix code):
+- KW1 (Garanimals): BAIL — false positive from stale PX escalation flags (**bug found & fixed**)
+- KW2 (toddler clothes): ✅ SUCCESS — 2 ads, 47 product listings
+- KW3 (kids clothes): ✅ SUCCESS — 1 ad, 52 product listings  
+- KW4 (toddler clothes clearance): BAIL — false DOM transition on homepage (**bug found & fixed**)
+
+**Bottom line**: 2 of 4 keywords succeeded even on the old code with a fresh profile. With both bugs fixed + behavioral hardening, expect significantly improved reliability.
 
 ## Overview
 
-Walmart uses **PerimeterX (PX)** + **Akamai Bot Manager** - two of the most sophisticated bot detection systems working in tandem. They use machine learning on multiple signals to calculate a trust score. This document details our current implementation and known issues.
+Walmart uses **PerimeterX (PX)** + **Akamai Bot Manager** — two of the most sophisticated bot detection systems working in tandem. They use machine learning on multiple signals to calculate a **cumulative trust/risk score** that persists across page loads via the `_px3` cookie. This document details our implementation, known triggers, and forensic methodology.
 
 ## ⚠️ CRITICAL: The --no-sandbox Banner
 
@@ -75,35 +83,45 @@ Walmart uses **PerimeterX (PX)** + **Akamai Bot Manager** - two of the most soph
 ### 5. Search Submission Behavior (PRIMARY DETECTION VECTOR)
 - **What they check**:
   - Programmatic form submission vs Enter key
+  - Typing method (`element.type()` vs real keyboard events)
   - Timing between typing and submission
   - Mouse position during submission
   - Focus state of search box
-- **Our implementation**:
-  - ⚠️  **LIKELY ISSUE**: Using `search_box.press("Enter")` which may be detectable
-  - ⚠️  **LIKELY ISSUE**: Programmatic navigation to `/search` URL after button click
-  - ❌ **NOT IMPLEMENTED**: Natural Enter key with proper focus/blur events
-  - ❌ **NOT IMPLEMENTED**: Mouse click on search button (more human-like)
+- **Our implementation** (updated 2026-03-24):
+  - ✅ `page.keyboard.press()` per-character typing (dispatches real KeyDown/KeyPress/KeyUp events)
+  - ✅ Variable keystroke delays (80-220ms) with occasional longer pauses
+  - ✅ `page.keyboard.press("Enter")` for submit (not `element.press()`)
+  - ✅ Search button click as primary submit, Enter as fallback
+  - ✅ Dwell time (1.5-3.5s) between login check and search box interaction
+  - ✅ Post-type dwell (0.6-1.2s) before submission
+  - ✅ No programmatic `/search?q=` URL navigation — only organic form submission
 
-### 6. Page Evaluation Timing
+### 6. Page Evaluation Timing (CDP Fingerprint)
 - **What they check**:
+  - Number and frequency of `Runtime.evaluate` CDP calls
   - Immediate page.evaluate() calls after navigation
   - Evaluation context lifecycle
-  - Timing of diagnostic checks
-- **Our implementation**:
+- **Our implementation** (updated 2026-03-24):
+  - ✅ **Consolidated diagnostics**: 5 separate `page.evaluate()` calls merged into 1 (UA, WebGL vendor, WebGL unmasked, navigator diag, WebGL renderer — all in single eval)
   - ✅ eval_safe wrapper prevents crashes
   - ✅ Bail-on-blocked check before evals
-  - ✅ Logs eval_error with label, URL, error
+  - ✅ Post-transition settle pause (0.8-1.5s) before any DOM/cookie queries
   - ✅ No fatal "Page.evaluate:" crashes
 
 ## What We've Implemented (Still Being Flagged)
 
-### ✅ Human Behavior Simulation
-- **Variable keystroke delays**: 80-220ms per character with occasional pauses
+### ✅ Human Behavior Simulation (Updated 2026-03-24)
+- **Realistic typing**: `page.keyboard.press()` per-character (real KeyDown/KeyPress/KeyUp events, not synthetic `element.type()`)
+- **Variable keystroke delays**: 80-220ms per character with occasional longer pauses
 - **Micro-mouse movements**: Subtle attention movements during typing (5-15 steps, ±10px jitter)
 - **Drift reading**: Mouse drift during result scanning (2-3 seconds)
 - **Back-scroll peek**: 35% chance of scrolling back up briefly
 - **Random product hover**: Hover on random product tiles
-- **Dwell times**: 600-1200ms pause after typing before submit, 2.2-3.5s before first scroll
+- **Pre-search dwell**: 1.5-3.5s pause between login check and search box click
+- **Post-type dwell**: 600-1200ms pause after typing before submit
+- **Post-transition settle**: 0.8-1.5s pause after search navigation before any DOM queries
+- **Homepage idle**: 2.0-4.0s idle after homepage load before any interaction
+- **Consolidated CDP calls**: 5 diagnostic `page.evaluate()` calls merged into 1 to reduce `Runtime.evaluate` events
 
 ### ✅ Auto CAPTCHA Solver
 - **Press-and-hold detection**: Detects PX "Press and Hold" widget
@@ -124,10 +142,18 @@ Walmart uses **PerimeterX (PX)** + **Akamai Bot Manager** - two of the most soph
 - **Artifacts**: steps.jsonl, trace.zip, screenshots, HTML, meta.json
 - **Diag summary in Markdown**: Quick human triage without opening JSON
 
-### ✅ Bail System
+### ✅ Bail System (Two-Tier with PX Escalation Awareness)
 - **Non-retryable detection**: Stops blind retries on px_locked, hard_block, fatal
 - **Adapter returns**: `{'ok': bool, 'bail': bool, 'reason': str}`
 - **GUI integration**: Stops retrying immediately when bail=True
+- **PX escalation bail**: If `main.min.js` or `bundle` POST detected in network traffic, bail immediately before scroll — PX has already decided to challenge server-side
+- **Escalation flag reset after homepage solve**: If PX modal appears on the homepage and is successfully solved, escalation flags are cleared so they don’t false-positive during the search phase (bug fix 2026-03-24)
+- **Two-tier empty results bail**:
+  - **Tier 1**: `results_ready=false` + PX escalation signals → immediate bail (`px_blocked_no_results`)
+  - **Tier 2**: `results_ready=false` + no PX signals → extend wait +10s for slow load, then bail (`no_results_timeout`)
+- **Pre-scroll gate**: If PX escalation detected after results loaded, bail before unlocking scroll (`px_escalation_pre_scroll`)
+- **Search transition**: URL-only detection (`/search` in URL). DOM-based detection was removed because `[data-item-id]` matched homepage product tiles, causing false-positive transitions (bug fix 2026-03-24)
+- **Bail reasons**: `px_locked`, `hard_block`, `px_blocked_no_results`, `no_results_timeout`, `px_escalation_pre_scroll`, `px_escalation_after_submit`, `search_submit_no_nav`, `px_on_home_after_recovery`
 
 ### ✅ Resilient Navigation
 - **3-tier fallback**: domcontentloaded (30s) → commit+search (15s) → networkidle (10s)
@@ -144,63 +170,109 @@ Walmart uses **PerimeterX (PX)** + **Akamai Bot Manager** - two of the most soph
 - **eval_safe wrapper**: Prevents "Page.evaluate:" crashes, logs eval errors with context
 - **Bail-on-blocked guard**: Stops execution immediately if /blocked detected after homepage
 
-## 🔴 Known Issues & Current Blockers
+## 🔴 Known Issues & Current Findings
 
-### Issue #1: Search Submission Triggers Immediate Block
-**Status**: BLOCKING - 100% failure rate  
-**Symptom**: Homepage loads successfully, but search submission triggers instant 307 → /blocked  
-**Evidence**:
-- `resp_doc: 307` on search URL
-- `hard_block` logged immediately after search
-- No PX challenge modal - straight to blocked page
+### Finding #1: Cumulative Velocity Scoring (PRIMARY TRIGGER)
+**Status**: CONFIRMED via forensic audit (2026-03-24)  
+**Symptom**: Sequential searches from the same profile can trigger PX CAPTCHA due to accumulated risk  
+**Evidence** (from Garan client runs):
 
-**Likely Causes**:
-1. **Programmatic form submission** - Using `search_box.press("Enter")` may be detectable
-2. **Programmatic navigation fallback** - Code navigates to `/search?q=...` URL if button click fails
-3. **Missing human signals** - No mouse position, focus/blur events during submission
-4. **Timing pattern** - Consistent timing between typing and submission
+**Morning run** (old profile, pre-behavioral-fixes):
 
-**Next Steps to Try**:
-- [ ] Use keyboard.press("Enter") instead of element.press("Enter")
-- [ ] Add mouse movement to search button before Enter
-- [ ] Ensure proper focus state before submission
-- [ ] Add variable delay (1-3s) after last keystroke
-- [ ] Remove programmatic navigation fallback
-- [ ] Test with manual Enter key in headed mode
+| Run | Keyword | Gap from 1st | `_px3` Cookie | PX Escalation | Result |
+|-----|---------|-------------|---------------|---------------|--------|
+| 1 | Garanimals | — | Not present | None | ✅ Success |
+| 2 | toddler clothes | 81s | Present | None | ✅ Success |
+| 3 | kids clothes | 167s | Present (updated) | `main.min.js` + `bundle` POST + iframe | ❌ CAPTCHA |
+| 4 | community coffee | 462s (scheduler) | Present | None | ✅ Success |
 
-### Issue #2: webdriver=True in Navigator Diagnostics
-**Status**: INVESTIGATING  
-**Symptom**: `navigator.webdriver=True` logged in some runs  
-**Evidence**: `[diag] {'webdriver': True, ...}` in console output
+**Afternoon run** (fresh profile, pre-behavioral-fixes — GUI hadn't restarted to pick up new code):
 
-**Expected**: Should be `False` with `ignore_default_args=['--enable-automation']`
+| Run | Keyword | Gap from 1st | PX on Homepage | PX on Search | Result | Notes |
+|-----|---------|-------------|----------------|--------------|--------|-------|
+| 1 | Garanimals | — | ✅ Solved | Stale flags → false bail | ❌ BAIL | **Bug: escalation flags not reset after homepage solve** |
+| 2 | toddler clothes | 87s | None | None | ✅ Success | 2 ads, 47 listings |
+| 3 | kids clothes | 219s | None | None | ✅ Success | 1 ad, 52 listings |
+| 4 | toddler clothes clearance | 352s | None | Escalated immediately | ❌ BAIL | PX escalated on search nav; also hit DOM false-positive bug |
 
-**Possible Causes**:
-1. `ignore_default_args` not being applied correctly
-2. Playwright version issue
-3. Chrome channel launch failure (falling back to Chromium)
+**Root Cause**: PX maintains a server-side risk score correlated with the `_px3` cookie. Each search from the same profile increments the score. PX's decision to challenge is made **server-side during the search navigation** — before any scroll, before any DOM interaction.
 
-**Next Steps**:
-- [ ] Verify Chrome channel launch success ("✅ Using real Chrome" in logs)
-- [ ] Test with fresh Playwright installation
-- [ ] Check if persistent context applies ignore_default_args correctly
+**Key Insight**: The scroll did NOT trigger the CAPTCHA. PX had already decided to challenge when `main.min.js` loaded. Results were withheld, then code proceeded to scroll, giving PX a DOM event to attach the modal to.
 
-### Issue #3: Profile Environment Variable Not Respected by GUI
-**Status**: CONFIRMED  
-**Symptom**: GUI uses old profile path despite `WALMART_PROFILE_DIR` env var  
-**Evidence**: 
+**Mitigations Implemented**:
+- [x] Inter-keyword cooldown (45s minimum between keywords in GUI)
+- [x] PX escalation detection (`main.min.js` / `bundle` POST network signals)
+- [x] Two-tier bail on empty results with PX awareness
+- [x] Pre-scroll PX escalation gate (bail before unlocking scroll)
+- [x] Module state reset between GUI keyword runs
+- [x] Escalation flag reset after successful homepage CAPTCHA solve (2026-03-24 fix)
+
+### Finding #2: PX Escalation Signals (Early Warning System)
+**Status**: IMPLEMENTED (2026-03-24)  
+**Discovery**: PX uses a two-phase approach:
+1. **Standard telemetry** (every page): `collector-pxu6b0qd2s.px-cloud.net` POST — behavioral data collection. Present on ALL pages, even successful ones.
+2. **Challenge enforcement** (only when challenging): `client.px-cloud.net/.../main.min.js` GET + `collector .../assets/js/bundle` POST + `px-iframe` injection. Only appears when PX has **already decided** to challenge.
+
+If you see `main.min.js` load after search navigation → PX has decided to challenge. Results will be withheld. CAPTCHA modal is queued. **Bail immediately — no action will prevent the challenge.**
+
+### Finding #3: Scheduler vs GUI Structural Difference
+**Status**: UNDERSTOOD  
+**Why scheduler succeeds after GUI gets CAPTCHA'd**:
+
+The scheduler runs each keyword as a **separate subprocess** (`subprocess.Popen`). This means:
+- Fresh Python process → fresh module globals, fresh PX state
+- New TCP connections → new source port range, new TLS sessions
+- New PX collector session → PX sees a "returning user," not a "bot hammering"
+- Natural time gap between keywords (process startup overhead)
+
+The GUI runs keywords **sequentially in the same process**:
+- Same module state carried across keywords (now fixed with `_reset_run_state()`)
+- Same OS network state, same TCP port range
+- Minimal gap between keywords (now fixed with 45s cooldown)
+
+### Finding #4: `_px3` Cookie — PX Risk Score Carrier
+**Status**: MONITORED  
+The `_px3` cookie carries PX's cumulative risk score across page loads and sessions. It persists in the Chrome profile on disk.
+- **Absent** on first-ever visit → PX evaluates fresh (low risk)
+- **Present** after first visit → PX starts from accumulated score
+- **Updated** after each interaction → risk score can increase or decrease
+- **High-entropy value** (long string) suggests accumulated evaluation data
+
+We now log `_px3` presence, value length, and expiry at the start of every run for forensic visibility.
+
+### Finding #5: Stale PX Escalation Flags After Homepage Solve (BUG FOUND & FIXED)
+**Status**: FIXED (2026-03-24 afternoon)  
+**Symptom**: KW1 (Garanimals) bailed on search even though the homepage CAPTCHA was successfully solved  
+**Root Cause**: When PX challenged on the homepage, the network listener set `main_js_seen=True` and `bundle_post_seen=True`. After solving the CAPTCHA successfully, those flags were **never reset**. When the search was submitted and `_wait_for_search_results` polled, it saw the stale flags and exited early with `px_escalation_early_exit` — a **false positive bail**.  
+**Fix**: Reset `PX_ESCALATION` flags (`main_js_seen`, `bundle_post_seen`, `escalation_ts`) immediately after `_solve_px_until_clear` returns True on the homepage. Added `px_escalation_reset` log event for forensic visibility.  
+**File**: `walmart_search_and_capture.py` ~line 3036-3043  
+**Timeline from step log**:
 ```
-export WALMART_PROFILE_DIR="/Users/dan.maguire/ChromeProfiles/walmart_clean2"
-# But logs show:
-[profile] WALMART_PROFILE_DIR='/Users/dan.maguire/ChromeProfiles/walmart'
+t=9.6s   PX modal on homepage
+t=10.0s  main.min.js + bundle_post flags set    ← escalation flags
+t=11.8s  Press-and-hold solve (7.95s)
+t=26.1s  ✅ "Unblocked on homepage"               ← flags NOT reset (bug)
+t=36.7s  Submit → nav to /search?q=Garanimals
+t=36.8s  _wait_for_search_results → sees stale flags → EARLY EXIT
+t=37.2s  BAIL: px_blocked_no_results              ← FALSE POSITIVE
 ```
 
-**Impact**: Cannot test with clean profile via GUI
+### Finding #6: DOM False-Positive in Search Transition Detection (BUG FOUND & FIXED)
+**Status**: FIXED (2026-03-24 afternoon)  
+**Symptom**: KW4 (toddler clothes clearance) returned `button:dom` transition while still on homepage URL  
+**Root Cause**: `_wait_for_search_transition()` checked `RESULT_READY_SELECTORS` as a fallback alongside URL matching. The selector `[data-item-id]` matches **homepage product recommendation tiles** — not just search results. After clicking the search button, the function found `[data-item-id]` on the homepage and returned `"dom"` before the SPA had actually navigated to `/search`. The code then thought it was on the search results page but was still on the homepage.  
+**Fix**: Removed DOM selector fallback entirely from `_wait_for_search_transition()`. Now it only waits for `/search` to appear in the URL, which is the reliable signal for SPA navigation.  
+**File**: `walmart_search_and_capture.py` ~line 2067-2085  
+**Impact**: Without this fix, the scraper entered the wrong post-submit path ("Post-PX recovery: idling on home"), wasted time, and then hit PX escalation when the delayed search navigation finally occurred.
 
-**Next Steps**:
-- [ ] Verify GUI reads environment variables on startup
-- [ ] Test with command-line adapter directly
-- [ ] Add profile path selector to GUI
+### Issue #7 (RESOLVED): Search Submission Triggers Immediate Block
+**Status**: RESOLVED (was blocking in Oct 2025, fixed by Nov 2025)  
+**Root Cause Was**: `search_box.press("Enter")` → replaced with `page.keyboard.press("Enter")` + proper focus/blur + mouse movement to search button + variable dwell times.
+**Current State**: Search submission works reliably. The remaining trigger is velocity scoring (Finding #1), not submission mechanics.
+
+### Issue #8 (RESOLVED): webdriver=True
+**Status**: RESOLVED  
+**Fix**: `ignore_default_args=['--enable-automation']` + `channel='chrome'` (real Chrome). Verified via `navigator_diag` in step logs.
 
 ## Implementation Details
 
@@ -254,10 +326,13 @@ def ghost_cursor_move(page, start_x, start_y, end_x, end_y):
     # 15-25 steps for smooth movement
 ```
 
-**Keystroke Timing**:
+**Keystroke Timing** (updated 2026-03-24 — uses real keyboard events):
 ```python
+# Per-character page.keyboard.press() dispatches real KeyDown/KeyPress/KeyUp
+# Unlike element.type(), this is indistinguishable from physical keypresses
 for char in keyword:
-    search_box.type(char, delay=random.uniform(80, 200))  # 80-200ms per key
+    page.keyboard.press(char)
+    time.sleep(random.uniform(0.08, 0.22))  # 80-220ms per key
 ```
 
 **Hover Events**:
@@ -420,26 +495,124 @@ def _mark_cookies_refreshed(profile_dir):
 9. ✅ TLS fingerprint matches Chrome
 10. ✅ HTTP/2 support
 
-## Usage
+## Fresh Profile: Complete Walkthrough
 
-### Setup:
+### Why a fresh profile matters
+
+PX tracks trust/risk via the `_px3` cookie and other state stored in the Chrome profile. A profile that has accumulated PX challenges, failed CAPTCHAs, or suspicious cookies starts every new run at a **higher risk score**. A fresh profile begins with a clean slate.
+
+### How the profile flows through the system
+
+```
+~/.zshrc                          # WALMART_PROFILE_DIR env var (persists across shells)
+  └─> keyword_input.py (GUI)      # reads env var at startup → ctx.profile_dir
+       └─> walmart/adapter.py     # passes ctx.profile_dir to core scraper
+            └─> walmart_search_and_capture.py  # _launch() opens Chrome with user_data_dir=profile_dir
+```
+
+**Key implication**: The GUI reads `WALMART_PROFILE_DIR` **once at startup**. If you change the env var or the profile, you must **restart the GUI** for the change to take effect.
+
+The scraper's `_launch()` function also creates a `_rmn_fingerprint/` subdirectory inside the profile to store a stable viewport size and timezone. These are generated on the first scrape run and reused on subsequent runs so PX sees a consistent fingerprint.
+
+### Step-by-step: Create and activate a fresh profile
+
+#### Step 1: Run the setup script
+
 ```bash
-# 1. Create profile
-python3 scripts/manual_walmart_setup.py
+.venv/bin/python3 scripts/setup_walmart_fresh_profile.py
+```
 
-# 2. Configure proxy (optional but recommended)
+**What the script automates:**
+1. Creates a timestamped profile directory: `~/ChromeProfiles/walmart_fresh_YYYYMMDD_HHMMSS`
+2. Launches Chrome with **identical** args to the main scraper (`--use-angle=metal`, `chromium_sandbox=True`, `channel='chrome'`, `ignore_default_args=['--enable-automation']`, `navigator.webdriver=undefined`)
+3. Navigates to walmart.com — prompts you to solve CAPTCHA if PX challenges
+4. Performs organic browsing: homepage scroll, 1-2 product searches with clicks, back navigation
+5. Prompts for manual login (recommended — enables SBA/SBV ad capture)
+6. Verifies profile on disk (Cookies, Preferences, Network Persistent State)
+7. **Automatically updates `~/.zshrc`** — removes old `WALMART_PROFILE_DIR` entries, writes the new one
+8. Sets `WALMART_PROFILE_DIR` in the current process (for any child processes)
+
+You can also pass a custom name:
+```bash
+.venv/bin/python3 scripts/setup_walmart_fresh_profile.py walmart_march_clean
+```
+
+#### Step 2: Source your shell (required)
+
+The setup script updates `~/.zshrc` but your **current terminal session** still has the old value. Apply it:
+
+```bash
+source ~/.zshrc
+```
+
+Verify it took effect:
+```bash
+echo $WALMART_PROFILE_DIR
+# Should print: /Users/<you>/ChromeProfiles/walmart_fresh_YYYYMMDD_HHMMSS
+```
+
+#### Step 3: Restart the GUI (required)
+
+The GUI loads Python modules and reads env vars **at startup**. A running GUI will not pick up the new profile or any code changes.
+
+```bash
+# Close the existing keyword_input.py window, then:
+.venv/bin/python3 keyword_input.py
+```
+
+#### Step 4: Run a test scrape
+
+Pick any Walmart client keyword and run a single keyword scrape. Check the step log for:
+- `profile_dir` should show the fresh path
+- `px_escalation` events (should be absent on a fresh profile)
+- `results_ready: true` with product listings
+
+### Verify an existing profile
+
+To check the health of the currently configured profile without creating a new one:
+
+```bash
+.venv/bin/python3 scripts/setup_walmart_fresh_profile.py --verify
+```
+
+This checks:
+- `WALMART_PROFILE_DIR` env var is set
+- Profile directory exists on disk
+- Cookies, Preferences, Network Persistent State files present and non-empty
+- `~/.zshrc` value matches the current env var
+- `_rmn_fingerprint/` viewport and timezone files (created on first scrape run)
+
+### When to create a fresh profile
+
+- **Profile is getting PX challenged on every keyword** → accumulated risk, time for a fresh start
+- **Login expired** → re-login via the scraper's built-in `prompt_relogin` is easier, but if it fails, create a fresh profile and log in during setup
+- **After major code changes to launch args** → fingerprint consistency requires the profile to be warmed up with the same Chrome args the scraper uses
+- **New machine or team member** → each machine needs its own profile
+
+### Common pitfalls
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Scraper uses old profile path | GUI wasn't restarted | Close and relaunch `keyword_input.py` |
+| `echo $WALMART_PROFILE_DIR` shows old path | Shell not sourced | `source ~/.zshrc` |
+| Profile dir "not found" error | Env var points to deleted dir | Run setup script again |
+| PX challenges on first keyword with fresh profile | CAPTCHA wasn't solved during setup | Re-run setup, solve the CAPTCHA when prompted |
+| `--no-sandbox` banner visible | `chromium_sandbox` not set | Already fixed in setup script; verify you're using the latest version |
+| WebGL shows SwiftShader | GPU args missing | Already fixed in setup script; verify `--use-angle=metal` in launch |
+
+### Configure proxy (optional)
+
+```bash
 export WALMART_PROXY_SERVER="http://residential-proxy.com:8080"
 export WALMART_PROXY_USERNAME="user"
 export WALMART_PROXY_PASSWORD="pass"
-
-# 3. Set profile
-export WALMART_PROFILE_DIR="$HOME/Documents/Amazon_Scrape/profiles/walmart"
 ```
 
-### Run:
+### Run a scrape
+
 ```bash
-python3 keyword_input.py
-# Select Walmart
+.venv/bin/python3 keyword_input.py
+# Select Walmart retailer
 # Enter keyword
 # Click "Start Scraping"
 ```
@@ -471,9 +644,9 @@ python3 keyword_input.py
 
 ## Troubleshooting & Debugging
 
-### Current Status (As of 2025-10-08 22:13)
+### Current Status (As of 2026-03-24)
 
-**We can load homepage but are blocked at search submission (100% failure rate).** This indicates the search submission behavior is the primary detection vector, not the initial fingerprint.
+**Scraper is operational.** Homepage loads reliably, search submission works, and results are captured successfully on most keywords. The primary remaining risk is **cumulative velocity scoring** — PX challenges after rapid sequential searches from the same profile. Two critical bugs (stale escalation flags, DOM false-positive transition) were fixed on 2026-03-24 and await testing with a GUI restart.
 
 ### Analyze Run Reports
 
@@ -540,10 +713,18 @@ curl -x $WALMART_PROXY_SERVER \
 ### Profile Issues?
 
 ```bash
-# Clear and recreate
-rm -rf ~/Documents/Amazon_Scrape/profiles/walmart
-python3 scripts/manual_walmart_setup.py
+# Check current profile health
+.venv/bin/python3 scripts/setup_walmart_fresh_profile.py --verify
+
+# Create a fresh profile (preferred — builds organic browsing history)
+.venv/bin/python3 scripts/setup_walmart_fresh_profile.py
+
+# After setup, apply to current shell + restart GUI:
+source ~/.zshrc
+# Close keyword_input.py, then relaunch
 ```
+
+See the **"Fresh Profile: Complete Walkthrough"** section above for full details.
 
 ## Cost Estimates
 
@@ -565,66 +746,136 @@ python3 scripts/manual_walmart_setup.py
 - Playwright Stealth: https://github.com/berstend/puppeteer-extra/tree/master/packages/puppeteer-extra-plugin-stealth
 - WebGL Fingerprinting: https://browserleaks.com/webgl
 
-## Next Steps to Try (Priority Order)
+## Current Priorities (as of 2026-03-24 afternoon)
 
-### 🔴 Priority 1: Fix Search Submission Behavior
-**Current blocker** - This is why we're getting blocked:
+### 🔴 Priority 1: Restart GUI and Test with All Fixes
+- **All code changes from today require a GUI restart** to take effect
+- The last 4-keyword test run used **stale code** (GUI was already running when fixes were saved)
+- Fixes pending validation:
+  - Stale PX escalation flag reset after homepage solve (Finding #5)
+  - DOM false-positive transition fix (Finding #6)
+  - Consolidated `page.evaluate()` (5→1 call)
+  - `page.keyboard.press()` per-character typing
+  - Pre-search dwell time (1.5-3.5s)
+  - Post-transition settle pause (0.8-1.5s)
+- Fresh profile is ready: `$WALMART_PROFILE_DIR` points to `~/ChromeProfiles/walmart_fresh_*`
+- **Test command**: Restart `keyword_input.py`, run Garan client (4 keywords)
 
-1. **Replace programmatic Enter with natural keyboard event**:
-   - Change from `search_box.press("Enter")` to `page.keyboard.press("Enter")`
-   - Ensure search box has focus before pressing Enter
-   - Add proper focus/blur event sequence
+### 🟡 Priority 2: Build Walmart Step-by-Step Isolation Test
+- Port `tools/kroger_step_by_step_test.py` to Walmart-specific version
+- Test each step independently: homepage → search_box → type → submit → results
+- Include PX escalation detection at each step
+- Include `_px3` cookie logging between steps
+- Use to re-validate after any scraper changes
 
-2. **Remove programmatic navigation fallback**:
-   - Delete the `page.goto(search_url)` fallback after button click
-   - This is a clear bot signal
+### 🟠 Priority 3: Tune Inter-Keyword Cooldown
+- Currently set to 45s minimum between keywords in GUI mode
+- May need increase to 60-90s if PX continues to challenge on 3rd keyword
+- Monitor `px_escalation` events in step logs to calibrate
+- Scheduler subprocess isolation naturally provides longer gaps
 
-3. **Add human-like submission delay**:
-   - Variable 1-3s delay after last keystroke before submission
-   - Random chance (30%) to pause and re-read query before submitting
+### 🟠 Priority 4: Profile Rotation / Multi-Profile Support
+- Single profile accumulates `_px3` risk across all runs
+- Multiple authenticated profiles would distribute risk
+- Consider profile-per-client or profile-per-keyword-group
+- Manual login required per profile (PX detects automated login flows)
 
-4. **Test with manual Enter in headed mode**:
-   - Verify that manual Enter key works without block
-   - If manual works, confirms our submission method is the issue
+### 🟢 Priority 5: `_px3` Cookie Management
+- Monitor `_px3` value length growth across runs (correlates with risk)
+- Consider clearing `_px3` between runs if risk consistently exceeds threshold
+- Test: does deleting `_px3` between runs reduce CAPTCHA rate?
+- Risk: PX may treat missing `_px3` as suspicious (new session on established profile)
 
-### 🟡 Priority 2: Verify Fingerprint is Clean
+### ✅ RESOLVED: Behavioral Hardening (March 24, 2026)
+- Switched typing from `element.type()` to `page.keyboard.press()` (real keyboard events)
+- Consolidated 5 diagnostic `page.evaluate()` calls into 1 (reduces CDP fingerprint)
+- Added dwell times between login check and search box interaction
+- Added post-transition settle pauses before DOM queries
+- Fixed homepage PX escalation flag leak (Finding #5)
+- Fixed DOM false-positive in search transition (Finding #6)
 
-1. **Test with fresh profile** (walmart_clean2):
-   - Run `./scripts/setup_clean_walmart_profile.sh walmart_clean2`
-   - Manually age profile (2-3 minutes browsing)
-   - Verify no suspicious cookies in pre-run
+### ✅ RESOLVED: Search Submission (was Priority 1 in Oct 2025)
+- Fixed by switching to `page.keyboard.press("Enter")` with proper focus/blur
+- Added mouse movement to search button, variable dwell times
+- Removed programmatic `/search?q=` navigation fallback
 
-2. **Confirm webdriver=False**:
-   - Check navigator_diag in run_report.md
-   - Should show `webdriver: False`
-   - If True, investigate ignore_default_args
+## Forensic Methodology: Analyzing PX Triggers
 
-3. **Verify UNMASKED WebGL shows ANGLE/Metal**:
-   - Check webgl_unmasked in run_report.md
-   - Should NOT show SwiftShader
-   - Should show ANGLE or Metal renderer
+When a CAPTCHA or bail occurs, use this process to determine the root cause:
 
-### 🟢 Priority 3: Consider Additional Mitigations
+### 1. Locate the step log
+```bash
+# Find latest run's step log
+ls -lt output/walmart/*/runs/*/walmart_*_steps.jsonl | head -5
+```
 
-1. **Residential Proxies** (if not using):
-   - Bright Data, Smartproxy, Oxylabs
-   - Datacenter IPs may be flagged
-   - Cost: $5-15/GB
+### 2. Check for PX escalation signals
+```bash
+# Look for main.min.js (challenge enforcement script)
+grep "main.min.js" <steps.jsonl>
 
-2. **Longer Dwell Times**:
-   - Increase pre-submit dwell to 2-3 seconds
-   - Increase homepage idle to 5-10 seconds
-   - More random product interactions
+# Look for bundle POST (challenge telemetry)
+grep "bundle" <steps.jsonl>
 
-3. **Profile Aging**:
-   - Let profile sit for 24-48 hours between runs
-   - Manual browsing sessions to build trust
-   - Multiple authenticated profiles
+# Look for px-iframe injection
+grep "px-iframe" <steps.jsonl>
+```
+
+**If these appear**: PX decided to challenge server-side. The trigger is cumulative velocity, not any specific action. Check timing between this run and previous runs.
+
+**If these are absent**: The run was not challenged by PX. Any bail was due to slow load or hard block, not CAPTCHA.
+
+### 3. Check `_px3` cookie state
+```bash
+# Look for px3_cookie log entry
+grep "px3_cookie" <steps.jsonl>
+```
+- `present: true` with high `value_len` → accumulated risk from prior runs
+- `present: false` → fresh session, low risk
+
+### 4. Compare PX network events across runs
+For each run, extract the PX response timeline:
+```bash
+grep "px_resp\|px_escalation\|results_ready" <steps.jsonl> | jq -r '[.elapsed_ms, .event, .url // .ready // ""] | @tsv'
+```
+
+**Successful run pattern**: Only `collector` POSTs → `results_ready: true`
+**Failed run pattern**: `collector` POSTs → `main.min.js` GET → `bundle` POST → `px-iframe` → `results_ready: false`
+
+### 5. Check bail reason in run report
+```bash
+cat output/walmart/*/runs/*/run_report.json | jq '.outcome, .bail_reason'
+```
+
+Bail reasons and their meanings:
+- `px_locked` — PX modal appeared, solver failed after max attempts
+- `hard_block` — Redirected to /blocked
+- `px_blocked_no_results` — PX escalation detected + no results loaded
+- `no_results_timeout` — No PX signals but results never loaded (slow/error)
+- `px_escalation_pre_scroll` — PX escalation detected before scroll unlock
+- `px_escalation_after_submit` — PX modal + escalation signals after search submit
+- `px_on_home_after_recovery` — Still on homepage after PX recovery attempt
+- `search_submit_no_nav` — No navigation after button click / Enter
+
+### Key files in the codebase
+| File | Purpose |
+|------|---------|
+| `walmart_search_and_capture.py` | Core scraper, PX detection, bail logic, scroll gating |
+| `keyword_input.py` | GUI runner, inter-keyword cooldown |
+| `scheduler_daemon.py` | Scheduler (subprocess per keyword) |
+| `retailers/walmart/adapter.py` | Adapter wrapping core scraper for GUI/scheduler |
+| `scripts/setup_walmart_fresh_profile.py` | Fresh profile creator (organic browsing + login prompt) |
+| `tools/kroger_step_by_step_test.py` | Step isolation test (port to Walmart pending) |
+| `debug_walmart_preflight.py` | Preflight check tester |
+| `view_debug_logs.py` | Step log analyzer |
+| `tools/scrape_monitor.py` | Coverage and health monitor |
 
 ## See Also
 
 - `docs/WALMART_PROXY_SETUP.md` - Proxy configuration guide
 - `docs/reference/Walmart_ad_html.md` - Ad selectors
-- `scripts/manual_walmart_setup.py` - Profile setup
+- `scripts/manual_walmart_setup.py` - Legacy profile setup
+- `scripts/setup_walmart_fresh_profile.py` - Fresh profile setup (preferred)
 - `walmart_search_and_capture.py` - Main implementation
 - `view_debug_logs.py` - Analyze steps.jsonl files
+- `tools/kroger_step_by_step_test.py` - Step isolation test (Kroger, template for Walmart port)

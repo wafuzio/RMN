@@ -117,16 +117,22 @@ function isColumnAdType(ad: any): boolean {
     if (!ad.card_format && ad.dimensions?.height > ad.dimensions?.width) return true;
     return false;
   }
-  // Left rail Sponsored Display ads also go in the column
-  if (ad.ad_type === "Sponsored_Display" && ad.slot === "left_rail") {
-    return true;
-  }
-  // Portrait (skyscraper) Sponsored Display ads → RHS column
-  if ((ad.ad_type === "Sponsored_Display" || ad.ad_type === "Sponsored Display") && ad.card_format === "tile") {
-    return true;
-  }
-  if ((ad.ad_type === "Sponsored_Display" || ad.ad_type === "Sponsored Display") && ad.dimensions?.height > ad.dimensions?.width * 1.5) {
-    return true;
+  // Sponsored Display ads: check slot and dimensions
+  // Note: Amazon stores in 'type' field, others use 'ad_type'
+  const isSponsoredDisplay = ad.type === "Sponsored_Display" || ad.ad_type === "Sponsored_Display" || ad.ad_type === "Sponsored Display";
+  
+  if (isSponsoredDisplay) {
+    // Left rail ads go in column
+    if (ad.slot === "left_rail") return true;
+    // Tile format (vertical) goes in column
+    if (ad.card_format === "tile") return true;
+    // Vertical aspect ratio (taller than 1.5x width) goes in column
+    if (ad.dimensions?.height > ad.dimensions?.width * 1.5) return true;
+    // Amazon Sponsored Display: default to column for vertical ads
+    if (ad.retailer?.toLowerCase() === "amazon" && ad.dimensions?.height > ad.dimensions?.width) return true;
+    
+    // Amazon Sponsored Display with Display_Ad subtype: default to column (vertical format)
+    if (ad.retailer?.toLowerCase() === "amazon" && ad.subtype === "Display_Ad") return true;
   }
   return false;
 }
@@ -590,6 +596,7 @@ export default function Index() {
 
         // Skip ads without valid images (has_image: false or missing image_url)
         // Exception: Allow Sponsored_Logo ads through even with placeholder images
+        // Note: has_image can be true, false, or null - only skip when explicitly false
         const isSponsoredLogo = c.ad_type === "Sponsored_Logo";
         if (!isSponsoredLogo && (c.has_image === false || !c.image_url || c.image_url.includes('placeholder'))) {
           continue;

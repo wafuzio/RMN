@@ -2045,28 +2045,32 @@ def api_ads_cards():
                 if data:
                     all_ads = data.get("ads") or []
                     oid = ad_row.get("original_id")
-                    # Try integer index first
-                    int_idx = None
-                    if oid is not None:
+                    
+                    # First, try exact ID match (works for all retailers)
+                    if oid:
+                        for a in all_ads:
+                            if a.get("id") == oid:
+                                orig_ad = a
+                                break
+                    
+                    # Fallback: Try integer index parsing (only for non-Amazon retailers)
+                    if not orig_ad and oid is not None:
+                        int_idx = None
                         if isinstance(oid, int):
                             int_idx = oid
-                        elif isinstance(oid, str):
+                        elif isinstance(oid, str) and '::' not in oid:
                             # Parse trailing number from IDs like 'walmart-20260213092946-2'
                             # These IDs are 1-indexed, so subtract 1 for array index
                             parts = oid.rsplit('-', 1)
                             if len(parts) == 2 and parts[1].isdigit():
                                 int_idx = int(parts[1]) - 1
-                            # Amazon format: 'amazon::20260226093300::hash::0'
-                            elif '::' in oid:
-                                last_seg = oid.rsplit('::', 1)[-1]
-                                if last_seg.isdigit():
-                                    int_idx = int(last_seg)
                             elif oid.isdigit():
                                 int_idx = int(oid)
-                    if int_idx is not None and 0 <= int_idx < len(all_ads):
-                        orig_ad = all_ads[int_idx]
-                    else:
+                        if int_idx is not None and 0 <= int_idx < len(all_ads):
+                            orig_ad = all_ads[int_idx]
+                    elif brand and brand != "Unknown":
                         # Fallback: match by brand + ad_type (case-insensitive, normalize underscores)
+                        # Only use this when we have a real brand name, not "Unknown"
                         _norm = lambda s: s.lower().replace("_", " ")
                         for a in all_ads:
                             ab = (a.get("brand") or a.get("advertiser") or "").strip()
@@ -2080,9 +2084,12 @@ def api_ads_cards():
                                 break
 
                 if orig_ad:
-                    image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, orig_ad)
                     media_urls = build_media_urls_for_ad(file_retailer, file_client, orig_ad)
+                    image_url = media_urls.get("image_url") or media_urls.get("poster_url")
+                    if not image_url:
+                        image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, orig_ad)
                     video_url_api = media_urls.get("video_url")
+                    poster_url = media_urls.get("poster_url")
                     video_overlay = orig_ad.get("video_overlay")
                     card_format = orig_ad.get("card_format")
                     dimensions = orig_ad.get("dimensions")
@@ -2115,8 +2122,11 @@ def api_ads_cards():
                     if raw_img_url:
                         synthetic_ad["image_url"] = raw_img_url
                     media_urls = build_media_urls_for_ad(file_retailer, file_client, synthetic_ad)
-                    image_url = media_urls.get("image_url", "")
+                    image_url = media_urls.get("image_url") or media_urls.get("poster_url")
+                    if not image_url:
+                        image_url, has_image, debug_path, skip_reason = build_image_fields(file_retailer, file_client, synthetic_ad)
                     video_url_api = media_urls.get("video_url")
+                    poster_url = media_urls.get("poster_url")
                     video_overlay = None
                     card_format = None
                     dimensions = None
@@ -2136,6 +2146,7 @@ def api_ads_cards():
                     "message": message,
                     "image_url": image_url,
                     "video_url": video_url_api,
+                    "poster_url": poster_url,
                     "video_overlay": video_overlay,
                     "run_file": os.path.basename(jp) if jp else "",
                     "timestamp": ts,
@@ -2272,13 +2283,15 @@ def api_ads_cards():
                 continue
         
         # Build response
+        # has_more: check if there are more items in the index to load (not filtered total)
+        # This ensures pagination works correctly when filtering reduces the card count
         result = {
             "retailer": retailer,
             "client": _norm_clients_for_cache(clients),
             "cards": cards,
             "page": page,
             "page_size": page_size,
-            "has_more": (start_idx + len(cards)) < total,
+            "has_more": (start_idx + page_size) < total,
             "total_cards": total,
             "brands": [],  # Not computed for brand-filtered queries
             "filters": {
@@ -2998,6 +3011,8 @@ def api_ads_cards():
                     "client": file_client,
                     "keyword": data.get("keyword") or data.get("search_term"),
                     "ad_type": canonicalize_ad_type(ad.get("type") or ad.get("ad_type")),
+                    "type": ad.get("type"),  # Original type field (e.g., "Sponsored_Display" for Amazon)
+                    "subtype": ad.get("subtype"),  # Original subtype field (e.g., "Display_Ad" for Amazon)
                     "brand": brand,
                     "advertisers": advertisers,  # NEW: array of advertisers for filtering
                     "message": message,
@@ -3797,6 +3812,17 @@ def api_brand_details():
     if not brand_name:
         return jsonify({"error": "brand parameter required"}), 400
 
+    cache_params = {
+        "endpoint": "brand-details",
+        "brand": brand_name.lower(),
+        "retailers": retailers_param,
+        "keywords": keywords_param or None,
+    }
+    cache_key = _cache_key(cache_params)
+    cached = _get_cached(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
     # Parse keywords filter early if provided (for competitors fetching the brand's data)
     filter_keywords = set()
     if keywords_param:
@@ -3828,6 +3854,7 @@ def api_brand_details():
             print(f"[brand-details] DB: {brand_name} → {result['total_ads']} ads, "
                   f"{len(result['top_keywords'])} keywords, {len(result['top_competitors'])} competitors "
                   f"in {_elapsed:.0f}ms")
+            _set_cache(cache_key, result)
             return jsonify(result)
         print(f"[brand-details] DB returned None for {brand_name}, falling back to JSON scan")
 
@@ -4158,7 +4185,7 @@ def api_brand_details():
             for month, count in sorted(monthly_activity.items())
         ]
 
-        return jsonify({
+        result = {
             "brand": brand_name,
             "total_ads": total_ads,
             "retailer_ads": retailer_counts,
@@ -4166,7 +4193,9 @@ def api_brand_details():
             "top_keywords": top_keywords,
             "top_competitors": top_competitors,
             "monthly_activity": monthly_activity_list
-        })
+        }
+        _set_cache(cache_key, result)
+        return jsonify(result)
     except Exception as e:
         print(f"[brand-details] Error: {str(e)}")
         return jsonify({"error": f"Failed to fetch brand details: {str(e)}"}), 500

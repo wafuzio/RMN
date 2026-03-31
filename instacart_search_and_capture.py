@@ -744,44 +744,87 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             # Find all ad containers using structural selectors (hash classes change)
             log("🧭 Finding ad containers via structural navigation...")
             
-            # Find all divs with UUID IDs that have -inner children
+            # STRATEGY 1: Find ad containers by role="region" with aria-label containing "carousel"
+            # These contain the shoppable-list-sliding-carousel elements (current structure as of Mar 2026)
             elements = []
-            all_divs = page.query_selector_all('div[id]')
-            log(f"   Checking {len(all_divs)} divs with IDs...")
+            carousel_containers = page.query_selector_all('[role="region"][aria-label*="carousel"]')
+            log(f"   Strategy 1: Found {len(carousel_containers)} carousel regions")
             
-            for div in all_divs:
+            for container in carousel_containers:
                 try:
-                    div_id = div.get_attribute('id')
-                    if not div_id or '-' not in div_id:
-                        continue
-                    
-                    # Check if this div has a child with id="{div_id}-inner"
-                    inner = div.query_selector(f'[id="{div_id}-inner"]')
-                    if not inner:
-                        continue
-                    
-                    # Check if the inner contains a carousel
-                    carousel = inner.query_selector('[data-testid="shoppable-list-sliding-carousel"]')
+                    # Verify this container has a shoppable carousel
+                    carousel = container.query_selector('[data-testid="shoppable-list-sliding-carousel"]')
                     if not carousel:
                         continue
                     
-                    # This is a border container with a carousel!
+                    # Get the carousel element (which is the actual ad container)
                     try:
-                        div_bbox = div.bounding_box()
-                        inner_bbox = inner.bounding_box()
-                        log(f"\n✅ Found ad container: id={div_id}")
-                        log(f"   ↳ Outer bbox: x={div_bbox['x']:.1f}, y={div_bbox['y']:.1f}, w={div_bbox['width']:.1f}, h={div_bbox['height']:.1f}")
-                        log(f"   ↳ Inner bbox: x={inner_bbox['x']:.1f}, y={inner_bbox['y']:.1f}, w={inner_bbox['width']:.1f}, h={inner_bbox['height']:.1f}")
+                        bbox = carousel.bounding_box()
+                        if bbox:
+                            log(f"\n✅ Found ad carousel container")
+                            log(f"   ↳ bbox: x={bbox['x']:.1f}, y={bbox['y']:.1f}, w={bbox['width']:.1f}, h={bbox['height']:.1f}")
                     except:
                         pass
                     
-                    # Screenshot the INNER element to avoid capturing container padding/borders
-                    elements.append(('Shoppable Display Ad', inner))
+                    # Screenshot the carousel element
+                    elements.append(('Shoppable Display Ad', carousel))
                     
                 except Exception as e:
+                    log(f"   ⚠️  Error processing carousel container: {e}")
                     continue
             
+            # STRATEGY 2 (FALLBACK): Try old div[id]-inner pattern if Strategy 1 found nothing
+            # This was the original selector logic that may work if Instacart reverts their structure
+            if len(elements) == 0:
+                log("   Strategy 1 found 0 ads, trying fallback Strategy 2...")
+                all_divs = page.query_selector_all('div[id]')
+                log(f"   Strategy 2: Checking {len(all_divs)} divs with IDs...")
+                
+                for div in all_divs:
+                    try:
+                        div_id = div.get_attribute('id')
+                        if not div_id or '-' not in div_id:
+                            continue
+                        
+                        # Check if this div has a child with id="{div_id}-inner"
+                        inner = div.query_selector(f'[id="{div_id}-inner"]')
+                        if not inner:
+                            continue
+                        
+                        # Check if the inner contains a carousel
+                        carousel = inner.query_selector('[data-testid="shoppable-list-sliding-carousel"]')
+                        if not carousel:
+                            continue
+                        
+                        # This is a border container with a carousel!
+                        try:
+                            div_bbox = div.bounding_box()
+                            inner_bbox = inner.bounding_box()
+                            log(f"\n✅ Found ad container (fallback): id={div_id}")
+                            log(f"   ↳ Outer bbox: x={div_bbox['x']:.1f}, y={div_bbox['y']:.1f}, w={div_bbox['width']:.1f}, h={div_bbox['height']:.1f}")
+                            log(f"   ↳ Inner bbox: x={inner_bbox['x']:.1f}, y={inner_bbox['y']:.1f}, w={inner_bbox['width']:.1f}, h={inner_bbox['height']:.1f}")
+                        except:
+                            pass
+                        
+                        # Screenshot the INNER element to avoid capturing container padding/borders
+                        elements.append(('Shoppable Display Ad', inner))
+                        
+                    except Exception as e:
+                        continue
+                
+                if len(elements) > 0:
+                    log(f"   ✅ Fallback Strategy 2 found {len(elements)} ads")
+            
             log(f"\n✅ Found {len(elements)} ad containers total")
+            
+            # If no ads found, still save the run with diagnostic info
+            if len(elements) == 0:
+                log("⚠️  WARNING: No ad containers detected!")
+                log("   This could indicate:")
+                log("   1. Instacart changed their DOM structure")
+                log("   2. Page didn't fully load")
+                log("   3. No ads present for this search")
+                log("   Saving run with empty ads array for debugging...")
             
             for ad_type, elem in elements:
                 i = elements.index((ad_type, elem))
@@ -1011,7 +1054,19 @@ def search_and_capture(keyword: str, output_dir: str, store: str = None) -> bool
             # Capture HTML content for later saving
             log("\n💾 Capturing HTML content...")
             html_content = page.content()
-            log(f"   ✅ HTML captured")
+            log(f"   ✅ HTML captured ({len(html_content)} bytes)")
+            
+            # Log diagnostic info if no ads found
+            if ad_count == 0:
+                log("\n🔍 DIAGNOSTIC INFO (no ads found):")
+                log(f"   Search URL: {search_url}")
+                log(f"   Page title: {page.title()}")
+                log(f"   HTML size: {len(html_content)} bytes")
+                # Check for common blocking indicators
+                if "blocked" in html_content.lower() or "captcha" in html_content.lower():
+                    log("   ⚠️  Page may be blocked or showing CAPTCHA")
+                if "sign in" in html_content.lower() or "log in" in html_content.lower():
+                    log("   ⚠️  Page may require login")
 
             # Track profile health (block detection + persistent ledger)
             try:

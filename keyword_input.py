@@ -158,6 +158,13 @@ import retailers.walmart.adapter  # noqa: F401
 import retailers.target.adapter  # noqa: F401
 import retailers.tiktokshop.adapter  # noqa: F401
 
+# Scheduler tab
+try:
+    from gui.scheduler_tab import SchedulerTab
+    SCHEDULER_TAB_AVAILABLE = True
+except ImportError:
+    SCHEDULER_TAB_AVAILABLE = False
+
 # Optional: try eager imports; if they fail, globals stay None and the lazy path runs later
 try:
     from kroger_search_and_capture import search_and_capture as ksc_search_and_capture
@@ -419,6 +426,13 @@ class KeywordInputApp:
         
         # ===== TAB 2: Screen Capture =====
         self._build_screen_capture_tab()
+        
+        # ===== TAB 3: Scheduler =====
+        if SCHEDULER_TAB_AVAILABLE:
+            try:
+                self.scheduler_tab = SchedulerTab(self.notebook, self)
+            except Exception as e:
+                logging.error(f"Failed to initialize Scheduler tab: {e}")
 
         # Client/Product field + New button
         client_frame = ttk.Frame(scrollable_frame, style='Card.TFrame')
@@ -1204,8 +1218,35 @@ class KeywordInputApp:
         self.root.update()
 
         # Scrape loop
+        # INTER-KEYWORD COOLDOWN: PX uses cumulative velocity scoring — 3 rapid
+        # searches in <3 min triggered CAPTCHA. Enforce minimum gap between keywords
+        # to stay below PX's server-side risk threshold.
+        KEYWORD_COOLDOWN_SECS = 45  # minimum seconds between keyword runs
+        last_keyword_end_ts = 0.0
+        
         success_count = 0
         for i, keyword in enumerate(keywords):
+            # Enforce inter-keyword cooldown (skip for first keyword)
+            if i > 0 and last_keyword_end_ts > 0:
+                elapsed = time.time() - last_keyword_end_ts
+                remaining = KEYWORD_COOLDOWN_SECS - elapsed
+                if remaining > 0:
+                    cooldown_msg = f"Cooling down {int(remaining)}s between keywords (PX velocity guard)…"
+                    if progress_label.winfo_exists():
+                        progress_label.config(text=cooldown_msg)
+                    keyword_label.config(text=f"Next: {keyword}")
+                    self.status_label.config(text=cooldown_msg)
+                    popup.update()
+                    self.root.update()
+                    # Countdown with UI updates
+                    while remaining > 0:
+                        time.sleep(min(1.0, remaining))
+                        remaining = KEYWORD_COOLDOWN_SECS - (time.time() - last_keyword_end_ts)
+                        if remaining > 0 and progress_label.winfo_exists():
+                            progress_label.config(text=f"Cooling down {int(remaining)}s between keywords…")
+                            popup.update()
+                            self.root.update()
+            
             progress_var.set(i)
             keyword_label.config(text=f"Scraping {i+1}/{len(keywords)}: {keyword}")
             if progress_label.winfo_exists():
@@ -1277,6 +1318,9 @@ class KeywordInputApp:
                         popup.update()
                         self.notify(err_text, "error")
                         # Continue to next keyword, do not abort whole run
+            
+            # Record when this keyword finished (for inter-keyword cooldown)
+            last_keyword_end_ts = time.time()
 
         # Debug print of collected pairs
         print(f"\n📊 Collected {len(run_pairs)} JSON/HTML pairs from this run")
@@ -2853,12 +2897,37 @@ Captured: {timestamp_str}
         
         try:
             base = get_base_dir()
+            
+            # Check master override config first
+            config_file = os.path.join(base, "config", "scheduler_control.json")
+            if os.path.exists(config_file):
+                try:
+                    with open(config_file, 'r') as f:
+                        import json
+                        config = json.load(f)
+                        if not config.get("enabled", True):
+                            self.notify("Scheduler is DISABLED via master override. Use toggle_scheduler.sh to enable.", "error")
+                            return
+                except Exception as e:
+                    self.notify(f"Error reading scheduler control config: {e}", "error")
+                    return
+            
             daemon_script = os.path.join(base, "start_scheduler.sh")
             lock_file = os.path.join(base, "logs", "scheduler.lock")
+            pause_file = os.path.join(base, ".scheduler_paused")
             
             if not os.path.exists(daemon_script):
                 self.notify("start_scheduler.sh not found", "error")
                 return
+            
+            # Remove pause file if it exists (unpause)
+            if os.path.exists(pause_file):
+                try:
+                    os.remove(pause_file)
+                    self.notify("Resuming scheduler...", "info")
+                except Exception as e:
+                    self.notify(f"Could not remove pause file: {e}", "error")
+                    return
             
             # Check for stale lock file
             if os.path.exists(lock_file):
@@ -2957,6 +3026,13 @@ Captured: {timestamp_str}
                             os.remove(path)
                     except Exception:
                         pass
+                # Create pause file to prevent auto-restart
+                pause_file = os.path.join(base, ".scheduler_paused")
+                try:
+                    with open(pause_file, 'w') as f:
+                        f.write("PAUSED\nScheduler manually stopped via GUI\n")
+                except Exception:
+                    pass
                 self.refresh_daemon_status_manual()
             
             self.root.after(4000, _force_kill_and_cleanup)

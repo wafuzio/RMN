@@ -1,14 +1,14 @@
 {
   "kroger": {
-    "consecutive_failures": 0,
-    "total_failures": 27,
+    "consecutive_failures": 1,
+    "total_failures": 28,
     "total_successes": 7,
     "last_success": "2026-03-07T05:19:01.537260+00:00",
-    "last_failure": "2026-03-04T02:29:15.144439+00:00",
+    "last_failure": "2026-03-09T15:40:30.959597+00:00",
     "last_failure_reason": "access_denied_small_page",
     "last_alert_sent": "2026-03-07T05:17:41.121272+00:00",
-    "status": "healthy",
-    "last_failure_keyword": "low calorie ice cream"
+    "status": "degraded",
+    "last_failure_keyword": "pickle spears"
   },
   "test_retailer": {
     "consecutive_failures": 0,
@@ -23,20 +23,20 @@
   },
   "walmart": {
     "consecutive_failures": 0,
-    "total_failures": 14,
-    "total_successes": 304,
-    "last_success": "2026-03-07T06:08:10.397832+00:00",
-    "last_failure": "2026-03-03T15:38:11.614701+00:00",
-    "last_failure_reason": "not_logged_in",
-    "last_alert_sent": null,
+    "total_failures": 20,
+    "total_successes": 673,
+    "last_success": "2026-03-27T20:43:24.304648+00:00",
+    "last_failure": "2026-03-23T14:30:33.627188+00:00",
+    "last_failure_reason": "blocked_redirect",
+    "last_alert_sent": "2026-03-11T17:16:19.764028+00:00",
     "status": "healthy",
-    "last_failure_keyword": "Garanimals"
+    "last_failure_keyword": "coffee k cup"
   },
   "target": {
     "consecutive_failures": 0,
     "total_failures": 20,
-    "total_successes": 242,
-    "last_success": "2026-03-07T06:05:22.970768+00:00",
+    "total_successes": 552,
+    "last_success": "2026-03-20T17:06:11.260282+00:00",
     "last_failure": "2026-03-04T02:31:14.562948+00:00",
     "last_failure_reason": "not_logged_in",
     "last_alert_sent": "2026-03-04T02:09:44.738961+00:00",
@@ -46,8 +46,8 @@
   "instacart": {
     "consecutive_failures": 0,
     "total_failures": 0,
-    "total_successes": 321,
-    "last_success": "2026-03-07T06:01:19.699984+00:00",
+    "total_successes": 712,
+    "last_success": "2026-03-28T14:29:12.664401+00:00",
     "last_failure": null,
     "last_failure_reason": null,
     "last_alert_sent": null,

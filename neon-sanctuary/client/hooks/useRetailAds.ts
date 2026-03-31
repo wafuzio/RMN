@@ -117,7 +117,7 @@ export function useAds(params: {
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     retry: false, // Don't retry failed requests - fail fast
-    placeholderData: (previousData) => previousData, // Keep previous data while fetching (replaces keepPreviousData)
+    // Removed placeholderData to prevent showing stale data when client filter changes
   });
 }
 

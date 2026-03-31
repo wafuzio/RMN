@@ -644,27 +644,27 @@ def get_brand_details(
         ]
 
         # ── 3. Top competitors (brands appearing on same keywords) ──
-        # Get the keywords this brand appears on
-        cur.execute(f"""
-            SELECT DISTINCT lower(r.keyword) as kw
-            FROM ads a
-            JOIN runs r ON a.run_id = r.id
-            WHERE lower(a.brand) = lower(%s) {ret_clause}
-              AND r.keyword IS NOT NULL AND r.keyword != ''
-        """, [brand_name] + ret_params)
-        brand_keywords = [row[0] for row in cur.fetchall()]
+        brand_keywords = list(keywords_filter) if keywords_filter else [item["keyword"] for item in top_keywords]
 
         top_competitors = []
         if brand_keywords:
             cur.execute(f"""
-                SELECT a.brand, lower(r.keyword) as kw, COUNT(*) as cnt
-                FROM ads a
-                JOIN runs r ON a.run_id = r.id
-                WHERE lower(r.keyword) = ANY(%s) {ret_clause}
-                  AND lower(a.brand) != lower(%s)
+                WITH brand_pairs AS (
+                    SELECT DISTINCT r.retailer, lower(r.keyword) AS kw
+                    FROM ads a0
+                    JOIN runs r ON a0.run_id = r.id
+                    WHERE lower(a0.brand) = lower(%s) {ret_clause}
+                      AND r.keyword IS NOT NULL AND r.keyword != ''
+                      AND lower(r.keyword) = ANY(%s)
+                )
+                SELECT a.brand, bp.kw, COUNT(*) as cnt
+                FROM brand_pairs bp
+                JOIN runs r ON r.retailer = bp.retailer AND lower(r.keyword) = bp.kw
+                JOIN ads a ON a.run_id = r.id
+                WHERE lower(a.brand) != lower(%s)
                   AND a.brand IS NOT NULL AND a.brand != '' AND a.brand != 'Unknown'
-                GROUP BY a.brand, lower(r.keyword)
-            """, [brand_keywords] + ret_params + [brand_name])
+                GROUP BY a.brand, bp.kw
+            """, [brand_name] + ret_params + [brand_keywords] + [brand_name])
             comp_rows = cur.fetchall()
 
             # Aggregate by brand

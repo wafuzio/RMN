@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Manual Walmart profile setup - keeps browser open for CAPTCHA solving.
+Uses real Chrome with anti-detection measures to minimize CAPTCHA triggers.
 """
 import os
 import sys
@@ -33,18 +34,37 @@ def main():
     os.makedirs(PROFILE_DIR, exist_ok=True)
     
     with sync_playwright() as p:
-        print("\n🌐 Opening browser...")
+        print("\n🌐 Opening browser with anti-detection measures...")
+        
+        # CRITICAL: GPU acceleration args for proper WebGL fingerprint
+        args = [
+            '--use-angle=metal',  # Force ANGLE→Metal backend on macOS
+            '--enable-gpu-rasterization',
+            '--ignore-gpu-blocklist',
+            '--disable-focus-on-load',
+            '--noerrdialogs',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-dev-shm-usage',
+        ]
+        
         context = p.chromium.launch_persistent_context(
             user_data_dir=PROFILE_DIR,
             headless=False,
+            channel='chrome',  # CRITICAL: Real Chrome for correct JA3 fingerprint
             viewport={'width': 1366, 'height': 768},
             locale='en-US',
-            args=[
-                '--disable-blink-features=AutomationControlled',
-                '--disable-dev-shm-usage',
-            ],
-            ignore_default_args=["--enable-automation"],
+            timezone_id='America/New_York',
+            args=args,
+            ignore_default_args=['--enable-automation'],  # Prevents navigator.webdriver=true
+            chromium_sandbox=True,
         )
+        
+        # CRITICAL: Force navigator.webdriver to be undefined (not true)
+        context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+        """)
         
         page = context.pages[0] if context.pages else context.new_page()
         
@@ -53,12 +73,18 @@ def main():
         page.goto("https://www.walmart.com/", wait_until='domcontentloaded')
         
         print()
-        print("✅ Browser is open!")
+        print("✅ Browser is open with anti-detection measures!")
         print()
-        print("👉 Solve the CAPTCHA if it appears")
-        print("👉 Browse around naturally")
+        print("👉 If CAPTCHA appears, solve it manually")
+        print("👉 Log in to Walmart (optional but recommended)")
+        print("👉 Browse naturally for 2-3 minutes")
         print("👉 Press Ctrl+C when done to save and close")
         print()
+        print("Anti-detection active:")
+        print("  - Real Chrome (correct JA3 fingerprint)")
+        print("  - GPU acceleration (proper WebGL)")
+        print("  - navigator.webdriver = undefined")
+        print("  - --enable-automation removed")
         
         try:
             # Keep browser open until user interrupts

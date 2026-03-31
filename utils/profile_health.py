@@ -414,10 +414,9 @@ def prompt_relogin(
         if now - last_report >= 15:
             _log(f"   ⏳ Waiting for login… ({remaining}s remaining)")
             last_report = now
-        try:
-            page.wait_for_timeout(2000)
-        except Exception:
-            time.sleep(2)
+        # Use time.sleep instead of page.wait_for_timeout to avoid blocking
+        # the Tkinter event loop when running from GUI
+        time.sleep(2)
 
     # After timeout, show a final "Done?" confirmation
     try:

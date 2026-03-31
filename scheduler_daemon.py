@@ -19,6 +19,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import glob
 
+# Import audit system
+try:
+    from utils.scrape_audit import ScrapeAuditor
+    AUDIT_AVAILABLE = True
+except ImportError:
+    AUDIT_AVAILABLE = False
+
 # Import shared schedule library
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from schedules.schedules_lib import scan_schedules, now_in_tz
@@ -196,6 +203,14 @@ class SchedulerDaemon:
         """Initialize the scheduler daemon"""
         # Code directory (where scripts live)
         self.code_dir = Path(__file__).resolve().parent
+        
+        # Check for pause file - exit immediately if paused
+        pause_file = self.code_dir / ".scheduler_paused"
+        if pause_file.exists():
+            print("⏸️  Scheduler is PAUSED (.scheduler_paused file exists)")
+            print("   Delete this file or click 'Start' in the GUI to resume")
+            sys.exit(0)
+        
         # Data root (where output/, logs/, etc. live). Defaults to code_dir unless SCRAPER_HOME is set
         self.root_dir = Path(os.environ.get("SCRAPER_HOME", str(self.code_dir))).resolve()
         # Backward-compatible alias
@@ -364,6 +379,50 @@ class SchedulerDaemon:
             self.logger.error(f"Failed to load client history: {e}")
             
         return []
+    
+    def _classify_error(self, rc: int, stdout: str, stderr: str, retailer: str) -> str:
+        """
+        Classify scraper error type based on return code and output.
+        
+        Returns one of:
+        - "bot_manager_block": Bot detection/blocking (Walmart, Kroger)
+        - "no_ads_found": Scraper succeeded but found 0 ads
+        - "auth_required": Login/authentication issue
+        - "timeout": Internal timeout (not subprocess timeout)
+        - "generic_failure": Other failures
+        """
+        stdout_lower = stdout.lower() if stdout else ""
+        stderr_lower = stderr.lower() if stderr else ""
+        combined = stdout_lower + " " + stderr_lower
+        
+        # Bot Manager / hard block detection
+        if any(indicator in combined for indicator in [
+            "hard_block", "hard block", "bot manager", 
+            "blocked?url=", "/blocked?", "bail_reason",
+            "ak_bmsc", "bm_mi", "bm_sv",  # Akamai Bot Manager cookies
+            "access denied", "akamai"
+        ]):
+            return "bot_manager_block"
+        
+        # No ads found (successful scrape, empty results)
+        if any(indicator in combined for indicator in [
+            "found 0 ad", "no ad containers", "ads: []",
+            "empty ads array"
+        ]):
+            return "no_ads_found"
+        
+        # Authentication/login issues
+        if any(indicator in combined for indicator in [
+            "not logged in", "login required", "sign in",
+            "authentication failed", "session expired"
+        ]):
+            return "auth_required"
+        
+        # Internal timeouts (not subprocess timeout)
+        if "timeout" in combined and "playwright" in combined:
+            return "timeout"
+        
+        return "generic_failure"
     
     def _cleanup_orphaned_chrome(self, profile_pattern: str = None):
         """Kill any orphaned Chrome/Chromium processes using scraper profiles.
@@ -683,6 +742,10 @@ class SchedulerDaemon:
                 self.logger.info(f"[{retailer}] START keyword '{keyword}' for {client_name}")
                 self.execution_logger.info(f"KEYWORD_SCRAPE_START: Retailer={retailer}, Client={client_name}, Keyword=[{i}/{len(keywords)}] '{keyword}'")
                 
+                # Retry logic: attempt up to 2 times for transient failures
+                max_attempts = 2
+                attempt = 1
+                
                 # Build command based on retailer
                 if retailer == "kroger":
                     cmd = [
@@ -713,11 +776,17 @@ class SchedulerDaemon:
                 
                 self.execution_logger.debug(f"SUBPROCESS_CMD: {' '.join(cmd)}")
                 
-                try:
-                    self.execution_logger.debug(f"SUBPROCESS_START: {script} for '{keyword}'")
+                while attempt <= max_attempts:
+                    if attempt > 1:
+                        self.logger.info(f"[{retailer}] RETRY attempt {attempt}/{max_attempts} for '{keyword}'")
+                        self.execution_logger.info(f"KEYWORD_RETRY: Retailer={retailer}, Keyword='{keyword}', Attempt={attempt}")
+                        time.sleep(5)  # Brief delay before retry
                     
-                    # Run as normal foreground process - Chrome needs real display session
-                    proc = subprocess.Popen(
+                    try:
+                        self.execution_logger.debug(f"SUBPROCESS_START: {script} for '{keyword}' (attempt {attempt})")
+                        
+                        # Run as normal foreground process - Chrome needs real display session
+                        proc = subprocess.Popen(
                         cmd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
@@ -741,29 +810,74 @@ class SchedulerDaemon:
                         success_count += 1
                         self.logger.info(f"[{retailer}] SUCCESS keyword '{keyword}' for {client_name}")
                         self.execution_logger.info(f"KEYWORD_SCRAPE_SUCCESS: Retailer={retailer}, Client={client_name}, Keyword='{keyword}'")
-                    else:
-                        self.logger.error(f"[{retailer}] FAIL keyword '{keyword}' for {client_name}: rc={rc}")
-                        self.execution_logger.error(f"KEYWORD_SCRAPE_FAILED: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', rc={rc}")
                         
-                except subprocess.TimeoutExpired:
-                    # Kill the process and clean up orphaned Chrome
-                    try:
-                        proc.kill()
-                    except Exception:
-                        pass
-                    try:
-                        stdout, stderr = proc.communicate()
-                    except:
-                        pass
-                    # Clean up any orphaned Chrome for this retailer
-                    self._cleanup_orphaned_chrome(retailer)
-                    self.logger.error(f"[{retailer}] TIMEOUT keyword '{keyword}' for {client_name} after {self.keyword_timeout}s")
-                    self.execution_logger.error(f"KEYWORD_SCRAPE_TIMEOUT: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', Timeout={self.keyword_timeout}s")
-                except Exception as e:
-                    self.logger.error(f"[{retailer}] ERROR keyword '{keyword}' for {client_name}: {e}")
-                    self.execution_logger.error(f"KEYWORD_SCRAPE_EXCEPTION: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', Error={e}")
-                    # Clean up any orphaned Chrome for this retailer
-                    self._cleanup_orphaned_chrome(retailer)
+                        # Audit the scrape result immediately
+                        if AUDIT_AVAILABLE:
+                            try:
+                                auditor = ScrapeAuditor(Path(client_dir))
+                                audit_result = auditor.audit_latest_run(Path(client_dir), keyword)
+                                if audit_result:
+                                    score = audit_result.get('quality_score', 0)
+                                    blank = audit_result.get('blank_ads', 0)
+                                    unknown = audit_result.get('unknown_brands', 0)
+                                    unbound = audit_result.get('unbound_ads', 0)
+                                    
+                                    self.logger.info(f"[{retailer}] AUDIT: '{keyword}' - Quality: {score}/100 (blank:{blank}, unknown:{unknown}, unbound:{unbound})")
+                                    self.execution_logger.info(f"SCRAPE_AUDIT: Retailer={retailer}, Keyword='{keyword}', Score={score}, Blank={blank}, Unknown={unknown}, Unbound={unbound}")
+                                    
+                                    # Warn on low quality
+                                    if score < 50:
+                                        self.logger.warning(f"[{retailer}] LOW QUALITY scrape for '{keyword}': {score}/100")
+                                        if audit_result.get('issues'):
+                                            for issue in audit_result['issues'][:3]:  # Log first 3 issues
+                                                self.logger.warning(f"  - {issue}")
+                            except Exception as e:
+                                self.execution_logger.debug(f"AUDIT_FAILED: {e}")
+                    else:
+                        # Differentiate error types based on return code and output
+                        error_type = self._classify_error(rc, stdout, stderr, retailer)
+                        
+                        if error_type == "bot_manager_block":
+                            self.logger.error(f"[{retailer}] BOT_BLOCK keyword '{keyword}' for {client_name}: rc={rc}")
+                            self.execution_logger.error(f"BOT_MANAGER_BLOCK: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', rc={rc}")
+                            break  # Never retry bot blocks
+                        elif error_type == "no_ads_found":
+                            self.logger.warning(f"[{retailer}] EMPTY keyword '{keyword}' for {client_name}: no ads found")
+                            self.execution_logger.warning(f"NO_ADS_FOUND: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', rc={rc}")
+                            break  # Don't retry empty results
+                        elif error_type in ["auth_required", "generic_failure"] and attempt < max_attempts:
+                            self.logger.warning(f"[{retailer}] FAIL keyword '{keyword}' (attempt {attempt}): {error_type}")
+                            self.execution_logger.warning(f"KEYWORD_SCRAPE_FAILED_RETRYABLE: Retailer={retailer}, Keyword='{keyword}', ErrorType={error_type}, Attempt={attempt}")
+                            attempt += 1
+                            continue  # Retry transient failures
+                        else:
+                            self.logger.error(f"[{retailer}] FAIL keyword '{keyword}' for {client_name}: rc={rc}")
+                            self.execution_logger.error(f"KEYWORD_SCRAPE_FAILED: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', rc={rc}, ErrorType={error_type}")
+                            break  # Max retries exceeded or non-retryable error
+                        
+                        break  # Success - exit retry loop
+                        
+                    except subprocess.TimeoutExpired:
+                        # Kill the process and clean up orphaned Chrome
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                        try:
+                            stdout, stderr = proc.communicate()
+                        except:
+                            pass
+                        # Clean up any orphaned Chrome for this retailer
+                        self._cleanup_orphaned_chrome(retailer)
+                        self.logger.error(f"[{retailer}] TIMEOUT keyword '{keyword}' for {client_name} after {self.keyword_timeout}s")
+                        self.execution_logger.error(f"KEYWORD_SCRAPE_TIMEOUT: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', Timeout={self.keyword_timeout}s")
+                        break  # Don't retry timeouts
+                    except Exception as e:
+                        self.logger.error(f"[{retailer}] ERROR keyword '{keyword}' for {client_name}: {e}")
+                        self.execution_logger.error(f"KEYWORD_SCRAPE_EXCEPTION: Retailer={retailer}, Client={client_name}, Keyword='{keyword}', Error={e}")
+                        # Clean up any orphaned Chrome for this retailer
+                        self._cleanup_orphaned_chrome(retailer)
+                        break  # Don't retry exceptions
                     
             # Skip post-processing if no successful scrapes
             if success_count == 0:

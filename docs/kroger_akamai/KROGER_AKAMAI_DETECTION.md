@@ -50,7 +50,6 @@ Based on memory from Mar 3, 2026:
 **Chrome 145 Compatible Args** (CRITICAL):
 ```python
 args = [
-    '--no-sandbox',
     '--disable-dev-shm-usage',
     '--disable-infobars',
     '--no-first-run',
@@ -60,7 +59,14 @@ args = [
     '--disable-notifications',
     '--disable-quic',
     '--noerrdialogs',
+    # GPU acceleration (CRITICAL: Prevents SwiftShader software rendering)
+    '--use-angle=metal',
+    '--enable-gpu-rasterization',
+    '--ignore-gpu-blocklist',
 ]
+
+# NOTE: chromium_sandbox=True is used instead of --no-sandbox flag
+# The --no-sandbox flag is a detection vector for Akamai
 ```
 
 **REMOVED Args** (Chrome 145 crashes with these):

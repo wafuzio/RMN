@@ -22,7 +22,7 @@
     "17:45",
     "20:45"
   ],
-  "enabled": true,
+  "enabled": false,
   "tz": "",
   "created_at": "2025-10-23T03:47:53Z",
   "updated_at": "2025-11-25T04:46:44Z"

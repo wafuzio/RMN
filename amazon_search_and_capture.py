@@ -78,7 +78,11 @@ CAROUSEL_HEADINGS = [
     "Trending now",
     "Popular products in this category",
     "Customers who viewed this item also viewed",
+    "Customers frequently viewed",
+    "Discover Travel Beauty Products",
+    "Find Organic Wellness Items",
     "Customers mention",
+    "Explore Korean Beauty Products",
     "Picks from Amazon Influencers",
     "From Amazon influencer storefronts"
 ]
@@ -338,17 +342,25 @@ def _extract_brand_and_message(container):
     if brand:
         brand = re.sub(r'^Buy\s+And\s+Save\s*:\s*', '', brand, flags=re.IGNORECASE).strip() or None
 
+    # Reject URLs and domain names as brand names
+    if brand:
+        # Reject if it looks like a URL or domain (contains .com, .net, www., http, etc.)
+        if re.search(r'\.(com|net|org|edu|gov|co\.uk|io|ai)\b', brand, re.IGNORECASE):
+            brand = None
+        elif re.search(r'^(https?://|www\.)', brand, re.IGNORECASE):
+            brand = None
+        elif re.search(r'amazon\.com', brand, re.IGNORECASE):
+            brand = None
+
     # Reject GUID/hex-like strings that leak from DOM attributes
     if brand:
-        _b = brand.strip()
-        _is_uuid = bool(re.match(
-            r'^[0-9A-Fa-f]{8}[\s_-]?[0-9A-Fa-f]{4}[\s_-]?[0-9A-Fa-f]{4}'
-            r'[\s_-]?[0-9A-Fa-f]{4}[\s_-]?[0-9A-Fa-f]{12}$', _b))
-        if not _is_uuid:
-            _stripped = re.sub(r'[\s_-]', '', _b)
-            if len(_stripped) >= 16:
-                _hx = sum(1 for c in _stripped if c in '0123456789abcdefABCDEF')
-                _dg = sum(1 for c in _stripped if c.isdigit())
+        _stripped = re.sub(r'[^a-fA-F0-9]', '', brand)
+        _is_uuid = False
+        if len(_stripped) >= 8:
+            _hx = sum(1 for c in _stripped if c in 'abcdefABCDEF')
+            _dg = sum(1 for c in _stripped if c.isdigit())
+            # If string is mostly hex digits + digits and has both, likely a UUID
+            if _stripped:
                 if _hx / len(_stripped) >= 0.90 and _dg >= 2:
                     _is_uuid = True
         if _is_uuid:
@@ -1483,6 +1495,23 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                 # Extract enhanced data from SBV internal structure
                                 brand_txt, brand_canon, message = _extract_brand_and_message(sbv_container)
                                 
+                                # If brand extraction failed or returned a URL, try to extract from message
+                                if (not brand_txt or not brand_canon) and message:
+                                    # Try "Shop the <Brand> Store" pattern
+                                    m = re.search(r'Shop\s+the\s+(.+?)\s+Store', message, re.IGNORECASE)
+                                    if m:
+                                        extracted_brand = m.group(1).strip()
+                                        if extracted_brand and not re.search(r'\.(com|net|org)', extracted_brand, re.IGNORECASE):
+                                            brand_txt = extracted_brand
+                                            try:
+                                                brand_canon = canonicalize(extracted_brand)
+                                                if not brand_canon:
+                                                    add_brand(extracted_brand)
+                                                    brand_canon = smart_title(extracted_brand)
+                                            except Exception:
+                                                brand_canon = extracted_brand
+                                            log(f"sbv: extracted brand from message -> {brand_txt}")
+                                
                                 # Extract additional info from SBV sections
                                 video_info = {}
                                 product_info = {}
@@ -1765,7 +1794,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                             extracted_brand = aria_label[brand_start:brand_end].strip()
                                             if extracted_brand:
                                                 brand_txt = extracted_brand
-                                                brand_canon = extracted_brand.lower().replace(' ', '_').replace('.', '')
+                                                brand_canon = canonicalize(extracted_brand) or extracted_brand
                                         
                                         # Extract message (between quotes)
                                         quote_start = aria_label.find('"')
@@ -1783,7 +1812,7 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                                     logo_brand = logo_link.get_attribute('aria-label') or ''
                                     if logo_brand and not brand_txt:  # Use if we don't have brand from method 1
                                         brand_txt = logo_brand
-                                        brand_canon = logo_brand.lower().replace(' ', '_').replace('.', '')
+                                        brand_canon = canonicalize(logo_brand) or logo_brand
                                     
                                     # Get brand store URL
                                     brand_store_url = logo_link.get_attribute('href') or ''
@@ -2842,9 +2871,9 @@ def search_and_capture(keyword: str, output_dir: str) -> bool:
                             except Exception as e:
                                 log(f"car: header extraction error for carousel {carousel_idx} -> {e}")
                             
-                            # Skip "Brands related to your search" as it's handled as individual sponsored brand cards
-                            if heading == "Brands related to your search":
-                                log(f"car: skipping '{heading}' - handled as individual brand cards")
+                            # Skip house ad carousels (Amazon's own promotional carousels)
+                            if heading in CAROUSEL_HEADINGS:
+                                log(f"car: skipping house ad carousel '{heading}'")
                                 continue
                             
                             # Scroll into view

@@ -1,5 +1,7 @@
 {
     "recommendations": [
-        "builder.builder"
+        "builder.builder",
+        "oolab-labs.claude-ide-bridge-extension",
+        "maxie-homrich.copilot-for-vscode-oss"
     ]
 }

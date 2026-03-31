@@ -482,6 +482,11 @@ def populate_runs(conn):
                 _slot_ad_type_lower = (slot_entry.get("ad_type") or "").lower().replace(" ", "_")
                 if _slot_product_id or "product_images/" in _slot_img_path:
                     continue
+                
+                # Skip Sponsored_Product and Product_Listing slots - these are product listings,
+                # not ad units. They should never appear as cards in the dashboard.
+                if _slot_ad_type_lower in ("sponsored_product", "product_listing"):
+                    continue
 
                 # Stable dedup key for this slot within this run
                 slot_original_id = f"slot:{run_id_val}:{slot_idx}"
