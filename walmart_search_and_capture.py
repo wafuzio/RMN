@@ -632,7 +632,6 @@ def _fp_paths(profile_dir: Optional[str]):
 def _load_or_init_profile_fingerprint(profile_dir: Optional[str]):
     vp_path, tz_path = _fp_paths(profile_dir)
     if not vp_path:
-        # fallback defaults
         return {"width": 1440, "height": 900}, "America/Chicago"
     try:
         with open(vp_path, "r") as f:
@@ -641,7 +640,6 @@ def _load_or_init_profile_fingerprint(profile_dir: Optional[str]):
             timezone = f.read().strip()
         return viewport, timezone
     except:
-        # Choose once, save, reuse
         viewports = [
             {'width': 1920, 'height': 1080},
             {'width': 1366, 'height': 768},
@@ -660,6 +658,35 @@ def _load_or_init_profile_fingerprint(profile_dir: Optional[str]):
         except:
             pass
         return viewport, timezone
+
+def _load_or_init_noise_seed(profile_dir: Optional[str]) -> int:
+    """
+    Return a stable integer noise seed for this profile.
+
+    Used to generate hardware fingerprint noise that is:
+    - Consistent within a profile (same session = same fingerprint)
+    - Different from the real hardware values (changes canvas/audio hash)
+    - Different across profiles (each profile looks like a different machine)
+
+    Stored at <profile_dir>/_rmn_fingerprint/noise_seed.txt
+    """
+    if not profile_dir:
+        return 0x1A2B3C4D
+    fp_dir = os.path.join(profile_dir, "_rmn_fingerprint")
+    os.makedirs(fp_dir, exist_ok=True)
+    seed_path = os.path.join(fp_dir, "noise_seed.txt")
+    try:
+        with open(seed_path, "r") as f:
+            return int(f.read().strip())
+    except:
+        import secrets
+        seed = secrets.randbelow(2**31)
+        try:
+            with open(seed_path, "w") as f:
+                f.write(str(seed))
+        except:
+            pass
+        return seed
 # --- END: profile fingerprint persistence ---
 
 def _get_proxy_config():
@@ -733,6 +760,8 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
         
         # Load stable fingerprint for this profile (not randomized per run!)
         viewport, timezone = _load_or_init_profile_fingerprint(profile_dir)
+        noise_seed = _load_or_init_noise_seed(profile_dir)
+        print(f"[fingerprint] noise_seed={noise_seed} (stable per profile)")
         
         # Use persistent Chrome (channel=chrome) for real Chrome browser
         launch_options = {
@@ -755,14 +784,95 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
             ctx = playwright.chromium.launch_persistent_context(**launch_options)
             print(f"✅ Using real Chrome (correct JA3 fingerprint)")
             
-            # CRITICAL: Force navigator.webdriver to be undefined (not true)
-            # With persistent context, ignore_default_args doesn't reliably clear it
-            # This minimal init script prevents PX from seeing webdriver=true
-            ctx.add_init_script("""
-                // Make navigator.webdriver be undefined rather than true
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
+            # Hardware fingerprint spoofing init script.
+            #
+            # Akamai identifies machines by canvas hash, audio fingerprint, and
+            # navigator hardware properties — not just IP or cookies. If this
+            # machine's fingerprint is in their blocklist, every session is
+            # pre-challenged regardless of behavior or IP.
+            #
+            # This script applies stable per-profile noise that shifts those
+            # signals to look like different hardware. The seed is generated
+            # once and stored in the profile directory so the fingerprint is
+            # consistent within a profile but unique across profiles/machines.
+            ctx.add_init_script(f"""
+(function() {{
+    const SEED = {noise_seed};
+
+    // --- Fast seeded PRNG (mulberry32) ---
+    function prng(seed) {{
+        return function() {{
+            seed = (seed + 0x6D2B79F5) | 0;
+            var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+            t = t + Math.imul(t ^ (t >>> 7), 61 | t) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        }};
+    }}
+
+    // --- navigator.webdriver: must be undefined, not true ---
+    try {{
+        Object.defineProperty(navigator, 'webdriver', {{ get: () => undefined }});
+    }} catch(e) {{}}
+
+    // --- Hardware concurrency + device memory ---
+    // Pick from realistic values, stable for this profile.
+    const HW_OPTIONS  = [4, 6, 8, 10, 12, 16];
+    const MEM_OPTIONS = [4, 8, 16];
+    const hwConcurrency = HW_OPTIONS[SEED % HW_OPTIONS.length];
+    const deviceMemory  = MEM_OPTIONS[(SEED >> 4) % MEM_OPTIONS.length];
+    try {{ Object.defineProperty(navigator, 'hardwareConcurrency', {{ get: () => hwConcurrency }}); }} catch(e) {{}}
+    try {{ Object.defineProperty(navigator, 'deviceMemory',        {{ get: () => deviceMemory  }}); }} catch(e) {{}}
+
+    // --- Canvas fingerprint noise ---
+    // Akamai draws text to a small canvas and hashes the pixel output.
+    // We add 1-bit noise to the first row of small canvases — imperceptible
+    // visually but changes the hash. We save + restore pixels so the page
+    // rendering canvas is unaffected.
+    (function() {{
+        const orig = HTMLCanvasElement.prototype.toDataURL;
+        HTMLCanvasElement.prototype.toDataURL = function() {{
+            // Only touch small canvases (fingerprinting), not UI/render targets
+            if (this.width > 0 && this.width <= 500 && this.height > 0 && this.height <= 300) {{
+                const ctx2d = this.getContext('2d');
+                if (ctx2d) {{
+                    try {{
+                        const scanW = Math.min(this.width, 64);
+                        const img   = ctx2d.getImageData(0, 0, scanW, 1);
+                        const saved = new Uint8ClampedArray(img.data);
+                        const rng   = prng(SEED ^ (this.width * 997 + this.height));
+                        for (let i = 0; i < img.data.length; i += 4) {{
+                            img.data[i] ^= (rng() > 0.5 ? 1 : 0); // flip LSB of red
+                        }}
+                        ctx2d.putImageData(img, 0, 0);
+                        const result = orig.apply(this, arguments);
+                        // Restore so the visible canvas is unchanged
+                        for (let j = 0; j < img.data.length; j++) img.data[j] = saved[j];
+                        ctx2d.putImageData(img, 0, 0);
+                        return result;
+                    }} catch(e) {{}}
+                }}
+            }}
+            return orig.apply(this, arguments);
+        }};
+    }})();
+
+    // --- Audio fingerprint noise ---
+    // AudioContext fingerprinting reads the output of an OfflineAudioContext
+    // oscillator through an AnalyserNode. We add a tiny seed-derived offset
+    // only for very short buffers (fingerprinting), not real audio playback.
+    (function() {{
+        const audioNoise = ((SEED & 0xFFFF) / 0xFFFF) * 1e-7;
+        const orig = AudioBuffer.prototype.getChannelData;
+        AudioBuffer.prototype.getChannelData = function(ch) {{
+            const data = orig.call(this, ch);
+            // Only perturb fingerprinting buffers (short, not music/SFX)
+            if (this.length > 0 && this.length < 4096 && this.numberOfChannels <= 2) {{
+                data[0] = data[0] + audioNoise;
+            }}
+            return data;
+        }};
+    }})();
+}})();
             """)
             
         except Exception as e:
