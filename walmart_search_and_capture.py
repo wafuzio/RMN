@@ -1871,19 +1871,23 @@ def _capture_gallery_cards(page, base_dir: str, keyword: str, meta: Dict, SL=Non
                 
                 # Scroll the iframe into view and take screenshot
                 try:
-                    iframe_handle.scroll_into_view_if_needed()
-                    time.sleep(0.15)
-                    # Measure the element's actual viewport Y after scroll, then
-                    # nudge the page so the card sits at 120px from the top —
-                    # well below the ~60px sticky header on all screen sizes.
+                    # Use wheel-based scroll so PX sensor sees real mouse delta events.
+                    # scroll_into_view_if_needed() + window.scrollBy() are JS calls — detectable.
+                    _bring_into_view(page, iframe_handle, SL=SL)
+                    time.sleep(random.uniform(0.25, 0.55))
+                    # Fine-tune: if card top is too close to viewport top (behind sticky header),
+                    # nudge down with wheel so the card sits ≥120px from viewport top.
                     _bb = iframe_handle.bounding_box()
                     if _bb is not None:
                         _current_y = _bb["y"]
                         _target_y = 120
                         if _current_y < _target_y:
-                            # Element is too close to top — scroll page up so element drops down
-                            page.evaluate(f"window.scrollBy(0, {_current_y - _target_y})")
-                            time.sleep(0.2)
+                            # Need to scroll page UP (negative delta) to push element down
+                            delta_px = _target_y - _current_y  # positive → need to scroll up
+                            steps = max(2, int(delta_px / 40))
+                            for _ in range(steps):
+                                page.mouse.wheel(0, -int(delta_px / steps))
+                                time.sleep(random.uniform(0.04, 0.10))
                 except Exception:
                     pass
                 
@@ -2201,10 +2205,23 @@ def _bring_into_view(page, loc, SL=None, max_bursts=8):
 # --- END: human scroll helpers ---
 
 # --- BEGIN: human typing and micro-movement helpers ---
-def human_type(element, text: str):
-    """Type with human-like delays and occasional pauses."""
+def human_type(element, text: str, page=None):
+    """Type with human-like delays using real keyboard events.
+
+    IMPORTANT: must use page.keyboard.press() (not element.type()).
+    element.type() fires only synthetic InputEvent — PX's sensor detects the
+    missing KeyDown/KeyPress/KeyUp chain. page.keyboard.press() dispatches the
+    full event sequence, indistinguishable from a real keypress.
+
+    If page is not supplied, falls back to element.type() (cold-start paths
+    that don't go through the search bar, where PX is not a concern).
+    """
     for ch in text:
-        element.type(ch, delay=random.uniform(80, 220))
+        if page is not None:
+            page.keyboard.type(ch)  # real KeyDown+KeyPress+KeyUp events
+        else:
+            element.type(ch, delay=0)  # fallback: synthetic only (avoid if PX-sensitive)
+        time.sleep(random.uniform(0.08, 0.22))
         if random.random() < 0.10:
             time.sleep(random.uniform(0.05, 0.15))
     if len(text) >= 10 and random.random() < 0.6:
@@ -2678,12 +2695,20 @@ def _log_px_trip(SL, reason: str):
 
 def _press_and_hold_until_complete(page, say, SL=None):
     """
-    One uninterrupted steady hold until 100%.
-    - Waits for widget to be visible and stable
-    - Focus click once
-    - Mouse down, sleep, mouse up (no movement)
-    - Wait for Walmart's auto-transition (beacon + modal vanish)
-    - Only if needed: gentle fallback (reload vs goto home)
+    Human-like press-and-hold on the PX captcha widget.
+
+    What a real human does:
+      1. Moves cursor naturally (curved Bezier path) to inside the button
+      2. Presses and holds — no preliminary separate click
+      3. Holds until progress bar fills / modal vanishes (not a fixed timer)
+      4. Has tiny hand tremor (~1-3px micro-drift) during the hold
+      5. Releases after seeing completion
+
+    Previous version tells that PX scored negatively:
+      - 10-step straight-line mouse.move() (not Bezier)
+      - Separate click() before down() (unnatural — humans just press and hold)
+      - Perfectly static cursor for 7-10s (no human hand is that still)
+      - Fixed timer instead of watching for completion signal
     """
     PX_HOLD_GUARD["in_progress"] = True
 
@@ -2707,63 +2732,114 @@ def _press_and_hold_until_complete(page, say, SL=None):
             say("warn", "[Walmart] PX widget not ready in time")
             return False
 
-        x = box["x"] + box["width"] * 0.25   # inside button
-        y = box["y"] + box["height"] / 2.0
+        # Randomized target inside button — humans don't always hit the exact same spot
+        x_frac = random.uniform(0.22, 0.42)
+        y_frac = random.uniform(0.35, 0.65)
+        x = box["x"] + box["width"] * x_frac
+        y = box["y"] + box["height"] * y_frac
 
-        # Focus click (guarded against page close)
+        # Bezier approach from current position — natural curved path, same as rest of scraper
         try:
-            page.mouse.move(x, y, steps=10)
-            page.mouse.click(x, y, delay=random.randint(40, 120))
+            cur = page.mouse.position
+            _bezier_mouse_move(page, cur["x"], cur["y"], x, y,
+                               duration_ms=random.randint(420, 780))
         except Exception:
-            if SL: SL.log("px_hold_bail", reason="page_closed_on_focus_click")
+            if SL: SL.log("px_hold_bail", reason="page_closed_on_approach")
             return False
-        time.sleep(random.uniform(0.25, 0.45))
 
-        if t_ready < 3.0:
-            low, high = 6.8, 8.2
-        else:
-            low, high = 8.8, 10.2
+        # Brief pause after arriving — human reads/sees the button before pressing
+        time.sleep(random.uniform(0.18, 0.40))
 
-        duration = random.uniform(low, high)
-        if SL: SL.log("px_hold_plan", duration=round(duration,2))
-        say("info", f"[Walmart] Steady hold {duration:.2f}s (ready in {t_ready:.2f}s)")
+        if SL: SL.log("px_hold_plan", x=round(x,1), y=round(y,1),
+                      x_frac=round(x_frac,2), y_frac=round(y_frac,2))
+        say("info", f"[Walmart] PX hold starting (widget ready in {t_ready:.2f}s)")
 
-        # Hold (guarded against page close)
+        # Press and hold — watch for completion signal, don't use a fixed timer.
+        # Max cap of 18s prevents infinite hold if completion never fires.
+        HOLD_MAX = 18.0
+        drift_interval = random.uniform(0.8, 1.6)  # seconds between micro-movements
+
         try:
             page.mouse.down()
-            time.sleep(duration)
+        except Exception:
+            if SL: SL.log("px_hold_bail", reason="page_closed_on_down")
+            return False
+
+        hold_start = time.time()
+        last_drift = hold_start
+        completed = False
+
+        while time.time() - hold_start < HOLD_MAX:
+            elapsed = time.time() - hold_start
+
+            # Completion signal 1: PX beacon fired
+            if px_beacon_seen["ok"]:
+                if SL: SL.log("px_completion_beacon", elapsed=round(elapsed,2))
+                completed = True
+                break
+
+            # Completion signal 2: modal DOM elements gone
+            try:
+                modal_gone = (
+                    page.locator("#px-captcha").count() == 0 and
+                    page.locator('iframe[title="Human verification challenge"]').count() == 0 and
+                    "Robot or human?" not in (page.content() or "")
+                )
+                if modal_gone and elapsed > 2.0:
+                    if SL: SL.log("px_completion_modal_gone", elapsed=round(elapsed,2))
+                    completed = True
+                    break
+            except Exception:
+                pass
+
+            # Micro hand tremor — very small random drift while holding.
+            # A real human hand is never perfectly static for 10+ seconds;
+            # a completely frozen cursor during a mouse-down is a bot signal.
+            now = time.time()
+            if now - last_drift >= drift_interval:
+                try:
+                    dx = random.uniform(-2.5, 2.5)
+                    dy = random.uniform(-1.5, 1.5)
+                    page.mouse.move(x + dx, y + dy)
+                    drift_interval = random.uniform(0.7, 1.8)
+                    last_drift = now
+                except Exception:
+                    pass
+
+            time.sleep(0.10)
+
+        try:
             page.mouse.up()
         except Exception:
-            if SL: SL.log("px_hold_bail", reason="page_closed_on_down_up")
-            return False
-        time.sleep(random.uniform(1.4, 2.0))
+            pass
 
-        # Wait for Walmart's auto-transition (beacon + modal vanish or nav)
-        t0 = time.time()
-        auto_ok = False
-        if SL: SL.log("px_auto_wait_start", timeout=4.0)
+        if not completed:
+            if SL: SL.log("px_hold_timeout", held=round(time.time()-hold_start,2))
+        time.sleep(random.uniform(1.4, 2.2))
 
-        while time.time() - t0 < 4.0:
-            if px_beacon_seen["ok"]:
-                auto_ok = True
-                if SL: SL.log("px_auto_ok", reason="beacon_seen")
-                break
-            if page.locator("#px-captcha").count() == 0 and \
-               page.locator('iframe[title="Human verification challenge"]').count() == 0 and \
-               "Robot or human?" not in (page.content() or ""):
-                auto_ok = True
-                if SL: SL.log("px_auto_ok", reason="modal_vanished")
-                break
-            time.sleep(0.15)
-
-        if SL and not auto_ok:
-            SL.log("px_auto_wait_timeout", waited=round(time.time()-t0,2))
+        # If beacon/DOM check didn't confirm completion during hold, wait a bit more
+        if not completed:
+            t0 = time.time()
+            if SL: SL.log("px_auto_wait_start", timeout=4.0)
+            while time.time() - t0 < 4.0:
+                if px_beacon_seen["ok"]:
+                    completed = True
+                    if SL: SL.log("px_auto_ok", reason="beacon_seen")
+                    break
+                if page.locator("#px-captcha").count() == 0 and \
+                   page.locator('iframe[title="Human verification challenge"]').count() == 0 and \
+                   "Robot or human?" not in (page.content() or ""):
+                    completed = True
+                    if SL: SL.log("px_auto_ok", reason="modal_vanished")
+                    break
+                time.sleep(0.15)
+            if SL and not completed:
+                SL.log("px_auto_wait_timeout", waited=round(time.time()-t0,2))
 
         # Gentle fallback only if auto-transition failed
-        if not auto_ok:
+        if not completed:
             if SL: SL.log("px_fallback_start")
             if _on_blocked(page.url):
-                # Go to home (like Walmart would send us), then idle
                 if SL: SL.log("px_fallback", action="goto_home")
                 try:
                     page.goto("https://www.walmart.com/", wait_until="domcontentloaded")
@@ -2771,7 +2847,6 @@ def _press_and_hold_until_complete(page, say, SL=None):
                 except Exception as e:
                     if SL: SL.log("px_fallback_error", error=str(e))
             else:
-                # Soft reload to let scripts re-evaluate
                 if SL: SL.log("px_fallback", action="soft_reload")
                 try:
                     page.reload(wait_until="domcontentloaded")
@@ -2785,7 +2860,7 @@ def _press_and_hold_until_complete(page, say, SL=None):
 
         _mark_px_cleared(SL=SL)
         if SL: SL.log("px_hold_done", cookies_present=has_px, cookie_names=names[:6],
-                     cleared=cleared, url=page.url, auto_ok=auto_ok)
+                     cleared=cleared, url=page.url, auto_ok=completed)
         say("info", f"[Walmart] cookies:{has_px} cleared:{cleared} names:{names[:8]}")
         return cleared
     finally:
@@ -3729,16 +3804,30 @@ def search_and_capture(
                 SL.log("cookie_suspicious", names=suspicious)
                 say("warn", f"[{retailer}] ⚠️  Suspicious cookies present: {suspicious}")
                 cookies_info["suspicious"] = suspicious
-                # Only clear poisoned cookies on a cold start (fresh page). On a reused
-                # page these are valid live Akamai session tokens — clearing them mid-session
-                # is what triggers the PX challenge.
                 if not _reuse_page:
+                    # Cold start: clear all bot-detection cookies before first navigation
                     n_cleared = _clear_bot_detection_cookies(ctx, SL=SL)
                     if n_cleared:
                         say("info", f"[{retailer}] 🧹 Auto-cleared {n_cleared} poisoned bot-detection cookies")
                         cookies_info["bot_cookies_cleared"] = n_cleared
                 else:
-                    SL.log("cookie_suspicious_kept", reason="reused_page_live_session")
+                    # Reused page: ak_bmsc/bm_sv are live Akamai session tokens — keep them.
+                    # But "adblocked" is a pure bot flag with no session value — clear it now.
+                    _PURE_BOT_FLAGS = {"adblocked", "abck", "_abck"}
+                    live_bot_flags = [n for n in suspicious if n.lower() in _PURE_BOT_FLAGS]
+                    if live_bot_flags:
+                        try:
+                            all_cookies = ctx.cookies()
+                            keep = [c for c in all_cookies if c["name"].lower() not in _PURE_BOT_FLAGS]
+                            ctx.clear_cookies()
+                            if keep:
+                                ctx.add_cookies(keep)
+                            SL.log("bot_flags_cleared_on_reuse", cleared=live_bot_flags)
+                            say("info", f"[{retailer}] 🧹 Cleared bot flag cookie(s) on reused page: {live_bot_flags}")
+                        except Exception as _ce:
+                            SL.log("bot_flags_clear_error", error=str(_ce))
+                    else:
+                        SL.log("cookie_suspicious_kept", reason="reused_page_live_session")
 
             # CRITICAL: Verify cookie persistence for debugging
             if len(pre_cookies) == 0:
@@ -3837,12 +3926,74 @@ def search_and_capture(
                     SL.log("homepage_buffer_done", url=page.url)
             else:
                 say("info", f"[{retailer}] Clean session — navigating to search")
+                # Clear PX localStorage on fresh pages too — the browser profile retains
+                # _pxvid / pxcts from previous sessions. A flagged vid from a prior
+                # hard-blocked run will cause PX to challenge even on a cold start.
+                try:
+                    _px_ls_cleared_fresh = page.evaluate("""() => {
+                        const keys = Object.keys(localStorage).filter(k =>
+                            k.startsWith('_px') || k.startsWith('px_') || k === 'pxcts'
+                        );
+                        keys.forEach(k => localStorage.removeItem(k));
+                        return keys;
+                    }""")
+                    if _px_ls_cleared_fresh:
+                        SL.log("px_localstorage_cleared_fresh", keys=_px_ls_cleared_fresh)
+                except Exception:
+                    pass
+                # PX stores the visitor ID in BOTH localStorage AND a cookie (_pxvid).
+                # Clearing localStorage is insufficient — the cookie survives in the
+                # Chromium profile and PX reads it on the next page load to restore the
+                # flagged vid. Delete _pxvid from ctx cookies before any navigation.
+                try:
+                    _all_ck = ctx.cookies()
+                    _px_vid_ck = [c for c in _all_ck if c["name"] in ("_pxvid", "_pxde")]
+                    if _px_vid_ck:
+                        _keep_ck = [c for c in _all_ck if c["name"] not in ("_pxvid", "_pxde")]
+                        ctx.clear_cookies()
+                        if _keep_ck:
+                            ctx.add_cookies(_keep_ck)
+                        SL.log("px_vid_cookie_cleared_fresh", names=[c["name"] for c in _px_vid_ck])
+                except Exception as _px_ck_err:
+                    SL.log("px_vid_cookie_clear_error", path="fresh", error=str(_px_ck_err))
 
             # Navigate to search results — prefer search bar (human pattern) over
             # direct URL navigation when the page is already live on Walmart.
             with step(SL, "goto_search"):
                 _used_searchbar = False
                 if _reuse_page:
+                    # Clear PX localStorage before navigation so the new search results
+                    # page gets a fresh visitor ID (_pxvid). The old vid may carry a
+                    # "flagged" reputation from a prior blocked session — same vid =
+                    # same bad score even with clean keyboard events.
+                    try:
+                        _px_ls_cleared = page.evaluate("""() => {
+                            const keys = Object.keys(localStorage).filter(k =>
+                                k.startsWith('_px') || k.startsWith('px_') || k === 'pxcts'
+                            );
+                            keys.forEach(k => localStorage.removeItem(k));
+                            return keys;
+                        }""")
+                        if _px_ls_cleared:
+                            SL.log("px_localstorage_cleared", keys=_px_ls_cleared)
+                    except Exception as _ls_err:
+                        SL.log("px_localstorage_clear_error", error=str(_ls_err))
+                    # Also delete _pxvid from ctx cookies — PX persists the visitor ID
+                    # in a cookie as well as localStorage. If the cookie is not removed,
+                    # PX reads it back after navigation and reuses the flagged vid regardless
+                    # of the localStorage clear. This was confirmed by ift.px-cloud.net/ns?v=
+                    # showing the same vid (337ff3c0) on KW2 after localStorage was empty.
+                    try:
+                        _all_ck = ctx.cookies()
+                        _px_vid_ck = [c for c in _all_ck if c["name"] in ("_pxvid", "_pxde")]
+                        if _px_vid_ck:
+                            _keep_ck = [c for c in _all_ck if c["name"] not in ("_pxvid", "_pxde")]
+                            ctx.clear_cookies()
+                            if _keep_ck:
+                                ctx.add_cookies(_keep_ck)
+                            SL.log("px_vid_cookie_cleared", names=[c["name"] for c in _px_vid_ck])
+                    except Exception as _px_ck_err:
+                        SL.log("px_vid_cookie_clear_error", path="reuse", error=str(_px_ck_err))
                     try:
                         _sb = page.locator('[data-testid="search-form"] input[name="q"]')
                         if _sb.count() > 0:
@@ -3867,8 +4018,10 @@ def search_and_capture(
                             _sel_all = "Meta+a" if _platform.system() == "Darwin" else "Control+a"
                             _sb.first.press(_sel_all)
                             page.wait_for_timeout(random.randint(60, 120))
-                            # Use existing human_type() for natural keystroke cadence
-                            human_type(_sb.first, keyword)
+                            # Use page.keyboard.type() via human_type(page=page) — real
+                            # KeyDown/KeyPress/KeyUp events instead of synthetic InputEvent.
+                            # PX sensors detect element.type(); page.keyboard does not trigger it.
+                            human_type(_sb.first, keyword, page=page)
                             # Brief pause before submitting — simulates reading what was typed
                             page.wait_for_timeout(random.randint(300, 600))
                             _sb.first.press("Enter")
@@ -4031,16 +4184,56 @@ def search_and_capture(
             else:
                 nd_result = {"organic_items": [], "sponsored_items": [], "organic_count": 0, "sponsored_count": 0}
 
-            # Simple scroll passes -- trigger lazy-loaded ad network calls (GraphQL responses)
+            # Scroll down to trigger lazy-loaded ad network calls (GraphQL responses).
+            # IMPORTANT: use page.mouse.wheel() — NOT window.scrollTo().
+            # PX's sensor distinguishes programmatic JS scrolls from user wheel events.
+            # window.scrollTo() is a dead giveaway; mouse.wheel() matches real trackpad input.
             _unlock_scroll("direct_nav", SL=SL)
+
+            # Pre-scroll dwell: a human reads the top of the page for a few seconds
+            # before starting to scroll. Starting immediately after results load is a
+            # bot signal. 2.5-4.5s matches realistic reading/scan behaviour.
+            _pre_scroll_dwell = random.uniform(2.5, 4.5)
+            SL.log("pre_scroll_dwell", seconds=round(_pre_scroll_dwell, 2))
+            page.wait_for_timeout(int(_pre_scroll_dwell * 1000))
+
+            # Move mouse into the content area before scrolling (simulate gaze landing
+            # on product grid). PX checks that wheel events originate near the viewport
+            # centre, not from a stationary corner position.
+            try:
+                _vp = page.viewport_size or {"width": 1280, "height": 800}
+                _mx = random.randint(int(_vp["width"] * 0.25), int(_vp["width"] * 0.65))
+                _my = random.randint(int(_vp["height"] * 0.30), int(_vp["height"] * 0.55))
+                page.mouse.move(_mx, _my)
+                page.wait_for_timeout(random.randint(300, 650))
+                SL.log("pre_scroll_mouse_pos", x=_mx, y=_my)
+            except Exception:
+                pass
+
+            # Reset FIRST_SCROLL_DONE so the lighter first-burst logic fires correctly
+            # for each keyword (it's a module-level flag that stays set between keywords).
+            FIRST_SCROLL_DONE["done"] = False
+
             with step(SL, "scroll_passes"):
                 for _spass in range(3):
                     try:
-                        if _spass == 0:
-                            page.evaluate("window.scrollTo(0, document.body.scrollHeight * 0.5)")
-                            page.wait_for_timeout(1500)
-                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                        page.wait_for_timeout(2000)
+                        # Each pass: several wheel bursts with natural reading pauses.
+                        # Pass 0 is lighter (first_scroll logic inside _scroll_like_human
+                        # limits it automatically); passes 1-2 are fuller scrolls.
+                        _bursts = random.randint(3, 5) if _spass == 0 else random.randint(4, 7)
+                        _scroll_like_human(
+                            page, say,
+                            bursts=_bursts,
+                            lines_min=7, lines_max=16,
+                            pause_min=0.45, pause_max=1.3,
+                            SL=SL,
+                        )
+                        # Brief micro-movement: simulate eye scanning the results
+                        try:
+                            micro_mouse_attention(page, around=(4, 8), jitter=18)
+                        except Exception:
+                            pass
+                        page.wait_for_timeout(random.randint(1000, 2200))
                         SL.log("scroll_pass", pass_num=_spass)
                         if _still_px_modal(page):
                             SL.log("px_mid_scroll", pass_num=_spass)
@@ -4050,12 +4243,16 @@ def search_and_capture(
                                 break
                     except Exception as _scroll_err:
                         SL.log("scroll_pass_error", pass_num=_spass, error=str(_scroll_err))
+
+                # Scroll back to top with wheel (not scrollTo — same reason).
                 try:
-                    page.evaluate("window.scrollTo(0, 0)")
-                    page.wait_for_timeout(500)
+                    for _ in range(random.randint(4, 7)):
+                        page.mouse.wheel(0, -random.randint(200, 420))
+                        time.sleep(random.uniform(0.05, 0.14))
+                    page.wait_for_timeout(random.randint(400, 800))
                 except Exception:
                     pass
-                # Wait for in-flight ad network calls to complete (matches CLI behavior)
+                # Wait for in-flight ad network calls to complete (matches CLI behaviour)
                 try:
                     page.wait_for_load_state("networkidle", timeout=5000)
                 except Exception:
@@ -4122,7 +4319,17 @@ def search_and_capture(
             # Note: ads_list will be built during ad capture below, then saved at the end
             SL.log("canonical_json_prep", run_id=run_id, client=client_name, keyword=keyword)
 
+            # Helper: check for PX modal and solve before/between captures.
+            # Called as a statement before each ad type — blocks until PX is cleared
+            # or times out. Screenshots taken while the modal is overlaid are unusable.
+            def _px_guard(where: str):
+                if _still_px_modal(page):
+                    SL.log("px_guard_triggered", where=where)
+                    say("warn", f"[{retailer}] PX modal before {where} — solving")
+                    _solve_px_until_clear(page, say, SL=SL)
+
             # 1) Skyline top strip banner (e.g. LandO Lakes thin banner at page top)
+            _px_guard("skyline")
             n, s = _capture_elements(page, base_dir, keyword, "skyline", SELECTORS["skyline"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, run_id=run_id, ads_list=ads_list)
             shots.extend(s)
             if n:
@@ -4131,59 +4338,89 @@ def search_and_capture(
             # 2) Marquee banners — scroll each into view so the iframe src hydrates,
             #    then screenshot. Walmart places marquee2 iframes both above the grid
             #    (shoppable banner, e.g. Country Crock) and below (e.g. Thyme & Table).
+            _px_guard("marquee_banner")
             marquee_locs = page.locator(SELECTORS["marquee_banner"])
             marquee_count = marquee_locs.count()
             SL.log("marquee_found", count=marquee_count)
             if marquee_count:
                 say("info", f"[{retailer}] Marquee banners found ({marquee_count}) — scrolling to hydrate")
-                # Scroll each into view so the iframe src loads before we screenshot
+                # Wheel-scroll each marquee into view so its iframe src loads before screenshot.
+                # scroll_into_view_if_needed() is a JS call — PX detects no mouse delta events.
                 for _mi in range(marquee_count):
                     try:
-                        marquee_locs.nth(_mi).scroll_into_view_if_needed(timeout=5000)
-                        page.wait_for_timeout(800)
+                        _bring_into_view(page, marquee_locs.nth(_mi), SL=SL)
+                        time.sleep(random.uniform(0.6, 1.1))
                     except Exception:
                         pass
                 try:
                     page.wait_for_load_state("networkidle", timeout=5000)
                 except Exception:
                     pass
-                # Scroll back to top then capture all marquee instances in one pass
+                # Wheel back to top — window.scrollTo(0,0) is a JS call PX scores negatively.
                 try:
-                    page.evaluate("window.scrollTo(0, 0)")
-                    page.wait_for_timeout(300)
+                    _scroll_like_human(page, say, bursts=random.randint(3, 5),
+                                       lines_min=-20, lines_max=-8,
+                                       pause_min=0.12, pause_max=0.30, SL=SL)
+                    time.sleep(random.uniform(0.2, 0.4))
                 except Exception:
                     pass
+                _seen_marquee_srcs: set = set()
+                def _marquee_dedup(item):
+                    try:
+                        # If this element contains another [data-testid="marquee2"], it's the
+                        # outer wrapper — skip it. We only want the innermost element.
+                        if item.locator('[data-testid="marquee2"]').count() > 0:
+                            return False
+                    except Exception:
+                        pass
+                    # Deduplicate by iframe src to handle top/bottom placement of same ad.
+                    try:
+                        src = item.locator("iframe").first.get_attribute("src") or ""
+                        src_key = src.split("?")[0]
+                        if src_key in _seen_marquee_srcs:
+                            return False
+                        if src_key:
+                            _seen_marquee_srcs.add(src_key)
+                    except Exception:
+                        pass
+                    return True
                 n, s = _capture_elements(
                     page, base_dir, keyword, "marquee_banner",
                     SELECTORS["marquee_banner"],
                     meta, SL=SL, client_name=client_name, client_root=client_root,
                     timestamp=run_timestamp, run_id=run_id, ads_list=ads_list,
+                    filter_fn=_marquee_dedup,
                 )
                 shots.extend(s)
                 if n:
                     say("info", f"[{retailer}] Marquee banner captured ({n})")
 
             # 3) SBA
+            _px_guard("sba")
             n, s = _capture_elements(page, base_dir, keyword, "sba", SELECTORS["sba"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, run_id=run_id, ads_list=ads_list)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] SBA found ({n})")
             
             # 3) Tile takeover — any element with data-testid="tile-take-over" is a paid placement
+            _px_guard("tile_takeover")
             n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, filter_fn=None, run_id=run_id, ads_list=ads_list)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] Tile takeover found ({n})")
             
             # 4) SBV (screenshot module + attempt mp4 download)
+            _px_guard("sbv")
             sbv_mod = page.locator(SELECTORS["sbv"])
             vcount = sbv_mod.count()
             vids_saved = 0
             for i in range(vcount):
                 mod = sbv_mod.nth(i)
                 try:
-                    mod.scroll_into_view_if_needed()
-                    time.sleep(0.2)
+                    # Scroll SBV module into view using wheel events (not JS scrollIntoView).
+                    # element.scroll_into_view_if_needed() uses JS — PX detects no mouse delta.
+                    _bring_into_view(page, mod, SL=SL)
+                    time.sleep(random.uniform(0.3, 0.6))
                     
                     # Extract advertiser for SBV
                     # Priority: Use first product in carousel (matches HTML parser logic)
@@ -4395,17 +4632,21 @@ def search_and_capture(
             
             # 5) Gallery Bottom Ad Cards (carousel of sponsored brand cards in iframes)
             # These ads are at the bottom of the page and need scrolling to hydrate
+            _px_guard("gallery_cards")
             try:
-                # First, scroll to bottom to trigger lazy loading of gallery cards
+                # Scroll to bottom using wheel bursts to trigger lazy loading of gallery cards.
+                # window.scrollTo() is detectable by PX — use mouse.wheel() instead.
                 try:
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    _scroll_like_human(page, say, bursts=random.randint(4, 7),
+                                       lines_min=10, lines_max=20,
+                                       pause_min=0.3, pause_max=0.7, SL=SL)
                     time.sleep(2.0)  # Wait for iframes to start loading
-                    
+
                     # Check if gallery container exists now
                     gallery_container = page.locator(SELECTORS["gallery_cards"])
                     if gallery_container.count() > 0:
-                        # Scroll the container into view and wait for iframes to hydrate
-                        gallery_container.first.scroll_into_view_if_needed()
+                        # Wheel-scroll until container is in view (not JS scrollIntoView)
+                        _bring_into_view(page, gallery_container.first, SL=SL)
                         time.sleep(1.5)  # Additional wait for iframe content to load
                         
                         # Wait for at least one iframe to have content
@@ -4438,30 +4679,28 @@ def search_and_capture(
                 say("warn", f"[{retailer}] Gallery Cards capture failed: {e}")
             
             # 6) Full-page screenshot to Main folder
-            # Gallery cards were already scrolled to in step 5, so all lazy iframes
-            # are loaded. We just need one final scroll to the bottom to ensure nothing
-            # at the tail end is missed, then shoot from the top.
+            _px_guard("fullpage_screenshot")
+            # Gallery card iframes are lazy-rendered only when in-viewport. Scrolling
+            # back to top BEFORE screenshotting causes them to unload, leaving blank
+            # sections at the bottom of the full-page image.
+            # Fix: stay at the bottom after the incremental scroll (gallery cards already
+            # captured and still rendered there). Playwright's full_page=True renders
+            # the entire document without needing to be at the top.
             try:
                 try:
-                    # One pass: scroll to bottom slowly so any remaining lazy content fires
-                    page_height = page.evaluate("document.body.scrollHeight")
-                    viewport_height = page.evaluate("window.innerHeight")
-                    scroll_position = 0
-                    scroll_increment = viewport_height * 0.8
-                    while scroll_position < page_height:
-                        page.evaluate(f"window.scrollTo(0, {scroll_position})")
-                        time.sleep(0.5)
-                        scroll_position += scroll_increment
-                        # Re-measure — gallery iframes can extend the doc height after loading
-                        page_height = page.evaluate("document.body.scrollHeight")
+                    # One pass: scroll to bottom with wheel bursts so lazy content fires
+                    # and PX sees real wheel events, not JS scrollTo calls.
+                    _scroll_like_human(page, say, bursts=random.randint(5, 8),
+                                       lines_min=12, lines_max=22,
+                                       pause_min=0.25, pause_max=0.6, SL=SL)
+                    # Final push to ensure we're at the very bottom
+                    for _ in range(random.randint(3, 5)):
+                        page.mouse.wheel(0, random.randint(300, 500))
+                        time.sleep(random.uniform(0.08, 0.18))
 
-                    # Hold at absolute bottom long enough for gallery iframes to render
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    time.sleep(2.0)
-
-                    # Scroll back to top for clean full-page capture
-                    page.evaluate("window.scrollTo(0, 0)")
-                    time.sleep(0.5)
+                    # Hold at absolute bottom — gallery iframes render when in-viewport
+                    time.sleep(2.5)
+                    # Stay here — do NOT scroll back to top before shooting
                 except Exception as e:
                     if SL: SL.log("fullpage_scroll_error", error=str(e))
                 

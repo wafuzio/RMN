@@ -73,13 +73,14 @@ def setup_fresh_profile(profile_dir):
             timezone_id='America/New_York',
             chromium_sandbox=True,         # CRITICAL: removes --no-sandbox banner
             args=[
+                '--disable-blink-features=AutomationControlled',  # navigator.webdriver=undefined at browser level
                 '--use-angle=metal',           # Force ANGLE→Metal (macOS GPU)
                 '--enable-gpu-rasterization',   # Prefer GPU raster
                 '--ignore-gpu-blocklist',       # Don't let Chrome disable GPU
                 '--disable-focus-on-load',
                 '--noerrdialogs',
             ],
-            ignore_default_args=['--enable-automation'],  # Prevents navigator.webdriver=true
+            ignore_default_args=['--enable-automation'],  # Remove --enable-automation banner flag
         )
 
         # Match the main scraper's webdriver override
