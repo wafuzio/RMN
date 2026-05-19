@@ -1,18 +1,29 @@
 # Complete PerimeterX Bypass Strategy for Walmart
 
-## Current Status: OPERATIONAL — Behavioral Hardening Complete, Pending Retest
+## Current Status: ✅ OPERATIONAL — PX Modal Eliminated (3-KW clean run confirmed)
 
-**Last Updated**: 2026-03-24 (afternoon session)
+**Last Updated**: 2026-05-19
 
-**Current State**: Two critical bugs were found and fixed during the March 24 afternoon analysis session. Additionally, a round of behavioral hardening was applied to reduce CDP/bot fingerprint signals. **All fixes require a GUI restart to take effect** — the last test run (4 keywords) used stale code because the GUI was already running when changes were saved.
+**Current State**: Full PX bypass achieved. First clean 3-keyword run with no "Robot or human?" modal on any keyword — first time in months. Root causes identified and fixed through step-log forensic analysis.
 
-**Latest test results** (March 24, 12:38–12:45 PM, pre-fix code):
-- KW1 (Garanimals): BAIL — false positive from stale PX escalation flags (**bug found & fixed**)
-- KW2 (toddler clothes): ✅ SUCCESS — 2 ads, 47 product listings
-- KW3 (kids clothes): ✅ SUCCESS — 1 ad, 52 product listings  
-- KW4 (toddler clothes clearance): BAIL — false DOM transition on homepage (**bug found & fixed**)
+**Latest test results** (2026-05-19, post-fix):
+- KW1 (proactiv): ✅ Clean — no PX modal, all ad types captured
+- KW2 (acne skin care): ✅ Clean — no PX modal, gallery cards captured
+- KW3 (acne kit): ✅ Clean — no PX modal, full run complete
 
-**Bottom line**: 2 of 4 keywords succeeded even on the old code with a fresh profile. With both bugs fixed + behavioral hardening, expect significantly improved reliability.
+**What was actually causing the modal (in order of impact):**
+
+1. **`_pxvid` cookie survived profile wipes** — PX stores the visitor ID in BOTH localStorage AND a cookie. We were only clearing localStorage. The flagged vid (`337ff3c0`) persisted in `ctx.cookies()` and was sent to `ift.px-cloud.net/ns?v=` within 7 seconds of page load — before any scroll happened. The challenge was predetermined at navigation time. **Fix**: delete `_pxvid` + `_pxde` from ctx cookies before every navigation (both fresh and reuse paths).
+
+2. **JavaScript scrolls in capture code** — After fixing keyboard events and scroll_passes, PX was still triggering during the ad capture phase (SBV, gallery cards, full-page). `element.scroll_into_view_if_needed()` and `window.scrollTo()` are detectable as non-human. **Fix**: replaced all remaining JS scrolls with `page.mouse.wheel()` bursts via `_bring_into_view()` and `_scroll_like_human()`.
+
+3. **`element.type()` for keyboard input** — fires only synthetic `InputEvent`, missing `KeyDown/KeyPress/KeyUp` chain. PX detects this. **Fix**: `page.keyboard.type(ch)` per character via `human_type(element, text, page=page)`.
+
+4. **Contaminated browser profile** — profile accumulated flagged `_pxvid` history, `adblocked` cookies, and bot-associated fingerprints across sessions. **Fix**: wipe profile (preserve `_rmn_fingerprint/`), re-warm with `scripts/setup_walmart_fresh_profile.py`.
+
+5. **Press-and-hold captcha solve** — old implementation used 10-step straight-line mouse move + separate pre-click + perfectly static cursor during hold + fixed timer. All detectable. **Fix**: Bezier approach, no pre-click, micro hand-tremor drift (±2.5px) during hold, release on completion signal.
+
+**Step log confirmation**: look for `px_vid_cookie_cleared_fresh` on each KW — should show `['_pxvid', '_pxde']` being removed. No `px_trip` or `scroll_blocked` events = clean run.
 
 ## Overview
 

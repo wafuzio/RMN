@@ -972,6 +972,53 @@ page.evaluate("window.scrollTo(0, 0)")  # Back to top
 
 ---
 
+## Walmart: "Robot or human?" modal appears during scrape
+
+**Last confirmed fixed**: 2026-05-19 — first clean 3-keyword run with no modal.
+
+**Symptom:** PerimeterX challenge modal appears mid-scroll or at start of KW2+, sometimes escalating to a hard `/blocked` page.
+
+**Root causes (confirmed via step log forensics, in order of impact):**
+
+### 1. `_pxvid` cookie survives between keywords ⚠️ MOST IMPACTFUL
+PX stores the visitor ID in **both** localStorage AND a `_pxvid` cookie. Clearing localStorage is not enough — the cookie persists in the Chromium profile and PX reads it back on the next page load. A flagged vid causes the challenge to be **predetermined at navigation time**, before any scroll or interaction happens.
+
+**Diagnosis**: check step log for `ift.px-cloud.net/ns?v=XXXXXXXX` — if the same vid appears across keywords, the cookie is not being cleared.
+
+**Fix**: delete `_pxvid` + `_pxde` from `ctx.cookies()` before every navigation. Step log should show `px_vid_cookie_cleared_fresh` or `px_vid_cookie_cleared` with the names removed.
+
+### 2. JavaScript scrolls in capture code
+`element.scroll_into_view_if_needed()` and `window.scrollTo()` are detectable JS calls — PX sees no mouse delta events. Even if scroll_passes uses wheel events correctly, capture sections that use JS scrolls will still be flagged.
+
+**All scroll calls must use `page.mouse.wheel()` or `_bring_into_view()` / `_scroll_like_human()`.**
+
+### 3. `element.type()` for keyboard input
+Fires only synthetic `InputEvent`, missing `KeyDown/KeyPress/KeyUp` chain. Use `page.keyboard.type(ch)` per character. The `human_type()` function requires `page=page` to be passed at the call site.
+
+### 4. Contaminated browser profile
+A profile that has been used in flagged/blocked sessions carries tainted `_pxvid` history, `adblocked` cookies, and a browser fingerprint associated with bot activity in PX's cloud database.
+
+**Fix**: wipe and re-warm the profile. Keep `_rmn_fingerprint/` (our fingerprint config), delete everything else:
+```bash
+# With scraper/Chrome fully stopped:
+cd profiles/walmart
+rm -rf Default "Local State" BrowserMetrics-spare.pma ChromeFeatureState \
+       Variations first_party_sets.db first_party_sets.db-journal \
+       segmentation_platform .cookie_refresh_time
+# Re-warm:
+.venv/bin/python3 scripts/setup_walmart_fresh_profile.py
+```
+
+### 5. Captcha solve appears programmatic
+Old press-and-hold used straight-line mouse.move (10 steps), a separate pre-click before down, perfectly static cursor during hold, and a fixed timer. PX's sensor monitors mouse delta events and flags static cursors during mouse-down.
+
+**Fix**: Bezier approach to button, no pre-click, micro hand-tremor (±2.5px drift every 0.7–1.8s during hold), release when beacon fires or modal DOM disappears.
+
+**See also:** `docs/WALMART_PERIMETERX_COMPLETE.md` for full forensic methodology.
+
+---
+
+
 ## Duplicate brand logos with different hashes
 
 **Cause:** Logo filenames hashed by URL instead of image content.
