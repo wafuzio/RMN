@@ -1218,10 +1218,10 @@ class KeywordInputApp:
         self.root.update()
 
         # Scrape loop
-        # INTER-KEYWORD COOLDOWN: PX uses cumulative velocity scoring — 3 rapid
-        # searches in <3 min triggered CAPTCHA. Enforce minimum gap between keywords
-        # to stay below PX's server-side risk threshold.
-        KEYWORD_COOLDOWN_SECS = 45  # minimum seconds between keyword runs
+        # INTER-KEYWORD COOLDOWN: now that keyword 2+ navigates via the search bar
+        # (human-like), the natural typing + page load time provides organic spacing.
+        # A short floor just ensures the previous run's post-processing finishes.
+        KEYWORD_COOLDOWN_SECS = 8  # reduced from 45s — search bar provides natural gap
         last_keyword_end_ts = 0.0
         
         success_count = 0

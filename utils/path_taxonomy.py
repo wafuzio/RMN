@@ -3,10 +3,23 @@
 from typing import Dict, Set, Tuple
 from pathlib import Path
 
-# Canonical allowed folders per retailer (documentation-aligned)
+# Canonical label → folder name mapping for Walmart ad types.
+# This is the single source of truth: add a new ad type here and
+# both the save path and the allowed-folder check stay in sync.
+WALMART_LABEL_TO_FOLDER: Dict[str, str] = {
+    "skyline":       "Skyline",
+    "marquee_banner":"Marquee_Banner",
+    "sba":           "SBA",
+    "sbv":           "SBV",
+    "tile_takeover": "Tile_Takeover",
+    "gallery_cards": "Gallery_Cards",
+}
+
+# Canonical allowed folders per retailer — Walmart's set is derived from
+# WALMART_LABEL_TO_FOLDER so the two can never drift apart.
 ALLOWED_FOLDERS: Dict[str, Set[str]] = {
     "kroger": {"TOA", "Skyscraper", "Carousel", "Display_Ads", "Main", "runs"},
-    "walmart": {"SBA", "SBV", "Tile_Takeover", "Gallery_Cards", "Main", "runs"},  # No Top_Banner; legacy allowed to exist but not used
+    "walmart": set(WALMART_LABEL_TO_FOLDER.values()) | {"Main", "runs"},
     "instacart": {"Shoppable_Display_Ads", "Shoppable_Video_Ads", "Shoppable_Display_Ad", "Shoppable_Video_Ad", "Shoppable_Recipe_Ads", "Display_Ads", "Main", "runs"},
     "amazon": {"Sponsored_Brand", "Sponsored_Product", "Sponsored_Display", "Main", "runs"},
     # Target taxonomy aligned to actual ad types: Listing page banners + Sponsored Logo

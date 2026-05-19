@@ -1,5 +1,8 @@
 import os
 import pdb
+import shutil
+import socket
+import subprocess
 import threading
 import time
 import json
@@ -243,14 +246,57 @@ SUBMIT = {"method": "", "t": 0.0}
 # Browser UA cache (set once per run from live browser)
 BROWSER_UA = {"ua": None}
 
+# ---------------------------------------------------------------------------
+# Singleton browser context — shared across all search_and_capture() calls
+# within the same process session.  Mirrors the CLI pattern: one Chrome
+# launch, one persistent context, one new_page() / page.close() per keyword.
+# Poisoned cookies stay in memory (never flushed to disk between keywords).
+# Call close_walmart_context() at process exit to clean up.
+# ---------------------------------------------------------------------------
+_WALMART_SINGLETON: dict = {"playwright": None, "ctx": None, "page": None}
+
+# Shared net counters — reset at the start of each search_and_capture() call.
+# Context-level listeners reference this dict so they stay wired across runs.
+_WALMART_NET_COUNTERS: dict = {"req_failed": 0, "resp_doc": 0, "route_errors": 0}
+
+
+def close_walmart_context() -> None:
+    """Close the singleton browser context and stop Playwright.
+
+    Call this at application shutdown (e.g. after all keywords have been
+    processed).  Safe to call multiple times.
+    """
+    pg  = _WALMART_SINGLETON.get("page")
+    pw  = _WALMART_SINGLETON.get("playwright")
+    ctx = _WALMART_SINGLETON.get("ctx")
+    _WALMART_SINGLETON["page"] = None
+    _WALMART_SINGLETON["ctx"] = None
+    _WALMART_SINGLETON["playwright"] = None
+    if pg is not None:
+        try:
+            pg.close()
+        except Exception:
+            pass
+    if ctx is not None:
+        try:
+            ctx.close()
+        except Exception:
+            pass
+    if pw is not None:
+        try:
+            pw.stop()
+        except Exception:
+            pass
+    print("[walmart] singleton context closed")
+
 # Ad modules we'll detect and screenshot
 SELECTORS = {
-    "top_banner": "a.ad, a.adctr",  # programmatic banners (top/bottom)
-    "sba": '[data-testid="sba-container"]',  # Sponsored Brand module
-    "tile_takeover": '[data-testid="tile-take-over"]',  # Tile takeover
-    "sbv": '[data-testid="search-video-in-grid"]',  # Sponsored Brand Video
-    "marquee_banner": '[data-testid="marquee2"]',  # Onsite Display Marquee Banner
-    "gallery_cards": '[data-testid="galleryBottom"]',  # Gallery Bottom Ad Cards carousel
+    "skyline":        'iframe[data-ad-type="top"]',         # Top strip banner (LandO Lakes style)
+    "sba":            '[data-testid="sba-container"]',      # Sponsored Brand module
+    "tile_takeover":  '[data-testid="tile-take-over"]',     # Tile takeover
+    "sbv":            '[data-testid="search-video-in-grid"]',  # Sponsored Brand Video
+    "marquee_banner": '[data-testid="marquee2"]',           # Onsite Display Marquee Banner (top + bottom)
+    "gallery_cards":  '[data-testid="galleryBottom"]',      # Gallery Bottom Ad Cards carousel
     "gallery_card_iframe": 'iframe[data-ad-type^="gallerybottom"]',  # Individual card iframes
 }
 @dataclass
@@ -259,6 +305,223 @@ class CaptureResult:
     shots: List[str]
     assets: List[str]
     meta: Dict
+
+
+# --- BEGIN: WalmartAdInterceptor (network response capture for GraphQL ad payloads) ---
+import re as _re
+
+_ORCHESTRA_RE = _re.compile(r"/orchestra/(?:home|pdp|api|search)/graphql", _re.I)
+_SWAG_RE = _re.compile(r"/swag/graphql", _re.I)
+_VIDEO_INTERCEPT_RE = _re.compile(r"\.(mp4|m3u8|mpd|webm|mov)(\?|$)", _re.I)
+_VAST_INTERCEPT_RE = _re.compile(r"(vast|vpaid|adtag|adsystem)", _re.I)
+_AD_IMAGE_INTERCEPT_RE = _re.compile(r"(creative|banner|ad[_\-]image|sponsoredAsset)", _re.I)
+
+
+class WalmartAdInterceptor:
+    """Attaches to a Playwright page BEFORE navigation and captures ad-relevant network responses.
+
+    Sources:
+      - /orchestra/**/graphql  → AdV3 sponsored shelf ads, lazy item stacks
+      - /swag/graphql          → AdV2DisplayDSP display/banner ads
+      - Video URLs (.mp4/.m3u8/.mpd)
+      - VAST/VPAID ad tag URLs
+      - Creative asset image URLs
+    """
+
+    def __init__(self):
+        self.orchestra_payloads: List[Dict] = []
+        self.swag_payloads: List[Dict] = []
+        self.video_urls: List[str] = []
+        self.vast_urls: List[str] = []
+        self.asset_urls: List[str] = []
+
+        # Parsed after harvest()
+        self.sponsored_shelf_ads: List[Dict] = []
+        self.display_banner_ads: List[Dict] = []
+        self.lazy_items: List[Dict] = []
+
+    def attach(self, page) -> None:
+        """Register response handler. MUST be called before page.goto()."""
+        page.on("response", self._on_response)
+
+    def _on_response(self, response) -> None:
+        url = response.url
+        try:
+            if _ORCHESTRA_RE.search(url):
+                self._capture_json(url, "orchestra", response)
+            elif _SWAG_RE.search(url):
+                self._capture_json(url, "swag", response)
+            elif _VIDEO_INTERCEPT_RE.search(url):
+                if url not in self.video_urls:
+                    self.video_urls.append(url)
+            elif _VAST_INTERCEPT_RE.search(url):
+                if url not in self.vast_urls:
+                    self.vast_urls.append(url)
+            elif _AD_IMAGE_INTERCEPT_RE.search(url):
+                if url not in self.asset_urls:
+                    self.asset_urls.append(url)
+        except Exception:
+            pass
+
+    def _capture_json(self, url: str, source: str, response) -> None:
+        try:
+            ct = response.headers.get("content-type", "")
+            if "json" not in ct and "graphql" not in url:
+                return
+            body = response.json()
+            if source == "orchestra":
+                self.orchestra_payloads.append({"url": url, "body": body})
+            else:
+                self.swag_payloads.append({"url": url, "body": body})
+        except Exception:
+            pass
+
+    def harvest(self, debug_dir: Optional[str] = None) -> "WalmartAdInterceptor":
+        """Parse all captured payloads. Call after scrolling. Returns self."""
+        for entry in self.orchestra_payloads:
+            self._parse_orchestra(entry.get("body", {}))
+        for i, entry in enumerate(self.swag_payloads):
+            body = entry.get("body", {})
+            # Dump raw payload for key-path inspection when debug_dir provided
+            if debug_dir:
+                try:
+                    import json as _json
+                    dp = os.path.join(debug_dir, f"swag_payload_{i}.json")
+                    with open(dp, "w") as _f:
+                        _json.dump({"url": entry.get("url"), "body": body}, _f, indent=2)
+                except Exception:
+                    pass
+            self._parse_swag(body)
+        for i, entry in enumerate(self.orchestra_payloads):
+            body = entry.get("body", {})
+            if debug_dir:
+                try:
+                    import json as _json
+                    dp = os.path.join(debug_dir, f"orchestra_payload_{i}.json")
+                    with open(dp, "w") as _f:
+                        _json.dump({"url": entry.get("url"), "body": body}, _f, indent=2)
+                except Exception:
+                    pass
+        return self
+
+    def _parse_orchestra(self, body: Dict) -> None:
+        data = body.get("data") or {}
+        self._walk_sponsored(data, depth=0)
+        self._walk_item_stacks(data, depth=0)
+
+    def _walk_sponsored(self, node: Any, depth: int) -> None:
+        if depth > 8 or not isinstance(node, dict):
+            return
+        for key, val in node.items():
+            if key in ("sponsoredProducts", "adV3", "sponsoredShelf", "sponsoredAds"):
+                ads = val if isinstance(val, list) else (val.get("ads", []) if isinstance(val, dict) else [])
+                for ad in ads:
+                    if isinstance(ad, dict):
+                        self.sponsored_shelf_ads.append(ad)
+                        # Collect video URLs embedded in ad payload
+                        ad_str = json.dumps(ad)
+                        for m in _VIDEO_INTERCEPT_RE.finditer(ad_str):
+                            start = max(0, m.start() - 200)
+                            chunk = ad_str[start:m.end() + 50]
+                            um = _re.search(r'https?://[^\s"\'\\]+' + _re.escape(m.group(0).split("?")[0]), chunk)
+                            if um:
+                                u = um.group(0).rstrip('",\\')
+                                if u not in self.video_urls:
+                                    self.video_urls.append(u)
+            elif isinstance(val, dict):
+                self._walk_sponsored(val, depth + 1)
+            elif isinstance(val, list):
+                for item in val:
+                    self._walk_sponsored(item, depth + 1)
+
+    def _walk_item_stacks(self, node: Any, depth: int) -> None:
+        if depth > 6 or not isinstance(node, dict):
+            return
+        for key, val in node.items():
+            if key == "itemStacks" and isinstance(val, list):
+                for stack in val:
+                    for item in (stack.get("items", []) if isinstance(stack, dict) else []):
+                        if isinstance(item, dict) and item.get("name"):
+                            self.lazy_items.append(item)
+            elif isinstance(val, dict):
+                self._walk_item_stacks(val, depth + 1)
+
+    def _parse_swag(self, body: Dict) -> None:
+        data = body.get("data") or {}
+        self._walk_display_ads(data, depth=0)
+
+    def _walk_display_ads(self, node: Any, depth: int) -> None:
+        if depth > 8 or not isinstance(node, dict):
+            return
+        for key, val in node.items():
+            if key in ("adV2DisplayDSP", "multiImpDspAd", "displayAdDSP", "displayAd", "bannerAd", "dspAd"):
+                ads = val if isinstance(val, list) else ([val] if isinstance(val, dict) else [])
+                for ad in ads:
+                    if isinstance(ad, dict):
+                        self.display_banner_ads.append(ad)
+            elif isinstance(val, dict):
+                self._walk_display_ads(val, depth + 1)
+            elif isinstance(val, list):
+                for item in val:
+                    self._walk_display_ads(item, depth + 1)
+
+# --- END: WalmartAdInterceptor ---
+
+
+def _extract_next_data_items(page, SL=None) -> Optional[Dict]:
+    """Extract organic and sponsored items from __NEXT_DATA__ JSON embedded in the page.
+
+    Returns dict with keys: organic_items, sponsored_items, organic_count, sponsored_count.
+    Returns None on failure.
+    """
+    try:
+        raw = page.evaluate(
+            "() => { const el = document.getElementById('__NEXT_DATA__'); return el ? el.textContent : null; }"
+        )
+        if not raw:
+            if SL: SL.log("next_data_missing")
+            return None
+
+        nd = json.loads(raw)
+        props = nd.get("props", {}).get("pageProps", {})
+        sr = props.get("initialData", {}).get("searchResult", {})
+        stacks = sr.get("itemStacks", [])
+
+        organic: List[Dict] = []
+        sponsored: List[Dict] = []
+
+        for stack in stacks:
+            for item in stack.get("items", []):
+                if not isinstance(item, dict) or not item.get("name"):
+                    continue
+                item_id = str(item.get("usItemId", ""))
+                is_sponsored = bool(item.get("isSponsoredFlag") or item.get("sponsoredProduct"))
+                entry = {
+                    "item_id": item_id,
+                    "name": item.get("name", ""),
+                    "brand": item.get("brand", "") or "",
+                    "price": ((item.get("priceInfo") or {}).get("linePrice") or ""),
+                    "image_url": ((item.get("imageInfo") or {}).get("thumbnailUrl") or ""),
+                    "href": item.get("canonicalUrl", ""),
+                    "is_sponsored": is_sponsored,
+                    "seller": item.get("sellerName", "Walmart"),
+                    "ad_uuid": (item.get("sponsoredProduct") or {}).get("adUuid") if isinstance(item.get("sponsoredProduct"), dict) else None,
+                }
+                if is_sponsored:
+                    sponsored.append(entry)
+                else:
+                    organic.append(entry)
+
+        return {
+            "organic_items": organic,
+            "sponsored_items": sponsored,
+            "organic_count": len(organic),
+            "sponsored_count": len(sponsored),
+            "total": sr.get("aggregatedCount", 0),
+        }
+    except Exception as e:
+        if SL: SL.log("next_data_error", error=str(e))
+        return None
 
 
 def _ensure_dir(path: str) -> None:
@@ -354,7 +617,7 @@ def build_ad_object(
     Build a canonical ad object with safe defaults.
     """
     # Defensive checks
-    assert ad_type in {"SBA", "SBV", "Tile_Takeover", "Gallery_Cards"}, f"Unexpected ad_type: {ad_type}"
+    assert ad_type in {"SBA", "SBV", "Tile_Takeover", "Gallery_Cards", "Skyline", "Marquee_Banner"}, f"Unexpected ad_type: {ad_type}"
     folder = folder_for_adtype("walmart", ad_type)
     assert validate_folder("walmart", folder), f"Invalid Walmart folder: {folder}"
 
@@ -746,6 +1009,7 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
     # Empty args = software rendering = "WebKit WebGL" = instant PX block
     # These args ensure Chrome uses real GPU (ANGLE/Metal on macOS)
     args = [
+        '--disable-blink-features=AutomationControlled',  # Sets navigator.webdriver=undefined at browser level (no JS override needed)
         '--use-angle=metal',  # Force ANGLE→Metal backend on macOS
         '--enable-gpu-rasterization',  # Prefer GPU raster
         '--ignore-gpu-blocklist',  # Don't let Chrome silently disable GPU
@@ -771,7 +1035,6 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
             'locale': 'en-US',
             'timezone_id': timezone,  # STABLE per profile
             'args': args,
-            'ignore_default_args': ['--enable-automation'],  # Prevents navigator.webdriver=true
             'chromium_sandbox': True,  # CRITICAL: Force sandbox ON (removes banner)
         }
         
@@ -888,24 +1151,15 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
         # Only set Accept-Language; let Chrome generate sec-* and UA dynamically
         ctx.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
         
-        # Telemetry - catch silent exits
-        ctx.tracing.start(screenshots=True, snapshots=True, sources=False)
         ctx.on("close", lambda: print("[ctx] closed"))
         
-        # Create page BEFORE using it anywhere
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.on("crash", lambda: print("[page] crashed"))
-        page.on("close", lambda: _on_page_close())
-        ctx.on("close", lambda: _on_ctx_close())
-        page.on("console", lambda msg: print("[console]", msg.type, msg.text))
-        
-        # --- forensic listeners ---
+        # --- forensic listeners (context-level — fire for all pages, all runs) ---
         def _req_failed(req):
             if CURRENT_SL:
                 CURRENT_SL.log("req_failed",
                                url=req.url, method=req.method,
                                resource=req.resource_type, failure=str(req.failure))
-            net_counters["req_failed"] += 1
+            _WALMART_NET_COUNTERS["req_failed"] += 1
 
         def _resp_doc(res):
             try:
@@ -915,18 +1169,13 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
                         CURRENT_SL.log("resp_doc",
                                        url=res.url, status=res.status,
                                        method=req.method, fromCache=res.from_service_worker)
-                    net_counters["resp_doc"] += 1
+                    _WALMART_NET_COUNTERS["resp_doc"] += 1
             except Exception as e:
                 if CURRENT_SL:
                     CURRENT_SL.log("resp_doc_error", err=str(e))
 
-        def _page_error(err):
-            if CURRENT_SL:
-                CURRENT_SL.log("page_error", error=str(err))
-
         ctx.on("requestfailed", _req_failed)
         ctx.on("response", _resp_doc)
-        page.on("pageerror", _page_error)
         
         # --- BEGIN: off-domain guard rails (NARROW - Google only) ---
         # CRITICAL: Do NOT route PX/RUM/TAP endpoints - PX detects routing fingerprints
@@ -944,7 +1193,7 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
             except Exception as e:
                 if CURRENT_SL:
                     CURRENT_SL.log("route_error", url=req.url, err=str(e))
-                net_counters["route_errors"] += 1
+                _WALMART_NET_COUNTERS["route_errors"] += 1
                 return route.continue_()
         
         # Route ONLY Google domains (not "**/*" - that touches PX/RUM endpoints)
@@ -966,12 +1215,6 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
                 CURRENT_SL.log("px_resp", url=res.url, status=res.status, method=res.request.method)
         ctx.on("response", _log_px_response)
         
-        # Navigation logging - log via CURRENT_SL
-        def _log_navigation(fr):
-            if CURRENT_SL:
-                CURRENT_SL.log("nav", url=fr.url, name=fr.name)
-        page.on("framenavigated", _log_navigation)
-        
         # /blocked detector (request-level)
         def _log_blocked_nav(req):
             if req.is_navigation_request() and "walmart.com/blocked" in req.url.lower():
@@ -981,17 +1224,8 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
                     import pdb; pdb.set_trace()
         ctx.on("request", _log_blocked_nav)
         
-        # Apply stealth ONLY if explicitly enabled (PX detects stealth mutations)
-        # For Walmart, stealth is OFF by default - use real Chrome + coherent signals instead
-        if os.environ.get("WALMART_ENABLE_STEALTH") == "1":
-            apply_stealth(page)
-            if CURRENT_SL:
-                CURRENT_SL.log("stealth_applied", enabled=True)
-        else:
-            if CURRENT_SL:
-                CURRENT_SL.log("stealth_skipped", reason="px_detection_risk")
-        
-        return None, ctx, page, True
+        # Return context only — page is created per-run by _get_walmart_ctx / search_and_capture
+        return None, ctx, None, True
     
     browser = playwright.chromium.launch(
         headless=headless,
@@ -1012,7 +1246,83 @@ def _launch(playwright, profile_dir: Optional[str], headless: bool = False, prox
     ctx.on("close", lambda: _on_ctx_close())
     page.on("console", lambda msg: print("[console]", msg.type, msg.text))
     
-    return browser, ctx, page, False
+    return None, ctx, page, False
+
+
+# Cookies that Akamai/PX use to flag a session as bot-contaminated.
+# Removing them from the profile DB before Chrome launches gives the
+# session a clean slate without touching any legitimate trust cookies.
+_POISONED_COOKIE_NAMES = {'adblocked', 'ak_bmsc', 'bm_sv', 'bm_mi', 'bm_sz'}
+
+def _scrub_profile_cookies(profile_dir: str) -> None:
+    """Delete known bot-detection cookies from the Chrome profile SQLite DB.
+
+    Must be called BEFORE Chrome launches — Chrome holds an exclusive lock
+    on the Cookies DB while running.
+    """
+    import sqlite3
+    cookie_db = os.path.join(profile_dir, "Default", "Cookies")
+    if not os.path.exists(cookie_db):
+        return
+    try:
+        conn = sqlite3.connect(cookie_db)
+        placeholders = ",".join("?" * len(_POISONED_COOKIE_NAMES))
+        cur = conn.execute(
+            f"DELETE FROM cookies WHERE name IN ({placeholders})",
+            list(_POISONED_COOKIE_NAMES)
+        )
+        removed = cur.rowcount
+        conn.commit()
+        conn.close()
+        if removed:
+            print(f"[walmart] scrubbed {removed} poisoned cookie(s) from profile: {cookie_db}")
+        else:
+            print(f"[walmart] profile clean — no poisoned cookies found")
+    except Exception as e:
+        print(f"[walmart] cookie scrub failed (non-fatal): {e}")
+
+
+def _get_walmart_ctx(profile_dir: str, proxy_config: dict = None):
+    """Return the shared persistent browser context, creating it on first call.
+
+    Mirrors the CLI singleton pattern: one Chrome launch per process, one
+    new_page()/page.close() per keyword.  Poisoned cookies stay in memory
+    and are never flushed to disk between keyword runs.
+
+    Call close_walmart_context() at process exit to tear down gracefully.
+    """
+    from playwright.sync_api import sync_playwright as _sync_pw
+
+    singleton = _WALMART_SINGLETON
+    ctx = singleton.get("ctx")
+
+    if ctx is not None:
+        try:
+            _ = ctx.pages  # health-check — raises if playwright is gone
+            return ctx
+        except Exception:
+            print("[walmart] singleton context dead — recreating")
+            singleton["ctx"] = None
+            try:
+                singleton["playwright"].stop()
+            except Exception:
+                pass
+            singleton["playwright"] = None
+
+    # Scrub poisoned bot-detection cookies from the profile on disk BEFORE
+    # Chrome launches — Chrome locks the SQLite DB once running, so this is
+    # the only window where we can remove them cleanly.
+    if profile_dir:
+        _scrub_profile_cookies(profile_dir)
+
+    print("[walmart] launching singleton Chrome context")
+    pw = _sync_pw().start()
+    singleton["playwright"] = pw
+
+    _, ctx, _, _ = _launch(pw, profile_dir, proxy_config=proxy_config)
+    singleton["ctx"] = ctx
+    print("[walmart] singleton context ready")
+    return ctx
 
 
 def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, meta: Dict, SL=None, client_name: str = None, client_root: str = None, timestamp: str = None, filter_fn=None, run_id: str = None, ads_list: List[Dict[str, Any]] = None) -> Tuple[int, List[str]]:
@@ -1229,7 +1539,8 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                                         # If alt text is close to advertiser name, save the logo
                                         if norm_alt in norm_advertiser or norm_advertiser in norm_alt:
                                             logo_db = BrandLogoDatabase()
-                                            ad_type_name = ad_type_map.get(label, label.title())
+                                            from utils.path_taxonomy import WALMART_LABEL_TO_FOLDER
+                                            ad_type_name = WALMART_LABEL_TO_FOLDER.get(label, label.title())
                                             logo_db.add_brand_logo(
                                                 brand=advertiser,
                                                 logo_url=logo_src,
@@ -1253,17 +1564,12 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                         if SL: SL.log("advertiser_extraction_error", error=str(e), label=label, index=i+1)
                         advertiser = "unknown"  # Ensure we have a value even on error
                     
-                    # Map label to ad type folder name (canonical: SBA, SBV, Tile_Takeover only)
-                    ad_type_map = {
-                        'sba': 'SBA',
-                        'sbv': 'SBV',
-                        'tile_takeover': 'Tile_Takeover',
-                        # top_banner and marquee_banner are future features (not yet implemented)
-                    }
-                    ad_type_folder = ad_type_map.get(label, label.title())
+                    # Map label to ad type folder name — imported from path_taxonomy,
+                    # which also derives ALLOWED_FOLDERS from the same dict.
+                    from utils.path_taxonomy import WALMART_LABEL_TO_FOLDER, validate_folder
+                    ad_type_folder = WALMART_LABEL_TO_FOLDER.get(label, label.title())
                     
                     # Validate folder is allowed for Walmart
-                    from utils.path_taxonomy import validate_folder
                     if not validate_folder('walmart', ad_type_folder):
                         if SL: SL.log("invalid_folder", label=label, folder=ad_type_folder, reason="not_in_allowed_folders")
                         continue  # Skip this ad if folder not allowed
@@ -1294,7 +1600,21 @@ def _capture_elements(page, base_dir: str, keyword: str, label: str, css: str, m
                 if SL: SL.log("filename_generation_error", error=str(e), label=label, index=i+1)
                 out = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_{label}_{i+1}.png"))
             
-            item.screenshot(path=out)
+            # For tile takeovers, screenshot 2 levels down (> div > section) to
+            # skip the padding wrapper (pr4-xl) that adds large whitespace on the right.
+            # Tachyons class names and data-dca-type are stable but structural nav
+            # is more resilient than attribute matching.
+            if label == 'tile_takeover':
+                try:
+                    inner = item.locator('> div > section').first
+                    if inner.count() > 0:
+                        inner.screenshot(path=out)
+                    else:
+                        item.screenshot(path=out)
+                except Exception:
+                    item.screenshot(path=out)
+            else:
+                item.screenshot(path=out)
             shots.append(out)
             
             # Build and append canonical ad object (if run_id and ads_list provided)
@@ -1397,18 +1717,11 @@ def _capture_gallery_cards(page, base_dir: str, keyword: str, meta: Dict, SL=Non
             if SL: SL.log("gallery_cards_not_found")
             return 0, []
         
-        # Find all ad card iframes - try multiple patterns
-        # Primary: data-ad-type starts with "gallerybottom"
-        # Also check for any sponsored ad iframes in the container
+        # Find gallery card iframes — only match data-ad-type starting with "gallerybottom"
+        # The broader zonebottom fallback was matching marquee banners and the site header,
+        # causing misclassification. If no gallerybottom iframes exist, there are no gallery cards.
         iframe_selector = SELECTORS["gallery_card_iframe"]
         iframes = page.query_selector_all(iframe_selector)
-        
-        # If no iframes found with primary selector, try broader search
-        if not iframes:
-            # Try iframes with title="Walmart Advertisement" within gallery containers
-            iframes = page.query_selector_all('[id*="zonebottom"] iframe[title="Walmart Advertisement"]')
-            if iframes and SL:
-                SL.log("gallery_cards_fallback_iframes", count=len(iframes))
         
         if SL: SL.log("gallery_cards_found", iframe_count=len(iframes))
         
@@ -1559,7 +1872,18 @@ def _capture_gallery_cards(page, base_dir: str, keyword: str, meta: Dict, SL=Non
                 # Scroll the iframe into view and take screenshot
                 try:
                     iframe_handle.scroll_into_view_if_needed()
-                    time.sleep(0.3)  # Let it settle
+                    time.sleep(0.15)
+                    # Measure the element's actual viewport Y after scroll, then
+                    # nudge the page so the card sits at 120px from the top —
+                    # well below the ~60px sticky header on all screen sizes.
+                    _bb = iframe_handle.bounding_box()
+                    if _bb is not None:
+                        _current_y = _bb["y"]
+                        _target_y = 120
+                        if _current_y < _target_y:
+                            # Element is too close to top — scroll page up so element drops down
+                            page.evaluate(f"window.scrollBy(0, {_current_y - _target_y})")
+                            time.sleep(0.2)
                 except Exception:
                     pass
                 
@@ -2194,8 +2518,14 @@ def _wait_px_cookie(ctx, timeout_ms=8000):
         time.sleep(0.2)
     return False, last
 
+_FORCE_BLOCK_ONCE_STATE = {"armed": os.environ.get("WALMART_FORCE_BLOCK_ONCE_FOR_TEST", "0") == "1"}
+_FORCED_TEST_MODE = os.environ.get("WALMART_FORCE_BLOCK_ONCE_FOR_TEST", "0") == "1"
+
 def _on_blocked(url: str) -> bool:
-    """Check if URL is the /blocked route."""
+    """Check if URL is the /blocked route. Optional one-shot force for deterministic validation."""
+    if _FORCE_BLOCK_ONCE_STATE["armed"]:
+        _FORCE_BLOCK_ONCE_STATE["armed"] = False
+        return True
     return "walmart.com/blocked" in (url or "").lower()
 
 
@@ -2667,6 +2997,451 @@ def _verify_writable_dir(path: str, create: bool = True) -> str:
         raise RuntimeError(f"Directory not writable: {p} ({e})")
     return p
 
+# ---------------------------------------------------------------------------
+# Opensteer warm-session recovery
+# ---------------------------------------------------------------------------
+
+_OPENSTEER_WARM_ENABLED  = os.environ.get("ENABLE_OPENSTEER_WARM_RECOVERY",   "1") == "1"
+_OPENSTEER_ATTACH_MODE   = os.environ.get("WALMART_OPENSTEER_ATTACH_MODE",     "0") == "1"
+
+_CHROME_BINARY_CANDIDATES = [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta",
+    "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+]
+
+
+def _find_chrome_binary() -> str:
+    override = os.environ.get("CHROME_BINARY")
+    if override and os.path.exists(override):
+        return override
+    for p in _CHROME_BINARY_CANDIDATES:
+        if os.path.exists(p):
+            return p
+    raise RuntimeError(
+        "Chrome binary not found. Install Chrome or set CHROME_BINARY env var."
+    )
+
+
+def _find_free_port(start: int = 9222) -> int:
+    for port in range(start, start + 20):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("localhost", port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError(f"No free TCP port found in range {start}–{start + 19}")
+
+
+def _clone_profile_minimal(src_user_data_dir: str, dst_dir: str, profile: str = "Default") -> str:
+    """
+    Copy only cookie-critical files from a Chrome profile into dst_dir.
+    Much faster than a full clone and avoids lock conflicts with the running
+    Playwright context (which holds the real profile's SQLite lock).
+    Returns the path to the cloned user-data dir.
+    """
+    src = os.path.join(src_user_data_dir, profile)
+    dst_profile = os.path.join(dst_dir, profile)
+    os.makedirs(dst_profile, exist_ok=True)
+
+    file_targets = [
+        "Cookies",
+        "Network Persistent State",
+        "Preferences",
+        "Secure Preferences",
+    ]
+    dir_targets = [
+        "Local Storage",
+        "Session Storage",
+    ]
+    for name in file_targets:
+        s = os.path.join(src, name)
+        if os.path.isfile(s):
+            shutil.copy2(s, os.path.join(dst_profile, name))
+    for name in dir_targets:
+        s = os.path.join(src, name)
+        d = os.path.join(dst_profile, name)
+        if os.path.isdir(s):
+            shutil.copytree(s, d, dirs_exist_ok=True)
+
+    return dst_dir
+
+
+def _opensteer_warm_session(
+    profile_dir: str,
+    target_url: str,
+    run_id: str,
+    say: Optional[Callable] = None,
+    SL=None,
+) -> dict:
+    """
+    Launch a headed Chrome browser pre-seeded with the scraper profile.
+    Block via tkinter dialog until the user signals results are visible.
+    Return cookies + localStorage to inject into the existing Playwright context.
+
+    Attach mode (WALMART_OPENSTEER_ATTACH_MODE=1 — default off):
+      Launches a clean Chrome binary (no automation flags) on a free CDP port,
+      then attaches opensteer to it. This removes the --disable-blink-features
+      banner that Akamai scores negatively. Falls back to direct mode on any error.
+
+    Direct mode (default):
+      Uses opensteer browser clone + opensteer open. Simpler but Chrome shows
+      the AutomationControlled warning banner.
+
+    profile_dir is the Chrome user-data root (same as WALMART_PROFILE_DIR).
+    """
+    WS = f"walmart-warm-{run_id}"
+    _say = say or (lambda kind, msg: print(f"[opensteer/{kind}] {msg}"))
+
+    user_data_dir = profile_dir
+    profile_directory = "Default"
+
+    ws_deleted    = False
+    chrome_proc   = None
+    tmp_clone_dir = None
+
+    try:
+        attach_succeeded = False
+
+        # ------------------------------------------------------------------
+        # Attempt attach mode: clean Chrome → opensteer --attach-endpoint
+        # ------------------------------------------------------------------
+        if _OPENSTEER_ATTACH_MODE:
+            try:
+                chrome_bin = _find_chrome_binary()
+                port = _find_free_port()
+
+                # Minimal clone into a temp dir — avoids SQLite lock conflict
+                # with the Playwright context that already holds the real profile.
+                tmp_clone_dir = os.path.join(
+                    os.path.dirname(user_data_dir),
+                    f".warm_clone_{run_id}",
+                )
+                _clone_profile_minimal(user_data_dir, tmp_clone_dir, profile_directory)
+
+                _say("info", f"[opensteer/attach] Launching clean Chrome on port {port} ...")
+                chrome_proc = subprocess.Popen(
+                    [
+                        chrome_bin,
+                        f"--user-data-dir={tmp_clone_dir}",
+                        f"--profile-directory={profile_directory}",
+                        f"--remote-debugging-port={port}",
+                        "--no-first-run",
+                        "--no-default-browser-check",
+                        target_url,
+                    ]
+                )
+
+                # Wait up to 10s for CDP to become reachable
+                deadline = time.time() + 10
+                while time.time() < deadline:
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        if s.connect_ex(("localhost", port)) == 0:
+                            break
+                    time.sleep(0.3)
+                else:
+                    raise RuntimeError(f"Chrome CDP not ready on port {port} after 10s")
+
+                # Attach opensteer to the running Chrome
+                result = subprocess.run(
+                    [
+                        "opensteer", "open", target_url,
+                        "--workspace", WS,
+                        "--attach-endpoint", f"http://localhost:{port}",
+                    ],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        f"opensteer --attach-endpoint failed: {result.stderr.strip()}"
+                    )
+
+                attach_succeeded = True
+                if SL: SL.log("opensteer_attach_mode", ws=WS, port=port)
+                _say("info", f"[opensteer/attach] Attached to clean Chrome (no automation banner)")
+
+            except Exception as e:
+                _say("warn", f"[opensteer/attach] Failed ({e}) — falling back to direct mode")
+                if SL: SL.log("opensteer_attach_fallback", error=str(e))
+                if chrome_proc:
+                    try: chrome_proc.terminate()
+                    except Exception: pass
+                    chrome_proc = None
+                if tmp_clone_dir and os.path.exists(tmp_clone_dir):
+                    try: shutil.rmtree(tmp_clone_dir, ignore_errors=True)
+                    except Exception: pass
+                    tmp_clone_dir = None
+
+        # ------------------------------------------------------------------
+        # Direct mode: opensteer-managed clone + open (existing behaviour)
+        # ------------------------------------------------------------------
+        if not attach_succeeded:
+            _say("info", f"[opensteer] Cloning scraper profile → workspace {WS} ...")
+            result = subprocess.run(
+                [
+                    "opensteer", "browser", "clone",
+                    "--workspace", WS,
+                    "--source-user-data-dir", user_data_dir,
+                    "--source-profile-directory", profile_directory,
+                ],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode != 0:
+                if SL: SL.log("opensteer_clone_error", ws=WS, stderr=result.stderr.strip())
+                raise RuntimeError(
+                    f"opensteer browser clone failed (rc={result.returncode}): {result.stderr.strip()}"
+                )
+
+            _say("info", "[opensteer] Opening headed browser — navigate past the block, then confirm here")
+            open_cmd = [
+                "opensteer", "open", target_url,
+                "--workspace", WS,
+                "--headless", "false",
+            ]
+            result = None
+            last_stderr = ""
+            max_open_attempts = 3
+            for attempt in range(1, max_open_attempts + 1):
+                result = subprocess.run(open_cmd, capture_output=True, text=True)
+                last_stderr = (result.stderr or "").strip()
+                if result.returncode == 0:
+                    break
+
+                page_race = (
+                    "browserContext.newPage" in last_stderr
+                    or "reading '_page'" in last_stderr
+                )
+                if page_race and attempt < max_open_attempts:
+                    if SL:
+                        SL.log(
+                            "opensteer_open_retry",
+                            ws=WS,
+                            attempt=attempt,
+                            reason="browser_context_page_race",
+                            stderr=last_stderr,
+                        )
+                    _say(
+                        "warn",
+                        f"[opensteer] Browser init race on attempt {attempt}/{max_open_attempts}; retrying...",
+                    )
+                    time.sleep(2.0)
+                    continue
+                break
+
+            if result is None or result.returncode != 0:
+                if SL:
+                    SL.log("opensteer_open_error", ws=WS, stderr=last_stderr)
+                raise RuntimeError(
+                    f"opensteer open failed (rc={result.returncode if result else 'unknown'}): {last_stderr}"
+                )
+
+        _opensteer_set_title(WS, "OPENSTEER WARM SESSION (USE THIS WINDOW)", SL=SL)
+
+        # ------------------------------------------------------------------
+        # Prompt user via tkinter dialog (same pattern as prompt_relogin)
+        # ------------------------------------------------------------------
+        user_confirmed = False
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+            try:
+                _root = tk._default_root  # type: ignore[attr-defined]
+                if _root is None or not _root.winfo_exists():
+                    raise RuntimeError("no root")
+                own_root = False
+            except Exception:
+                _root = tk.Tk()
+                _root.withdraw()
+                own_root = True
+            user_confirmed = messagebox.askyesno(
+                "Walmart — Navigate Past Block",
+                "An opensteer browser window is open.\n\n"
+                "Use the window titled: OPENSTEER WARM SESSION (USE THIS WINDOW).\n"
+                "Do NOT use the window titled: SCRAPER (DO NOT TOUCH).\n\n"
+                "Navigate to Walmart search results in that window, then return here.\n\n"
+                "Click Yes when results are visible.\n"
+                "Click No to abort warm-session recovery.",
+            )
+            if own_root:
+                _root.destroy()
+        except Exception:
+            if sys.stdin.isatty():
+                _say("warn", "[opensteer] Use window 'OPENSTEER WARM SESSION'. Navigate to results, then press Enter.")
+                input("[opensteer] Press Enter when Walmart search results are visible...")
+                user_confirmed = True
+            else:
+                raise RuntimeError("[opensteer] No interactive prompt available (no tkinter, no TTY)")
+
+        if not user_confirmed:
+            raise RuntimeError("[opensteer] User aborted warm-session recovery")
+
+        # ------------------------------------------------------------------
+        # Export cookies and localStorage
+        # ------------------------------------------------------------------
+        cookies_raw = subprocess.run(
+            ["opensteer", "exec", "return await this.cookies('walmart.com')", "--workspace", WS],
+            capture_output=True, text=True, timeout=30,
+        )
+        if cookies_raw.returncode != 0:
+            if SL: SL.log("opensteer_cookies_error", ws=WS, stderr=cookies_raw.stderr.strip())
+            raise RuntimeError(f"opensteer exec cookies failed: {cookies_raw.stderr.strip()}")
+
+        storage_raw = subprocess.run(
+            ["opensteer", "exec", "return await this.storage('walmart.com', 'local')", "--workspace", WS],
+            capture_output=True, text=True, timeout=30,
+        )
+        storage_stdout = storage_raw.stdout if storage_raw.returncode == 0 else "{}"
+        if storage_raw.returncode != 0 and SL:
+            SL.log("opensteer_storage_error", ws=WS, stderr=storage_raw.stderr.strip())
+
+        # Delete opensteer workspace
+        subprocess.run(
+            ["opensteer", "browser", "delete", "--workspace", WS],
+            capture_output=True, timeout=30,
+        )
+        ws_deleted = True
+
+    finally:
+        if not ws_deleted:
+            try:
+                subprocess.run(
+                    ["opensteer", "browser", "delete", "--workspace", WS],
+                    capture_output=True, timeout=30,
+                )
+            except Exception:
+                pass
+        if chrome_proc:
+            try: chrome_proc.terminate()
+            except Exception: pass
+        if tmp_clone_dir and os.path.exists(tmp_clone_dir):
+            try: shutil.rmtree(tmp_clone_dir, ignore_errors=True)
+            except Exception: pass
+
+    try:
+        cookies = json.loads(cookies_raw.stdout).get("cookies", [])
+    except Exception as e:
+        raise RuntimeError(
+            f"Could not parse opensteer cookies JSON: {e}\nRaw: {cookies_raw.stdout[:200]}"
+        )
+
+    try:
+        local_storage = json.loads(storage_stdout)
+        if not isinstance(local_storage, dict):
+            local_storage = {}
+    except Exception:
+        local_storage = {}
+
+    if SL:
+        SL.log(
+            "opensteer_warm_session_done",
+            ws=WS,
+            mode="attach" if attach_succeeded else "direct",
+            cookies=len(cookies),
+            storage_keys=len(local_storage),
+        )
+
+    return {"cookies": cookies, "local_storage": local_storage}
+
+
+_SAMESITE_MAP = {
+    "strict":         "Strict",
+    "lax":            "Lax",
+    "none":           "None",
+    "no_restriction": "None",
+    "unspecified":    "Lax",
+    "":               "Lax",
+}
+
+
+def _set_page_title(page, title: str, SL=None):
+    """Best-effort browser tab/window title labeling for operator clarity."""
+    try:
+        page.evaluate("(t) => { try { document.title = t; } catch (_) {} }", title)
+        if SL:
+            SL.log("page_title_set", title=title)
+    except Exception as e:
+        if SL:
+            SL.log("page_title_set_error", title=title, error=str(e))
+
+
+def _opensteer_set_title(ws: str, title: str, SL=None):
+    """Best-effort label for OpenSteer warm-session window title."""
+    cmds = [
+        f"try {{ document.title = {json.dumps(title)}; return document.title; }} catch (e) {{ return 'title_set_failed'; }}",
+        f"try {{ await this.eval(() => {{ document.title = {json.dumps(title)}; return document.title; }}); return 'ok'; }} catch (e) {{ return 'title_set_failed'; }}",
+    ]
+    for cmd in cmds:
+        try:
+            result = subprocess.run(
+                ["opensteer", "exec", cmd, "--workspace", ws],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if result.returncode == 0:
+                if SL:
+                    SL.log("opensteer_title_set", ws=ws, title=title)
+                return
+        except Exception:
+            pass
+    if SL:
+        SL.log("opensteer_title_set_failed", ws=ws, title=title)
+
+
+def _inject_warm_session(ctx, page, session: dict, SL=None):
+    """
+    Inject opensteer warm-session state into the existing Playwright context.
+    Must be called before any navigation retry.
+    """
+    if not isinstance(session, dict):
+        if SL:
+            SL.log("warm_session_invalid", type=str(type(session)))
+        return
+
+    cookies = session.get("cookies", [])
+    local_storage = session.get("local_storage", {})
+
+    if cookies:
+        normalized = []
+        for c in cookies:
+            try:
+                if not isinstance(c, dict):
+                    if SL:
+                        SL.log("warm_cookie_invalid_type", cookie_type=str(type(c)))
+                    continue
+                raw_ss = str(c.get("sameSite") or "").lower().strip()
+                norm = {
+                    "name":     str(c.get("name", "")),
+                    "value":    str(c.get("value", "")),
+                    "domain":   c.get("domain") or ".walmart.com",
+                    "path":     c.get("path") or "/",
+                    "expires":  float(c["expiresAt"]) / 1000 if c.get("expiresAt") not in (None, -1, "") else -1,
+                    "httpOnly": bool(c.get("httpOnly", False)),
+                    "secure":   bool(c.get("secure", False)),
+                    "sameSite": _SAMESITE_MAP.get(raw_ss, "Lax"),
+                }
+                if norm["name"] and norm["domain"]:
+                    normalized.append(norm)
+            except Exception as e:
+                cookie_name = c.get("name") if isinstance(c, dict) else None
+                if SL: SL.log("warm_cookie_normalize_error", cookie_name=cookie_name, error=str(e))
+        try:
+            ctx.add_cookies(normalized)
+            if SL: SL.log("warm_session_cookies_injected", count=len(normalized))
+        except Exception as e:
+            if SL: SL.log("warm_session_cookie_error", error=str(e))
+
+    if local_storage and isinstance(local_storage, dict):
+        try:
+            if "walmart.com" not in (page.url or ""):
+                page.goto("https://www.walmart.com", wait_until="domcontentloaded")
+            page.evaluate("(data) => Object.assign(localStorage, data)", local_storage)
+            if SL: SL.log("warm_session_storage_injected", keys=list(local_storage.keys())[:8])
+        except Exception as e:
+            if SL: SL.log("warm_session_storage_error", error=str(e))
+
+
 def _resolve_run_dir(base_dir: Optional[str], keyword: str) -> str:
     """Always produce a unique, timestamped run folder and create it."""
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -2893,37 +3668,46 @@ def search_and_capture(
     ctx: Optional[BrowserContext] = None
     browser: Optional[Browser] = None
     
+    # Reset shared net counters for this run
+    _WALMART_NET_COUNTERS.update({"req_failed": 0, "resp_doc": 0, "route_errors": 0})
+    net_counters = _WALMART_NET_COUNTERS
+
     try:
-        with sync_playwright() as p:
-            with step(SL, "launch_context"):
-                browser, ctx, page, persistent = _launch(p, profile_dir, headless=headless, proxy_config=proxy_config, net_counters=net_counters)
-                MT.mark("launch_context", ok=True)
+        with step(SL, "launch_context"):
+            ctx = _get_walmart_ctx(profile_dir, proxy_config=proxy_config)
 
-            # --- BEGIN: close-aware guards ---
-            CLOSED = {"page": False, "ctx": False}
+            # Reuse the singleton page if it's still alive and on Walmart.
+            # Creating a new page per keyword is a cold-start robot signal —
+            # a real user keeps the same tab open and types in the search bar.
+            _existing_page = _WALMART_SINGLETON.get("page")
+            _reuse_page = (
+                _existing_page is not None
+                and not _existing_page.is_closed()
+                and "walmart.com" in (_existing_page.url or "")
+            )
 
-            def _on_page_close():
-                CLOSED["page"] = True
-                print("[page] closed")
+            if _reuse_page:
+                page = _existing_page
+                SL.log("page_reused", url=page.url)
+            else:
+                page = ctx.new_page()
+                _WALMART_SINGLETON["page"] = page
+                SL.log("page_created_fresh")
 
-            def _on_ctx_close():
-                CLOSED["ctx"] = True
-                print("[ctx] closed")
-
-            # Only register handlers if page/ctx were successfully created
-            if page and ctx:
-                try:
-                    page.on("close", lambda: _on_page_close())
-                    ctx.on("close", lambda: _on_ctx_close())
-                except Exception:
-                    pass
-            # --- END: close-aware guards ---
-            
-            # Guard: If launch failed, bail early
-            if not page or not ctx:
-                SL.log("launch_failed", reason="page or ctx is None")
-                say("error", f"[{retailer}] Browser launch failed")
-                return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
+            # Page-level listeners — re-attached each run
+            CLOSED.update({"page": False, "ctx": False})
+            page.on("crash",  lambda: print("[page] crashed"))
+            page.on("close",  lambda: CLOSED.update({"page": True}) or print("[page] closed"))
+            page.on("console", lambda msg: print("[console]", msg.type, msg.text))
+            page.on("pageerror", lambda err: CURRENT_SL and CURRENT_SL.log("page_error", error=str(err)))
+            page.on("framenavigated", lambda fr: CURRENT_SL and CURRENT_SL.log("nav", url=fr.url, name=fr.name))
+            if os.environ.get("WALMART_ENABLE_STEALTH") == "1":
+                apply_stealth(page)
+                SL.log("stealth_applied", enabled=True)
+            else:
+                SL.log("stealth_skipped", reason="px_detection_risk")
+            _set_page_title(page, "SCRAPER (DO NOT TOUCH)", SL=SL)
+            MT.mark("launch_context", ok=True)
             
             # DIAGNOSTIC: Profile health check (verify Chrome is writing to disk)
             health = _profile_health(profile_dir)
@@ -2945,13 +3729,16 @@ def search_and_capture(
                 SL.log("cookie_suspicious", names=suspicious)
                 say("warn", f"[{retailer}] ⚠️  Suspicious cookies present: {suspicious}")
                 cookies_info["suspicious"] = suspicious
-                # Auto-clear poisoned bot-detection cookies before first navigation.
-                # These carry an encrypted bot reputation score — clearing them forces
-                # Walmart to issue a fresh score. Auth cookies are preserved.
-                n_cleared = _clear_bot_detection_cookies(ctx, SL=SL)
-                if n_cleared:
-                    say("info", f"[{retailer}] 🧹 Auto-cleared {n_cleared} poisoned bot-detection cookies")
-                    cookies_info["bot_cookies_cleared"] = n_cleared
+                # Only clear poisoned cookies on a cold start (fresh page). On a reused
+                # page these are valid live Akamai session tokens — clearing them mid-session
+                # is what triggers the PX challenge.
+                if not _reuse_page:
+                    n_cleared = _clear_bot_detection_cookies(ctx, SL=SL)
+                    if n_cleared:
+                        say("info", f"[{retailer}] 🧹 Auto-cleared {n_cleared} poisoned bot-detection cookies")
+                        cookies_info["bot_cookies_cleared"] = n_cleared
+                else:
+                    SL.log("cookie_suspicious_kept", reason="reused_page_live_session")
 
             # CRITICAL: Verify cookie persistence for debugging
             if len(pre_cookies) == 0:
@@ -2988,10 +3775,12 @@ def search_and_capture(
                         print("Breaking into debugger - Type 'c' to continue, 'q' to quit")
                         import pdb; pdb.set_trace()
             
-            # CRITICAL: Establish session with human-like browsing pattern
-            say("info", f"[{retailer}] Establishing session (human-like pattern)")
-            
-            # Log sec-ch-ua headers on FIRST navigation (before homepage - PX checks these)
+            # --- BEGIN: Direct navigation approach ---
+            # Replaces: homepage warmup + search box typing + submit + human scroll
+            # Key insight: navigating directly to /search?q=keyword avoids the
+            # search-box interaction that is the primary PerimeterX trigger.
+
+            # Log sec-ch-ua headers on FIRST navigation (PX checks these)
             nav_headers_logged = {"done": False}
             def _log_first_nav_headers(req):
                 if nav_headers_logged["done"]:
@@ -3009,55 +3798,112 @@ def search_and_capture(
                         print(f"[nav_headers] {wanted}")
                         env_info["nav_headers"] = wanted
                         nav_headers_logged["done"] = True
-                        
-                        # Warn if UA-CH is missing on first nav
                         if not any(wanted.values()):
                             SL.log("ua_ch_missing", url=req.url)
                             say("warn", f"[{retailer}] ⚠️  UA-CH headers missing on first nav; PX may flag this")
                 except Exception:
                     pass
             ctx.on("request", _log_first_nav_headers)
-            
-            # 1. Visit homepage (like real users) - resilient navigation
-            phase = _goto_home(page, SL)
-            SL.log("home_goto_phase_final", phase=phase)
-            
-            # Timing: to homepage
-            timings["to_home_ms"] = int((time.time() - SL.t0) * 1000)
-            
-            # CRITICAL: Bail fast if blocked on first navigation (prevents eval errors)
-            if _on_blocked(page.url):
-                SL.log("hard_block", where="initial_home", url=page.url, reason="blocked_on_first_nav")
-                say("error", f"[{retailer}] ❌ Hard blocked on first navigation")
-                say("error", f"  URL: {page.url}")
-                say("error", f"  This indicates IP/profile reputation issue or Bot Manager flag")
-                
-                bail_reason = "hard_block"
-                meta["bail"] = bail_reason
-                meta["steps_log"] = SL.path
-                report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
-                _write_run_report(base_dir, report)
-                return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
-            
-            # DIAGNOSTIC: Log User-Agent (should be stable across runs)
-            ua = eval_safe(page, "() => navigator.userAgent", "ua", SL=SL)
-            if ua:
-                print(f"[ua] {ua}")
-                SL.log("user_agent", ua=ua)
-                env_info["ua"] = ua
+
+            # Attach ad interceptor BEFORE navigation so it captures every response
+            interceptor = WalmartAdInterceptor()
+            interceptor.attach(page)
+            SL.log("interceptor_attached", url=url)
+
+            # Homepage buffer: when a poisoned session is detected (adblocked/ak_bmsc/bm_sv
+            # present at startup), a direct search URL hit will be pre-blocked at Akamai's
+            # edge before the page even loads. A quiet homepage visit lets PX re-score the
+            # session with no search interaction, giving it a clean slate before we hit /search.
+            # Real users also don't navigate directly from one search URL to another.
+            # Skip homepage buffer when reusing a live page — ak_bmsc/bm_sv are
+            # legitimate Akamai cookies Walmart issued during keyword 1. Navigating
+            # to the homepage on an already-warm session triggers /blocked, not cures it.
+            _needs_home_buffer = (
+                not _reuse_page
+                and bool(cookies_info.get("suspicious") or cookies_info.get("bot_cookies_cleared"))
+            )
+            if _needs_home_buffer:
+                say("info", f"[{retailer}] Poisoned session detected — homepage buffer visit before search")
+                SL.log("homepage_buffer_start", reason="suspicious_cookies")
+                with step(SL, "homepage_buffer"):
+                    try:
+                        page.goto("https://www.walmart.com/", wait_until="domcontentloaded", timeout=20000)
+                    except Exception:
+                        pass  # timeout is fine — we just need the request to land
+                    # Quiet pause — no interaction, just let PX observe a homepage load
+                    page.wait_for_timeout(random.randint(2500, 4000))
+                    # Clear any newly-issued bot cookies before the real nav
+                    _clear_bot_detection_cookies(ctx, SL=SL)
+                    SL.log("homepage_buffer_done", url=page.url)
             else:
-                print(f"[ua] eval failed - page may be redirecting")
-                env_info["ua"] = None
-            
-            # Cache UA for requests library (video downloads)
-            BROWSER_UA["ua"] = ua
+                say("info", f"[{retailer}] Clean session — navigating to search")
+
+            # Navigate to search results — prefer search bar (human pattern) over
+            # direct URL navigation when the page is already live on Walmart.
+            with step(SL, "goto_search"):
+                _used_searchbar = False
+                if _reuse_page:
+                    try:
+                        _sb = page.locator('[data-testid="search-form"] input[name="q"]')
+                        if _sb.count() > 0:
+                            # Bezier move to search bar, then click — same pattern as homepage warmup
+                            _sb_box = _sb.first.bounding_box()
+                            if _sb_box:
+                                _sb_cx = _sb_box["x"] + _sb_box["width"] / 2
+                                _sb_cy = _sb_box["y"] + _sb_box["height"] / 2
+                                try:
+                                    cur = page.mouse.position
+                                    _bezier_mouse_move(page, cur["x"], cur["y"], _sb_cx, _sb_cy,
+                                                       duration_ms=random.randint(350, 650))
+                                except Exception:
+                                    pass
+                            _sb.first.click(timeout=4000)
+                            page.wait_for_timeout(random.randint(250, 500))
+                            # Triple-click selects all text in the input reliably on all platforms
+                            _sb.first.click(click_count=3)
+                            page.wait_for_timeout(random.randint(80, 150))
+                            # Also press platform select-all as belt-and-suspenders
+                            import platform as _platform
+                            _sel_all = "Meta+a" if _platform.system() == "Darwin" else "Control+a"
+                            _sb.first.press(_sel_all)
+                            page.wait_for_timeout(random.randint(60, 120))
+                            # Use existing human_type() for natural keystroke cadence
+                            human_type(_sb.first, keyword)
+                            # Brief pause before submitting — simulates reading what was typed
+                            page.wait_for_timeout(random.randint(300, 600))
+                            _sb.first.press("Enter")
+                            try:
+                                page.wait_for_load_state("domcontentloaded", timeout=20000)
+                            except Exception:
+                                time.sleep(1)
+                            _used_searchbar = True
+                            SL.log("searchbar_nav_done", keyword=keyword, url=page.url)
+                        else:
+                            SL.log("searchbar_not_found", fallback="goto")
+                    except Exception as _sb_err:
+                        SL.log("searchbar_nav_failed", error=str(_sb_err), fallback="goto")
+
+                if not _used_searchbar:
+                    try:
+                        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    except Exception as _nav_err:
+                        if "timeout" not in str(_nav_err).lower():
+                            bail_reason = "navigation_failed"
+                            meta["bail"] = bail_reason
+                            meta["steps_log"] = SL.path
+                            report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
+                            _write_run_report(base_dir, report)
+                            return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
+                        # domcontentloaded timeout is acceptable -- page is still usually usable
+                        time.sleep(1)
+
+                _nav_mark_done(SL=SL)
+                timings["to_home_ms"] = int((time.time() - SL.t0) * 1000)
+                SL.log("goto_search_done", url=page.url)
+
+            # Diagnostics: UA, WebGL (masked only), navigator
             try:
-                HEADERS["user-agent"] = ua
-            except Exception:
-                pass
-            
-            # Log WebGL info (sanity check GPU isn't SwiftShader)
-            try:
+                ua = eval_safe(page, "() => navigator.userAgent", "ua", SL=SL)
                 vendor = eval_safe(page, """() => {
                     const c=document.createElement('canvas');
                     const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
@@ -3068,444 +3914,180 @@ def search_and_capture(
                     const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
                     return gl ? gl.getParameter(gl.RENDERER) : null;
                 }""", "webgl_renderer", SL=SL)
-                
-                # Get UNMASKED WebGL info (real GPU string - PX checks this)
-                unmasked = eval_safe(page, """() => {
-                    const c=document.createElement('canvas');
-                    const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
-                    if (!gl) return null;
-                    const ext = gl.getExtension('WEBGL_debug_renderer_info');
-                    return ext ? {
-                        unmaskedVendor: gl.getParameter(ext.UNMASKED_VENDOR_WEBGL),
-                        unmaskedRenderer: gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
-                    } : null;
-                }""", "webgl_unmasked", SL=SL)
-                
-                SL.log("webgl", vendor=vendor, renderer=renderer)
-                print(f"[webgl] vendor={vendor}, renderer={renderer}")
-                if unmasked:
-                    SL.log("webgl_unmasked", **unmasked)
-                    print(f"[webgl_unmasked] {unmasked}")
-                
-                env_info["webgl"] = {"vendor": vendor, "renderer": renderer, "unmasked": unmasked}
-                
-                # CRITICAL: Fingerprint verification guard (use UNMASKED when available)
-                # Masked WebGL can show "WebKit" in real Chrome - UNMASKED is the key differentiator
-                is_chrome_ua = ua and " Chrome/" in ua
-                
-                # Extract unmasked values (may be None if extension unavailable)
-                def _string(s):
-                    return (s or "").lower()
-                
-                unmasked_vendor = (unmasked or {}).get("unmaskedVendor") if isinstance(unmasked, dict) else None
-                unmasked_renderer = (unmasked or {}).get("unmaskedRenderer") if isinstance(unmasked, dict) else None
-                
-                # Heuristics for UNMASKED values
-                unmasked_ok = False
-                unmasked_bad = False
-                if unmasked_vendor or unmasked_renderer:
-                    # OK: ANGLE (Chromium), Google Inc., Metal (macOS)
-                    if "angle" in _string(unmasked_renderer) or "google" in _string(unmasked_vendor) or "metal" in _string(unmasked_renderer):
-                        unmasked_ok = True
-                    # BAD: SwiftShader (software renderer)
-                    if "swiftshader" in _string(unmasked_renderer):
-                        unmasked_bad = True
-                
-                # Decision logic
-                if is_chrome_ua and unmasked_bad:
-                    # FATAL: SwiftShader with Chrome UA = software rendering
-                    SL.log("fingerprint_mismatch", ua=ua, vendor=vendor, renderer=renderer, unmasked=unmasked, fatal=True)
-                    say("error", f"[{retailer}] ❌ FATAL: SwiftShader software renderer detected (will trip PX)")
-                    say("error", f"  UA: {ua}")
-                    say("error", f"  Unmasked: {unmasked}")
-                    
-                    bail_reason = "fingerprint_mismatch"
-                    meta["bail"] = bail_reason
-                    meta["steps_log"] = SL.path
-                    report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
-                    _write_run_report(base_dir, report)
-                    return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
-                    
-                elif is_chrome_ua and (unmasked_vendor or unmasked_renderer):
-                    # UNMASKED present - trust it more than masked
-                    if not unmasked_ok:
-                        SL.log("fingerprint_warning", reason="unmasked_unknown", ua=ua, vendor=vendor, renderer=renderer, unmasked=unmasked)
-                        say("warn", f"[{retailer}] ⚠️  Unmasked WebGL is unusual; proceeding cautiously")
-                        say("warn", f"  Unmasked: {unmasked}")
-                else:
-                    # UNMASKED missing; masked shows WebKit often in real Chrome - warn only
-                    if ("webkit" in _string(vendor)) or ("webkit" in _string(renderer)):
-                        SL.log("fingerprint_warning", reason="masked_webkit", ua=ua, vendor=vendor, renderer=renderer)
-                        say("warn", f"[{retailer}] ⚠️  Masked WebGL looks WebKit; no UNMASKED info. Not bailing.")
-                        say("warn", f"  Masked: {vendor} / {renderer}")
-                
-            except Exception:
-                pass
-            
-            # Log navigator diagnostics (webdriver, plugins, etc) - pinpoint bot signals
-            try:
+                # Note: WEBGL_debug_renderer_info (unmasked vendor/renderer) is NOT
+                # evaluated — real pages rarely call this extension and PX flags it.
                 diag = eval_safe(page, """() => ({
                     webdriver: navigator.webdriver,
-                    languages: navigator.languages,
-                    language: navigator.language,
-                    platform: navigator.platform,
+                    pluginsLength: (navigator.plugins||[]).length,
                     hardwareConcurrency: navigator.hardwareConcurrency,
                     deviceMemory: navigator.deviceMemory || null,
                     vendor: navigator.vendor,
-                    pluginsLength: (navigator.plugins||[]).length,
-                    userAgentData: (navigator.userAgentData ? {
-                        brands: navigator.userAgentData.brands || null,
-                        platform: navigator.userAgentData.platform || null,
-                        mobile: navigator.userAgentData.mobile || null
-                    } : null)
                 })""", "navigator_diag", SL=SL)
-                if diag:
-                    SL.log("navigator_diag", **diag)
-                    print(f"[diag] {diag}")
-                    env_info["navigator_diag"] = diag
-                    
-                    # CRITICAL: Bail if webdriver is still true (init script failed)
-                    if diag.get("webdriver"):
-                        SL.log("fingerprint_mismatch", webdriver=True, fatal=True)
-                        say("error", f"[{retailer}] ❌ webdriver=true detected — aborting to avoid PX hard block")
-                        
-                        bail_reason = "fingerprint_mismatch"
-                        meta["bail"] = bail_reason
-                        meta["steps_log"] = SL.path
-                        report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
-                        _write_run_report(base_dir, report)
-                        return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
-                        
-            except Exception:
-                pass
-            
-            # Check for PX challenge and solve with cooldown/retry
-            if _still_px_modal(page):
-                SL.log("px_status", where="home", challenged=True, url=page.url)
-                if _solve_px_until_clear(page, say, SL=SL):
-                    say("success", f"[{retailer}] ✅ Unblocked on homepage")
-                    SL.log("px_result", where="home", ok=True)
-                else:
-                    say("error", f"[{retailer}] Failed to clear PX after max attempts")
-                    SL.log("px_result", where="home", ok=False)
-                    bail_reason = "px_locked"
+
+                env_info["ua"] = ua
+                env_info["webgl"] = {"vendor": vendor, "renderer": renderer}
+                env_info["navigator_diag"] = diag
+                BROWSER_UA["ua"] = ua
+                try:
+                    HEADERS["user-agent"] = ua
+                except Exception:
+                    pass
+
+                SL.log("diagnostics", ua=str(ua)[:80], vendor=vendor, renderer=renderer)
+                print(f"[ua] {ua}")
+                print(f"[webgl] vendor={vendor} renderer={renderer}")
+
+                # Bail on SwiftShader (software renderer = instant PX fail)
+                if renderer and "SwiftShader" in str(renderer):
+                    bail_reason = "fingerprint_mismatch"
+                    SL.log("fingerprint_mismatch", renderer=renderer, fatal=True)
+                    say("error", f"[{retailer}] ❌ SwiftShader detected -- aborting (PX will hard-block)")
                     meta["bail"] = bail_reason
                     meta["steps_log"] = SL.path
                     report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
                     _write_run_report(base_dir, report)
                     return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
-            
-            # Natural mouse warm-up (builds PX trust score before search)
-            # Replaces bare sleep — real movement matters more than just waiting
-            _homepage_warmup(page, SL=SL)
-            
-            # Accept cookie consent if present (optional)
-            try:
-                page.locator('button:has-text("Accept")').first.click(timeout=2000)
-                time.sleep(random.uniform(0.3, 0.6))
-            except:
-                pass
-            
-            # Login state check — missing login means fewer ad types captured
-            # Walmart shows "Hi, <user>" with data-testid="logged-in-account-button-name"
-            # when authenticated. That element is absent when not logged in.
-            try:
-                _wm_logged_in = False
-                try:
-                    _wm_logged_in = page.locator('[data-testid="logged-in-account-button-name"]').first.is_visible(timeout=2000)
-                except Exception:
-                    _wm_logged_in = False
 
-                if _wm_logged_in:
-                    say("info", f"[{retailer}] ✅ Logged-in session detected")
-                    SL.log("login_check", logged_in=True)
-                else:
-                    say("warn", f"[{retailer}] ⚠️ Not logged in — some ad types may not appear")
-                    SL.log("login_check", logged_in=False)
-                    try:
-                        from utils.profile_health import prompt_relogin
-                        _relogged = prompt_relogin(page, "walmart", keyword, log_fn=lambda m: say("info", m))
-                        if _relogged:
-                            say("info", f"[{retailer}] ✅ User completed re-login — continuing")
-                            SL.log("login_relogin", success=True)
-                        else:
-                            from utils.profile_health import record_login_outcome
-                            record_login_outcome("walmart", keyword, logged_in=False)
-                            SL.log("login_relogin", success=False)
-                    except Exception:
-                        pass
-            except Exception as _login_err:
-                SL.log("login_check_error", error=str(_login_err))
-
-            # Directly type into search – do not scroll the homepage
-            say("info", f"[{retailer}] Typing search query")
-            
-            # Optional: line-by-line tracer around “type → submit → first PX check”
-            if DEBUG.line_trace:
-                trace_path = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_linetrace.log"))
-                with ScopedTracer(os.path.basename(__file__), trace_path):
-                    # typing + submit code block
-                    # immediate PX check after submit (your px_after_submit_check)
-                    pass
-            
-            # Try to use the search box if visible (more realistic)
-            search_typed = False
-            try:
-                # Try multiple selectors for search box
-                search_selectors = [
-                    'input[aria-label="Search"]',
-                    'input[name="q"]',
-                    'input[type="search"]',
-                    '#global-search-input'
-                ]
-                
-                search_box = None
-                for selector in search_selectors:
-                    try:
-                        search_box = page.locator(selector).first
-                        if search_box.count() > 0:
-                            say("info", f"[{retailer}] Found search box: {selector}")
-                            break
-                    except:
-                        continue
-                
-                if search_box and search_box.count() > 0:
-                    # Click search box
-                    say("info", f"[{retailer}] Clicking search box")
-                    search_box.click()
-                    random_delay(0.2, 0.4)
-                    
-                    # CRITICAL: Longer dwell before typing to add entropy
-                    # Reduces "home → submit in ~4s" uniformity that PX detects
-                    time.sleep(random.uniform(2.0, 4.0))
-                    
-                    # Human typing with natural delays
-                    say("info", f"[{retailer}] Typing keyword: {keyword}")
-                    human_type(search_box, keyword)
-                    
-                    # CRITICAL: Dwell after typing (humans pause 600-1200ms before submit)
-                    random_delay(0.60, 1.20)
-                    
-                    # Tiny "attention" mouse move (low energy)
-                    if random.random() < 0.4:
-                        micro_mouse_attention(page, around=(5, 9), jitter=6)
-                    
-                    # Prefer submitting with a real transition (nav OR url OR DOM)
-                    submitted = False
-                    submit_start = time.time()
-                    SL.log("submit_wait_begin", ts=submit_start)
-                    
-                    def _log_after_submit(tag):
-                        px_now = _still_px_modal(page)
-                        ms_since_submit = int((time.time() - submit_start) * 1000)
-                        cookies_now = sorted(set(c["name"] for c in page.context.cookies("https://www.walmart.com/")))
-                        SL.log("after_submit", method=tag, px_visible=bool(px_now),
-                               ms_since_submit=ms_since_submit, url=page.url, cookies=cookies_now[:6])
-                    
-                    # 1) Try a visible search button
-                    btn = None
-                    for btn_sel in [
-                        'button[aria-label="Search"]',
-                        'button[type="submit"]',
-                        '[data-automation-id="global-search-submit"]',
-                        'button:has(svg[aria-hidden="true"])'
-                    ]:
-                        candidate = page.locator(btn_sel).first
-                        if candidate.count() > 0:
-                            btn = candidate
-                            break
-                    
-                    if btn and btn.count() > 0:
-                        try:
-                            box = btn.bounding_box()
-                            if box:
-                                mx = box["x"] + box["width"] * random.uniform(0.35, 0.65)
-                                my = box["y"] + box["height"] * random.uniform(0.35, 0.65)
-                                try:
-                                    cur = page.mouse.position
-                                    cur_x, cur_y = cur.get("x", mx - 80), cur.get("y", my)
-                                except Exception:
-                                    cur_x, cur_y = mx - 80, my
-                                _bezier_mouse_move(page, cur_x, cur_y, mx, my,
-                                                   duration_ms=random.randint(280, 500))
-                            random_delay(0.05, 0.12)
-                        except:
-                            pass
-                        
-                        SUBMIT["method"] = "button"; SUBMIT["t"] = submit_start
-                        try:
-                            btn.click()
-                            trans = _wait_for_search_transition(page, timeout_ms=20000)  # 20s SPA-friendly wait
-                            if trans:
-                                submitted = True
-                                _log_after_submit(f"button:{trans}")
-                        except Exception:
-                            pass
-                    
-                    # 2) Fallback: press Enter (use page.keyboard, not element.press), allow a second Enter
-                    if not submitted:
-                        try:
-                            search_box.focus()
-                        except Exception:
-                            try:
-                                search_box.click()
-                            except:
-                                pass
-                        SUBMIT["method"] = "enter"; SUBMIT["t"] = submit_start
-                        try:
-                            page.keyboard.press("Enter")
-                            trans = _wait_for_search_transition(page, timeout_ms=20000)
-                            if not trans:
-                                time.sleep(random.uniform(0.25, 0.6))  # sometimes first Enter just closes typeahead
-                                page.keyboard.press("Enter")
-                                trans = _wait_for_search_transition(page, timeout_ms=20000)
-                            if trans:
-                                submitted = True
-                                _log_after_submit(f"enter:{trans}")
-                        except Exception:
-                            pass
-                    
-                    SL.log("submit_wait_end", elapsed_ms=int((time.time()-submit_start)*1000))
-                    
-                    # 3) No transition? Bail (do NOT goto /search)
-                    if not submitted:
-                        SL.log("submit_no_nav", note="No form-driven navigation or SPA transition after button/enter")
-                        say("error", f"[{retailer}] No navigation after button/enter; bailing to avoid PX trip")
-                        bail_reason = "search_submit_no_nav"
-                        meta["bail"] = bail_reason
-                        meta["steps_log"] = SL.path
-                        report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
-                        _write_run_report(base_dir, report)
-                        return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
-                    
-                    search_typed = True
-                    say("info", f"[{retailer}] Search completed via typing")
-                else:
-                    say("warn", f"[{retailer}] Search box not found, using direct navigation")
-            except Exception as e:
-                say("warn", f"[{retailer}] Search typing failed: {e}")
-            
-            # Check for PX challenge after search navigation
-            if _still_px_modal(page):
-                SL.log("px_status", where="search_results", challenged=True, url=page.url)
-                if _solve_px_until_clear(page, say, SL=SL):
-                    say("success", f"[{retailer}] ✅ Unblocked on search results")
-                    SL.log("px_result", where="search_results", ok=True)
-                else:
-                    say("error", f"[{retailer}] Failed to clear PX on search results")
-                    SL.log("px_result", where="search_results", ok=False)
-                    bail_reason = "px_locked"
+                # Bail if webdriver=true (automation flag still set)
+                if diag and diag.get("webdriver"):
+                    bail_reason = "fingerprint_mismatch"
+                    SL.log("fingerprint_mismatch", webdriver=True, fatal=True)
+                    say("error", f"[{retailer}] ❌ webdriver=true -- aborting to avoid PX hard block")
                     meta["bail"] = bail_reason
                     meta["steps_log"] = SL.path
                     report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
                     _write_run_report(base_dir, report)
-                    return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
+                    return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
+            except Exception as _diag_err:
+                SL.log("diagnostics_error", error=str(_diag_err))
 
-            # Hard block detection: if immediately sent to /blocked after submit, bail
-            if _on_blocked(page.url) and (time.time() - LAST_NAV_DONE_TS["t"] < 5.0):
-                SL.log("hard_block", where="after_submit", url=page.url, reason="blocked_immediate_after_nav")
-                say("warn", f"[{retailer}] Hard block immediately after submit; backing off")
+            # Cookie snapshot (post-nav)
+            try:
+                pre_cookies = _cookie_names(ctx)
+                SL.log("cookies_after_nav", count=len(pre_cookies), names=pre_cookies[:8])
+                print(f"[cookies] post-nav walmart.com: {len(pre_cookies)} names={pre_cookies[:8]}")
+                suspicious = [n for n in pre_cookies if n.lower() in (
+                    "adblocked", "ak_bmsc", "bm_mi", "bm_sv", "bm_sz", "abck"
+                )]
+                if suspicious:
+                    SL.log("cookie_suspicious", names=suspicious)
+                    say("warn", f"[{retailer}] ⚠️  Suspicious cookies present: {suspicious}")
+            except Exception as _ck_err:
+                SL.log("cookie_snapshot_error", error=str(_ck_err))
+
+            # Hard block check after navigation
+            if _on_blocked(page.url):
+                SL.log("hard_block", where="after_search_nav", url=page.url)
+                say("error", f"[{retailer}] Hard blocked after search navigation -- bailing")
                 bail_reason = "hard_block"
                 meta["bail"] = bail_reason
                 meta["steps_log"] = SL.path
                 report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
                 _write_run_report(base_dir, report)
-                return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
-            
-            # Re-run search only after a small idle on home (if PX recovery took us home)
-            if page.url.rstrip("/") == "https://www.walmart.com":
-                say("info", f"[{retailer}] Post-PX recovery: idling on home")
-                time.sleep(random.uniform(2.0, 4.0))  # give PX state time to settle
-                # If PX re-appeared on home, bail
-                if _still_px_modal(page):
-                    SL.log("hard_block", reason="px_on_home_after_recovery", url=page.url)
+                return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
+
+            # PX challenge check (less common with direct URL but still possible)
+            if _still_px_modal(page):
+                SL.log("px_status", where="search_page", challenged=True, url=page.url)
+                if _solve_px_until_clear(page, say, SL=SL):
+                    say("success", f"[{retailer}] ✅ PX cleared on search page")
+                    SL.log("px_result", where="search_page", ok=True)
+                    PX_ESCALATION["main_js_seen"] = False
+                    PX_ESCALATION["bundle_post_seen"] = False
+                    PX_ESCALATION["escalation_ts"] = None
+                    SL.log("px_escalation_reset", where="search_page_solve")
+                else:
+                    say("error", f"[{retailer}] Failed to clear PX on search page")
+                    SL.log("px_result", where="search_page", ok=False)
                     bail_reason = "px_locked"
                     meta["bail"] = bail_reason
                     meta["steps_log"] = SL.path
                     report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
                     _write_run_report(base_dir, report)
-                    return CaptureResult(html_saved=0, shots=shots, assets=assets, meta=meta)
-                # Single retry to search
-                page.goto(url, wait_until="domcontentloaded")
-                _nav_mark_done(SL=SL)
-                # If this jumps to /blocked immediately, bail (don't hammer)
-                if _on_blocked(page.url) and (time.time() - LAST_NAV_DONE_TS["t"] < 5.0):
-                    SL.log("hard_block", reason="blocked_immediate_after_recovery_nav", url=page.url)
-                    bail_reason = "hard_block"
-                    meta["bail"] = bail_reason
-                    meta["steps_log"] = SL.path
-                    report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
-                    _write_run_report(base_dir, report)
-                    return CaptureResult(html_saved=0, shots=shots, assets=assets, meta=meta)
-            
-            # Wait for results to render (avoid false "empty" detection)
+                    return CaptureResult(html_saved=0, shots=[], assets=[], meta=meta)
+
+            # Wait for search results to render
             ready, which = _wait_for_search_results(page, timeout_ms=15000)
             SL.log("results_ready", ready=ready, selector=which, url=page.url)
-            _nav_mark_done(SL=SL)  # mark nav end regardless
+            _nav_mark_done(SL=SL)
             say("info", f"[{retailer}] Results ready: {ready} ({which}) | url={page.url}")
-            
-            # Wait for visual stability before acting
-            if ready:
-                timings["results_ready_ms"] = int((time.time() - (SUBMIT.get("t") or time.time()))*1000)
-                stable = _wait_results_stable(page)
-                SL.log("results_stable", stable=stable)
-            
+            timings["results_ready_ms"] = int((time.time() - SL.t0) * 1000)
+
             if not ready:
-                # Forensics to avoid silent retry
                 say("warn", f"[{retailer}] No results detected - saving forensics")
                 _dump_html_png(page, base_dir, f"{SLUG}_{keyword}_no_results")
                 artifacts["no_results_html"] = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_no_results.html"))
                 artifacts["no_results_png"] = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_no_results.png"))
-            
-            # Idle a beat before first scroll, then unlock scrolling
-            random_delay(2.2, 3.5)  # Increased from 1.6-2.8 for better trust
-            _unlock_scroll("results_ready", SL=SL)
-            
-            # Scroll like a human with native wheel events (PX modal handled inside)
-            _scroll_like_human(page, say, bursts=random.randint(2, 4), lines_min=6, lines_max=12, SL=SL)
-            
-            # Exploratory behavior: drift reading + optional back-scroll + hover
-            _drift_reading(page, seconds=random.uniform(1.8, 3.0))
-            _backscroll_peek(page)
-            
-            # Hover on a random product tile
-            try:
-                if not page.is_closed() and not _still_px_modal(page):
-                    tiles = page.locator('[data-item-id]')
-                    if tiles.count() > 0:
-                        n = random.randint(0, min(5, tiles.count()-1))
-                        tiles.nth(n).hover()
-                        time.sleep(random.uniform(0.4, 0.9))
-            except Exception:
-                pass
-            
-            # Wait a bit after interactions before capturing
-            time.sleep(random.uniform(0.5, 0.9))
-            
-            # Simple mouse movement (guarded against closed)
-            try:
-                if not page.is_closed():
-                    page.mouse.move(
-                        random.randint(300, 800),
-                        random.randint(400, 600)
-                    )
-                    time.sleep(random.uniform(0.2, 0.4))
-            except Exception as e:
-                if SL: SL.log("mouse_move_error", error=str(e))
-            
-            # Final check for PX challenge before capturing
+
+            # Extract __NEXT_DATA__ (structured product + sponsored item data from Next.js SSR)
+            nd_result = _extract_next_data_items(page, SL=SL)
+            if nd_result:
+                SL.log("next_data_extracted",
+                       organic=nd_result["organic_count"],
+                       sponsored=nd_result["sponsored_count"],
+                       total=nd_result.get("total", 0))
+                say("info", f"[{retailer}] __NEXT_DATA__: {nd_result['organic_count']} organic, "
+                            f"{nd_result['sponsored_count']} sponsored, {nd_result.get('total', 0)} total")
+            else:
+                nd_result = {"organic_items": [], "sponsored_items": [], "organic_count": 0, "sponsored_count": 0}
+
+            # Simple scroll passes -- trigger lazy-loaded ad network calls (GraphQL responses)
+            _unlock_scroll("direct_nav", SL=SL)
+            with step(SL, "scroll_passes"):
+                for _spass in range(3):
+                    try:
+                        if _spass == 0:
+                            page.evaluate("window.scrollTo(0, document.body.scrollHeight * 0.5)")
+                            page.wait_for_timeout(1500)
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                        page.wait_for_timeout(2000)
+                        SL.log("scroll_pass", pass_num=_spass)
+                        if _still_px_modal(page):
+                            SL.log("px_mid_scroll", pass_num=_spass)
+                            say("warn", f"[{retailer}] PX appeared mid-scroll -- solving")
+                            if not _solve_px_until_clear(page, say, SL=SL):
+                                SL.log("px_mid_scroll_failed", pass_num=_spass)
+                                break
+                    except Exception as _scroll_err:
+                        SL.log("scroll_pass_error", pass_num=_spass, error=str(_scroll_err))
+                try:
+                    page.evaluate("window.scrollTo(0, 0)")
+                    page.wait_for_timeout(500)
+                except Exception:
+                    pass
+                # Wait for in-flight ad network calls to complete (matches CLI behavior)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=5000)
+                except Exception:
+                    pass
+
+            # Harvest intercepted GraphQL ad data
+            interceptor.harvest(debug_dir=base_dir)
+            SL.log("interceptor_harvest",
+                   orchestra_payloads=len(interceptor.orchestra_payloads),
+                   swag_payloads=len(interceptor.swag_payloads),
+                   sponsored_shelf_ads=len(interceptor.sponsored_shelf_ads),
+                   display_banner_ads=len(interceptor.display_banner_ads),
+                   video_urls=len(interceptor.video_urls))
+            say("info", f"[{retailer}] Intercepted: "
+                        f"{len(interceptor.sponsored_shelf_ads)} shelf ads, "
+                        f"{len(interceptor.display_banner_ads)} banner ads, "
+                        f"{len(interceptor.video_urls)} video URLs")
+            timings["after_submit_px_ms"] = int((time.time() - SL.t0) * 1000)
+
+            # Final PX check before capture
             if _still_px_modal(page):
                 SL.log("px_status", where="before_capture", challenged=True, url=page.url)
                 if not _solve_px_until_clear(page, say, SL=SL):
                     say("error", f"[{retailer}] Failed to clear PX before capture")
-                    SL.log("px_result", where="before_capture", ok=False)
                     bail_reason = "px_locked"
                     meta["bail"] = bail_reason
                     meta["steps_log"] = SL.path
                     report = _build_report(keyword, "bail", bail_reason, started_at, timings, env_info, cookies_info, px_stats, net_counters, artifacts, SL)
                     _write_run_report(base_dir, report)
                     return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
-            
+            # --- END: Direct navigation approach ---
+
             # Save HTML with Kroger-style filename (standardized for GUI)
             # Use run_timestamp from directory name to ensure consistency with image filenames
             if run_timestamp and len(run_timestamp) == 14:
@@ -3539,34 +4121,59 @@ def search_and_capture(
             # Save canonical JSON schema (will be populated after ad capture)
             # Note: ads_list will be built during ad capture below, then saved at the end
             SL.log("canonical_json_prep", run_id=run_id, client=client_name, keyword=keyword)
-            
-            # 1) Programmatic banners (top_banner/marquee_banner - future feature, not yet implemented)
-            # n, s = _capture_elements(page, base_dir, keyword, "top_banner", SELECTORS["top_banner"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp)
-            # shots.extend(s)
-            # if n:
-            #     say("info", f"[{retailer}] Top banner found ({n})")
-            
-            # 2) SBA
+
+            # 1) Skyline top strip banner (e.g. LandO Lakes thin banner at page top)
+            n, s = _capture_elements(page, base_dir, keyword, "skyline", SELECTORS["skyline"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, run_id=run_id, ads_list=ads_list)
+            shots.extend(s)
+            if n:
+                say("info", f"[{retailer}] Skyline top banner found ({n})")
+
+            # 2) Marquee banners — scroll each into view so the iframe src hydrates,
+            #    then screenshot. Walmart places marquee2 iframes both above the grid
+            #    (shoppable banner, e.g. Country Crock) and below (e.g. Thyme & Table).
+            marquee_locs = page.locator(SELECTORS["marquee_banner"])
+            marquee_count = marquee_locs.count()
+            SL.log("marquee_found", count=marquee_count)
+            if marquee_count:
+                say("info", f"[{retailer}] Marquee banners found ({marquee_count}) — scrolling to hydrate")
+                # Scroll each into view so the iframe src loads before we screenshot
+                for _mi in range(marquee_count):
+                    try:
+                        marquee_locs.nth(_mi).scroll_into_view_if_needed(timeout=5000)
+                        page.wait_for_timeout(800)
+                    except Exception:
+                        pass
+                try:
+                    page.wait_for_load_state("networkidle", timeout=5000)
+                except Exception:
+                    pass
+                # Scroll back to top then capture all marquee instances in one pass
+                try:
+                    page.evaluate("window.scrollTo(0, 0)")
+                    page.wait_for_timeout(300)
+                except Exception:
+                    pass
+                n, s = _capture_elements(
+                    page, base_dir, keyword, "marquee_banner",
+                    SELECTORS["marquee_banner"],
+                    meta, SL=SL, client_name=client_name, client_root=client_root,
+                    timestamp=run_timestamp, run_id=run_id, ads_list=ads_list,
+                )
+                shots.extend(s)
+                if n:
+                    say("info", f"[{retailer}] Marquee banner captured ({n})")
+
+            # 3) SBA
             n, s = _capture_elements(page, base_dir, keyword, "sba", SELECTORS["sba"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, run_id=run_id, ads_list=ads_list)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] SBA found ({n})")
             
-            # 3) Tile takeover (only capture SPONSORED tile takeovers)
-            def is_sponsored_tile(item):
-                """Filter to only capture sponsored/featured tile takeovers"""
-                try:
-                    # Look for "Sponsored" indicator in the tile
-                    text = item.inner_text().lower()
-                    return 'sponsored' in text or 'featured' in text or 'ad' in text
-                except:
-                    # If we can't determine, skip it (safer to miss than capture organic)
-                    return False
-            
-            n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, filter_fn=is_sponsored_tile, run_id=run_id, ads_list=ads_list)
+            # 3) Tile takeover — any element with data-testid="tile-take-over" is a paid placement
+            n, s = _capture_elements(page, base_dir, keyword, "tile_takeover", SELECTORS["tile_takeover"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, filter_fn=None, run_id=run_id, ads_list=ads_list)
             shots.extend(s)
             if n:
-                say("info", f"[{retailer}] Sponsored tile takeover found ({n})")
+                say("info", f"[{retailer}] Tile takeover found ({n})")
             
             # 4) SBV (screenshot module + attempt mp4 download)
             sbv_mod = page.locator(SELECTORS["sbv"])
@@ -3831,34 +4438,32 @@ def search_and_capture(
                 say("warn", f"[{retailer}] Gallery Cards capture failed: {e}")
             
             # 6) Full-page screenshot to Main folder
+            # Gallery cards were already scrolled to in step 5, so all lazy iframes
+            # are loaded. We just need one final scroll to the bottom to ensure nothing
+            # at the tail end is missed, then shoot from the top.
             try:
-                # Incremental scroll to load lazy images throughout the page
                 try:
-                    # Get page height
+                    # One pass: scroll to bottom slowly so any remaining lazy content fires
                     page_height = page.evaluate("document.body.scrollHeight")
                     viewport_height = page.evaluate("window.innerHeight")
-                    
-                    # Scroll in increments, pausing to let images load
                     scroll_position = 0
-                    scroll_increment = viewport_height * 0.75  # Scroll 75% of viewport at a time
-                    
+                    scroll_increment = viewport_height * 0.8
                     while scroll_position < page_height:
                         page.evaluate(f"window.scrollTo(0, {scroll_position})")
-                        time.sleep(0.8)  # Pause to let lazy images load
+                        time.sleep(0.5)
                         scroll_position += scroll_increment
-                    
-                    # Final scroll to absolute bottom
+                        # Re-measure — gallery iframes can extend the doc height after loading
+                        page_height = page.evaluate("document.body.scrollHeight")
+
+                    # Hold at absolute bottom long enough for gallery iframes to render
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    time.sleep(1.0)  # Longer pause at bottom
+                    time.sleep(2.0)
+
+                    # Scroll back to top for clean full-page capture
+                    page.evaluate("window.scrollTo(0, 0)")
+                    time.sleep(0.5)
                 except Exception as e:
                     if SL: SL.log("fullpage_scroll_error", error=str(e))
-                
-                # Scroll back to top for clean screenshot
-                try:
-                    page.evaluate("window.scrollTo(0, 0)")
-                    time.sleep(0.5)  # Let header settle
-                except Exception:
-                    pass
                 
                 if client_root and run_timestamp:
                     main_folder = os.path.join(client_root, "Main")
@@ -3910,55 +4515,29 @@ def search_and_capture(
         return CaptureResult(html_saved=0, shots=[], assets=[], meta={})
     
     finally:
-        # DIAGNOSTIC: Check cookie persistence after run (only if ctx is alive)
+        # Post-run cookie snapshot (ctx stays alive — singleton context)
         if ctx:
             try:
-                ctx_alive = not CLOSED.get("ctx", False)
-            except Exception:
-                ctx_alive = False
+                snap = _cookie_snapshot(ctx)
+                SL.log("cookies_post_multi",
+                       by_www_count=snap["counts"]["by_www"],
+                       by_root_count=snap["counts"]["by_root"],
+                       all_count=snap["counts"]["all"],
+                       by_www_names=snap["by_www"],
+                       by_root_names=snap["by_root"],
+                       all_names=snap["all"])
+                post_cookies = _cookie_names(ctx)
+                print(f"[cookies] post-run walmart.com: {len(post_cookies)} names={post_cookies[:8]}")
+                SL.log("cookies_post", count=len(post_cookies), names=post_cookies[:8])
+                cookies_info["post_count"] = snap["counts"]["by_www"]
+                cookies_info["post_names"] = snap["by_www"]
+            except Exception as e:
+                print(f"[cookies] post-run failed: {e}")
 
-            if ctx_alive:
-                try:
-                    # Multi-domain cookie snapshot to diagnose domain/partition issues
-                    snap = _cookie_snapshot(ctx)
-                    SL.log("cookies_post_multi", 
-                           by_www_count=snap["counts"]["by_www"],
-                           by_root_count=snap["counts"]["by_root"],
-                           all_count=snap["counts"]["all"],
-                           by_www_names=snap["by_www"],
-                           by_root_names=snap["by_root"],
-                           all_names=snap["all"])
-                    
-                    # Keep original for back-compat metrics
-                    post_cookies = _cookie_names(ctx)
-                    print(f"[cookies] post-run walmart.com: {len(post_cookies)} names={post_cookies[:8]}")
-                    print(f"[cookies] multi-domain: www={snap['counts']['by_www']}, root={snap['counts']['by_root']}, all={snap['counts']['all']}")
-                    SL.log("cookies_post", count=len(post_cookies), names=post_cookies[:8])
-                    cookies_info["post_count"] = snap["counts"]["by_www"]
-                    cookies_info["post_names"] = snap["by_www"]
-                except Exception as e:
-                    print(f"[cookies] post-run failed: {e}")
-
-            # Save trace for debugging silent exits
-            if ctx:
-                try:
-                    trace_path = os.path.join(base_dir, safe_filename(f"{SLUG}_{keyword}_trace.zip"))
-                    ctx.tracing.stop(path=trace_path)
-                    print(f"[trace] saved → {trace_path}")
-                    artifacts["trace_zip"] = trace_path
-                except Exception as e:
-                    print(f"[trace] stop failed: {e}")
-
-            if ctx:
-                try:
-                    ctx.close()
-                except Exception:
-                    pass
-            if browser:
-                try:
-                    browser.close()
-                except Exception:
-                    pass
+        # Keep the page alive in the singleton — next keyword will reuse it
+        # via the search bar rather than opening a fresh page (more human-like).
+        # Page is only closed at process exit via close_walmart_context().
+        pass
     
     # Mark cookies as refreshed if successful
     if html_saved > 0:
