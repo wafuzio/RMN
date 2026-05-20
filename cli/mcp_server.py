@@ -67,7 +67,7 @@ del _sysconfig
 
 class TokenAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if not TOKEN:
+        if not TOKEN or request.url.path == "/health":
             return await call_next(request)
         provided = (
             request.headers.get("x-api-key") or
