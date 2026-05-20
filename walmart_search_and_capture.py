@@ -1840,12 +1840,67 @@ def _capture_gallery_cards(page, base_dir: str, keyword: str, meta: Dict, SL=Non
                                 advertiser = " ".join(words).title()
                             else:
                                 advertiser = " ".join(words[-3:]).title()
+                    elif logo_alt.strip():
+                        # Newer Walmart format: alt text may be just the brand name
+                        # or a short phrase — run through canonicalize directly
+                        if canonicalize_brand:
+                            advertiser = canonicalize_brand(logo_alt.strip()) or None
                     
                     # Try lexicon canonicalization if available
                     if advertiser and canonicalize_brand:
                         canonical = canonicalize_brand(advertiser)
                         if canonical:
                             advertiser = canonical
+
+                # Fallback: try other common logo element selectors (Walmart occasionally
+                # renames the element in updated iframe templates)
+                if not advertiser:
+                    _LOGO_SELECTORS = (
+                        "#brand-logo", "#logoImg", "#logo-image",
+                        "img.logo", "img[class*='logo']",
+                        "[data-testid='brand-logo']", "[data-testid='logo']",
+                        "img[id*='logo']",
+                    )
+                    for sel in _LOGO_SELECTORS:
+                        elem = soup.select_one(sel)
+                        if not elem:
+                            continue
+                        logo_url = logo_url or elem.get("src")
+                        alt = (elem.get("alt") or "").strip()
+                        if not alt:
+                            continue
+                        alt_lower = alt.lower()
+                        if "for the brand " in alt_lower:
+                            candidate = alt_lower.split("for the brand ")[-1].strip().title()
+                            if candidate.endswith(" Brand"):
+                                candidate = candidate[:-6].strip()
+                            advertiser = candidate
+                        elif " logo" in alt_lower:
+                            before_logo = alt_lower.split(" logo")[0].strip()
+                            if " of " in before_logo:
+                                advertiser = before_logo.split(" of ")[-1].strip().title()
+                            else:
+                                words = before_logo.split()
+                                if 1 <= len(words) <= 3:
+                                    advertiser = " ".join(words).title()
+                        elif canonicalize_brand:
+                            advertiser = canonicalize_brand(alt) or None
+                        if advertiser:
+                            if canonicalize_brand:
+                                advertiser = canonicalize_brand(advertiser) or advertiser
+                            break
+
+                # Fallback: scan all img[alt] elements and run each through the lexicon
+                if not advertiser and canonicalize_brand:
+                    for img in soup.find_all("img", alt=True):
+                        alt = (img.get("alt") or "").strip()
+                        if not alt or len(alt) < 3:
+                            continue
+                        candidate = canonicalize_brand(alt)
+                        # Only accept unambiguous lexicon hits
+                        if candidate and not candidate.endswith("(?)"):
+                            advertiser = candidate
+                            break
                 
                 # Fallback: try hero image alt text
                 if not advertiser:

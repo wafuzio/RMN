@@ -340,13 +340,27 @@ def build_manifest(full: bool = False):
                 })
             brands_by_client[retailer][client] = brand_list
 
+    # Compute unknown-brand ad counts: runs with ads but no brands extracted.
+    # These represent ads where the scraper couldn't identify the advertiser.
+    unknown_ad_counts: dict = {}           # {retailer: total_unknown_ads}
+    unknown_ad_counts_by_client: dict = {} # {retailer: {client: count}}
+    for row in rows:
+        if row.get("ad_count", 0) > 0 and not row.get("brands"):
+            r = row["retailer"]
+            c = row["client"]
+            unknown_ad_counts[r] = unknown_ad_counts.get(r, 0) + row["ad_count"]
+            unknown_ad_counts_by_client.setdefault(r, {})
+            unknown_ad_counts_by_client[r][c] = unknown_ad_counts_by_client[r].get(c, 0) + row["ad_count"]
+
     # Atomic write: write to temp file then rename
     manifest_data = {
         "built_at": iso(datetime.utcnow().replace(tzinfo=timezone.utc)),
         "runs": rows,
         "daily_totals": daily_totals,
-        "brands": brand_summary,  # Pre-computed brand counts per retailer
-        "brands_by_client": brands_by_client  # Pre-computed brand counts per retailer+client
+        "brands": brand_summary,              # Pre-computed brand counts per retailer
+        "brands_by_client": brands_by_client, # Pre-computed brand counts per retailer+client
+        "unknown_ad_counts": unknown_ad_counts,
+        "unknown_ad_counts_by_client": unknown_ad_counts_by_client,
     }
     
     MANIFEST_TMP.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")

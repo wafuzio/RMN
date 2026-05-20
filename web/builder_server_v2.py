@@ -49,9 +49,16 @@ try:
         print("✅ Database store connected — using PostgreSQL for run/brand queries")
     else:
         raise ImportError("DB not reachable")
+    def mf_unknown_ad_counts(): return {}
+    def mf_unknown_ad_counts_by_client(): return {}
 except Exception as _db_err:
     print(f"⚠️  Database store unavailable ({_db_err}), falling back to manifest_store")
-    from web.manifest_store import runs as mf_runs, daily_totals as mf_daily, brands as mf_brands, brands_by_client as mf_brands_by_client
+    from web.manifest_store import (
+        runs as mf_runs, daily_totals as mf_daily,
+        brands as mf_brands, brands_by_client as mf_brands_by_client,
+        unknown_ad_counts as mf_unknown_ad_counts,
+        unknown_ad_counts_by_client as mf_unknown_ad_counts_by_client,
+    )
 
 # ============================================================================
 # Thumbnail Generation
@@ -538,6 +545,64 @@ def utc_range_for(filter_name: str, start: str | None, end: str | None, tz_offse
 def brand_slug(name: str) -> str:
     """Normalize to DB's underscore keys: 'Sour Patch Kids' -> 'sour_patch_kids'"""
     return re.sub(r'[^a-z0-9]+', '_', (name or '').lower()).strip('_')
+
+
+# Patterns that indicate brand-free taglines — canonicalize will spuriously match these
+_TAGLINE_PREFIXES = re.compile(
+    r'^(?:shop|get|buy|try|save|find|discover|introducing|experience|celebrate|'
+    r'power|boost|give|make|fuel|love|hit|live|big|real|same|special|works|a |the )',
+    re.IGNORECASE,
+)
+
+
+def _infer_brand_from_ad(ad: dict) -> str | None:
+    """Attempt to recover a brand name from ad fields when the brand field is null.
+
+    Strategies (in priority order):
+    1. "By / Shop / From X" pattern in title — extract X and canonicalize.
+    2. Canonicalize the full title if it isn't a generic tagline and a known brand
+       is found without fuzzy ambiguity.
+    3. Tile_Takeover: parse ``povid`` URL parameter whose first ``_``-separated
+       segment sometimes encodes the brand name.
+    Returns None when no confident match is found.
+    """
+    # Use core.brands.canonicalize which returns None on no match (unlike the
+    # server's canonicalize_brand which falls back to the raw input string).
+    from core.brands import canonicalize as _exact_canon
+
+    title = (ad.get("title") or ad.get("message") or ad.get("headline") or "").strip()
+    if title:
+        # Strategy 1: "By/Shop/From/Introducing X" prefix
+        prefix_m = re.match(
+            r'^(?:by|shop|from|introducing|brought to you by)\s+(.+)',
+            title,
+            re.IGNORECASE,
+        )
+        if prefix_m:
+            candidate = _exact_canon(prefix_m.group(1).strip())
+            if candidate and not candidate.endswith("(?)"):
+                return candidate
+
+        # Strategy 2: full-title canonicalize, but reject obvious taglines
+        if not _TAGLINE_PREFIXES.match(title):
+            candidate = _exact_canon(title)
+            if candidate and not candidate.endswith("(?)"):
+                return candidate
+
+    # Strategy 3: Tile_Takeover / Marquee_Banner — read povid first segment
+    href = ad.get("href") or ""
+    if href:
+        povid_m = re.search(r'[?&]povid=([^&]+)', href)
+        if povid_m:
+            segs = povid_m.group(1).split('_')
+            # Skip numeric-only segments (category IDs)
+            first_word = next((s for s in segs if s and not s.isdigit() and len(s) > 2), None)
+            if first_word:
+                candidate = _exact_canon(first_word.replace('-', ' '))
+                if candidate and not candidate.endswith("(?)"):
+                    return candidate
+
+    return None
 
 
 @lru_cache(maxsize=1)
@@ -2430,6 +2495,13 @@ def api_ads_cards():
                     brand = "Walmart"
                     advertisers = ["Walmart"]
 
+            # Last-resort: try to infer brand from title / href when still Unknown
+            if brand == "Unknown":
+                inferred = _infer_brand_from_ad(ad)
+                if inferred:
+                    brand = inferred
+                    advertisers = [inferred]
+
             # Apply brands filter if specified
             if brands_filter:
                 brands_list = [b.strip().lower() for b in brands_filter.split(',') if b.strip()]
@@ -2988,6 +3060,13 @@ def api_ads_cards():
                     if "walmart+" in msg_lower or "walmart plus" in msg_lower:
                         brand = "Walmart"
                         advertisers = ["Walmart"]
+
+                # Last-resort: try to infer brand from title / href when still Unknown
+                if brand == "Unknown":
+                    inferred = _infer_brand_from_ad(ad)
+                    if inferred:
+                        brand = inferred
+                        advertisers = [inferred]
                 
                 # Skip ads whose message is blacklisted (MSG: prefix in brand_blacklist.json)
                 if message and is_blacklisted(f"MSG:{message.strip()}"):
@@ -3402,14 +3481,31 @@ def api_brands():
         
         # Only use fast path if we got data, otherwise fall through to slow path
         if brand_counts:
+            # Append Unknown brand count from manifest
+            unknown_total = 0
+            unk_counts = mf_unknown_ad_counts_by_client() if clients else mf_unknown_ad_counts()
+            for retailer in retailers_to_query:
+                if clients:
+                    retailer_data = unk_counts.get(retailer, {})
+                    for client in clients:
+                        unknown_total += retailer_data.get(client, 0)
+                else:
+                    unknown_total += unk_counts.get(retailer, 0)
+
             # Build response
-            total = sum(brand_counts.values())
+            total = sum(brand_counts.values()) + unknown_total
             brands_list = []
             for norm_key, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True):
                 brands_list.append({
                     "brand": brand_display[norm_key],
                     "count": count,
                     "percentage": round((count / total) * 100, 1) if total > 0 else 0
+                })
+            if unknown_total > 0:
+                brands_list.append({
+                    "brand": "Unknown",
+                    "count": unknown_total,
+                    "percentage": round((unknown_total / total) * 100, 1) if total > 0 else 0,
                 })
             
             result = {"brands": brands_list}

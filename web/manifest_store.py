@@ -57,6 +57,23 @@ def brands_by_client() -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
     return _load().get("brands_by_client", {})
 
 
+def unknown_ad_counts() -> Dict[str, int]:
+    """Get count of unknown-brand ads by retailer.
+
+    These are ads where the scraper could not identify the advertiser brand.
+    Returns: {retailer: count_of_unknown_brand_ads}
+    """
+    return _load().get("unknown_ad_counts", {})
+
+
+def unknown_ad_counts_by_client() -> Dict[str, Dict[str, int]]:
+    """Get count of unknown-brand ads by retailer and client.
+
+    Returns: {retailer: {client: count_of_unknown_brand_ads}}
+    """
+    return _load().get("unknown_ad_counts_by_client", {})
+
+
 def built_at() -> str | None:
     """Get manifest build timestamp."""
     return _load().get("built_at")
