@@ -62,3 +62,11 @@ TL-WR702N_V1_UG.pdf
 experiments/kroger_initial_state.json
 CLI-Anything-WEB/
 experimental/obscura/
+
+# CLI agent-harness — runtime artifacts
+cli/*/captures/
+cli/*/agent-harness/captures/
+cli/walmart/agent-harness/cli_web/walmart/tests/fixtures/cassettes/
+*.db
+browser-profile/
+~/.config/cli-web-*/
