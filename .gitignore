@@ -64,8 +64,14 @@ CLI-Anything-WEB/
 experimental/obscura/
 
 # CLI agent-harness — runtime artifacts
-cli/*/captures/
-cli/*/agent-harness/captures/
+# Capture binary assets (large files, not useful in GitHub)
+cli/*/captures/**/assets/
+cli/*/captures/**/*.ts
+cli/*/captures/**/*.mp4
+cli/*/captures/**/*.webm
+cli/*/captures/**/*.png
+cli/*/captures/**/*.jpg
+# Capture JSON data IS committed — ALCHEMY reads it via GitHub connector
 cli/walmart/agent-harness/cli_web/walmart/tests/fixtures/cassettes/
 *.db
 browser-profile/
