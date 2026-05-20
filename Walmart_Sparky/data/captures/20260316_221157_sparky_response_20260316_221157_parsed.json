@@ -1,0 +1,113 @@
+{
+  "query_metadata": {
+    "query_text": "sparky response 20260316 221157",
+    "timestamp": "2026-03-16T22:11:57.159654",
+    "conversation_title": "Toddler Niece Outfit"
+  },
+  "response_classification": {
+    "response_mode": "product_carousel",
+    "intent_name": "open_dialog",
+    "has_products": true,
+    "has_editorial": true,
+    "has_google_grounding": false
+  },
+  "product_metrics": {
+    "total_products": 5,
+    "garanimals_count": 0,
+    "garanimals_positions": [],
+    "garanimals_share": 0.0,
+    "brands": [
+      "Auntie'S",
+      "Only",
+      "My",
+      "Take",
+      "Inktastic"
+    ],
+    "avg_garanimals_price": 0.0,
+    "avg_competitor_price": 26.79,
+    "seller_breakdown": {
+      "1P": 0,
+      "3P": 5
+    },
+    "badge_distribution": {
+      "best_seller": 0,
+      "clearance": 0,
+      "other": 0
+    },
+    "products": [
+      {
+        "position": 1,
+        "name": "Only The Best Nieces Get Promoted To Big Cousin Toddler Shirt, Cute Toddler Tee, Fun Toddler Outfit, Adorable Toddler Clothing, TODDLER SHORT SLEEVE TEE BELLA CANVAS 3001T",
+        "brand": "Only",
+        "price": 26.99,
+        "seller": "Queen B Wellness LLC",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 2,
+        "name": "Take Me To My Aunty You Peasant Toddler Shirt, Cute Kids Clothing Gift For Nieces And Nephews, Fun Family Reunion Outfit TODDLER SHORT SLEEVE TEE BELLA CANVAS 3001T",
+        "brand": "Take",
+        "price": 29.99,
+        "seller": "Queen B Wellness LLC",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 3,
+        "name": "Inktastic My Aunt and Uncle Love Me Niece Gift Girls Toddler Dress",
+        "brand": "Inktastic",
+        "price": 19.99,
+        "seller": "Inktastic Inc",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 4,
+        "name": "Auntie'S Bestie Toddler Shirt - Cute Niece/Nephew Outfit - I Love My Aunt - Boho Toddler & Youth Tee TODDLER SHORT SLEEVE TEE BELLA CANVAS 3001T",
+        "brand": "Auntie'S",
+        "price": 29.99,
+        "seller": "Queen B Wellness LLC",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 5,
+        "name": "My Aunt Is So Much Cooler Than My Mommy Toddler Shirt - Funny Niece/Nephew Outfit - Boho Toddler & Youth Tee TODDLER SHORT SLEEVE TEE BELLA CANVAS 3001T",
+        "brand": "My",
+        "price": 26.99,
+        "seller": "Queen B Wellness LLC",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      }
+    ]
+  },
+  "editorial_metrics": {
+    "garanimals_mentioned": false,
+    "preamble": "Here are a few toddler outfits that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:",
+    "followup": "These options include various cute and comfortable outfits, many featuring fun messages for a niece. They are made from soft, breathable materials suitable for toddlers. \n\nWould you like to explore options based on a specific size or color?",
+    "full_response": "Here are a few toddler outfits that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:\n\nSparky's Picks:[Product Name: Only The Best Nieces Get Promoted To Big Cousin Toddler Shirt, Cute Toddler Tee, Fun Toddler Outfit, Adorable Toddler Clothing, TODDLER SHORT SLEEVE TEE BELLA CANVAS 3001T Price: $26.99 Rating:  Badge_Label: []\nProduct Name: Take Me To My Aunty You Peasant Toddler Shirt, Cute Kids Clothing Gift For Nieces And Nephews, Fun Family Reunion Outfit TODDLER SHORT SLEEVE TEE BELLA CANVAS 3001T Price: $29.99 Rating:  Badge_Label: []\nProduct Name: Inktastic My Aunt and Uncle Love Me Niece Gift Girls Toddler Dress Price: $19.99 Rating:  Badge_Label: []\nProduct Name: Auntie'S Bestie Toddler Shirt - Cute Niece/Nephew Outfit - I Love My Aunt - Boho Toddler & Youth Tee TODDLER SHORT SLEEVE TEE BELLA CANVAS 3001T Price: $29.99 Rating:  Badge_Label: []\nProduct Name: My Aunt Is So Much Cooler Than My Mommy Toddler Shirt - Funny Niece/Nephew Outfit - Boho Toddler & Youth Tee TODDLER SHORT SLEEVE TEE BELLA CANVAS 3001T Price: $26.99 Rating:  Badge_Label: []]\nOther Options:[]\n\nThese options include various cute and comfortable outfits, many featuring fun messages for a niece. They are made from soft, breathable materials suitable for toddlers. \n\nWould you like to explore options based on a specific size or color?",
+    "source_domains": [],
+    "source_count": 0
+  },
+  "ad_infrastructure": {
+    "max_ads": 4,
+    "ads_active": false,
+    "specificity": "narrow",
+    "brands_targeted": []
+  },
+  "search_query_reformulation": {
+    "original": "sparky response 20260316 221157",
+    "reformulated": "cute toddler niece outfit"
+  }
+}

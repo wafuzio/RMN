@@ -460,10 +460,51 @@ class WalmartAdInterceptor:
                     if isinstance(ad, dict):
                         self.display_banner_ads.append(ad)
             elif isinstance(val, dict):
-                self._walk_display_ads(val, depth + 1)
+                # Also capture by __typename — covers adV2.adContent.data pattern where the key
+                # is just "data" but the value is a DSP display ad object.
+                typename = val.get("__typename", "")
+                if typename and ("DSP" in typename or "DisplayAd" in typename or "BannerAd" in typename):
+                    self.display_banner_ads.append(val)
+                else:
+                    self._walk_display_ads(val, depth + 1)
             elif isinstance(val, list):
                 for item in val:
                     self._walk_display_ads(item, depth + 1)
+
+    def get_display_brand(self) -> Optional[str]:
+        """Extract advertiser brand from captured display banner ads.
+
+        Uses assets["603"] (logo alt text, e.g. "Neutrogena Beauty to a Science logo").
+        Strips trailing noise words and canonicalizes against the brand lexicon.
+        """
+        import re as _re2
+        try:
+            from core.brands import canonicalize as _canon
+        except ImportError:
+            _canon = None
+
+        for ad in self.display_banner_ads:
+            assets = ad.get("assets") or {}
+            logo_alt = str(assets.get("603", "") or "").strip()
+            if not logo_alt:
+                continue
+            # Strip trailing "logo", "brand", "icon", "image" words
+            cleaned = _re2.sub(r'\s+(logo|brand|icon|image|badge)\s*$', '', logo_alt, flags=_re2.IGNORECASE).strip()
+            if not cleaned:
+                continue
+            if _canon:
+                canonical = _canon(cleaned)
+                if canonical:
+                    return canonical
+                # Fallback: try just the first word (brand name usually leads)
+                first_word = cleaned.split()[0] if cleaned.split() else ""
+                if first_word:
+                    canonical = _canon(first_word)
+                    if canonical:
+                        return canonical
+            # Last resort: return the cleaned text as-is (truncated to first 3 words)
+            return " ".join(cleaned.split()[:3])
+        return None
 
 # --- END: WalmartAdInterceptor ---
 
@@ -4330,10 +4371,18 @@ def search_and_capture(
 
             # 1) Skyline top strip banner (e.g. LandO Lakes thin banner at page top)
             _px_guard("skyline")
+            _sky_before = len(ads_list)
             n, s = _capture_elements(page, base_dir, keyword, "skyline", SELECTORS["skyline"], meta, SL=SL, client_name=client_name, client_root=client_root, timestamp=run_timestamp, run_id=run_id, ads_list=ads_list)
             shots.extend(s)
             if n:
                 say("info", f"[{retailer}] Skyline top banner found ({n})")
+                # Backfill brand from SWAG display payload if DOM extraction left it null
+                _display_brand = interceptor.get_display_brand()
+                if _display_brand:
+                    for _ad in ads_list[_sky_before:]:
+                        if not _ad.get("brand"):
+                            _ad["brand"] = _display_brand
+                            SL.log("skyline_brand_from_swag", brand=_display_brand)
 
             # 2) Marquee banners — scroll each into view so the iframe src hydrates,
             #    then screenshot. Walmart places marquee2 iframes both above the grid
@@ -4341,6 +4390,7 @@ def search_and_capture(
             _px_guard("marquee_banner")
             marquee_locs = page.locator(SELECTORS["marquee_banner"])
             marquee_count = marquee_locs.count()
+            _marquee_before = len(ads_list)
             SL.log("marquee_found", count=marquee_count)
             if marquee_count:
                 say("info", f"[{retailer}] Marquee banners found ({marquee_count}) — scrolling to hydrate")
@@ -4394,6 +4444,13 @@ def search_and_capture(
                 shots.extend(s)
                 if n:
                     say("info", f"[{retailer}] Marquee banner captured ({n})")
+                    # Backfill brand from SWAG display payload if DOM extraction left it null
+                    _display_brand = interceptor.get_display_brand()
+                    if _display_brand:
+                        for _ad in ads_list[_marquee_before:]:
+                            if not _ad.get("brand"):
+                                _ad["brand"] = _display_brand
+                                SL.log("marquee_brand_from_swag", brand=_display_brand)
 
             # 3) SBA
             _px_guard("sba")

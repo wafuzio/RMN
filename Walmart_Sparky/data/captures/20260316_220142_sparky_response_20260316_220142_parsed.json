@@ -1,0 +1,125 @@
+{
+  "query_metadata": {
+    "query_text": "sparky response 20260316 220142",
+    "timestamp": "2026-03-16T22:01:42.064803",
+    "conversation_title": "Affordable Toddler Clothes"
+  },
+  "response_classification": {
+    "response_mode": "product_carousel",
+    "intent_name": "open_dialog",
+    "has_products": true,
+    "has_editorial": true,
+    "has_google_grounding": false
+  },
+  "product_metrics": {
+    "total_products": 5,
+    "garanimals_count": 2,
+    "garanimals_positions": [
+      1,
+      3
+    ],
+    "garanimals_share": 40.0,
+    "brands": [
+      "Garanimals",
+      "Minnie",
+      "MEZZALL",
+      "Modern"
+    ],
+    "avg_garanimals_price": 12.385,
+    "avg_competitor_price": 10.523333333333335,
+    "seller_breakdown": {
+      "1P": 4,
+      "3P": 1
+    },
+    "badge_distribution": {
+      "best_seller": 4,
+      "clearance": 1,
+      "other": 0
+    },
+    "products": [
+      {
+        "position": 1,
+        "name": "Garanimals Baby & Toddler Girl Cotton 6-Piece Outfit Sets, Graphic Tops & Bottoms, 0M\u20136T",
+        "brand": "Garanimals",
+        "price": 16.79,
+        "seller": "Walmart.com",
+        "is_garanimals": true,
+        "rating": 0.0,
+        "review_count": 0,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 2,
+        "name": "Minnie Mouse Toddler Girls Denim Shortall and Short Sleeve Tee Set, 2-Piece, Sizes 12M-5T",
+        "brand": "Minnie",
+        "price": 17.98,
+        "seller": "Walmart.com",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 3,
+        "name": "Garanimals Baby & Toddler Girl Cotton 2-Piece Set, Short-Sleeve Dress & Biker Shorts, 0M\u20136T",
+        "brand": "Garanimals",
+        "price": 7.98,
+        "seller": "Walmart.com",
+        "is_garanimals": true,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 4,
+        "name": "MEZZALL Trendy Girls Outfits And Sets For Everyday Wear Comfortable Summer Dress With Elastic Waist For Toddlers For Leisure And Play Stylish Baby Wear",
+        "brand": "MEZZALL",
+        "price": 7.59,
+        "seller": "huizhoushichunweishangmaoyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Clearance"
+        ]
+      },
+      {
+        "position": 5,
+        "name": "Modern Moments by Gerber Toddler Girl Organic Loose Ruffled Skirted Short, Sizes 12 Months - 5T",
+        "brand": "Modern",
+        "price": 6,
+        "seller": "Walmart.com",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      }
+    ]
+  },
+  "editorial_metrics": {
+    "garanimals_mentioned": true,
+    "preamble": "Here are a few affordable everyday toddler clothes options you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:",
+    "followup": "These options provide comfort and versatility for daily toddler wear, with various styles and sets. \n\nAre you looking for specific types of clothing, like dresses or pants?",
+    "full_response": "Here are a few affordable everyday toddler clothes options you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:\n\nSparky's Picks:[Product Name: Garanimals Baby & Toddler Girl Cotton 6-Piece Outfit Sets, Graphic Tops & Bottoms, 0M\u20136T Price: $16.79 Rating: 4.6 Badge_Label: [\"Best seller\"]\nProduct Name: Minnie Mouse Toddler Girls Denim Shortall and Short Sleeve Tee Set, 2-Piece, Sizes 12M-5T Price: $17.98 Rating: 4.6 Badge_Label: [\"Best seller\"]\nProduct Name: Garanimals Baby & Toddler Girl Cotton 2-Piece Set, Short-Sleeve Dress & Biker Shorts, 0M\u20136T Price: $7.98 Rating: 4.8 Badge_Label: [\"Best seller\"]\nProduct Name: MEZZALL Trendy Girls Outfits And Sets For Everyday Wear Comfortable Summer Dress With Elastic Waist For Toddlers For Leisure And Play Stylish Baby Wear Price: $7.59 Rating:  Badge_Label: [\"Clearance\"]\nProduct Name: Modern Moments by Gerber Toddler Girl Organic Loose Ruffled Skirted Short, Sizes 12 Months - 5T Price: $6.00 Rating: 4.9 Badge_Label: [\"Best seller\"]]\nOther Options:[]\n\nThese options provide comfort and versatility for daily toddler wear, with various styles and sets. \n\nAre you looking for specific types of clothing, like dresses or pants?",
+    "source_domains": [],
+    "source_count": 0
+  },
+  "ad_infrastructure": {
+    "max_ads": 4,
+    "ads_active": false,
+    "specificity": "narrow",
+    "brands_targeted": []
+  },
+  "search_query_reformulation": {
+    "original": "sparky response 20260316 220142",
+    "reformulated": "affordable everyday toddler clothes"
+  }
+}

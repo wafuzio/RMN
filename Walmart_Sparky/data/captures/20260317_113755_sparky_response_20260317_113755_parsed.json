@@ -1,0 +1,117 @@
+{
+  "query_metadata": {
+    "query_text": "sparky response 20260317 113755",
+    "timestamp": "2026-03-17T11:37:55.870513",
+    "conversation_title": "Affordable Fall Fashion for Kids"
+  },
+  "response_classification": {
+    "response_mode": "product_carousel",
+    "intent_name": "open_dialog",
+    "has_products": true,
+    "has_editorial": true,
+    "has_google_grounding": false
+  },
+  "product_metrics": {
+    "total_products": 5,
+    "garanimals_count": 0,
+    "garanimals_positions": [],
+    "garanimals_share": 0.0,
+    "brands": [
+      "Hoodies",
+      "Toddler",
+      "Dakiuu",
+      "4th",
+      "Avtoify"
+    ],
+    "avg_garanimals_price": 0.0,
+    "avg_competitor_price": 11.07,
+    "seller_breakdown": {
+      "1P": 0,
+      "3P": 5
+    },
+    "badge_distribution": {
+      "best_seller": 0,
+      "clearance": 2,
+      "other": 0
+    },
+    "products": [
+      {
+        "position": 1,
+        "name": "Toddler Boy Clothes Set Long Sleeve Plaid Prints T Shirt Tops Pants Kids Gentleman Outfits Fall Winter Outfit,Size 3 Years-4 Years",
+        "brand": "Toddler",
+        "price": 8.98,
+        "seller": "guangzhouhuyuanchenmaoyiyouxiangongsi",
+        "is_garanimals": false,
+        "rating": 5.0,
+        "review_count": 2,
+        "badges": [
+          "Clearance"
+        ]
+      },
+      {
+        "position": 2,
+        "name": "4th Birthday Outfit for Toddler Girls 4 Year Old Fourth Four Sweatshirt Tutu Skirt Fall Clothes",
+        "brand": "4th",
+        "price": 17.39,
+        "seller": "guangzhouyuanhuidianzishangwuyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 3,
+        "name": "Hoodies for Boys Kids Red Hoodie Casual Long Sleeve Classic Hoodie Fall Clothes Girls Hoodies Size 4-5 Years Boys Girls Fashion",
+        "brand": "Hoodies",
+        "price": 9.7,
+        "seller": "xianjianfengfeibaihuoyouxianzerengongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 4,
+        "name": "Avtoify Girls Long Sleeve Shirts Casual, Toddler Girls Fall Clothes, 3-12 Years Old Boys and Girls Casual Polka Printed 3/4 Sleeve Round Neck top",
+        "brand": "Avtoify",
+        "price": 4.99,
+        "seller": "guangzhouzuoxiariyongpinyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Clearance"
+        ]
+      },
+      {
+        "position": 5,
+        "name": "Dakiuu Kids Girls Winter Fall Clothes Bow Spring Bowknot Ruffle Long Sleeve High Low Top Shirt + Leopard Legging Pants 4-7 Years 2 Pcs Outfits Clothing Set Brown 5 Years (5Y)",
+        "brand": "Dakiuu",
+        "price": 14.29,
+        "seller": "shenZHENshi FANGqingYUANdianZIshangWUyouXIANgonGSI",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      }
+    ]
+  },
+  "editorial_metrics": {
+    "garanimals_mentioned": false,
+    "preamble": "Here are a few affordable fall fashion options for your 4 year old. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:",
+    "followup": "These options offer various styles and comfort for fall, including outfit sets, a hoodie, and a long-sleeve top, all at affordable prices. They are designed for children around 4 years old. \n\nAre you looking for something for a boy or a girl, or a specific type of clothing?",
+    "full_response": "Here are a few affordable fall fashion options for your 4 year old. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:\n\nSparky's Picks:[Product Name: Toddler Boy Clothes Set Long Sleeve Plaid Prints T Shirt Tops Pants Kids Gentleman Outfits Fall Winter Outfit,Size 3 Years-4 Years Price: $8.98 Rating: 5.0 Badge_Label: [\"Clearance\"]\nProduct Name: 4th Birthday Outfit for Toddler Girls 4 Year Old Fourth Four Sweatshirt Tutu Skirt Fall Clothes Price: $17.39 Rating:  Badge_Label: []\nProduct Name: Hoodies for Boys Kids Red Hoodie Casual Long Sleeve Classic Hoodie Fall Clothes Girls Hoodies Size 4-5 Years Boys Girls Fashion Price: $9.70 Rating:  Badge_Label: []\nProduct Name: Avtoify Girls Long Sleeve Shirts Casual, Toddler Girls Fall Clothes, 3-12 Years Old Boys and Girls Casual Polka Printed 3/4 Sleeve Round Neck top Price: $4.99 Rating:  Badge_Label: [\"Clearance\"]\nProduct Name: Dakiuu Kids Girls Winter Fall Clothes Bow Spring Bowknot Ruffle Long Sleeve High Low Top Shirt + Leopard Legging Pants 4-7 Years 2 Pcs Outfits Clothing Set Brown 5 Years (5Y) Price: $14.29 Rating:  Badge_Label: []]\nOther Options:[]\n\nThese options offer various styles and comfort for fall, including outfit sets, a hoodie, and a long-sleeve top, all at affordable prices. They are designed for children around 4 years old. \n\nAre you looking for something for a boy or a girl, or a specific type of clothing?",
+    "source_domains": [],
+    "source_count": 0
+  },
+  "ad_infrastructure": {
+    "max_ads": 4,
+    "ads_active": false,
+    "specificity": "narrow",
+    "brands_targeted": []
+  },
+  "search_query_reformulation": {
+    "original": "sparky response 20260317 113755",
+    "reformulated": "fall fashion, affordable, 4 year old"
+  }
+}

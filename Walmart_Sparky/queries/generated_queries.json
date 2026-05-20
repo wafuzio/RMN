@@ -1,0 +1,548 @@
+{
+  "branded_queries": [
+    {
+      "query": "garanimals bodysuit",
+      "product_type": "Bodysuit",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals dress",
+      "product_type": "Dress",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals jean",
+      "product_type": "Jean",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals legging",
+      "product_type": "Legging",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals outfit",
+      "product_type": "Outfit",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals pajama",
+      "product_type": "Pajama",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals pant",
+      "product_type": "Pant",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals romper",
+      "product_type": "Romper",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals set",
+      "product_type": "Set",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals shirt",
+      "product_type": "Shirt",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals short",
+      "product_type": "Short",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals skirt",
+      "product_type": "Skirt",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals tank",
+      "product_type": "Tank",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals tee",
+      "product_type": "Tee",
+      "intent": "branded",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    }
+  ],
+  "category_queries": [
+    {
+      "query": "toddler rompers walmart",
+      "product_type": "rompers",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best rompers for toddlers",
+      "product_type": "rompers",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler jeans walmart",
+      "product_type": "jeans",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best jeans for toddlers",
+      "product_type": "jeans",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler t-shirts walmart",
+      "product_type": "t-shirts",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best t-shirts for toddlers",
+      "product_type": "t-shirts",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler shorts walmart",
+      "product_type": "shorts",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best shorts for toddlers",
+      "product_type": "shorts",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler dresses walmart",
+      "product_type": "dresses",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best dresses for toddlers",
+      "product_type": "dresses",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler pajamas walmart",
+      "product_type": "pajamas",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best pajamas for toddlers",
+      "product_type": "pajamas",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler swimwear walmart",
+      "product_type": "swimwear",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best swimwear for toddlers",
+      "product_type": "swimwear",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler leggings walmart",
+      "product_type": "leggings",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best leggings for toddlers",
+      "product_type": "leggings",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler outfits walmart",
+      "product_type": "outfits",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best outfits for toddlers",
+      "product_type": "outfits",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler bodysuits walmart",
+      "product_type": "bodysuits",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best bodysuits for toddlers",
+      "product_type": "bodysuits",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler jumpsuits walmart",
+      "product_type": "jumpsuits",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best jumpsuits for toddlers",
+      "product_type": "jumpsuits",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler overalls walmart",
+      "product_type": "overalls",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best overalls for toddlers",
+      "product_type": "overalls",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler pants walmart",
+      "product_type": "pants",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best pants for toddlers",
+      "product_type": "pants",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler skirts walmart",
+      "product_type": "skirts",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best skirts for toddlers",
+      "product_type": "skirts",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler hoodies walmart",
+      "product_type": "hoodies",
+      "intent": "category",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best hoodies for toddlers",
+      "product_type": "hoodies",
+      "intent": "category_quality",
+      "priority": "high",
+      "expected_mode": "product_carousel"
+    }
+  ],
+  "comparative_queries": [
+    {
+      "query": "garanimals vs children's place",
+      "competitor": "children's place",
+      "intent": "comparative",
+      "priority": "high",
+      "expected_mode": "deflection"
+    },
+    {
+      "query": "which is better garanimals or children's place",
+      "competitor": "children's place",
+      "intent": "comparative_quality",
+      "priority": "high",
+      "expected_mode": "deflection"
+    },
+    {
+      "query": "garanimals vs cat and jack",
+      "competitor": "cat and jack",
+      "intent": "comparative",
+      "priority": "high",
+      "expected_mode": "deflection"
+    },
+    {
+      "query": "which is better garanimals or cat and jack",
+      "competitor": "cat and jack",
+      "intent": "comparative_quality",
+      "priority": "high",
+      "expected_mode": "deflection"
+    },
+    {
+      "query": "garanimals vs carters",
+      "competitor": "carters",
+      "intent": "comparative",
+      "priority": "high",
+      "expected_mode": "deflection"
+    },
+    {
+      "query": "which is better garanimals or carters",
+      "competitor": "carters",
+      "intent": "comparative_quality",
+      "priority": "high",
+      "expected_mode": "deflection"
+    },
+    {
+      "query": "garanimals vs okie dokie",
+      "competitor": "okie dokie",
+      "intent": "comparative",
+      "priority": "high",
+      "expected_mode": "deflection"
+    },
+    {
+      "query": "which is better garanimals or okie dokie",
+      "competitor": "okie dokie",
+      "intent": "comparative_quality",
+      "priority": "high",
+      "expected_mode": "deflection"
+    }
+  ],
+  "quality_perception_queries": [
+    {
+      "query": "are garanimals clothes good quality",
+      "intent": "quality_perception",
+      "priority": "critical",
+      "expected_mode": "editorial"
+    },
+    {
+      "query": "do garanimals clothes hold up in the wash",
+      "intent": "quality_perception",
+      "priority": "critical",
+      "expected_mode": "editorial"
+    },
+    {
+      "query": "garanimals reviews",
+      "intent": "quality_perception",
+      "priority": "critical",
+      "expected_mode": "editorial"
+    },
+    {
+      "query": "how is garanimals quality",
+      "intent": "quality_perception",
+      "priority": "critical",
+      "expected_mode": "editorial"
+    },
+    {
+      "query": "are garanimals durable",
+      "intent": "quality_perception",
+      "priority": "critical",
+      "expected_mode": "editorial"
+    },
+    {
+      "query": "do garanimals clothes shrink",
+      "intent": "quality_perception",
+      "priority": "critical",
+      "expected_mode": "editorial"
+    },
+    {
+      "query": "garanimals vs target brand quality",
+      "intent": "quality_perception",
+      "priority": "critical",
+      "expected_mode": "editorial"
+    },
+    {
+      "query": "is garanimals worth it",
+      "intent": "quality_perception",
+      "priority": "critical",
+      "expected_mode": "editorial"
+    }
+  ],
+  "value_queries": [
+    {
+      "query": "cheap kids clothes walmart",
+      "intent": "value",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler clothes under $10",
+      "intent": "value",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "affordable kids clothing",
+      "intent": "value",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "best value toddler clothes",
+      "intent": "value",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "budget kids clothes walmart",
+      "intent": "value",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "inexpensive toddler outfits",
+      "intent": "value",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    }
+  ],
+  "seasonal_queries": [
+    {
+      "query": "back to school toddler clothes walmart",
+      "intent": "seasonal",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "summer clothes for kids",
+      "intent": "seasonal",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "Easter toddler outfits",
+      "intent": "seasonal",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "winter clothes for toddlers",
+      "intent": "seasonal",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "fall toddler clothes",
+      "intent": "seasonal",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "holiday outfits for kids",
+      "intent": "seasonal",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "spring toddler clothes",
+      "intent": "seasonal",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "toddler beach clothes",
+      "intent": "seasonal",
+      "priority": "medium",
+      "expected_mode": "product_carousel"
+    }
+  ],
+  "mix_and_match_queries": [
+    {
+      "query": "mix and match kids clothes",
+      "intent": "mix_and_match",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "coordinating toddler outfits",
+      "intent": "mix_and_match",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "kids clothes that go together",
+      "intent": "mix_and_match",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "matching toddler sets",
+      "intent": "mix_and_match",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "garanimals mix and match",
+      "intent": "mix_and_match",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    },
+    {
+      "query": "easy outfit sets for toddlers",
+      "intent": "mix_and_match",
+      "priority": "critical",
+      "expected_mode": "product_carousel"
+    }
+  ]
+}

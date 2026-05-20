@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sparky Investigation Board</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:#111;color:#ccc;line-height:1.5}
+a{color:#d4af37}
+
+/* --- LAYOUT --- */
+.top-bar{background:#0a0a0a;border-bottom:1px solid #222;padding:16px 32px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100}
+.top-bar h1{font-size:15px;letter-spacing:2px;color:#d4af37;font-weight:600;text-transform:uppercase}
+.top-bar .meta{font-size:12px;color:#555}
+.top-bar .filters{display:flex;gap:8px}
+.filter-btn{background:none;border:1px solid #333;color:#777;padding:4px 12px;font-size:11px;cursor:pointer;border-radius:3px;font-family:inherit;transition:all .15s}
+.filter-btn:hover,.filter-btn.active{border-color:#d4af37;color:#d4af37}
+
+.page{max-width:1400px;margin:0 auto;padding:24px 32px 80px}
+
+/* --- PIPELINE --- */
+.pipeline-section{margin-bottom:40px}
+.section-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#555;margin-bottom:16px;font-weight:600}
+.pipeline{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding-bottom:8px}
+.pipe-node{flex:1;min-width:140px;background:#1a1a1a;border:1px solid #2a2a2a;padding:14px 16px;position:relative;cursor:pointer;transition:all .2s}
+.pipe-node:hover{border-color:#444}
+.pipe-node.selected{border-color:#d4af37;background:#1a1800}
+.pipe-node::after{content:'';position:absolute;right:-1px;top:50%;transform:translateY(-50%);width:0;height:0;border-top:8px solid transparent;border-bottom:8px solid transparent;border-left:8px solid #2a2a2a;z-index:2}
+.pipe-node:last-child::after{display:none}
+.pipe-node:hover::after{border-left-color:#444}
+.pipe-node.selected::after{border-left-color:#d4af37}
+.pipe-name{font-size:12px;font-weight:600;color:#eee;margin-bottom:4px}
+.pipe-conf{display:flex;align-items:center;gap:6px;margin-top:8px}
+.conf-bar{flex:1;height:3px;background:#2a2a2a;border-radius:2px;overflow:hidden}
+.conf-fill{height:100%;border-radius:2px;transition:width .3s}
+.conf-label{font-size:10px;color:#555;min-width:28px;text-align:right}
+
+/* Pipeline detail panel */
+.pipe-detail{background:#1a1a1a;border:1px solid #2a2a2a;padding:20px 24px;margin-top:-1px;display:none;animation:fadeIn .2s}
+.pipe-detail.visible{display:block}
+.pipe-detail-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+.detail-col h4{font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:600}
+.detail-col.known h4{color:#4ade80}
+.detail-col.suspected h4{color:#fbbf24}
+.detail-col.unknown h4{color:#ef4444}
+.detail-item{font-size:12px;padding:6px 0;border-bottom:1px solid #222;color:#999}
+
+/* --- THREADS --- */
+.threads-section{margin-bottom:40px}
+.threads-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.thread-card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;overflow:hidden;transition:all .2s}
+.thread-card:hover{border-color:#333}
+.thread-card.expanded{grid-column:1/-1}
+.thread-header{padding:16px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.thread-id{font-size:11px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:2px;white-space:nowrap}
+.thread-id.routing{background:#3b82f620;color:#3b82f6;border:1px solid #3b82f640}
+.thread-id.category{background:#f9731620;color:#f97316;border:1px solid #f9731640}
+.thread-id.perception{background:#a855f720;color:#a855f7;border:1px solid #a855f740}
+.thread-id.context{background:#06b6d420;color:#06b6d4;border:1px solid #06b6d440}
+.thread-id.variables{background:#64748b20;color:#94a3b8;border:1px solid #64748b40}
+.thread-info{flex:1}
+.thread-title{font-size:14px;font-weight:600;color:#eee;margin-bottom:4px}
+.thread-question{font-size:12px;color:#888;font-style:italic}
+.thread-toggle{color:#555;font-size:18px;transition:transform .2s;line-height:1}
+.thread-card.expanded .thread-toggle{transform:rotate(45deg)}
+
+.thread-body{display:none;padding:0 20px 20px;animation:fadeIn .2s}
+.thread-card.expanded .thread-body{display:block}
+
+.thread-section{margin-top:16px}
+.thread-section-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#555;font-weight:600;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #222}
+
+.hypothesis-box{background:#0a0a0a;border-left:3px solid #fbbf24;padding:12px 16px;margin:8px 0;font-size:13px;color:#ccc}
+.hypothesis-box .label{font-size:10px;color:#fbbf24;letter-spacing:1px;text-transform:uppercase;font-weight:600;margin-bottom:4px}
+
+.evidence-list{list-style:none}
+.evidence-list li{font-size:12px;padding:6px 0;border-bottom:1px solid #1a1a1a;display:flex;align-items:flex-start;gap:8px}
+.evidence-dot{width:6px;height:6px;border-radius:50%;margin-top:6px;flex-shrink:0}
+.evidence-dot.confirmed{background:#4ade80}
+.evidence-dot.observed{background:#fbbf24}
+.evidence-dot.inferred{background:#f97316}
+.evidence-dot.gap{background:#ef4444}
+
+.test-list{list-style:none}
+.test-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #1a1a1a;font-size:12px}
+.test-check{width:16px;height:16px;border:1px solid #444;border-radius:2px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .15s}
+.test-check:hover{border-color:#d4af37}
+.test-check.done{background:#4ade8020;border-color:#4ade80}
+.test-check.done::after{content:'';width:8px;height:5px;border-left:2px solid #4ade80;border-bottom:2px solid #4ade80;transform:rotate(-45deg);margin-top:-2px}
+.test-query{color:#ccc}
+.test-why{color:#666;font-size:11px;margin-top:2px}
+
+.dep-links{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.dep-link{font-size:10px;padding:2px 8px;border-radius:2px;cursor:pointer;border:1px solid}
+.dep-link.routing{border-color:#3b82f640;color:#3b82f6}
+.dep-link.category{border-color:#f9731640;color:#f97316}
+.dep-link.perception{border-color:#a855f740;color:#a855f7}
+.dep-link.context{border-color:#06b6d440;color:#06b6d4}
+.dep-link.variables{border-color:#64748b40;color:#94a3b8}
+
+/* --- CONNECTIONS SECTION --- */
+.connections-section{margin-bottom:40px}
+.conn-chain{background:#1a1a1a;border:1px solid #2a2a2a;padding:16px 20px;margin-bottom:8px;border-radius:4px}
+.conn-chain-nodes{display:flex;align-items:center;flex-wrap:wrap;gap:4px;font-size:12px}
+.conn-node{padding:4px 10px;border-radius:3px;background:#0a0a0a}
+.conn-node.fact{border:1px solid #4ade8040;color:#4ade80}
+.conn-node.inference{border:1px solid #fbbf2440;color:#fbbf24}
+.conn-node.gap{border:1px solid #ef444440;color:#ef4444;border-style:dashed}
+.conn-arrow{color:#333;font-size:14px}
+.conn-strength{font-size:10px;color:#555;margin-top:6px}
+
+/* --- TEST MATRIX --- */
+.matrix-section{margin-bottom:40px}
+.matrix-table{width:100%;border-collapse:collapse;font-size:12px}
+.matrix-table th{text-align:left;padding:8px 12px;border-bottom:2px solid #333;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#555;font-weight:600}
+.matrix-table td{padding:8px 12px;border-bottom:1px solid #1a1a1a;vertical-align:top}
+.matrix-table tr:hover{background:#1a1a1a}
+.matrix-table .query-cell{color:#eee;font-family:'SF Mono','Fira Code',monospace;font-size:11px}
+.matrix-table .thread-tags{display:flex;gap:4px;flex-wrap:wrap}
+.priority-high{color:#ef4444}
+.priority-med{color:#fbbf24}
+.priority-low{color:#555}
+.status-badge{font-size:10px;padding:2px 6px;border-radius:2px}
+.status-badge.queued{background:#333;color:#888}
+.status-badge.done{background:#4ade8020;color:#4ade80}
+
+/* --- NOTES --- */
+.notes-section{margin-bottom:40px}
+.notes-area{width:100%;min-height:120px;background:#0a0a0a;border:1px solid #2a2a2a;color:#ccc;padding:14px 16px;font-family:inherit;font-size:13px;line-height:1.6;resize:vertical;border-radius:4px}
+.notes-area:focus{outline:none;border-color:#333}
+.notes-actions{display:flex;gap:8px;margin-top:8px;justify-content:flex-end}
+.btn-sm{background:none;border:1px solid #333;color:#777;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:3px;font-family:inherit;transition:all .15s}
+.btn-sm:hover{border-color:#d4af37;color:#d4af37}
+
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* --- RESPONSIVE --- */
+@media(max-width:900px){
+  .threads-grid{grid-template-columns:1fr}
+  .thread-card.expanded{grid-column:1}
+  .pipe-detail-grid{grid-template-columns:1fr}
+  .pipeline{flex-wrap:nowrap}
+}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1>Sparky Investigation Board</h1>
+  <div class="filters">
+    <button class="filter-btn active" onclick="filterThreads('all')">All Threads</button>
+    <button class="filter-btn" onclick="filterThreads('has-gaps')">Has Gaps</button>
+    <button class="filter-btn" onclick="filterThreads('testable')">Testable Now</button>
+  </div>
+  <div class="meta">Garanimals / Walmart Sparky &mdash; Mar 2026</div>
+</div>
+
+<div class="page">
+
+<!-- ============ SYSTEM PIPELINE ============ -->
+<div class="pipeline-section">
+  <div class="section-label">System Model &mdash; Click any stage to see evidence</div>
+  <div class="pipeline" id="pipeline"></div>
+  <div class="pipe-detail" id="pipeDetail"></div>
+</div>
+
+<!-- ============ CAUSAL CHAINS ============ -->
+<div class="connections-section">
+  <div class="section-label">Established Connections</div>
+  <div id="connections"></div>
+</div>
+
+<!-- ============ INVESTIGATION THREADS ============ -->
+<div class="threads-section">
+  <div class="section-label">Investigation Threads</div>
+  <div class="threads-grid" id="threadsGrid"></div>
+</div>
+
+<!-- ============ TEST MATRIX ============ -->
+<div class="matrix-section">
+  <div class="section-label">Test Queue</div>
+  <table class="matrix-table" id="testMatrix">
+    <thead>
+      <tr>
+        <th style="width:30px"></th>
+        <th>Query</th>
+        <th>Tests For</th>
+        <th>Threads</th>
+        <th>Priority</th>
+      </tr>
+    </thead>
+    <tbody id="testBody"></tbody>
+  </table>
+</div>
+
+<!-- ============ NOTES ============ -->
+<div class="notes-section">
+  <div class="section-label">Working Notes</div>
+  <textarea class="notes-area" id="notes" placeholder="Observations, anomalies, things that don't fit the model yet..."></textarea>
+  <div class="notes-actions">
+    <button class="btn-sm" onclick="exportState()">Export JSON</button>
+  </div>
+</div>
+
+</div>
+
+<script>
+// ============================================================
+// DATA MODEL
+// ============================================================
+
+const pipeline = [
+  {
+    id: 'query', name: 'Query Input', confidence: 0.9,
+    known: [
+      'Full API endpoint and request body documented',
+      'URL-encoded query in message.query field',
+      'conversationId UUID for session management',
+      'channelId distinguishes iOS vs other clients',
+      'metadata includes loginStatus, walmartPlusStatus, isAssociate'
+    ],
+    suspected: [
+      'Other channel IDs exist (Android, web) with potentially different behavior'
+    ],
+    unknown: [
+      'Whether query preprocessing happens before the API call on-device'
+    ]
+  },
+  {
+    id: 'reformulation', name: 'Query Reformulation', confidence: 0.55,
+    known: [
+      'Strips question words ("what are", "how do I")',
+      'Preserves value terms, age indicators, category descriptors',
+      'Conversation context injected into reformulated query',
+      '"gift" context persists even when user explicitly redirects'
+    ],
+    suspected: [
+      'Brand names may be reordered alphabetically in comparative queries',
+      '"cute" independently triggers specialty routing',
+      'Reformulation adds inferred intent tags not visible in the query string'
+    ],
+    unknown: [
+      'Full reformulation ruleset',
+      'How brand names are weighted vs. category terms',
+      'Whether reformulation differs by response mode',
+      'If "best selling" gets special handling as a modifier'
+    ]
+  },
+  {
+    id: 'intent', name: 'Intent Classifier', confidence: 0.35,
+    known: [
+      'Three distinct response modes: Product, Editorial, Comparative Deflection',
+      'Product intent returns carousel of 5 items',
+      'Editorial uses Google Vertex AI grounding',
+      'Comparative queries trigger deflection with products but no qualitative judgment'
+    ],
+    suspected: [
+      'Question structure (not just content) determines mode selection',
+      '"why" and "are X good" trigger editorial; "show me" and "best X" trigger product',
+      'Hybrid responses may be a fourth mode or just transition behavior'
+    ],
+    unknown: [
+      'The actual classification rules or model',
+      'Whether intent classification is a discrete classifier or LLM-based',
+      'If the same query can produce different modes on different runs',
+      'How conversation context shifts intent classification on follow-ups'
+    ]
+  },
+  {
+    id: 'routing', name: '1P / 3P Router', confidence: 0.65,
+    known: [
+      'Binary routing: results are 80-100% 1P or 100% 3P, rarely mixed',
+      'Value terms (cheap, affordable, budget) → 1P route',
+      'Generic categories (shirts, pants, clothes) → 1P route',
+      'Seasonal/event terms (back to school, halloween) → 3P route',
+      'Gift context (gift for niece, cute outfit for) → 3P route',
+      'Garanimals visibility perfectly correlates with 1P routing (R²=1.0)'
+    ],
+    suspected: [
+      '"best selling" modifier may trigger marketplace/3P routing',
+      '"mix and match" is a borderline category (40/60 1P/3P observed)',
+      'Novelty and character-specific queries route to 3P'
+    ],
+    unknown: [
+      'Exact keyword triggers and their weights',
+      'Whether routing is rule-based or model-based',
+      'If multiple trigger words interact (additive? override?)',
+      'Whether 1P brands can appear in 3P-routed results or vice versa'
+    ]
+  },
+  {
+    id: 'search', name: 'Product Search', confidence: 0.5,
+    known: [
+      'Returns exactly 5 products in carousel format',
+      'Keyword-title matching is a strong ranking signal',
+      'Best Seller badges correlate with 1P-dominant results',
+      'searchQuery field shows the reformulated search passed to Walmart engine',
+      'sellerName reveals 1P vs 3P origin'
+    ],
+    suspected: [
+      'Lower price may rank higher in generic category queries',
+      'SEO-stuffed 3P titles outperform clean 1P titles in niche categories',
+      'Sales velocity and review count influence ranking'
+    ],
+    unknown: [
+      'Full ranking algorithm',
+      'Role of inventory/stock levels',
+      'Whether personalization (purchase history) affects product selection',
+      'How sponsored products will integrate when ads activate',
+      'Geographic/store-level inventory influence'
+    ]
+  },
+  {
+    id: 'editorial', name: 'Vertex AI Editorial', confidence: 0.5,
+    known: [
+      'Powered by Google Vertex AI Search grounding API',
+      'Sources include: reddit, babycenter, thespruce, mommy blogs, brand sites',
+      'textIndices provide character-level source attribution',
+      'Garanimals framed as "affordable everyday" — Cat & Jack as "durable"',
+      'Sparky refuses qualitative brand comparisons in editorial'
+    ],
+    suspected: [
+      'Source weighting may favor high-authority domains',
+      'Recency of content influences which sources get cited',
+      'Brand website content (garanimals.com) is indexed but underweighted'
+    ],
+    unknown: [
+      'Full source weighting algorithm',
+      'Whether Walmart can influence grounding source selection',
+      'If editorial responses vary over time as web content changes',
+      'How many unique source domains are in the grounding corpus'
+    ]
+  },
+  {
+    id: 'ads', name: 'Ad Infrastructure', confidence: 0.3,
+    known: [
+      'adsBeacon present in every response with "sparky": true',
+      'max_ads: 4 for generic queries, 8 for comparative',
+      'showAds: false in all captures so far',
+      'brands array populated based on query context',
+      'specificity field exists (observed: "broad", "narrow")'
+    ],
+    suspected: [
+      'Ad system is built and ready but not yet activated at scale',
+      'Comparative queries are higher-value ad real estate',
+      'Sponsored products will inject into the 5-item carousel'
+    ],
+    unknown: [
+      'When showAds flips to true and what triggers it',
+      'Whether sponsored products displace organic or add to carousel',
+      'Ad auction mechanics and bidding model',
+      'Whether ads affect editorial content or only product carousel',
+      'Walmart+ status impact on ad frequency'
+    ]
+  },
+  {
+    id: 'response', name: 'Response Assembly', confidence: 0.85,
+    known: [
+      'Full response JSON schema documented for all 3 modes',
+      'Product mode: rawResponse[].products[] with full metadata',
+      'Editorial mode: entities.GoogleSource[] with textIndices',
+      'Standard preamble template with disclaimer',
+      'Follow-up questions appear template-based, not contextual'
+    ],
+    suspected: [
+      'Follow-up question templates may vary by detected intent category'
+    ],
+    unknown: [
+      'Whether response format changes when experimentFlags are populated',
+      'If HTML tag support (supportHtmlTags: true) changes editorial formatting'
+    ]
+  }
+];
+
+const connections = [
+  {
+    chain: [
+      { text: '1P Routing', type: 'fact' },
+      { text: 'Garanimals Visibility', type: 'fact' }
+    ],
+    strength: 'Proven (R²=1.0) — 4 queries, zero exceptions. If 1P products appear, Garanimals appears. If 3P dominates, Garanimals is absent.',
+    id: 'conn-1p'
+  },
+  {
+    chain: [
+      { text: 'Value Keywords', type: 'fact' },
+      { text: '1P Route Trigger', type: 'fact' },
+      { text: 'Garanimals in Carousel', type: 'fact' }
+    ],
+    strength: 'Observed — "cheap", "affordable", "budget" consistently trigger 1P routing where Garanimals holds 40-60% of slots.',
+    id: 'conn-value'
+  },
+  {
+    chain: [
+      { text: 'Category-Specific Query', type: 'fact' },
+      { text: 'Keyword-Title Mismatch?', type: 'inference' },
+      { text: '3P SEO Titles Win', type: 'inference' },
+      { text: 'Garanimals Invisible', type: 'fact' }
+    ],
+    strength: 'Partially observed — "toddler rompers" returned 0% Garanimals, 100% 3P Chinese sellers. Keyword mismatch is inferred, not proven.',
+    id: 'conn-category'
+  },
+  {
+    chain: [
+      { text: 'Seasonal/Gift Terms', type: 'fact' },
+      { text: '3P Route Trigger', type: 'fact' },
+      { text: 'Zero Garanimals', type: 'fact' }
+    ],
+    strength: 'Observed — "back to school", "cute outfit for niece" consistently route to 3P-only results.',
+    id: 'conn-seasonal'
+  },
+  {
+    chain: [
+      { text: 'Google Vertex Sources', type: 'fact' },
+      { text: 'Blog/Reddit Framing', type: 'fact' },
+      { text: '"Affordable Not Durable" Narrative', type: 'inference' },
+      { text: 'Cat & Jack Wins Perception', type: 'fact' }
+    ],
+    strength: 'Observed in 1 editorial response — sources (babycenter, reddit, mommy blogs) frame Garanimals as budget, Cat & Jack as quality. Needs more samples.',
+    id: 'conn-perception'
+  },
+  {
+    chain: [
+      { text: 'Conversation Context', type: 'fact' },
+      { text: 'Sticky Classification', type: 'fact' },
+      { text: 'Routing Lock-in', type: 'inference' },
+      { text: 'Contaminated Follow-ups', type: 'gap' }
+    ],
+    strength: 'Observed — "gift" context persisted into follow-up despite user correction. Implies all testing must use fresh conversationId per query.',
+    id: 'conn-context'
+  },
+  {
+    chain: [
+      { text: 'adsBeacon Active', type: 'gap' },
+      { text: 'Sponsored Injection?', type: 'gap' },
+      { text: 'Organic Displacement?', type: 'gap' }
+    ],
+    strength: 'Infrastructure exists but showAds=false in all captures. When this activates, the entire visibility model may shift.',
+    id: 'conn-ads'
+  }
+];
+
+const threads = [
+  {
+    id: 'routing',
+    color: 'routing',
+    title: 'The Routing Binary',
+    question: 'What exactly determines whether Sparky pulls from 1P catalog or 3P marketplace?',
+    hypothesis: {
+      label: 'Working Model',
+      text: 'Sparky uses a keyword-triggered binary classifier. Certain terms (value, generic category) force 1P routing; others (seasonal, gift, novelty) force 3P. There is no gradient — it\'s one or the other, with rare borderline cases.'
+    },
+    evidence: [
+      { level: 'confirmed', text: 'Value terms → 1P, seasonal/gift → 3P (multiple observations)' },
+      { level: 'confirmed', text: '1P results = 80-100% 1P brands, 3P results = 100% marketplace sellers' },
+      { level: 'observed', text: '"mix and match" produced 40/60 split — borderline case' },
+      { level: 'observed', text: '"best selling" triggered 100% 3P on rompers' },
+      { level: 'gap', text: 'No systematic keyword testing — only 4 queries captured' }
+    ],
+    tests: [
+      { query: '"walmart brand toddler clothes"', why: 'Can explicit "walmart brand" override 3P routing?', done: false },
+      { query: '"toddler rompers" (no "best selling")', why: 'Isolate whether "best selling" or "rompers" triggered 3P', done: false },
+      { query: '"everyday toddler basics"', why: 'Test if "everyday" + "basics" reliably triggers 1P', done: false },
+      { query: '"cute toddler shirts"', why: 'Test if "cute" alone triggers 3P without gift context', done: false },
+      { query: '"paw patrol toddler clothes"', why: 'Character/licensed query — 1P or 3P?', done: false }
+    ],
+    depends: [],
+    blocks: ['category', 'variables'],
+    notes: ''
+  },
+  {
+    id: 'category',
+    color: 'category',
+    title: 'The Category Gap',
+    question: 'Why does Garanimals dominate generic queries but vanish in category-specific ones?',
+    hypothesis: {
+      label: 'Working Model',
+      text: 'Garanimals product titles use different terminology than shoppers search for. If Garanimals lists "one-piece outfit" but shoppers search "romper," keyword-title matching fails and SEO-stuffed 3P titles win. This is a PDP metadata problem, not an LLM problem.'
+    },
+    evidence: [
+      { level: 'confirmed', text: '"best kids clothing brands" → 2/5 Garanimals (40%)' },
+      { level: 'confirmed', text: '"toddler rompers" → 0/5 Garanimals (0%), all 3P Chinese sellers' },
+      { level: 'confirmed', text: 'Comparative query → 3/5 Garanimals (60%)' },
+      { level: 'inferred', text: 'Garanimals may not use "romper" in product titles for romper-equivalent items' },
+      { level: 'gap', text: 'Only 1 of ~14 product categories tested' },
+      { level: 'gap', text: 'No audit of actual Garanimals product titles vs. search terms' }
+    ],
+    tests: [
+      { query: '"toddler pajamas walmart"', why: 'Test a category where Garanimals should be strong', done: false },
+      { query: '"toddler leggings walmart"', why: 'Another core category', done: false },
+      { query: '"kids swimwear walmart"', why: 'Seasonal category — routing may compete', done: false },
+      { query: '"toddler bodysuits"', why: 'Synonym test — Garanimals likely uses "bodysuit"', done: false },
+      { query: '"2T clothes walmart"', why: 'Size-specific query — does size affect routing?', done: false },
+      { query: '"toddler onesies"', why: 'Common shopper term — does Garanimals use it?', done: false },
+      { query: '"toddler outfit sets"', why: 'Core Garanimals format — sets/multipacks', done: false }
+    ],
+    depends: ['routing'],
+    blocks: [],
+    notes: ''
+  },
+  {
+    id: 'perception',
+    color: 'perception',
+    title: 'The Perception Frame',
+    question: 'What shapes Sparky\'s editorial narrative about Garanimals, and can it be influenced?',
+    hypothesis: {
+      label: 'Working Model',
+      text: 'Vertex AI grounding pulls from a handful of high-authority parenting sites and Reddit threads where Garanimals is discussed as "cheap but not durable" vs. Cat & Jack. The editorial frame is a direct reflection of the web content Google indexes — change the web content, change the frame.'
+    },
+    evidence: [
+      { level: 'confirmed', text: 'Editorial positions Garanimals as "affordable everyday wear"' },
+      { level: 'confirmed', text: 'Cat & Jack explicitly named as the durability comparison' },
+      { level: 'confirmed', text: 'Sources: babycenter, reddit, mommy blogs, garanimals.com, walmart.com' },
+      { level: 'confirmed', text: 'textIndices show character-level source attribution' },
+      { level: 'observed', text: 'Only 1 editorial response captured — sample size is 1' },
+      { level: 'gap', text: 'No map of all domains Vertex AI draws from' },
+      { level: 'gap', text: 'Unknown if garanimals.com content is weighted differently than 3rd party' }
+    ],
+    tests: [
+      { query: '"are garanimals clothes good quality"', why: 'Direct quality perception probe', done: false },
+      { query: '"do garanimals clothes hold up in the wash"', why: 'Durability-specific probe', done: false },
+      { query: '"garanimals vs cat and jack quality"', why: 'Head-to-head perception query', done: false },
+      { query: '"what do parents think of garanimals"', why: 'Open-ended sentiment — which sources cited?', done: false },
+      { query: '"garanimals reviews"', why: 'Review-framed query — triggers editorial or product?', done: false }
+    ],
+    depends: [],
+    blocks: [],
+    notes: ''
+  },
+  {
+    id: 'context',
+    color: 'context',
+    title: 'The Context Machine',
+    question: 'How does conversation history shape routing and results — and can it be weaponized or must it be avoided?',
+    hypothesis: {
+      label: 'Working Model',
+      text: 'Sparky\'s query reformulation engine appends inferred context from prior turns. Once a conversation is classified (e.g., "gift shopping"), that classification is sticky and overrides explicit user corrections. For testing, this means every query MUST use a fresh conversationId. For strategy, this means the first query in a customer\'s session may determine what they see for the rest of it.'
+    },
+    evidence: [
+      { level: 'confirmed', text: '"gift" context persisted despite user saying "not a gift"' },
+      { level: 'confirmed', text: 'Reformulated query included "gift" tag from prior turn' },
+      { level: 'confirmed', text: 'Each conversation uses persistent UUID' },
+      { level: 'inferred', text: 'Context classification is binary and irreversible within a session' },
+      { level: 'gap', text: 'Only 1 multi-turn conversation observed for context behavior' },
+      { level: 'gap', text: 'Unknown if positive context ("I love Garanimals") persists and helps' }
+    ],
+    tests: [
+      { query: 'Turn 1: "cheap toddler basics" → Turn 2: "show me rompers"', why: 'Does 1P context from T1 carry into category query at T2?', done: false },
+      { query: 'Turn 1: "I love Garanimals" → Turn 2: "toddler clothes"', why: 'Does brand affinity context boost visibility?', done: false },
+      { query: 'Turn 1: "back to school" → Turn 2: "actually just everyday clothes"', why: 'Can seasonal/3P context be overridden?', done: false },
+      { query: 'Same query, fresh conversationId vs. reused', why: 'Confirm context contamination vs. clean baseline', done: false }
+    ],
+    depends: [],
+    blocks: ['routing', 'category'],
+    notes: 'All systematic testing must account for this. Fresh UUID per query is non-negotiable for clean data.'
+  },
+  {
+    id: 'variables',
+    color: 'variables',
+    title: 'The Dark Variables',
+    question: 'What hidden factors (personalization, geography, time, A/B tests, ads) affect results but we can\'t see yet?',
+    hypothesis: {
+      label: 'Working Model',
+      text: 'We\'re capturing from a single user profile (logged in, Walmart+ expired, one geographic location, one time window). Any or all of: purchase history, Walmart+ status, store location, time of day, and active A/B experiments could be shifting results. Without controlling for these, we can\'t distinguish signal from noise in any longitudinal measurement.'
+    },
+    evidence: [
+      { level: 'confirmed', text: 'Metadata sends loginStatus and walmartPlusStatus to API' },
+      { level: 'confirmed', text: 'experimentFlags array exists in request (currently empty)' },
+      { level: 'confirmed', text: 'adsBeacon with showAds: false in all captures' },
+      { level: 'inferred', text: 'When experimentFlags populate, A/B tests are active' },
+      { level: 'gap', text: 'No logged-out captures for comparison' },
+      { level: 'gap', text: 'No geographic variation tested' },
+      { level: 'gap', text: 'No temporal variation tested' },
+      { level: 'gap', text: 'No Walmart+ active account tested' }
+    ],
+    tests: [
+      { query: 'Any baseline query, logged out', why: 'Compare logged-in vs. logged-out for same query', done: false },
+      { query: 'Same query, different time of day (AM vs PM)', why: 'Check for temporal variation', done: false },
+      { query: 'Same query, different store selected in app', why: 'Check for geographic/inventory influence', done: false },
+      { query: 'Monitor experimentFlags across sessions', why: 'Detect when Walmart runs A/B tests', done: false },
+      { query: 'Same query from fresh account with no purchase history', why: 'Isolate personalization effect', done: false }
+    ],
+    depends: ['routing'],
+    blocks: [],
+    notes: 'This is the foundational noise problem. Until we have baselines for these variables, before/after measurement of any optimization is unreliable.'
+  }
+];
+
+const testQueue = [
+  { query: '"walmart brand toddler clothes"', tests: '1P override via explicit "walmart brand"', threads: ['routing'], priority: 'high', done: false },
+  { query: '"toddler rompers" (no "best selling")', tests: 'Isolate romper routing without "best selling" modifier', threads: ['routing', 'category'], priority: 'high', done: false },
+  { query: '"mix and match kids clothes"', tests: 'Core Garanimals differentiator — visibility check', threads: ['category'], priority: 'high', done: false },
+  { query: '"are garanimals clothes good quality"', tests: 'Editorial perception probe — source mapping', threads: ['perception'], priority: 'high', done: false },
+  { query: '"cheap toddler shirts"', tests: 'Confirm value term → 1P → Garanimals chain', threads: ['routing'], priority: 'med', done: false },
+  { query: '"cute toddler shirts"', tests: 'Test "cute" as independent 3P trigger', threads: ['routing'], priority: 'med', done: false },
+  { query: '"toddler pajamas walmart"', tests: 'Category coverage — pajamas', threads: ['category'], priority: 'med', done: false },
+  { query: '"toddler outfit sets"', tests: 'Category coverage — sets/multipacks', threads: ['category'], priority: 'med', done: false },
+  { query: '"garanimals vs cat and jack quality"', tests: 'Head-to-head perception in editorial mode', threads: ['perception'], priority: 'med', done: false },
+  { query: 'T1: "cheap basics" → T2: "show me rompers"', tests: 'Context carry-over from 1P to category query', threads: ['context'], priority: 'med', done: false },
+  { query: '"paw patrol toddler clothes"', tests: 'Licensed character query routing', threads: ['routing'], priority: 'low', done: false },
+  { query: 'Same query, logged out vs logged in', tests: 'Personalization baseline', threads: ['variables'], priority: 'low', done: false },
+  { query: 'Same query, AM vs PM capture', tests: 'Temporal variation check', threads: ['variables'], priority: 'low', done: false },
+  { query: '"back to school toddler clothes"', tests: 'Confirm seasonal → 3P routing', threads: ['routing'], priority: 'low', done: false },
+  { query: '"toddler bodysuits" vs "toddler onesies"', tests: 'Synonym routing difference', threads: ['category', 'routing'], priority: 'low', done: false }
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+  selectedPipe: null,
+  expandedThreads: {},
+  testsDone: {},
+  threadTestsDone: {},
+  notes: '',
+  filter: 'all'
+};
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem('sparky_board_v2');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.assign(state, parsed);
+    }
+  } catch(e) {}
+}
+
+function saveState() {
+  try {
+    localStorage.setItem('sparky_board_v2', JSON.stringify(state));
+  } catch(e) {}
+}
+
+// ============================================================
+// RENDER: PIPELINE
+// ============================================================
+function renderPipeline() {
+  const el = document.getElementById('pipeline');
+  el.innerHTML = pipeline.map(node => {
+    const pct = Math.round(node.confidence * 100);
+    const color = node.confidence > 0.7 ? '#4ade80' : node.confidence > 0.45 ? '#fbbf24' : '#ef4444';
+    const selected = state.selectedPipe === node.id ? ' selected' : '';
+    return `<div class="pipe-node${selected}" onclick="selectPipe('${node.id}')">
+      <div class="pipe-name">${node.name}</div>
+      <div class="pipe-conf">
+        <div class="conf-bar"><div class="conf-fill" style="width:${pct}%;background:${color}"></div></div>
+        <div class="conf-label">${pct}%</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectPipe(id) {
+  state.selectedPipe = state.selectedPipe === id ? null : id;
+  saveState();
+  renderPipeline();
+  renderPipeDetail();
+}
+
+function renderPipeDetail() {
+  const el = document.getElementById('pipeDetail');
+  if (!state.selectedPipe) { el.className = 'pipe-detail'; return; }
+  const node = pipeline.find(n => n.id === state.selectedPipe);
+  if (!node) { el.className = 'pipe-detail'; return; }
+
+  el.className = 'pipe-detail visible';
+  el.innerHTML = `<div class="pipe-detail-grid">
+    <div class="detail-col known">
+      <h4>Confirmed</h4>
+      ${(node.known || []).map(t => `<div class="detail-item">${t}</div>`).join('')}
+    </div>
+    <div class="detail-col suspected">
+      <h4>Suspected</h4>
+      ${(node.suspected || []).map(t => `<div class="detail-item">${t}</div>`).join('')}
+      ${!(node.suspected||[]).length ? '<div class="detail-item" style="color:#333">None yet</div>' : ''}
+    </div>
+    <div class="detail-col unknown">
+      <h4>Unknown</h4>
+      ${(node.unknown || []).map(t => `<div class="detail-item">${t}</div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// RENDER: CONNECTIONS
+// ============================================================
+function renderConnections() {
+  const el = document.getElementById('connections');
+  el.innerHTML = connections.map(c => `<div class="conn-chain">
+    <div class="conn-chain-nodes">
+      ${c.chain.map(n => `<span class="conn-node ${n.type}">${n.text}</span>`).join('<span class="conn-arrow">&rarr;</span>')}
+    </div>
+    <div class="conn-strength">${c.strength}</div>
+  </div>`).join('');
+}
+
+// ============================================================
+// RENDER: THREADS
+// ============================================================
+function renderThreads() {
+  const grid = document.getElementById('threadsGrid');
+  const filtered = threads.filter(t => {
+    if (state.filter === 'has-gaps') return t.evidence.some(e => e.level === 'gap');
+    if (state.filter === 'testable') return t.tests.some(test => !isThreadTestDone(t.id, test.query));
+    return true;
+  });
+
+  grid.innerHTML = filtered.map(t => {
+    const expanded = state.expandedThreads[t.id] ? ' expanded' : '';
+    const gapCount = t.evidence.filter(e => e.level === 'gap').length;
+    const testsDone = t.tests.filter(test => isThreadTestDone(t.id, test.query)).length;
+
+    return `<div class="thread-card${expanded}" data-thread="${t.id}">
+      <div class="thread-header" onclick="toggleThread('${t.id}')">
+        <span class="thread-id ${t.color}">${t.id.toUpperCase()}</span>
+        <div class="thread-info">
+          <div class="thread-title">${t.title}</div>
+          <div class="thread-question">${t.question}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:10px;color:#555;margin-bottom:4px">${gapCount} gaps &middot; ${testsDone}/${t.tests.length} tested</div>
+          <div class="thread-toggle">+</div>
+        </div>
+      </div>
+      <div class="thread-body">
+        <div class="thread-section">
+          <div class="hypothesis-box">
+            <div class="label">${t.hypothesis.label}</div>
+            ${t.hypothesis.text}
+          </div>
+        </div>
+
+        <div class="thread-section">
+          <div class="thread-section-label">Evidence</div>
+          <ul class="evidence-list">
+            ${t.evidence.map(e => `<li><span class="evidence-dot ${e.level}"></span><span>${e.text}</span></li>`).join('')}
+          </ul>
+        </div>
+
+        <div class="thread-section">
+          <div class="thread-section-label">Tests</div>
+          <div class="test-list">
+            ${t.tests.map(test => {
+              const done = isThreadTestDone(t.id, test.query);
+              return `<div class="test-item">
+                <div class="test-check${done ? ' done' : ''}" onclick="toggleThreadTest('${t.id}','${esc(test.query)}')"></div>
+                <div>
+                  <div class="test-query">${test.query}</div>
+                  <div class="test-why">${test.why}</div>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        ${t.depends.length || t.blocks.length ? `<div class="thread-section">
+          <div class="thread-section-label">Dependencies</div>
+          <div class="dep-links">
+            ${t.depends.map(d => `<span class="dep-link ${d}" onclick="toggleThread('${d}')" title="Depends on">needs ${d.toUpperCase()}</span>`).join('')}
+            ${t.blocks.map(d => `<span class="dep-link ${d}" onclick="toggleThread('${d}')" title="Informs">feeds ${d.toUpperCase()}</span>`).join('')}
+          </div>
+        </div>` : ''}
+
+        ${t.notes ? `<div class="thread-section">
+          <div class="thread-section-label">Notes</div>
+          <div style="font-size:12px;color:#999;padding:8px;background:#0a0a0a;border-radius:3px">${t.notes}</div>
+        </div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleThread(id) {
+  state.expandedThreads[id] = !state.expandedThreads[id];
+  saveState();
+  renderThreads();
+  if (state.expandedThreads[id]) {
+    setTimeout(() => {
+      const card = document.querySelector(`[data-thread="${id}"]`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
+  }
+}
+
+function isThreadTestDone(threadId, query) {
+  return state.threadTestsDone[threadId + '::' + query] || false;
+}
+
+function toggleThreadTest(threadId, query) {
+  const key = threadId + '::' + query;
+  state.threadTestsDone[key] = !state.threadTestsDone[key];
+  saveState();
+  renderThreads();
+  renderTestMatrix();
+}
+
+// ============================================================
+// RENDER: TEST MATRIX
+// ============================================================
+function renderTestMatrix() {
+  const body = document.getElementById('testBody');
+  body.innerHTML = testQueue.map((t, i) => {
+    const done = state.testsDone[i] || false;
+    const prioClass = t.priority === 'high' ? 'priority-high' : t.priority === 'med' ? 'priority-med' : 'priority-low';
+    return `<tr>
+      <td><div class="test-check${done ? ' done' : ''}" onclick="toggleMatrixTest(${i})"></div></td>
+      <td class="query-cell">${t.query}</td>
+      <td style="color:#999">${t.tests}</td>
+      <td><div class="thread-tags">${t.threads.map(th => `<span class="dep-link ${th}">${th.toUpperCase()}</span>`).join('')}</div></td>
+      <td class="${prioClass}">${t.priority}</td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleMatrixTest(i) {
+  state.testsDone[i] = !state.testsDone[i];
+  saveState();
+  renderTestMatrix();
+}
+
+// ============================================================
+// FILTERS & UTILITIES
+// ============================================================
+function filterThreads(f) {
+  state.filter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  saveState();
+  renderThreads();
+}
+
+function esc(s) { return s.replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+function exportState() {
+  const data = {
+    state,
+    pipeline: pipeline.map(p => ({ id: p.id, name: p.name, confidence: p.confidence })),
+    threads: threads.map(t => ({
+      id: t.id, title: t.title,
+      testsDone: t.tests.filter(test => isThreadTestDone(t.id, test.query)).length,
+      testsTotal: t.tests.length,
+      gaps: t.evidence.filter(e => e.level === 'gap').length
+    })),
+    exported: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sparky_board_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// NOTES
+// ============================================================
+function initNotes() {
+  const el = document.getElementById('notes');
+  el.value = state.notes || '';
+  el.addEventListener('input', () => {
+    state.notes = el.value;
+    saveState();
+  });
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadState();
+renderPipeline();
+renderPipeDetail();
+renderConnections();
+renderThreads();
+renderTestMatrix();
+initNotes();
+</script>
+</body>
+</html>

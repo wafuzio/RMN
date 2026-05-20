@@ -1,0 +1,45 @@
+{
+  "keyword": "community coffee",
+  "outcome": "bail",
+  "bail_reason": "fatal",
+  "started_at": "2026-04-13T01:18:25",
+  "timings": {
+    "to_home_ms": null,
+    "after_submit_px_ms": null,
+    "results_ready_ms": null
+  },
+  "env": {
+    "ua": null,
+    "webgl": {}
+  },
+  "cookies": {
+    "pre_count": 0,
+    "pre_names": [],
+    "post_count": 0,
+    "post_names": []
+  },
+  "px": {
+    "tries": 0,
+    "cycles": 0,
+    "cleared": null
+  },
+  "network": {
+    "req_failed": 0,
+    "resp_doc": 0,
+    "route_errors": 0
+  },
+  "artifacts": {
+    "steps_log": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_live_test/20260413011825/walmart_community_coffee_steps.jsonl",
+    "trace_zip": null,
+    "no_results_html": null,
+    "no_results_png": null,
+    "saved_html": null,
+    "meta_json": null
+  },
+  "diag": {
+    "navigator": null,
+    "webglUnmasked": null,
+    "navHeaders": null,
+    "suspiciousCookies": []
+  }
+}

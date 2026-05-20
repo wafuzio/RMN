@@ -19,7 +19,13 @@ Usage from a scraper:
 """
 
 import re
+import json
 from bs4 import BeautifulSoup
+
+try:
+    from core.brands import canonicalize as _canonicalize_brand
+except ImportError:
+    _canonicalize_brand = None
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -30,6 +36,80 @@ def _clean_price(raw):
         return ''
     m = re.search(r'(\$[\d,.]+(?:\.\d{2})?)', raw)
     return m.group(1) if m else raw.strip()[:20]
+
+
+_GENERIC_WORDS = frozenset({
+    'acne', 'skin', 'face', 'body', 'hair', 'eye', 'lip', 'hand', 'foot',
+    'pack', 'count', 'set', 'kit', 'bundle', 'value', 'combo', 'plus',
+    'organic', 'natural', 'premium', 'gentle', 'sensitive', 'clear', 'clean',
+    'advanced', 'extra', 'ultra', 'super', 'daily', 'deep', 'new', 'best',
+    'mini', 'travel', 'size', 'large', 'small', 'original', 'classic',
+    'salicylic', 'benzoyl', 'retinol', 'vitamin', 'collagen', 'hyaluronic',
+})
+
+def _extract_brands_batch_llm(titles: list) -> dict:
+    """Send a batch of product titles to the LLM relay and get {title: brand} back.
+
+    Returns an empty dict on any failure (no API key, network error, bad JSON, etc.)
+    so callers can transparently fall back to the heuristic.
+    """
+    titles = [t for t in titles if t]   # drop blanks
+    if not titles:
+        return {}
+    try:
+        from llm_client import RelayClient
+        client = RelayClient()          # raises RuntimeError if ALCHEMY_API_KEY missing
+    except (ImportError, RuntimeError):
+        return {}
+
+    # Build an index-keyed list so the LLM doesn't have to repeat long titles as JSON keys
+    numbered = "\n".join(f'{i}. {t}' for i, t in enumerate(titles))
+    prompt = (
+        "You are a product data specialist. "
+        "For each numbered product title below, identify the brand name.\n"
+        "Rules:\n"
+        "- Return ONLY a JSON object like {\"0\": \"Neutrogena\", \"1\": null, ...}\n"
+        "- Use the index number as the key (string).\n"
+        "- Value is the brand name string, or null if no brand is identifiable.\n"
+        "- Brand name only — no product line, no descriptor words.\n"
+        "- If the title starts with a generic word (Acne, Salicylic, Organic, etc.) "
+        "and no brand is present, return null.\n"
+        "- Do NOT include any explanation, markdown, or extra text.\n\n"
+        f"Titles:\n{numbered}"
+    )
+
+    try:
+        raw = client.complete(prompt, model="gpt-5.4-2026-03-05",
+                              temperature=0.0, max_tokens=800)
+        # Strip any markdown fences the model might add
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = re.sub(r'^```[a-z]*\n?', '', raw).rstrip('`').strip()
+        index_map = json.loads(raw)
+        return {titles[int(k)]: v for k, v in index_map.items()
+                if v and isinstance(v, str) and int(k) < len(titles)}
+    except Exception:
+        return {}
+
+
+def _brand_from_title(title: str) -> str:
+    """Derive brand from product title — lexicon first, cautious first-word fallback."""
+    if not title:
+        return None
+    if _canonicalize_brand:
+        canon = _canonicalize_brand(title)
+        if canon:
+            return canon
+    # Cautious heuristic: only return a single first word if it looks like a brand name
+    # (proper capitalization, 3+ chars, not a generic/chemical/descriptor word, not a number).
+    first = title.split()[0] if title.split() else ''
+    clean = re.sub(r"[^A-Za-z0-9&'.-]", '', first)
+    if (clean and len(clean) >= 3
+            and clean[0].isupper()
+            and not clean[0].isdigit()
+            and clean.lower() not in _GENERIC_WORDS):
+        return first
+    return None
 
 
 # ── Amazon ────────────────────────────────────────────────────────────────────
@@ -95,7 +175,7 @@ def _extract_amazon(soup):
 
 def _extract_walmart(soup):
     """Extract product listings from Walmart saved HTML."""
-    listings = []
+    raw_listings = []
     position = 0
 
     for item in soup.find_all(attrs={'data-item-id': True}):
@@ -141,14 +221,14 @@ def _extract_walmart(soup):
         if rating_el:
             rating = rating_el.get('aria-label', rating_el.get_text(strip=True))[:40]
 
-        listings.append({
+        raw_listings.append({
             'type': 'Product_Listing',
             'subtype': 'sponsored_product' if is_sponsored else 'organic_product',
             'product_id': item_id,
             'retailer_id_type': 'walmart_item_id',
             'walmart_id': walmart_id,
             'title': title,
-            'brand': None,
+            'brand': None,          # filled in below
             'price': price,
             'image_url': image_url,
             'href': href,
@@ -158,7 +238,18 @@ def _extract_walmart(soup):
         })
         position += 1
 
-    return listings
+    # ── Brand enrichment: LLM first, heuristic fallback ───────────────────
+    titles = [l['title'] for l in raw_listings]
+    llm_brands = _extract_brands_batch_llm(titles)   # empty dict if unavailable
+
+    for listing in raw_listings:
+        t = listing['title']
+        if t in llm_brands:
+            listing['brand'] = llm_brands[t]
+        else:
+            listing['brand'] = _brand_from_title(t)
+
+    return raw_listings
 
 
 # ── Kroger ────────────────────────────────────────────────────────────────────

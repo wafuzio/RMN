@@ -1,0 +1,114 @@
+{
+  "query_metadata": {
+    "query_text": "sparky response 20260316 215820",
+    "timestamp": "2026-03-16T21:58:20.721277",
+    "conversation_title": "Preschooler Back to School Clothes"
+  },
+  "response_classification": {
+    "response_mode": "product_carousel",
+    "intent_name": "open_dialog",
+    "has_products": true,
+    "has_editorial": true,
+    "has_google_grounding": false
+  },
+  "product_metrics": {
+    "total_products": 5,
+    "garanimals_count": 0,
+    "garanimals_positions": [],
+    "garanimals_share": 0.0,
+    "brands": [
+      "Xmyrz",
+      "children\u2019s",
+      "IBTOM",
+      "Watch"
+    ],
+    "avg_garanimals_price": 0.0,
+    "avg_competitor_price": 14.392000000000001,
+    "seller_breakdown": {
+      "1P": 0,
+      "3P": 5
+    },
+    "badge_distribution": {
+      "best_seller": 0,
+      "clearance": 1,
+      "other": 0
+    },
+    "products": [
+      {
+        "position": 1,
+        "name": "IBTOM CASTLE Toddler Kids Boys Back to School Outfit Top with Shorts Schoolbus Embroidered Kindergarten Clothes 4-5 Years Navy Blue + Red Plaid",
+        "brand": "IBTOM",
+        "price": 19.99,
+        "seller": "ShenzhenshiHengchuangTianxiaKejiYouxianGongsi",
+        "is_garanimals": false,
+        "rating": 5.0,
+        "review_count": 1,
+        "badges": []
+      },
+      {
+        "position": 2,
+        "name": "children\u2019s wear Cute Retro I Dig Preschool Dump Truck Graphic T-Shirt for Toddler Girls and Kids Back to School Outfit",
+        "brand": "children\u2019s",
+        "price": 11.99,
+        "seller": "shamenmengkashifushiyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 3,
+        "name": "Watch Out Preschool Here I Come T-Shirt \u2013 Cute Back to School Shirt for Kids",
+        "brand": "Watch",
+        "price": 19.99,
+        "seller": "ABIOMED INC",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 4,
+        "name": "children\u2019s wear Funny Back to School Toddler Kids T-Shirt I'm Ready for Pre-K Graphic Tee for Boys and Girls Cute Preschool Short Sleeve Top",
+        "brand": "children\u2019s",
+        "price": 11.99,
+        "seller": "xiamenbuzhengtouziguanliyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 5,
+        "name": "Xmyrz Girls Tops Graphic T Shirts Back To School Skin Friendly Preschoolers Breathable T-Shirt Tshirt Blouse Casual Tops",
+        "brand": "Xmyrz",
+        "price": 8,
+        "seller": "huizhoushiyiyadianzishangwuyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Clearance"
+        ]
+      }
+    ]
+  },
+  "editorial_metrics": {
+    "garanimals_mentioned": false,
+    "preamble": "Here are a few back to school clothes options for your preschooler. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:",
+    "followup": "These options include various styles and comfort features for active preschoolers. They are designed for durability and ease of wear. \n\nAre you looking for a specific type of clothing, like shirts or full outfits?",
+    "full_response": "Here are a few back to school clothes options for your preschooler. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:\n\nSparky's Picks:[Product Name: IBTOM CASTLE Toddler Kids Boys Back to School Outfit Top with Shorts Schoolbus Embroidered Kindergarten Clothes 4-5 Years Navy Blue + Red Plaid Price: $19.99 Rating: 5.0 Badge_Label: []\nProduct Name: children\u2019s wear Cute Retro I Dig Preschool Dump Truck Graphic T-Shirt for Toddler Girls and Kids Back to School Outfit Price: $11.99 Rating:  Badge_Label: []\nProduct Name: Watch Out Preschool Here I Come T-Shirt \u2013 Cute Back to School Shirt for Kids Price: $19.99 Rating:  Badge_Label: []\nProduct Name: children\u2019s wear Funny Back to School Toddler Kids T-Shirt I'm Ready for Pre-K Graphic Tee for Boys and Girls Cute Preschool Short Sleeve Top Price: $11.99 Rating:  Badge_Label: []\nProduct Name: Xmyrz Girls Tops Graphic T Shirts Back To School Skin Friendly Preschoolers Breathable T-Shirt Tshirt Blouse Casual Tops Price: $8.00 Rating:  Badge_Label: [\"Clearance\"]]\nOther Options:[]\n\nThese options include various styles and comfort features for active preschoolers. They are designed for durability and ease of wear. \n\nAre you looking for a specific type of clothing, like shirts or full outfits?",
+    "source_domains": [],
+    "source_count": 0
+  },
+  "ad_infrastructure": {
+    "max_ads": 4,
+    "ads_active": false,
+    "specificity": "narrow",
+    "brands_targeted": []
+  },
+  "search_query_reformulation": {
+    "original": "sparky response 20260316 215820",
+    "reformulated": "back to school clothes, preschooler"
+  }
+}

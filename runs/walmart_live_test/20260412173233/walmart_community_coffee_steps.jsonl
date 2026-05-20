@@ -1,0 +1,32 @@
+{"ts": 1776033153.1078231, "t": 0.0, "event": "run_start", "run_id": "1776033153107-6373", "keyword": "community coffee", "preflight": {"base_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_live_test/20260412173233", "profile_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/profiles/walmart"}, "debug": {"break_on_px": false, "break_on_blocked": false, "line_trace": false, "pdb_on_exception": true}}
+{"ts": 1776033153.1080241, "t": 0.0, "event": "milestone", "run_id": "1776033153107-6373", "name": "preflight_ok", "ok": true, "note": ""}
+{"ts": 1776033153.8745139, "t": 0.767, "event": "step_start", "name": "launch_context"}
+{"ts": 1776033159.560735, "t": 6.453, "event": "stealth_skipped", "reason": "px_detection_risk"}
+{"ts": 1776033159.561206, "t": 6.453, "event": "milestone", "run_id": "1776033153107-6373", "name": "launch_context", "ok": true, "note": ""}
+{"ts": 1776033159.561305, "t": 6.454, "event": "step_end", "name": "launch_context", "dur": 5.686}
+{"ts": 1776033159.561475, "t": 6.454, "event": "profile_health", "Cookies": {"exists": true, "size": 77824}, "Network Persistent State": {"exists": true, "size": 6311}, "Preferences": {"exists": true, "size": 10670}}
+{"ts": 1776033160.090816, "t": 6.983, "event": "cookies_pre", "count": 43, "names": ["AID", "CID", "SPID", "_intlbu", "_lat", "_m", "_msit", "_pxhd"]}
+{"ts": 1776033160.091143, "t": 6.983, "event": "cookie_suspicious", "names": ["adblocked", "ak_bmsc", "bm_mi", "bm_sv"]}
+{"ts": 1776033160.091837, "t": 6.984, "event": "log", "level": "warn", "msg": "[walmart] ⚠️  Suspicious cookies present: ['adblocked', 'ak_bmsc', 'bm_mi', 'bm_sv']"}
+{"ts": 1776033160.111396, "t": 7.004, "event": "bot_cookies_cleared", "cleared": ["ak_bmsc", "adblocked", "bm_mi", "bm_sv"], "preserved": 67}
+{"ts": 1776033160.111613, "t": 7.004, "event": "log", "level": "info", "msg": "[walmart] 🧹 Auto-cleared 4 poisoned bot-detection cookies"}
+{"ts": 1776033160.1117141, "t": 7.004, "event": "cookie_persistence", "status": "COOKIES_PRESENT", "note": "Profile working - 43 cookies persisted from previous run"}
+{"ts": 1776033160.111825, "t": 7.004, "event": "log", "level": "info", "msg": "[walmart] Establishing session (human-like pattern)"}
+{"ts": 1776033160.2072792, "t": 7.099, "event": "nav_headers", "url": "https://www.walmart.com/", "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"", "sec-ch-ua-mobile": "?0", "sec-ch-ua-platform": "\"macOS\"", "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}
+{"ts": 1776033161.71567, "t": 8.608, "event": "resp_doc", "url": "https://www.walmart.com/", "status": 200, "method": "GET", "fromCache": false}
+{"ts": 1776033161.72686, "t": 8.619, "event": "nav", "url": "https://www.walmart.com/", "name": ""}
+{"ts": 1776033161.756904, "t": 8.649, "event": "req_failed", "url": "https://www.walmart.com/akam/13/11034bc5", "method": "GET", "resource": "script", "failure": "csp"}
+{"ts": 1776033164.488671, "t": 11.381, "event": "nav", "url": "about:blank", "name": ""}
+{"ts": 1776033164.831709, "t": 11.724, "event": "nav", "url": "https://www.walmart.com/", "name": ""}
+{"ts": 1776033165.039026, "t": 11.931, "event": "home_goto_phase", "phase": "domcontentloaded"}
+{"ts": 1776033165.0405571, "t": 11.933, "event": "home_goto_phase_final", "phase": "domcontentloaded"}
+{"ts": 1776033165.043618, "t": 11.936, "event": "hard_block", "where": "initial_home", "url": "https://www.walmart.com/", "reason": "blocked_on_first_nav"}
+{"ts": 1776033165.0445921, "t": 11.937, "event": "log", "level": "warn", "msg": "[walmart] Hard blocked on first nav"}
+{"ts": 1776033165.044873, "t": 11.937, "event": "log", "level": "warn", "msg": "[walmart] Attempting warm session recovery via opensteer"}
+{"ts": 1776033165.047769, "t": 11.94, "event": "log", "level": "info", "msg": "[opensteer] Cloning scraper profile → workspace walmart-warm-20260412173245 ..."}
+{"ts": 1776033171.893257, "t": 18.785, "event": "log", "level": "info", "msg": "[opensteer] Opening headed browser — navigate past the block, then confirm here"}
+{"ts": 1776033242.611924, "t": 89.504, "event": "opensteer_warm_session_done", "ws": "walmart-warm-20260412173245", "cookies": 2, "storage_keys": 0}
+{"ts": 1776033242.619308, "t": 89.512, "event": "log", "level": "error", "msg": "[walmart] Warm session recovery failed: 'str' object has no attribute 'get'"}
+{"ts": 1776033242.619622, "t": 89.512, "event": "warm_session_error", "where": "initial_home", "error": "'str' object has no attribute 'get'"}
+{"ts": 1776033244.0516071, "t": 90.944, "event": "cookies_post_multi", "by_www_count": 0, "by_root_count": 0, "all_count": 0, "by_www_names": [], "by_root_names": [], "all_names": []}
+{"ts": 1776033244.051986, "t": 90.944, "event": "cookies_post", "count": 0, "names": []}

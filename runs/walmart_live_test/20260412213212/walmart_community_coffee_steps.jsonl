@@ -1,0 +1,83 @@
+{"ts": 1776047532.565067, "t": 0.0, "event": "run_start", "run_id": "1776047532565-2831", "keyword": "community coffee", "preflight": {"base_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_live_test/20260412213212", "profile_dir": "/tmp/walmart_test_profile_fresh"}, "debug": {"break_on_px": false, "break_on_blocked": false, "line_trace": false, "pdb_on_exception": true}}
+{"ts": 1776047532.565569, "t": 0.001, "event": "milestone", "run_id": "1776047532565-2831", "name": "preflight_ok", "ok": true, "note": ""}
+{"ts": 1776047533.344805, "t": 0.78, "event": "step_start", "name": "launch_context"}
+{"ts": 1776047540.961646, "t": 8.397, "event": "page_title_set", "title": "SCRAPER (DO NOT TOUCH)"}
+{"ts": 1776047541.030144, "t": 8.465, "event": "stealth_skipped", "reason": "px_detection_risk"}
+{"ts": 1776047541.032778, "t": 8.468, "event": "milestone", "run_id": "1776047532565-2831", "name": "launch_context", "ok": true, "note": ""}
+{"ts": 1776047541.03318, "t": 8.468, "event": "step_end", "name": "launch_context", "dur": 7.688}
+{"ts": 1776047541.033955, "t": 8.469, "event": "profile_health", "Cookies": {"exists": true, "size": 81920}, "Network Persistent State": {"exists": true, "size": 11378}, "Preferences": {"exists": true, "size": 30057}}
+{"ts": 1776047541.095667, "t": 8.531, "event": "cookies_pre", "count": 0, "names": []}
+{"ts": 1776047541.096205, "t": 8.531, "event": "cookie_persistence", "status": "NO_COOKIES", "note": "First run or profile issue - cookies will be saved after this run"}
+{"ts": 1776047541.096454, "t": 8.531, "event": "log", "level": "info", "msg": "[walmart] Establishing session (human-like pattern)"}
+{"ts": 1776047541.3217542, "t": 8.757, "event": "nav_headers", "url": "https://www.walmart.com/", "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"", "sec-ch-ua-mobile": "?0", "sec-ch-ua-platform": "\"macOS\"", "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}
+{"ts": 1776047541.780134, "t": 9.215, "event": "resp_doc", "url": "https://www.walmart.com/", "status": 200, "method": "GET", "fromCache": false}
+{"ts": 1776047541.8547359, "t": 9.29, "event": "nav", "url": "https://www.walmart.com/", "name": ""}
+{"ts": 1776047541.883355, "t": 9.318, "event": "req_failed", "url": "https://www.walmart.com/akam/13/110348b3", "method": "GET", "resource": "script", "failure": "csp"}
+{"ts": 1776047545.870527, "t": 13.305, "event": "nav", "url": "about:blank", "name": ""}
+{"ts": 1776047546.433044, "t": 13.868, "event": "nav", "url": "https://www.walmart.com/", "name": ""}
+{"ts": 1776047546.5651891, "t": 14.0, "event": "px_resp", "url": "https://collector-pxu6b0qd2s.px-cloud.net/api/v2/collector", "status": 200, "method": "POST"}
+{"ts": 1776047546.790418, "t": 14.225, "event": "home_goto_phase", "phase": "domcontentloaded"}
+{"ts": 1776047546.8157802, "t": 14.251, "event": "home_goto_phase_final", "phase": "domcontentloaded"}
+{"ts": 1776047546.8210618, "t": 14.256, "event": "hard_block", "where": "initial_home", "url": "https://www.walmart.com/", "reason": "blocked_on_first_nav"}
+{"ts": 1776047546.822103, "t": 14.257, "event": "log", "level": "warn", "msg": "[walmart] Hard blocked on first nav"}
+{"ts": 1776047546.822749, "t": 14.258, "event": "log", "level": "warn", "msg": "[walmart] Attempting warm session recovery via opensteer"}
+{"ts": 1776047546.832097, "t": 14.267, "event": "log", "level": "info", "msg": "[opensteer] Cloning scraper profile → workspace walmart-warm-20260412213226 ..."}
+{"ts": 1776047554.901352, "t": 22.336, "event": "log", "level": "info", "msg": "[opensteer] Opening headed browser — navigate past the block, then confirm here"}
+{"ts": 1776047577.094354, "t": 44.529, "event": "opensteer_title_set", "ws": "walmart-warm-20260412213226", "title": "OPENSTEER WARM SESSION (USE THIS WINDOW)"}
+{"ts": 1776047796.7834308, "t": 264.218, "event": "opensteer_warm_session_done", "ws": "walmart-warm-20260412213226", "cookies": 2, "storage_keys": 0}
+{"ts": 1776047796.798267, "t": 264.233, "event": "warm_cookie_invalid_type", "cookie_type": "<class 'str'>"}
+{"ts": 1776047796.798517, "t": 264.233, "event": "warm_cookie_invalid_type", "cookie_type": "<class 'str'>"}
+{"ts": 1776047796.9217331, "t": 264.357, "event": "px_resp", "url": "https://tzm.px-cloud.net/ns?c=000b5440-36e1-11f1-b1d2-213c731991c0", "status": 200, "method": "GET"}
+{"ts": 1776047797.276511, "t": 264.711, "event": "resp_doc", "url": "https://i5.walmartimages.com/dfw/63fd9f59-4c54/7adb6fe1-4149-4ebe-b4c7-2ea1921d4a19/v344/create-3p-cookie.html", "status": 200, "method": "GET", "fromCache": false}
+{"ts": 1776047797.279865, "t": 264.715, "event": "nav", "url": "https://i5.walmartimages.com/dfw/63fd9f59-4c54/7adb6fe1-4149-4ebe-b4c7-2ea1921d4a19/v344/create-3p-cookie.html", "name": ""}
+{"ts": 1776047797.494604, "t": 264.93, "event": "px_resp", "url": "https://collector-pxu6b0qd2s.px-cloud.net/api/v2/collector", "status": 200, "method": "POST"}
+{"ts": 1776047797.530367, "t": 264.965, "event": "resp_doc", "url": "https://www.walmart.com/~partytown/partytown-sandbox-sw.html?1776047548029", "status": 200, "method": "GET", "fromCache": true}
+{"ts": 1776047797.530921, "t": 264.966, "event": "nav", "url": "https://www.walmart.com/~partytown/partytown-sandbox-sw.html?1776047548029", "name": ""}
+{"ts": 1776047797.534923, "t": 264.97, "event": "px_resp", "url": "https://collector-pxu6b0qd2s.px-cloud.net/api/v2/collector", "status": 200, "method": "POST"}
+{"ts": 1776047797.540116, "t": 264.975, "event": "req_failed", "url": "https://www.walmart.com/~partytown/proxytown", "method": "POST", "resource": "xhr", "failure": "net::ERR_ABORTED"}
+{"ts": 1776047797.540742, "t": 264.976, "event": "req_failed", "url": "https://www.walmart.com/~partytown/proxytown", "method": "POST", "resource": "xhr", "failure": "net::ERR_ABORTED"}
+{"ts": 1776047797.541743, "t": 264.977, "event": "resp_doc", "url": "https://identity.walmart.com/account/login?client_id=5f3fb121-076a-45f6-9587-249f0bc160ff&redirect_uri=https%3A%2F%2Fwww.walmart.com%2Faccount%2FverifyToken&scope=openid+email+offline_access&tenant_id=elh9ie&state=%2F&code_challenge=UFQP5tuf1epJYl0EmGStmooL7yvhw9chATuwFn62FoY", "status": 200, "method": "GET", "fromCache": false}
+{"ts": 1776047797.545457, "t": 264.98, "event": "req_failed", "url": "https://www.walmart.com/si/elh9ie/obs", "method": "POST", "resource": "xhr", "failure": "net::ERR_ABORTED"}
+{"ts": 1776047797.545789, "t": 264.981, "event": "req_failed", "url": "https://www.walmart.com/si/elh9ie/obs", "method": "POST", "resource": "xhr", "failure": "net::ERR_ABORTED"}
+{"ts": 1776047797.546002, "t": 264.981, "event": "req_failed", "url": "https://b.www.walmart.com/rum.gif", "method": "POST", "resource": "ping", "failure": "net::ERR_ABORTED"}
+{"ts": 1776047797.546266, "t": 264.981, "event": "req_failed", "url": "https://collector-pxu6b0qd2s.px-cloud.net/api/v2/collector/beacon", "method": "POST", "resource": "ping", "failure": "net::ERR_ABORTED"}
+{"ts": 1776047797.54672, "t": 264.982, "event": "nav", "url": "https://identity.walmart.com/account/login?client_id=5f3fb121-076a-45f6-9587-249f0bc160ff&redirect_uri=https%3A%2F%2Fwww.walmart.com%2Faccount%2FverifyToken&scope=openid+email+offline_access&tenant_id=elh9ie&state=%2F&code_challenge=UFQP5tuf1epJYl0EmGStmooL7yvhw9chATuwFn62FoY", "name": ""}
+{"ts": 1776047797.547568, "t": 264.983, "event": "req_failed", "url": "https://identity.walmart.com/akam/13/110348b3", "method": "GET", "resource": "script", "failure": "csp"}
+{"ts": 1776047797.55568, "t": 264.991, "event": "nav", "url": "https://identity.walmart.com/account/login?client_id=5f3fb121-076a-45f6-9587-249f0bc160ff&redirect_uri=https%3A%2F%2Fwww.walmart.com%2Faccount%2FverifyToken&scope=openid+email+offline_access&tenant_id=elh9ie&state=%2F&code_challenge=UFQP5tuf1epJYl0EmGStmooL7yvhw9chATuwFn62FoY", "name": ""}
+{"ts": 1776047797.558149, "t": 264.993, "event": "nav", "url": "about:blank", "name": ""}
+{"ts": 1776047797.561126, "t": 264.996, "event": "px_resp", "url": "https://tzm.px-cloud.net/ns?c=0a131400-36e1-11f1-9617-a70f2943d94c", "status": 200, "method": "GET"}
+{"ts": 1776047797.56234, "t": 264.997, "event": "px_resp", "url": "https://collector-pxu6b0qd2s.px-cloud.net/api/v2/collector", "status": 200, "method": "POST"}
+{"ts": 1776047797.570053, "t": 265.005, "event": "px_resp", "url": "https://collector-pxu6b0qd2s.px-cloud.net/api/v2/collector", "status": 200, "method": "POST"}
+{"ts": 1776047797.572862, "t": 265.008, "event": "nav", "url": "about:blank", "name": "tmx_tags_iframe"}
+{"ts": 1776047797.5759401, "t": 265.011, "event": "resp_doc", "url": "https://identity.walmart.com/~partytown/partytown-sandbox-sw.html?1776047560621", "status": 200, "method": "GET", "fromCache": true}
+{"ts": 1776047797.5764139, "t": 265.011, "event": "nav", "url": "https://identity.walmart.com/~partytown/partytown-sandbox-sw.html?1776047560621", "name": ""}
+{"ts": 1776047797.5832021, "t": 265.018, "event": "resp_doc", "url": "https://drfdisvc.walmart.com/b83gDeXZ3s1KYrTe?bf34e86028808d1e=56wX36myBz3Rv_XiR4vK8f8vzTPW84R1Or09TjCfYhuooYXcMLa_vf-kxAyAnhw1eTFRPlqvIw9yr_KYeqw9ULIbEheIbE6BShjrT8tgHgQKHPax9NfQT0lPdni78BZSkDiygTv4p_63OhCR3BXEhQdmZ6xnXt6L5CHsBRu4mzTM_TPUdfcvBBVXawnU5QDB_XjcY-9DrM0X7szph1eB", "status": 200, "method": "GET", "fromCache": false}
+{"ts": 1776047797.583915, "t": 265.019, "event": "resp_doc", "url": "https://drfdisvc.walmart.com/tyOD6b_C_lZr0aWU?24b562f97a49fe56=Ijy8zTnNBYIkGjEmqa8Gg25llU5HK_FsGw5io1wkg4E_jcTSwi8qWXnGJwAY3BmIXm64aEWC5G9T9x-6HuRir6dNUiUrfINUDB9cMDFxKGxQuYgkON8UJ9iEkL7c0s9p6Nxu6neP73pNoTMyxqFZKzWY-ii_hMSzTQNQvzhY3v-Kgt6ucIyq3bwOcgA5ilSD1hE8k8eOBNF6vsxmniE", "status": 200, "method": "GET", "fromCache": false}
+{"ts": 1776047797.584615, "t": 265.02, "event": "resp_doc", "url": "https://h.online-metrix.net/rulxVSLgvU3u8pnc?db8cce4d6aa44f14=c-Y3AIGFoKx-SkKFu36RQMzA4vXNT5aXGYvHcnAkKlWyvdWw5yUM-qb_XGQVbMomUc4-_AKihqmsYMrLa7KOoNXzIj3RPpghipSSb16WWvlnqDssdofVW_oNBhT9cxXMmNvQ7O4pWbk2glfiy1Z9d4nPyWehmKvnphh-yZSmdu3D2PSFs3I0IB-ZNLnAP1YNKSamAEHimOoLlGBfGo-B", "status": 200, "method": "GET", "fromCache": false}
+{"ts": 1776047797.58517, "t": 265.02, "event": "nav", "url": "https://h.online-metrix.net/rulxVSLgvU3u8pnc?db8cce4d6aa44f14=c-Y3AIGFoKx-SkKFu36RQMzA4vXNT5aXGYvHcnAkKlWyvdWw5yUM-qb_XGQVbMomUc4-_AKihqmsYMrLa7KOoNXzIj3RPpghipSSb16WWvlnqDssdofVW_oNBhT9cxXMmNvQ7O4pWbk2glfiy1Z9d4nPyWehmKvnphh-yZSmdu3D2PSFs3I0IB-ZNLnAP1YNKSamAEHimOoLlGBfGo-B", "name": ""}
+{"ts": 1776047797.58831, "t": 265.023, "event": "nav", "url": "https://drfdisvc.walmart.com/b83gDeXZ3s1KYrTe?bf34e86028808d1e=56wX36myBz3Rv_XiR4vK8f8vzTPW84R1Or09TjCfYhuooYXcMLa_vf-kxAyAnhw1eTFRPlqvIw9yr_KYeqw9ULIbEheIbE6BShjrT8tgHgQKHPax9NfQT0lPdni78BZSkDiygTv4p_63OhCR3BXEhQdmZ6xnXt6L5CHsBRu4mzTM_TPUdfcvBBVXawnU5QDB_XjcY-9DrM0X7szph1eB", "name": "tdr_DU0jI"}
+{"ts": 1776047797.588655, "t": 265.024, "event": "nav", "url": "https://drfdisvc.walmart.com/tyOD6b_C_lZr0aWU?24b562f97a49fe56=Ijy8zTnNBYIkGjEmqa8Gg25llU5HK_FsGw5io1wkg4E_jcTSwi8qWXnGJwAY3BmIXm64aEWC5G9T9x-6HuRir6dNUiUrfINUDB9cMDFxKGxQuYgkON8UJ9iEkL7c0s9p6Nxu6neP73pNoTMyxqFZKzWY-ii_hMSzTQNQvzhY3v-Kgt6ucIyq3bwOcgA5ilSD1hE8k8eOBNF6vsxmniE", "name": "tdr_pmObO"}
+{"ts": 1776047797.590531, "t": 265.025, "event": "px_resp", "url": "https://collector-pxu6b0qd2s.px-cloud.net/api/v2/collector", "status": 200, "method": "POST"}
+{"ts": 1776047797.646726, "t": 265.082, "event": "px_resp", "url": "https://collector-pxu6b0qd2s.px-cloud.net/api/v2/collector", "status": 200, "method": "POST"}
+{"ts": 1776047797.766892, "t": 265.202, "event": "warm_session_cookies_injected", "count": 0}
+{"ts": 1776047797.7671318, "t": 265.202, "event": "warm_session_injected", "where": "initial_home", "cookies": 2}
+{"ts": 1776047797.773389, "t": 265.208, "event": "home_goto_timeout", "err": "Page.goto: Target page, context or browser has been closed"}
+{"ts": 1776047797.782943, "t": 265.218, "event": "home_goto_phase", "phase": "commit+networkidle", "err": "Page.goto: Target page, context or browser has been closed"}
+{"ts": 1776047797.785144, "t": 265.22, "event": "home_goto_phase_after_warm", "phase": "networkidle"}
+{"ts": 1776047797.786735, "t": 265.222, "event": "eval_error", "label": "ua", "url": "https://identity.walmart.com/account/login?client_id=5f3fb121-076a-45f6-9587-249f0bc160ff&redirect_uri=https%3A%2F%2Fwww.walmart.com%2Faccount%2FverifyToken&scope=openid+email+offline_access&tenant_id=elh9ie&state=%2F&code_challenge=UFQP5tuf1epJYl0EmGStmooL7yvhw9chATuwFn62FoY", "error": "Page.evaluate: Target page, context or browser has been closed"}
+{"ts": 1776047797.788851, "t": 265.224, "event": "eval_error", "label": "webgl_vendor", "url": "https://identity.walmart.com/account/login?client_id=5f3fb121-076a-45f6-9587-249f0bc160ff&redirect_uri=https%3A%2F%2Fwww.walmart.com%2Faccount%2FverifyToken&scope=openid+email+offline_access&tenant_id=elh9ie&state=%2F&code_challenge=UFQP5tuf1epJYl0EmGStmooL7yvhw9chATuwFn62FoY", "error": "Page.evaluate: Target page, context or browser has been closed"}
+{"ts": 1776047797.79069, "t": 265.226, "event": "eval_error", "label": "webgl_renderer", "url": "https://identity.walmart.com/account/login?client_id=5f3fb121-076a-45f6-9587-249f0bc160ff&redirect_uri=https%3A%2F%2Fwww.walmart.com%2Faccount%2FverifyToken&scope=openid+email+offline_access&tenant_id=elh9ie&state=%2F&code_challenge=UFQP5tuf1epJYl0EmGStmooL7yvhw9chATuwFn62FoY", "error": "Page.evaluate: Target page, context or browser has been closed"}
+{"ts": 1776047797.792279, "t": 265.227, "event": "eval_error", "label": "webgl_unmasked", "url": "https://identity.walmart.com/account/login?client_id=5f3fb121-076a-45f6-9587-249f0bc160ff&redirect_uri=https%3A%2F%2Fwww.walmart.com%2Faccount%2FverifyToken&scope=openid+email+offline_access&tenant_id=elh9ie&state=%2F&code_challenge=UFQP5tuf1epJYl0EmGStmooL7yvhw9chATuwFn62FoY", "error": "Page.evaluate: Target page, context or browser has been closed"}
+{"ts": 1776047797.792479, "t": 265.227, "event": "webgl", "vendor": null, "renderer": null}
+{"ts": 1776047797.7952378, "t": 265.23, "event": "eval_error", "label": "navigator_diag", "url": "https://identity.walmart.com/account/login?client_id=5f3fb121-076a-45f6-9587-249f0bc160ff&redirect_uri=https%3A%2F%2Fwww.walmart.com%2Faccount%2FverifyToken&scope=openid+email+offline_access&tenant_id=elh9ie&state=%2F&code_challenge=UFQP5tuf1epJYl0EmGStmooL7yvhw9chATuwFn62FoY", "error": "Page.evaluate: Target page, context or browser has been closed"}
+{"ts": 1776047799.442966, "t": 266.878, "event": "log", "level": "warn", "msg": "[walmart] ⚠️ Not logged in — some ad types may not appear"}
+{"ts": 1776047799.44327, "t": 266.878, "event": "login_check", "logged_in": false}
+{"ts": 1776047807.100279, "t": 274.535, "event": "log", "level": "info", "msg": "   ⏳ Waiting up to 300s for Walmart login…"}
+{"ts": 1776047807.123691, "t": 274.559, "event": "log", "level": "info", "msg": "   ⏳ Waiting for login… (299s remaining)"}
+{"ts": 1776047823.1322792, "t": 290.567, "event": "log", "level": "info", "msg": "   ⏳ Waiting for login… (283s remaining)"}
+{"ts": 1776047839.140787, "t": 306.576, "event": "log", "level": "info", "msg": "   ⏳ Waiting for login… (267s remaining)"}
+{"ts": 1776047855.153933, "t": 322.589, "event": "log", "level": "info", "msg": "   ⏳ Waiting for login… (251s remaining)"}
+{"ts": 1776047871.1607401, "t": 338.596, "event": "log", "level": "info", "msg": "   ⏳ Waiting for login… (235s remaining)"}
+{"ts": 1776047887.171102, "t": 354.606, "event": "log", "level": "info", "msg": "   ⏳ Waiting for login… (219s remaining)"}
+{"ts": 1776047903.1814651, "t": 370.616, "event": "log", "level": "info", "msg": "   ⏳ Waiting for login… (203s remaining)"}
+{"ts": 1776047919.189539, "t": 386.625, "event": "log", "level": "info", "msg": "   ⏳ Waiting for login… (187s remaining)"}

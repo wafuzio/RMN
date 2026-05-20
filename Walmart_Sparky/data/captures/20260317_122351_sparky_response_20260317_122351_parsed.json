@@ -1,0 +1,125 @@
+{
+  "query_metadata": {
+    "query_text": "sparky response 20260317 122351",
+    "timestamp": "2026-03-17T12:23:51.757378",
+    "conversation_title": "Affordable Toddler Clothing"
+  },
+  "response_classification": {
+    "response_mode": "product_carousel",
+    "intent_name": "open_dialog",
+    "has_products": true,
+    "has_editorial": true,
+    "has_google_grounding": false
+  },
+  "product_metrics": {
+    "total_products": 5,
+    "garanimals_count": 1,
+    "garanimals_positions": [
+      1
+    ],
+    "garanimals_share": 20.0,
+    "brands": [
+      "Carter's",
+      "Toddler",
+      "Modern",
+      "St.",
+      "Garanimals"
+    ],
+    "avg_garanimals_price": 7.98,
+    "avg_competitor_price": 11.9175,
+    "seller_breakdown": {
+      "1P": 4,
+      "3P": 1
+    },
+    "badge_distribution": {
+      "best_seller": 3,
+      "clearance": 0,
+      "other": 2
+    },
+    "products": [
+      {
+        "position": 1,
+        "name": "Garanimals Baby & Toddler Girl Cotton 2-Piece Set, Short-Sleeve Dress & Biker Shorts, 0M\u20136T",
+        "brand": "Garanimals",
+        "price": 7.98,
+        "seller": "Walmart.com",
+        "is_garanimals": true,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 2,
+        "name": "Modern Moments by Gerber Toddler Girl Tank Outfit Set, 2-Piece, Sizes 12 Months - 5T",
+        "brand": "Modern",
+        "price": 15,
+        "seller": "Walmart.com",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "50+ bought since yesterday"
+        ]
+      },
+      {
+        "position": 3,
+        "name": "Toddler Kids Boy Shorts Clothing Set 0 6 12 18 24 Months 2T 3T 4T Letter Tractor Print Short Sleeve Round Neck T-Shirt with Solid Shorts 2Pcs Outfit",
+        "brand": "Toddler",
+        "price": 12.88,
+        "seller": "jiujiangshigongshengdianzishangwuyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 4,
+        "name": "St. Patrick\u2019s Day Bluey Unisex Toddler Graphic Sweatshirt and Jogger Pants Set, 2-Piece, Sizes 12M-5T",
+        "brand": "St.",
+        "price": 4.79,
+        "seller": "Walmart.com",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 5,
+        "name": "Carter's Child of Mine Toddler Boy Easter Outfit Set, 2-Piece, Sizes 12M-5T",
+        "brand": "Carter's",
+        "price": 15,
+        "seller": "Walmart.com",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "50+ bought since yesterday"
+        ]
+      }
+    ]
+  },
+  "editorial_metrics": {
+    "garanimals_mentioned": true,
+    "preamble": "Here are a few affordable clothing options for toddlers that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:",
+    "followup": "These clothing sets offer comfortable and stylish options for toddlers at various price points. They are designed for everyday wear and special occasions. \n\nAre you looking for clothing for a specific gender or age range?",
+    "full_response": "Here are a few affordable clothing options for toddlers that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:\n\nSparky's Picks:[Product Name: Garanimals Baby & Toddler Girl Cotton 2-Piece Set, Short-Sleeve Dress & Biker Shorts, 0M\u20136T Price: $7.98 Rating: 4.8 Badge_Label: [\"Best seller\"]\nProduct Name: Modern Moments by Gerber Toddler Girl Tank Outfit Set, 2-Piece, Sizes 12 Months - 5T Price: $15.00 Rating: 4.7 Badge_Label: [\"50+ bought since yesterday\"]\nProduct Name: Toddler Kids Boy Shorts Clothing Set 0 6 12 18 24 Months 2T 3T 4T Letter Tractor Print Short Sleeve Round Neck T-Shirt with Solid Shorts 2Pcs Outfit Price: $12.88 Rating: 4.7 Badge_Label: [\"Best seller\"]\nProduct Name: St. Patrick\u2019s Day Bluey Unisex Toddler Graphic Sweatshirt and Jogger Pants Set, 2-Piece, Sizes 12M-5T Price: $4.79 Rating: 4.9 Badge_Label: [\"Best seller\"]\nProduct Name: Carter's Child of Mine Toddler Boy Easter Outfit Set, 2-Piece, Sizes 12M-5T Price: $15.00 Rating: 4.8 Badge_Label: [\"50+ bought since yesterday\"]]\nOther Options:[]\n\nThese clothing sets offer comfortable and stylish options for toddlers at various price points. They are designed for everyday wear and special occasions. \n\nAre you looking for clothing for a specific gender or age range?",
+    "source_domains": [],
+    "source_count": 0
+  },
+  "ad_infrastructure": {
+    "max_ads": 4,
+    "ads_active": false,
+    "specificity": "narrow",
+    "brands_targeted": []
+  },
+  "search_query_reformulation": {
+    "original": "sparky response 20260317 122351",
+    "reformulated": "affordable clothing, toddlers"
+  }
+}

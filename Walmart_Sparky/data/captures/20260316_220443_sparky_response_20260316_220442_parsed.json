@@ -1,0 +1,122 @@
+{
+  "query_metadata": {
+    "query_text": "sparky response 20260316 220442",
+    "timestamp": "2026-03-16T22:04:43.077434",
+    "conversation_title": "Cheap Toddler Shirts"
+  },
+  "response_classification": {
+    "response_mode": "product_carousel",
+    "intent_name": "open_dialog",
+    "has_products": true,
+    "has_editorial": true,
+    "has_google_grounding": false
+  },
+  "product_metrics": {
+    "total_products": 5,
+    "garanimals_count": 3,
+    "garanimals_positions": [
+      1,
+      2,
+      5
+    ],
+    "garanimals_share": 60.0,
+    "brands": [
+      "Garanimals",
+      "Wonder"
+    ],
+    "avg_garanimals_price": 5.546666666666667,
+    "avg_competitor_price": 8.21,
+    "seller_breakdown": {
+      "1P": 5,
+      "3P": 0
+    },
+    "badge_distribution": {
+      "best_seller": 4,
+      "clearance": 0,
+      "other": 0
+    },
+    "products": [
+      {
+        "position": 1,
+        "name": "Garanimals Baby & Toddler Boy Cotton Short-Sleeve Graphic T-Shirts, 3-Pack, 0M\u20136T",
+        "brand": "Garanimals",
+        "price": 7.68,
+        "seller": "Walmart.com",
+        "is_garanimals": true,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 2,
+        "name": "Garanimals Toddler Boy Short Sleeve Pocket T-shirt, Sizes 18M-5T",
+        "brand": "Garanimals",
+        "price": 4.48,
+        "seller": "Walmart.com",
+        "is_garanimals": true,
+        "rating": 4.7,
+        "review_count": 204,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 3,
+        "name": "Wonder Nation Toddler Boys Tee with Short Sleeves, 3-Pack, Sizes 18M-5T",
+        "brand": "Wonder",
+        "price": 11.94,
+        "seller": "Walmart.com",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 4,
+        "name": "Wonder Nation Toddler Girls Tee with Short Sleeves, Sizes 18M-5T",
+        "brand": "Wonder",
+        "price": 4.48,
+        "seller": "Walmart.com",
+        "is_garanimals": false,
+        "rating": 4.8,
+        "review_count": 322,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 5,
+        "name": "Garanimals Baby & Toddler Girl Cotton Short-Sleeve Graphic T-Shirt, 0M\u20136T",
+        "brand": "Garanimals",
+        "price": 4.48,
+        "seller": "Walmart.com",
+        "is_garanimals": true,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      }
+    ]
+  },
+  "editorial_metrics": {
+    "garanimals_mentioned": true,
+    "preamble": "Here are a few toddler shirts that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:",
+    "followup": "These toddler shirts offer comfortable, easy-care options at budget-friendly prices, perfect for daily wear. They come in various styles and pack sizes. \n\nAre you looking for specific sizes or colors?",
+    "full_response": "Here are a few toddler shirts that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:\n\nSparky's Picks:[Product Name: Garanimals Baby & Toddler Boy Cotton Short-Sleeve Graphic T-Shirts, 3-Pack, 0M\u20136T Price: $7.68 Rating: 4.8 Badge_Label: [\"Best seller\"]\nProduct Name: Garanimals Toddler Boy Short Sleeve Pocket T-shirt, Sizes 18M-5T Price: $4.48 Rating: 4.7 Badge_Label: [\"Best seller\"]\nProduct Name: Wonder Nation Toddler Boys Tee with Short Sleeves, 3-Pack, Sizes 18M-5T Price: $11.94 Rating: 5.0 Badge_Label: [\"Best seller\"]\nProduct Name: Wonder Nation Toddler Girls Tee with Short Sleeves, Sizes 18M-5T Price: $4.48 Rating: 4.8 Badge_Label: [\"Best seller\"]\nProduct Name: Garanimals Baby & Toddler Girl Cotton Short-Sleeve Graphic T-Shirt, 0M\u20136T Price: $4.48 Rating: 4.8 Badge_Label: []]\nOther Options:[]\n\nThese toddler shirts offer comfortable, easy-care options at budget-friendly prices, perfect for daily wear. They come in various styles and pack sizes. \n\nAre you looking for specific sizes or colors?",
+    "source_domains": [],
+    "source_count": 0
+  },
+  "ad_infrastructure": {
+    "max_ads": 4,
+    "ads_active": false,
+    "specificity": "narrow",
+    "brands_targeted": []
+  },
+  "search_query_reformulation": {
+    "original": "sparky response 20260316 220442",
+    "reformulated": "cheap toddler shirts"
+  }
+}

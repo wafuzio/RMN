@@ -1,0 +1,81 @@
+{
+  "keyword": "community coffee",
+  "outcome": "bail",
+  "bail_reason": "hard_block_warm_failed",
+  "started_at": "2026-04-12T17:32:33",
+  "timings": {
+    "to_home_ms": 11935,
+    "after_submit_px_ms": null,
+    "results_ready_ms": null
+  },
+  "env": {
+    "ua": null,
+    "webgl": {},
+    "nav_headers": {
+      "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"macOS\"",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+    }
+  },
+  "cookies": {
+    "pre_count": 43,
+    "pre_names": [
+      "AID",
+      "CID",
+      "SPID",
+      "_intlbu",
+      "_lat",
+      "_m",
+      "_msit",
+      "_pxhd",
+      "_pxvid",
+      "_s",
+      "_sc",
+      "_shcc"
+    ],
+    "post_count": 0,
+    "post_names": [],
+    "suspicious": [
+      "adblocked",
+      "ak_bmsc",
+      "bm_mi",
+      "bm_sv"
+    ],
+    "bot_cookies_cleared": 4
+  },
+  "px": {
+    "tries": 0,
+    "cycles": 0,
+    "cleared": null
+  },
+  "network": {
+    "req_failed": 1,
+    "resp_doc": 1,
+    "route_errors": 0
+  },
+  "artifacts": {
+    "steps_log": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_live_test/20260412173233/walmart_community_coffee_steps.jsonl",
+    "trace_zip": null,
+    "no_results_html": null,
+    "no_results_png": null,
+    "saved_html": null,
+    "meta_json": null
+  },
+  "diag": {
+    "navigator": null,
+    "webglUnmasked": null,
+    "navHeaders": {
+      "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"macOS\"",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+    },
+    "suspiciousCookies": [
+      "adblocked",
+      "ak_bmsc",
+      "bm_mi",
+      "bm_sv"
+    ]
+  }
+}

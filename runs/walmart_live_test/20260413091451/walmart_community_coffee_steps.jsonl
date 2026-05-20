@@ -1,0 +1,34 @@
+{"ts": 1776089691.327838, "t": 0.0, "event": "run_start", "run_id": "1776089691327-3384", "keyword": "community coffee", "preflight": {"base_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_live_test/20260413091451", "profile_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/profiles/walmart"}, "debug": {"break_on_px": false, "break_on_blocked": false, "line_trace": false, "pdb_on_exception": true}}
+{"ts": 1776089691.3280509, "t": 0.0, "event": "milestone", "run_id": "1776089691327-3384", "name": "preflight_ok", "ok": true, "note": ""}
+{"ts": 1776089694.3957372, "t": 3.068, "event": "step_start", "name": "launch_context"}
+{"ts": 1776089702.274827, "t": 10.947, "event": "page_title_set", "title": "SCRAPER (DO NOT TOUCH)"}
+{"ts": 1776089702.304807, "t": 10.977, "event": "stealth_skipped", "reason": "px_detection_risk"}
+{"ts": 1776089702.306109, "t": 10.978, "event": "milestone", "run_id": "1776089691327-3384", "name": "launch_context", "ok": true, "note": ""}
+{"ts": 1776089702.30692, "t": 10.979, "event": "step_end", "name": "launch_context", "dur": 7.911}
+{"ts": 1776089702.310463, "t": 10.983, "event": "profile_health", "Cookies": {"exists": true, "size": 81920}, "Network Persistent State": {"exists": true, "size": 15328}, "Preferences": {"exists": true, "size": 23949}}
+{"ts": 1776089702.371556, "t": 11.044, "event": "cookies_pre", "count": 0, "names": []}
+{"ts": 1776089702.371809, "t": 11.044, "event": "cookie_persistence", "status": "NO_COOKIES", "note": "First run or profile issue - cookies will be saved after this run"}
+{"ts": 1776089702.371945, "t": 11.044, "event": "log", "level": "info", "msg": "[walmart] Establishing session (human-like pattern)"}
+{"ts": 1776089702.604192, "t": 11.276, "event": "nav_headers", "url": "https://www.walmart.com/", "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"", "sec-ch-ua-mobile": "?0", "sec-ch-ua-platform": "\"macOS\"", "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}
+{"ts": 1776089702.942879, "t": 11.615, "event": "resp_doc", "url": "https://www.walmart.com/", "status": 200, "method": "GET", "fromCache": false}
+{"ts": 1776089702.970328, "t": 11.643, "event": "nav", "url": "https://www.walmart.com/", "name": ""}
+{"ts": 1776089703.004724, "t": 11.677, "event": "page_error", "error": "Failed to construct 'MimeType': Illegal constructor"}
+{"ts": 1776089703.00798, "t": 11.68, "event": "req_failed", "url": "https://www.walmart.com/akam/13/110348aa", "method": "GET", "resource": "script", "failure": "csp"}
+{"ts": 1776089706.829893, "t": 15.502, "event": "nav", "url": "about:blank", "name": ""}
+{"ts": 1776089706.835722, "t": 15.508, "event": "page_error", "error": "Failed to construct 'MimeType': Illegal constructor"}
+{"ts": 1776089707.478884, "t": 16.151, "event": "nav", "url": "https://www.walmart.com/", "name": ""}
+{"ts": 1776089707.4884732, "t": 16.161, "event": "px_resp", "url": "https://collector-pxu6b0qd2s.px-cloud.net/api/v2/collector", "status": 200, "method": "POST"}
+{"ts": 1776089707.489176, "t": 16.161, "event": "px_resp", "url": "https://tzm.px-cloud.net/ns?c=29f62610-3743-11f1-9b86-47e0fc7edad2", "status": 200, "method": "GET"}
+{"ts": 1776089707.8275552, "t": 16.5, "event": "resp_doc", "url": "https://i5.walmartimages.com/dfw/63fd9f59-4c54/7adb6fe1-4149-4ebe-b4c7-2ea1921d4a19/v344/create-3p-cookie.html", "status": 200, "method": "GET", "fromCache": false}
+{"ts": 1776089707.864167, "t": 16.536, "event": "home_goto_phase", "phase": "domcontentloaded"}
+{"ts": 1776089707.8648021, "t": 16.537, "event": "home_goto_phase_final", "phase": "domcontentloaded"}
+{"ts": 1776089707.869395, "t": 16.542, "event": "hard_block", "where": "initial_home", "url": "https://www.walmart.com/", "reason": "blocked_on_first_nav"}
+{"ts": 1776089707.8696089, "t": 16.542, "event": "log", "level": "warn", "msg": "[walmart] Hard blocked on first nav"}
+{"ts": 1776089707.8737621, "t": 16.546, "event": "log", "level": "warn", "msg": "[walmart] Attempting warm session recovery via opensteer"}
+{"ts": 1776089707.881873, "t": 16.554, "event": "log", "level": "info", "msg": "[opensteer] Cloning scraper profile → workspace walmart-warm-20260413091507 ..."}
+{"ts": 1776089730.5902982, "t": 39.262, "event": "log", "level": "info", "msg": "[opensteer] Opening headed browser — navigate past the block, then confirm here"}
+{"ts": 1776089740.435253, "t": 49.107, "event": "opensteer_open_error", "ws": "walmart-warm-20260413091507", "stderr": "{\"error\":{\"name\":\"TypeError\",\"message\":\"browserContext.newPage: Cannot read properties of undefined (reading '_page')\"}}"}
+{"ts": 1776089743.597651, "t": 52.27, "event": "log", "level": "error", "msg": "[walmart] Warm session recovery failed: opensteer open failed (rc=1): {\"error\":{\"name\":\"TypeError\",\"message\":\"browserContext.newPage: Cannot read properties of undefined (reading '_page')\"}}"}
+{"ts": 1776089743.614941, "t": 52.287, "event": "warm_session_error", "where": "initial_home", "error": "opensteer open failed (rc=1): {\"error\":{\"name\":\"TypeError\",\"message\":\"browserContext.newPage: Cannot read properties of undefined (reading '_page')\"}}"}
+{"ts": 1776089745.4124181, "t": 54.085, "event": "cookies_post_multi", "by_www_count": 0, "by_root_count": 0, "all_count": 0, "by_www_names": [], "by_root_names": [], "all_names": []}
+{"ts": 1776089745.4131541, "t": 54.085, "event": "cookies_post", "count": 0, "names": []}

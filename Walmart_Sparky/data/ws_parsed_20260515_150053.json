@@ -1,0 +1,28 @@
+{
+  "captured_at": "2026-05-15T15:00:53.143757",
+  "input_file": "new_capture_input.txt",
+  "frame_count": 10,
+  "query": {
+    "query_text": "what%20kind%20of%20truck%20did%20sam%20walton%20drive",
+    "trace_id": "C03BDC08-4D61-4D36-A1A1-9400282E189A",
+    "conversation_id": "65eff142-088d-4d77-a719-160d3999caa6",
+    "channel_id": "SPARKY_ASSISTANT_IOS_APP",
+    "app_version": "WMT1H/26.17.1  iOS/26.4.2",
+    "experiment_flags": {},
+    "show_ads": false,
+    "walmart_plus_status": "EXPIRED",
+    "screen_context": "shop",
+    "client_intent": "client_intent_orchestrator"
+  },
+  "responses": {
+    "cot_steps": [
+      "Deciding how to help",
+      "Searching the web for you",
+      "Finding great matches for you"
+    ],
+    "text_responses": [],
+    "product_carousel": null,
+    "carousel_incomplete": true,
+    "text_pills": []
+  }
+}

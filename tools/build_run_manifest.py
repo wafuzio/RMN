@@ -166,21 +166,97 @@ def infer_parts(f: Path) -> tuple[str, str]:
         return "unknown", "unknown"
 
 
-def build_manifest():
-    """Build run manifest from all JSON files."""
+def _rebuild_aggregates(rows: list) -> tuple[dict, dict, dict, dict, dict]:
+    """Recompute daily_totals and brand summaries from an in-memory rows list."""
+    daily_totals: dict = {}
+    brand_counts: dict = {}
+    brand_counts_by_client: dict = {}
+    brand_display: dict = {}
+
+    for row in rows:
+        retailer = row["retailer"]
+        client = row["client"]
+        day = row["day"]
+        ad_count = row["ad_count"]
+
+        d1 = daily_totals.setdefault(retailer, {}).setdefault(client, {}).setdefault(day, 0)
+        daily_totals[retailer][client][day] = d1 + ad_count
+
+        for brand_name in row.get("brands", []):
+            canonical = canonicalize_brand(brand_name) or brand_name
+            norm_key = normalize_brand_for_matching(canonical)
+            if not norm_key:
+                continue
+            brand_display.setdefault(norm_key, canonical)
+            brand_counts.setdefault(retailer, {}).setdefault(norm_key, 0)
+            brand_counts[retailer][norm_key] += 1
+            brand_counts_by_client.setdefault(retailer, {}).setdefault(client, {}).setdefault(norm_key, 0)
+            brand_counts_by_client[retailer][client][norm_key] += 1
+
+    return daily_totals, brand_counts, brand_counts_by_client, brand_display
+
+
+def build_manifest(full: bool = False):
+    """Build run manifest from all JSON files.
+
+    Incremental mode (default):
+      1. Load existing manifest rows keyed by json_path.
+      2. Build the set of all paths currently on disk.
+      3. REMOVE entries whose files no longer exist (deleted, moved, renamed).
+      4. RE-PROCESS files whose mtime is newer than the last manifest build
+         (new files, content changes, taxonomy reassignments, path changes).
+      5. Rebuild aggregates (daily totals, brand counts) from the full in-memory
+         row set — no extra I/O needed.
+
+    Pass --full to ignore the existing manifest and reprocess everything.
+    """
     start = time.time()
-    rows = []
-    daily_totals = {}  # retailer -> client -> day -> total
-    
-    # Brand aggregation: retailer -> normalized_key -> {display_name, count}
-    brand_counts = {}  # retailer -> norm_key -> count
-    brand_counts_by_client = {}  # retailer -> client -> norm_key -> count
-    brand_display = {}  # norm_key -> display_name (canonical)
-    
+
+    # --- Load existing manifest for incremental mode ---
+    existing_rows: dict = {}  # json_path -> row
+    manifest_mtime: float = 0.0
+
+    if not full and MANIFEST.exists():
+        try:
+            existing = json.loads(MANIFEST.read_text(encoding="utf-8"))
+            for row in existing.get("runs", []):
+                existing_rows[row["json_path"]] = row
+            manifest_mtime = MANIFEST.stat().st_mtime
+            print(f"📋 Loaded {len(existing_rows)} existing runs (incremental mode)")
+        except Exception as e:
+            print(f"⚠️  Could not load existing manifest, falling back to full rebuild: {e}")
+            existing_rows = {}
+            manifest_mtime = 0.0
+
     print(f"🔍 Scanning for run JSON files...")
-    json_files = list_run_jsons()
-    print(f"📁 Found {len(json_files)} files to process")
-    
+    all_json_files = list_run_jsons()
+
+    # Build a set of relative paths that currently exist on disk
+    disk_rel_paths = {str(f.relative_to(OUTPUT)) for f in all_json_files}
+
+    if manifest_mtime > 0:
+        # Step 1: remove manifest entries for files that no longer exist on disk
+        # (handles deletes, moves, taxonomy reassignments)
+        before = len(existing_rows)
+        existing_rows = {p: r for p, r in existing_rows.items() if p in disk_rel_paths}
+        removed = before - len(existing_rows)
+        if removed:
+            print(f"🗑️  Removed {removed} stale entries (deleted/moved files)")
+
+        # Step 2: re-process files that are new or have changed content since last build
+        # 5-second overlap guards against clock skew at the boundary
+        json_files = [f for f in all_json_files if f.stat().st_mtime >= manifest_mtime - 5]
+        changed = len(json_files)
+        print(f"📁 {len(all_json_files)} total files — {changed} new/changed, {removed} removed")
+
+        # Nothing changed — skip the expensive rebuild entirely
+        if changed == 0 and removed == 0:
+            print(f"✅ Manifest already up to date ({len(existing_rows)} runs, no changes detected)")
+            return
+    else:
+        json_files = all_json_files
+        print(f"📁 Found {len(json_files)} files to process (full rebuild)")
+
     for jf in json_files:
         try:
             doc = json.loads(jf.read_text(encoding="utf-8"))
@@ -215,7 +291,8 @@ def build_manifest():
                 if cb and cb != "Unknown":
                     canonical_brands_by_type[ad_type].append(cb)
         
-        rows.append({
+        rel = str(jf.relative_to(OUTPUT))
+        existing_rows[rel] = {
             "retailer": retailer,
             "client": client,
             "json_path": rel,
@@ -224,46 +301,16 @@ def build_manifest():
             "day": day,
             "keyword": keyword,
             "ad_count": ad_count,
-            "brands": canonical_brands,  # Per-run brand list for date-filtered queries
-            "brands_by_type": canonical_brands_by_type  # Per-run brands grouped by ad type
-        })
+            "brands": canonical_brands,
+            "brands_by_type": canonical_brands_by_type,
+        }
 
-        # Update daily totals
-        d1 = daily_totals.setdefault(retailer, {}).setdefault(client, {}).setdefault(day, 0)
-        daily_totals[retailer][client][day] = d1 + ad_count
-        
-        # Extract and count brands
-        brands = extract_brands_from_doc(doc)
-        for brand_name in brands:
-            # Canonicalize and normalize
-            canonical = canonicalize_brand(brand_name) or brand_name
-            norm_key = normalize_brand_for_matching(canonical)
-            
-            if not norm_key:
-                continue
-            
-            # Track display name (prefer canonical)
-            if norm_key not in brand_display:
-                brand_display[norm_key] = canonical
-            
-            # Count per retailer
-            if retailer not in brand_counts:
-                brand_counts[retailer] = {}
-            if norm_key not in brand_counts[retailer]:
-                brand_counts[retailer][norm_key] = 0
-            brand_counts[retailer][norm_key] += 1
-            
-            # Count per retailer+client
-            if retailer not in brand_counts_by_client:
-                brand_counts_by_client[retailer] = {}
-            if client not in brand_counts_by_client[retailer]:
-                brand_counts_by_client[retailer][client] = {}
-            if norm_key not in brand_counts_by_client[retailer][client]:
-                brand_counts_by_client[retailer][client][norm_key] = 0
-            brand_counts_by_client[retailer][client][norm_key] += 1
-
-    # Sort runs newest first
+    # All rows (existing + newly processed), sorted newest first
+    rows = list(existing_rows.values())
     rows.sort(key=lambda r: r["timestamp"], reverse=True)
+
+    # Rebuild aggregates from the full in-memory rows list (fast — no I/O)
+    daily_totals, brand_counts, brand_counts_by_client, brand_display = _rebuild_aggregates(rows)
     
     # Build brand summary: retailer -> [{brand, count}, ...]
     brand_summary = {}
@@ -317,4 +364,8 @@ def build_manifest():
 
 
 if __name__ == "__main__":
-    build_manifest()
+    import argparse
+    parser = argparse.ArgumentParser(description="Build run manifest")
+    parser.add_argument("--full", action="store_true", help="Force full rebuild from scratch (ignores existing manifest)")
+    args = parser.parse_args()
+    build_manifest(full=args.full)

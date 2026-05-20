@@ -1,0 +1,35 @@
+{
+  "open_button": [
+    "[aria-label*=\"Sparky\" i]",
+    "[data-testid*=\"sparky\" i]",
+    "button:has-text(\"Sparky\")",
+    "button:has-text(\"Ask Sparky\")",
+    "button:has-text(\"Ask Walmart\")",
+    "a:has-text(\"Sparky\")",
+    "text=\"Sparky\""
+  ],
+  "chat_input": [
+    "textarea[placeholder*=\"Ask\" i]",
+    "textarea",
+    "[contenteditable=\"true\"]",
+    "input[placeholder*=\"Ask\" i]",
+    "input[type=\"text\"]"
+  ],
+  "send_button": [
+    "button[aria-label*=\"Send\" i]",
+    "button:has-text(\"Send\")",
+    "button[type=\"submit\"]"
+  ],
+  "response_container": [
+    "[data-testid*=\"sparky\" i]",
+    "[aria-label*=\"Sparky\" i]",
+    "main",
+    "body"
+  ],
+  "product_cards": [
+    "[data-testid*=\"product\" i]",
+    "[data-item-id]",
+    "a[href*=\"/ip/\"]",
+    "div:has(a[href*=\"/ip/\"])"
+  ]
+}

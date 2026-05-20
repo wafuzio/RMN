@@ -1,0 +1,26 @@
+{
+  "links": [
+    "https://www.walmart.com/brand/noophoric/mens-health/20037081?selectedSellerId=101184037&adsRedirect=true"
+  ],
+  "videos": [],
+  "advertisers": {
+    "sba_1": "Noophoric"
+  },
+  "gallery_cards": [
+    {
+      "index": 1,
+      "advertiser": "unknown",
+      "headline": null,
+      "subheadline": null,
+      "cta": "Shop now",
+      "logo_url": "https://advertising.walmart.com/thunder/assets/template-build-service/release/campaigns/advertising.walmart.com/0b979f35-4915-4501-b38b-3bda6c3349cd/862d6ccf-ed6a-4b4f-943f-2a50ac5744da/creatives/20260323T191408.699Z/optimizedPhotos/6c23b0ef-6e8c-416b-855e-7bfe9ca6a33c.jpg",
+      "hero_image_url": "https://advertising.walmart.com/thunder/assets/template-build-service/release/campaigns/advertising.walmart.com/0b979f35-4915-4501-b38b-3bda6c3349cd/862d6ccf-ed6a-4b4f-943f-2a50ac5744da/creatives/20260323T191408.699Z/brandBoxFix/8d181559-6a45-4673-8da9-f60a68747b65.jpg",
+      "screenshot": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_test/Gallery_Cards/walmart__unknown__gallery_card__walmart_test__test__D2026-03-31_T17-55.24_1.png",
+      "card_format": "banner",
+      "dimensions": {
+        "width": 1232,
+        "height": 178
+      }
+    }
+  ]
+}

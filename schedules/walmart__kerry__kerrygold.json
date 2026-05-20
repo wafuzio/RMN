@@ -1,0 +1,26 @@
+{
+  "id": "walmart_kerry_kerrygold_cd9df863",
+  "retailer": "walmart",
+  "client": "Kerry",
+  "keywords": [
+    "Kerrygold"
+  ],
+  "days": [
+    "friday",
+    "monday",
+    "saturday",
+    "sunday",
+    "thursday",
+    "tuesday",
+    "wednesday"
+  ],
+  "times": [
+    "07:35",
+    "12:00",
+    "16:10"
+  ],
+  "enabled": true,
+  "tz": "",
+  "created_at": "2026-05-18T16:42:47Z",
+  "updated_at": "2026-05-18T16:42:47Z"
+}

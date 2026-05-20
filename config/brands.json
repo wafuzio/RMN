@@ -56,10 +56,6 @@
     "verified": true
   },
   {
-    "name": "Act Anticavity Fluoride Rinse, Wild Watermelon",
-    "synonyms": []
-  },
-  {
     "name": "Activia",
     "synonyms": [],
     "verified": true
@@ -119,6 +115,11 @@
     "verified": true
   },
   {
+    "name": "Alkanatur",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "All Sport",
     "synonyms": [],
     "verified": true
@@ -172,7 +173,8 @@
       "Shop Single Serve Tasty Bites",
       "Explore Korean Beauty Products",
       "Discover Travel Beauty Products",
-      "Find Organic Wellness Items"
+      "Find Organic Wellness Items",
+      "Today's deals"
     ],
     "verified": true
   },
@@ -222,7 +224,8 @@
   },
   {
     "name": "Ancient Nutrition",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Angel Soft",
@@ -294,11 +297,13 @@
   },
   {
     "name": "Arey",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Arizona",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Arm & Hammer",
@@ -388,7 +393,8 @@
   },
   {
     "name": "Ballast",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Balvive",
@@ -413,10 +419,6 @@
     "name": "Bar-S",
     "synonyms": [],
     "verified": true
-  },
-  {
-    "name": "Barbie",
-    "synonyms": []
   },
   {
     "name": "Bare",
@@ -496,8 +498,11 @@
     "verified": true
   },
   {
-    "name": "Benadryl Extra Strength Anti-Itch Topical Cream With 2% Diphenhydramine Hci For Itch Relief Of Outdoor Itches Associated With Poison Ivy, Insect Bites & More, 1 Oz",
-    "synonyms": []
+    "name": "Benadryl",
+    "synonyms": [
+      "Benadryl Extra Strength Anti-Itch Topical Cream With 2% Diphenhydramine Hci For Itch Relief Of Outdoor Itches Associated With Poison Ivy, Insect Bites & More, 1 Oz"
+    ],
+    "verified": true
   },
   {
     "name": "Benebone",
@@ -608,10 +613,6 @@
     "verified": true
   },
   {
-    "name": "Blank",
-    "synonyms": []
-  },
-  {
     "name": "Bliss",
     "synonyms": [],
     "verified": true
@@ -676,7 +677,8 @@
   },
   {
     "name": "Bodyhealth",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Bodymed",
@@ -715,6 +717,11 @@
   },
   {
     "name": "Bose",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Bostons Best",
     "synonyms": [],
     "verified": true
   },
@@ -955,10 +962,6 @@
     "verified": true
   },
   {
-    "name": "California",
-    "synonyms": []
-  },
-  {
     "name": "California Milk Advisory Board",
     "synonyms": [],
     "verified": true
@@ -1063,7 +1066,8 @@
   },
   {
     "name": "Carroten",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Carvel",
@@ -1630,7 +1634,8 @@
   },
   {
     "name": "Dermated",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Designs for Health",
@@ -1949,20 +1954,11 @@
   },
   {
     "name": "Eight O Clock Coffee",
-    "synonyms": [],
+    "synonyms": [
+      "Eight O’Clock 100% Colombian Peaks Medium Roast Coffee Value Pack K-Cup Pods",
+      "Eight O’Clock Medium Roast Ground The Original Coffee"
+    ],
     "verified": true
-  },
-  {
-    "name": "Eight O’Clock 100% Colombian Peaks Medium Roast Coffee Value Pack K-Cup Pods",
-    "synonyms": []
-  },
-  {
-    "name": "Eight O’Clock Medium Roast Ground The Original Coffee",
-    "synonyms": []
-  },
-  {
-    "name": "Electric",
-    "synonyms": []
   },
   {
     "name": "Elemis",
@@ -2040,7 +2036,8 @@
   },
   {
     "name": "Essenherb",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Essentia",
@@ -2057,6 +2054,11 @@
     "synonyms": [
       "MSG:Instantly moisturize your skin with urea enriched formulas. Shop Eucerin"
     ],
+    "verified": true
+  },
+  {
+    "name": "Everden",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -2134,7 +2136,8 @@
   },
   {
     "name": "Fellowes",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Ferrero",
@@ -2190,7 +2193,8 @@
   },
   {
     "name": "Fitright",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Fitrx",
@@ -2233,8 +2237,9 @@
     "verified": true
   },
   {
-    "name": "Focus",
-    "synonyms": []
+    "name": "Focus Factor",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Folgers",
@@ -2325,8 +2330,9 @@
     "verified": true
   },
   {
-    "name": "Functional",
-    "synonyms": []
+    "name": "Functional Formularies",
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Funpops",
@@ -2380,7 +2386,9 @@
   },
   {
     "name": "Geologie",
-    "synonyms": [],
+    "synonyms": [
+      "MSG:Sponsored video from Geologie, click to learn more about offerings from Geologie on Amazon."
+    ],
     "verified": true
   },
   {
@@ -2448,7 +2456,8 @@
   },
   {
     "name": "Gobena",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Gogosqueez",
@@ -2695,7 +2704,8 @@
   },
   {
     "name": "Healthwtr",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Healthy Choice",
@@ -2815,7 +2825,8 @@
   },
   {
     "name": "Hiya",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "HMR",
@@ -2900,10 +2911,6 @@
     "verified": true
   },
   {
-    "name": "Hpn",
-    "synonyms": []
-  },
-  {
     "name": "Huaco Care",
     "synonyms": [],
     "verified": true
@@ -2938,7 +2945,8 @@
   {
     "name": "Iams",
     "synonyms": [
-      "Iams Cat Food"
+      "Iams Cat Food",
+      "Iams Dog Food"
     ],
     "verified": true
   },
@@ -2973,6 +2981,13 @@
     "verified": true
   },
   {
+    "name": "Ifillcup",
+    "synonyms": [
+      "Ifillcup From Ifillsystems"
+    ],
+    "verified": true
+  },
+  {
     "name": "Illy",
     "synonyms": [],
     "verified": true
@@ -2996,11 +3011,13 @@
   },
   {
     "name": "Instinct",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Intelligent Blends",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "International Delight",
@@ -3038,10 +3055,6 @@
       "Ithacahummus"
     ],
     "verified": true
-  },
-  {
-    "name": "Javvy",
-    "synonyms": []
   },
   {
     "name": "JB SKRUB",
@@ -3150,6 +3163,11 @@
   },
   {
     "name": "Jtf",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Juan Valdez Cafe",
     "synonyms": [],
     "verified": true
   },
@@ -3454,9 +3472,11 @@
     "name": "La Roche-Posay",
     "synonyms": [
       "La Roche-Posay Toleriane Cleansers And Moisturizers",
-      "La Roche Posay",
       "MSG:Shop Mela B3 Serum by La Roche Posay 90 percent showed dark spot correction dagger Shop now After 8 weeks, 90 percent of subjects showed improvement in at least one of the size and contrast of a persistent dark spot or the density of dark spots as assessed by expert grading",
-      "MSG:Formulated for all skin types including sensitive dry and oily Buy Toleriane"
+      "MSG:Formulated for all skin types including sensitive dry and oily Buy Toleriane",
+      "MSG:Rated 4.6 out of 5 stars from 3,688 reviews",
+      "MSG:Rated 4.6 out of 5 stars from 3,695 reviews",
+      "MSG:Rated 4.6 out of 5 stars from 3,691 reviews"
     ],
     "verified": true
   },
@@ -3489,6 +3509,11 @@
   },
   {
     "name": "Lanbena",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Lancome",
     "synonyms": [],
     "verified": true
   },
@@ -3533,7 +3558,8 @@
   },
   {
     "name": "Layinsun",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Lays",
@@ -3571,6 +3597,11 @@
   },
   {
     "name": "Lehoo",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Leisure Hydration",
     "synonyms": [],
     "verified": true
   },
@@ -3785,17 +3816,11 @@
   {
     "name": "Malk",
     "synonyms": [
-      "Malk Organics"
+      "Malk Organics",
+      "Malk Almond Milk, Unsweetened",
+      "Malk Oat Milk, Original"
     ],
     "verified": true
-  },
-  {
-    "name": "Malk Almond Milk, Unsweetened",
-    "synonyms": []
-  },
-  {
-    "name": "Malk Oat Milk, Original",
-    "synonyms": []
   },
   {
     "name": "Malt O Meal",
@@ -3864,8 +3889,11 @@
     "verified": true
   },
   {
-    "name": "Marylous",
-    "synonyms": []
+    "name": "Marylou's Coffee",
+    "synonyms": [
+      "Marylous"
+    ],
+    "verified": true
   },
   {
     "name": "Marzetti",
@@ -3933,7 +3961,15 @@
   },
   {
     "name": "Mcombo",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Mdrn-Life",
+    "synonyms": [
+      "•Mdrn-Life"
+    ],
+    "verified": true
   },
   {
     "name": "medicube",
@@ -4207,7 +4243,9 @@
   },
   {
     "name": "Murad",
-    "synonyms": [],
+    "synonyms": [
+      "MSG:Rated 4.4 out of 5 stars from 896 reviews"
+    ],
     "verified": true
   },
   {
@@ -4228,10 +4266,6 @@
     "name": "Mush",
     "synonyms": [],
     "verified": true
-  },
-  {
-    "name": "Mush Vanilla Bean Overnight Oats",
-    "synonyms": []
   },
   {
     "name": "Myprotein",
@@ -4393,7 +4427,8 @@
   },
   {
     "name": "Neurosonic",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Neutrogena",
@@ -4423,12 +4458,17 @@
   },
   {
     "name": "Nexcare",
-    "synonyms": [],
+    "synonyms": [
+      "MSG:Rated 4.6 out of 5 stars from 355 reviews"
+    ],
     "verified": true
   },
   {
-    "name": "Nexium Clear Mini Acid Reducer Delayed Release",
-    "synonyms": []
+    "name": "Nexium",
+    "synonyms": [
+      "Nexium Clear Mini Acid Reducer Delayed Release"
+    ],
+    "verified": true
   },
   {
     "name": "Nextmug",
@@ -4493,6 +4533,11 @@
     "verified": true
   },
   {
+    "name": "Norse Organics",
+    "synonyms": [],
+    "verified": true
+  },
+  {
     "name": "Nos",
     "synonyms": [
       "Nos Energy"
@@ -4529,6 +4574,11 @@
     "synonyms": [
       "Nutrail Nut Granola"
     ],
+    "verified": true
+  },
+  {
+    "name": "Nutrex Research",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -4683,7 +4733,8 @@
   },
   {
     "name": "Onyx",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Opalhouse",
@@ -4891,6 +4942,11 @@
   },
   {
     "name": "Patchrx",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Patpat",
     "synonyms": [],
     "verified": true
   },
@@ -5267,14 +5323,6 @@
     "verified": true
   },
   {
-    "name": "Publix Milk, Chocolate",
-    "synonyms": []
-  },
-  {
-    "name": "Publix Milk, Reduced Fat, 2% Milkfat",
-    "synonyms": []
-  },
-  {
     "name": "Puffs",
     "synonyms": [],
     "verified": true
@@ -5297,8 +5345,11 @@
     "verified": true
   },
   {
-    "name": "Pure Life Purified Water, 16.9 Fl Oz, Plastic Bottled Water (12 Pack)",
-    "synonyms": []
+    "name": "Pure Life",
+    "synonyms": [
+      "Pure Life Purified Water, 16.9 Fl Oz, Plastic Bottled Water (12 Pack)"
+    ],
+    "verified": true
   },
   {
     "name": "Pureology",
@@ -5496,7 +5547,8 @@
   },
   {
     "name": "Reign Storm",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Remedy",
@@ -5833,7 +5885,8 @@
   },
   {
     "name": "Seresto",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Seveclotree",
@@ -5974,10 +6027,16 @@
   },
   {
     "name": "Slate",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Slim Jim",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Slimfast",
     "synonyms": [],
     "verified": true
   },
@@ -6040,10 +6099,6 @@
     "verified": true
   },
   {
-    "name": "So Good So You Immunity Elderberry Blood Orange Probiotic Shot",
-    "synonyms": []
-  },
-  {
     "name": "Softsoap",
     "synonyms": [],
     "verified": true
@@ -6054,8 +6109,11 @@
     "verified": true
   },
   {
-    "name": "Sol-Ti Immuni-Ti Supershot",
-    "synonyms": []
+    "name": "Sol-Ti",
+    "synonyms": [
+      "Sol-Ti Immuni-Ti Supershot"
+    ],
+    "verified": true
   },
   {
     "name": "SOLY HUX",
@@ -6106,7 +6164,8 @@
   },
   {
     "name": "Spaghettios",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Sparkle",
@@ -6163,6 +6222,16 @@
     "synonyms": [
       "Spring Chef Ams"
     ],
+    "verified": true
+  },
+  {
+    "name": "Spring Valley",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Sproud",
+    "synonyms": [],
     "verified": true
   },
   {
@@ -6308,7 +6377,8 @@
   },
   {
     "name": "Superieur",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Suritch",
@@ -6647,7 +6717,8 @@
   },
   {
     "name": "Traeger",
-    "synonyms": []
+    "synonyms": [],
+    "verified": true
   },
   {
     "name": "Treeactiv",
@@ -6753,17 +6824,11 @@
     "verified": true
   },
   {
-    "name": "Two",
-    "synonyms": []
-  },
-  {
     "name": "Two Rivers Coffee",
-    "synonyms": [],
+    "synonyms": [
+      "Two Rivers Llc"
+    ],
     "verified": true
-  },
-  {
-    "name": "Two Rivers Llc",
-    "synonyms": []
   },
   {
     "name": "Tylenol",
@@ -7256,9 +7321,5 @@
     "name": "Zzzquil",
     "synonyms": [],
     "verified": true
-  },
-  {
-    "name": "•Mdrn-Life",
-    "synonyms": []
   }
 ]

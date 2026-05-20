@@ -1,0 +1,138 @@
+{
+  "keyword": "community coffee",
+  "outcome": "bail",
+  "bail_reason": "px_locked",
+  "started_at": "2026-04-12T17:21:46",
+  "timings": {
+    "to_home_ms": 12777,
+    "after_submit_px_ms": null,
+    "results_ready_ms": null
+  },
+  "env": {
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+    "webgl": {
+      "vendor": "WebKit",
+      "renderer": "WebKit WebGL",
+      "unmasked": {
+        "unmaskedVendor": "Google Inc. (Apple)",
+        "unmaskedRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)"
+      }
+    },
+    "nav_headers": {
+      "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"macOS\"",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+    },
+    "navigator_diag": {
+      "webdriver": null,
+      "languages": [
+        "en-US"
+      ],
+      "language": "en-US",
+      "platform": "MacIntel",
+      "hardwareConcurrency": 10,
+      "deviceMemory": 8,
+      "vendor": "Google Inc.",
+      "pluginsLength": 5,
+      "userAgentData": {
+        "brands": [
+          {
+            "brand": "Chromium",
+            "version": "146"
+          },
+          {
+            "brand": "Not-A.Brand",
+            "version": "24"
+          },
+          {
+            "brand": "Google Chrome",
+            "version": "146"
+          }
+        ],
+        "platform": "macOS",
+        "mobile": null
+      }
+    }
+  },
+  "cookies": {
+    "pre_count": 25,
+    "pre_names": [
+      "AID",
+      "CID",
+      "SPID",
+      "_lat",
+      "_m",
+      "_msit",
+      "_pxhd",
+      "_pxvid",
+      "_s",
+      "_sc",
+      "_tsc",
+      "_vc"
+    ],
+    "post_count": 0,
+    "post_names": []
+  },
+  "px": {
+    "tries": 0,
+    "cycles": 0,
+    "cleared": null
+  },
+  "network": {
+    "req_failed": 1,
+    "resp_doc": 6,
+    "route_errors": 0
+  },
+  "artifacts": {
+    "steps_log": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_live_test/20260412172146/walmart_community_coffee_steps.jsonl",
+    "trace_zip": null,
+    "no_results_html": null,
+    "no_results_png": null,
+    "saved_html": null,
+    "meta_json": null
+  },
+  "diag": {
+    "navigator": {
+      "webdriver": null,
+      "languages": [
+        "en-US"
+      ],
+      "language": "en-US",
+      "platform": "MacIntel",
+      "hardwareConcurrency": 10,
+      "deviceMemory": 8,
+      "vendor": "Google Inc.",
+      "pluginsLength": 5,
+      "userAgentData": {
+        "brands": [
+          {
+            "brand": "Chromium",
+            "version": "146"
+          },
+          {
+            "brand": "Not-A.Brand",
+            "version": "24"
+          },
+          {
+            "brand": "Google Chrome",
+            "version": "146"
+          }
+        ],
+        "platform": "macOS",
+        "mobile": null
+      }
+    },
+    "webglUnmasked": {
+      "unmaskedVendor": "Google Inc. (Apple)",
+      "unmaskedRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)"
+    },
+    "navHeaders": {
+      "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"macOS\"",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+    },
+    "suspiciousCookies": []
+  }
+}

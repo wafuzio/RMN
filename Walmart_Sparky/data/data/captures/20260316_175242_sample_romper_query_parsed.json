@@ -1,0 +1,119 @@
+{
+  "query_metadata": {
+    "query_text": "sample romper query",
+    "timestamp": "2026-03-16T17:52:42.949066",
+    "conversation_title": "Toddler Rompers at Walmart"
+  },
+  "response_classification": {
+    "response_mode": "product_carousel",
+    "intent_name": "open_dialog",
+    "has_products": true,
+    "has_editorial": true,
+    "has_google_grounding": false
+  },
+  "product_metrics": {
+    "total_products": 5,
+    "garanimals_count": 0,
+    "garanimals_positions": [],
+    "garanimals_share": 0.0,
+    "brands": [
+      "WRKEKC",
+      "Busydd",
+      "John Deere",
+      "Girls",
+      "Odeerbi"
+    ],
+    "avg_garanimals_price": 0.0,
+    "avg_competitor_price": 8.522,
+    "seller_breakdown": {
+      "1P": 0,
+      "3P": 5
+    },
+    "badge_distribution": {
+      "best_seller": 1,
+      "clearance": 1,
+      "other": 0
+    },
+    "products": [
+      {
+        "position": 1,
+        "name": "WRKEKC Baby Girls Romper, Newborn Girls Jumpsuit, Toddler Baby Girls Sleeveless Cute Printed Ruffle Sleeve Round Neck Romper",
+        "brand": "WRKEKC",
+        "price": 1.22,
+        "seller": "shenzhenshixinyinbindianzishangwuyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 2,
+        "name": "Busydd Newborn Baby Boys Girls Rompers V Neck Long Sleeve Toddler Romper Cute Print Side Tie Romper Jumpsuits Unisex Cotton Infant Clothes 0-9 Months",
+        "brand": "Busydd",
+        "price": 3.49,
+        "seller": "Shenzhenyoujiamaoyiyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Clearance"
+        ]
+      },
+      {
+        "position": 3,
+        "name": "John Deere Henley Romper Newborn to Toddler",
+        "brand": "John Deere",
+        "price": 23.99,
+        "seller": "imagikids",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 4,
+        "name": "Odeerbi Toddler Girls Clothes Floral Jumpsuit Baby Romper Toddler Kids Summer 2025 Fashion Cute Flowers Print Flying Sleeve Romper Light Blue 2-3 Years",
+        "brand": "Odeerbi",
+        "price": 4.99,
+        "seller": "Shenzhen Weibaolai Wangluo Keji youxian Gongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 5,
+        "name": "Girls Easter Romper Toddler Girl Jumpsuits Rompers Loose Casual Rompers with Pockets Clothes for Girls 4T",
+        "brand": "Girls",
+        "price": 8.92,
+        "seller": "guangzhouhantianshipinyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      }
+    ]
+  },
+  "editorial_metrics": {
+    "garanimals_mentioned": false,
+    "preamble": "Here are a few toddlers rompers that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:",
+    "followup": "These rompers offer various styles and features for toddlers, from sleeveless to long-sleeved designs. They come in different prints and materials suitable for various occasions. \n\nAre you looking for a specific size or season?",
+    "full_response": "Here are a few toddlers rompers that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:\n\nSparky's Picks:[Product Name: WRKEKC Baby Girls Romper, Newborn Girls Jumpsuit, Toddler Baby Girls Sleeveless Cute Printed Ruffle Sleeve Round Neck Romper Price: $1.22 Rating: 5.0 Badge_Label: [\"Best seller\"]\nProduct Name: Busydd Newborn Baby Boys Girls Rompers V Neck Long Sleeve Toddler Romper Cute Print Side Tie Romper Jumpsuits Unisex Cotton Infant Clothes 0-9 Months Price: $3.49 Rating: 4.4 Badge_Label: [\"Clearance\"]\nProduct Name: John Deere Henley Romper Newborn to Toddler Price: $23.99 Rating:  Badge_Label: []\nProduct Name: Odeerbi Toddler Girls Clothes Floral Jumpsuit Baby Romper Toddler Kids Summer 2025 Fashion Cute Flowers Print Flying Sleeve Romper Light Blue 2-3 Years Price: $4.99 Rating: 4.0 Badge_Label: []\nProduct Name: Girls Easter Romper Toddler Girl Jumpsuits Rompers Loose Casual Rompers with Pockets Clothes for Girls 4T Price: $8.92 Rating:  Badge_Label: []]\nOther Options:[]\n\nThese rompers offer various styles and features for toddlers, from sleeveless to long-sleeved designs. They come in different prints and materials suitable for various occasions. \n\nAre you looking for a specific size or season?",
+    "source_domains": [],
+    "source_count": 0
+  },
+  "ad_infrastructure": {
+    "max_ads": 4,
+    "ads_active": false,
+    "specificity": "narrow",
+    "brands_targeted": [
+      "Walmart"
+    ]
+  },
+  "search_query_reformulation": {
+    "original": "sample romper query",
+    "reformulated": "best selling toddlers rompers, Walmart"
+  }
+}

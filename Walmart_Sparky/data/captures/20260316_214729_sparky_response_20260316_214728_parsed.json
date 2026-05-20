@@ -1,0 +1,121 @@
+{
+  "query_metadata": {
+    "query_text": "sparky response 20260316 214728",
+    "timestamp": "2026-03-16T21:47:29.096413",
+    "conversation_title": "Kids Clothes Mix and Match"
+  },
+  "response_classification": {
+    "response_mode": "product_carousel",
+    "intent_name": "open_dialog",
+    "has_products": true,
+    "has_editorial": true,
+    "has_google_grounding": false
+  },
+  "product_metrics": {
+    "total_products": 5,
+    "garanimals_count": 1,
+    "garanimals_positions": [
+      1
+    ],
+    "garanimals_share": 20.0,
+    "brands": [
+      "Garanimals",
+      "BTween",
+      "Wonder",
+      "NAISIBABY",
+      "Marvel"
+    ],
+    "avg_garanimals_price": 16.79,
+    "avg_competitor_price": 24.765,
+    "seller_breakdown": {
+      "1P": 2,
+      "3P": 3
+    },
+    "badge_distribution": {
+      "best_seller": 2,
+      "clearance": 1,
+      "other": 0
+    },
+    "products": [
+      {
+        "position": 1,
+        "name": "Garanimals Baby & Toddler Girl Cotton 6-Piece Outfit Sets, Graphic Tops & Bottoms, 0M\u20136T",
+        "brand": "Garanimals",
+        "price": 16.79,
+        "seller": "Walmart.com",
+        "is_garanimals": true,
+        "rating": 0.0,
+        "review_count": 0,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 2,
+        "name": "Wonder Nation Toddler Girls Mix and Match Outfit Set, 6-Piece, Sizes 18M-5T",
+        "brand": "Wonder",
+        "price": 21.59,
+        "seller": "Walmart.com",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 3,
+        "name": "NAISIBABY Girls Mix and Match Outfit Kids Pack, Shorts Sleeve T-Shirt Shorts Casual 6-Piece 5-6T",
+        "brand": "NAISIBABY",
+        "price": 17.99,
+        "seller": "Guang zhou ji zhen wang jing mao you xian gong si",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Clearance"
+        ]
+      },
+      {
+        "position": 4,
+        "name": "BTween Girls Kids Clothing and Accessory Set- 5pc Mix And Match Sets,MILK,6",
+        "brand": "BTween",
+        "price": 24.99,
+        "seller": "B TWEEN LLC",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 5,
+        "name": "Marvel Spider-Gwen Ghost Spider Girls Mix and Match 5 Piece Outfit Set with 2 Tops, Leggings, Shorts & Scrunchie",
+        "brand": "Marvel",
+        "price": 34.49,
+        "seller": "Ruelily LLC",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      }
+    ]
+  },
+  "editorial_metrics": {
+    "garanimals_mentioned": true,
+    "preamble": "Here are a few mix and match kids clothes outfit sets that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:",
+    "followup": "These outfit sets are designed for versatility, allowing for multiple combinations to suit different occasions and styles. Each set offers various pieces to create new looks. \n\nAre you looking for a specific size or character theme for these sets?",
+    "full_response": "Here are a few mix and match kids clothes outfit sets that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:\n\nSparky's Picks:[Product Name: Garanimals Baby & Toddler Girl Cotton 6-Piece Outfit Sets, Graphic Tops & Bottoms, 0M\u20136T Price: $16.79 Rating: 4.6 Badge_Label: [\"Best seller\"]\nProduct Name: Wonder Nation Toddler Girls Mix and Match Outfit Set, 6-Piece, Sizes 18M-5T Price: $21.59 Rating: 5.0 Badge_Label: [\"Best seller\"]\nProduct Name: NAISIBABY Girls Mix and Match Outfit Kids Pack, Shorts Sleeve T-Shirt Shorts Casual 6-Piece 5-6T Price: $17.99 Rating: 5.0 Badge_Label: [\"Clearance\"]\nProduct Name: BTween Girls Kids Clothing and Accessory Set- 5pc Mix And Match Sets,MILK,6 Price: $24.99 Rating: 4.6 Badge_Label: []\nProduct Name: Marvel Spider-Gwen Ghost Spider Girls Mix and Match 5 Piece Outfit Set with 2 Tops, Leggings, Shorts & Scrunchie Price: $34.49 Rating: 4.0 Badge_Label: []]\nOther Options:[]\n\nThese outfit sets are designed for versatility, allowing for multiple combinations to suit different occasions and styles. Each set offers various pieces to create new looks. \n\nAre you looking for a specific size or character theme for these sets?",
+    "source_domains": [],
+    "source_count": 0
+  },
+  "ad_infrastructure": {
+    "max_ads": 4,
+    "ads_active": false,
+    "specificity": "narrow",
+    "brands_targeted": []
+  },
+  "search_query_reformulation": {
+    "original": "sparky response 20260316 214728",
+    "reformulated": "mix and match kids clothes"
+  }
+}

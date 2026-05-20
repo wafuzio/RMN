@@ -1,0 +1,70 @@
+ {"clientRequestType":"conversation","messageType":"multiModalEvent","conversationId":"65eff142-088d-4d77-a719-160d3999caa6","messages":
+  [{"senderTimestamp":"1778871995","messageType":"multiModalEvent","requestBodyTraceId":"79967841-fa7f-4db6-9c59-3e1bdd84d777","data":{"i
+  d":"e65b4173-23b8-496c-a2b3-e24cdac21e03","type":"output-event","subType":"ack_connection_established","content":"WebSocket connection 
+  established. Ready to receive audio and text."}}]}                                                                                     
+                                                                                                                                         
+   {"traceId":"C03BDC08-4D61-4D36-A1A1-9400282E189A","conversationId":"65eff142-088d-4d77-a719-160d3999caa6","verticalId":"sparky_assista
+  nt","additionalPayload":{"appContextAttributes":{"walmartPlusStatus":"EXPIRED","client":"iOS","showAds":false,"screen":"shop","isAssoci
+  ate":false,"supportHtmlTags":true,"isUEPClick":"true"},"sessionContextAttributes":{"userAgent":"WMT1H\/26.17.1                         
+  iOS\/26.4.2","loginStatus":"LOGGED_IN","locale":"en","sessionId":"7160B7DD-2936-4F04-A3DF-96024E402FFF"},"requestAttributes":{"experime
+  ntFlags":{"productDiscoveryAgent":"enabled","events-shopping-planner":"enabled","recipeAgent":"enabled","autoCareCenterAgent":"enabled"
+  ,"cot_enable":"true","tabbedCarousel":"enabled","recipeSuggestionPills":"enabled","verticalCarousel":"enabled","epaPlanner":"enabled","
+  essentials-shopping-planner":"enabled"},"type":"conversation","clientIntent":"client_intent_orchestrator"}},"messages":[{"data":{"encod
+  ing":"text\/url_encoded","content":"what%20kind%20of%20truck%20did%20sam%20walton%20drive","correlationId":"01AC64B3-7A5B-4E62-9797-15A
+  2359B0580","type":"input-message","subType":"text"},"senderTimestamp":"1778872037743","requestBodyTraceId":"3B9B28DC-0BFF-4A05-BEBC-903
+  ACBF7387F"}],"channelId":"SPARKY_ASSISTANT_IOS_APP"}                                                                                   
+                                                                                                                                         
+  {"clientRequestType":"conversation","messageType":"unifiedResponse","conversationId":"65eff142-088d-4d77-a719-160d3999caa6","messages":
+  [{"senderTimestamp":"1778872037","messageType":"unifiedResponse","requestBodyTraceId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","data":{"i
+  d":"58a6ad91-c962-4caf-8042-a86c058ec623","type":"output-message","subType":"unified_response","content":{"locale":"en-US","hideInputFi
+  eld":true,"responses":[{"messageType":"COT","payload":{"message":{"text":"Deciding how to help"},"configuration":{"hideMessageTimestamp
+  ":true,"hideFeedback":true}}}]},"correlationId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","encoding":"utf8"}}]}                           
+                                                                                                                                         
+   {"clientRequestType":"conversation","messageType":"unifiedResponse","conversationId":"65eff142-088d-4d77-a719-160d3999caa6","messages"
+  :[{"senderTimestamp":"1778872039","messageType":"unifiedResponse","requestBodyTraceId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","data":{"
+  id":"5e83b8f2-74da-47ca-8251-8da38228ce8d","type":"output-message","subType":"unified_response","content":{"locale":"en-US","hideInputF
+  ield":true,"responses":[{"messageType":"COT","payload":{"message":{"text":"Searching the web for you"},"configuration":{"hideMessageTim
+  estamp":true,"hideFeedback":true}}}]},"correlationId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","encoding":"utf8"}}]}                     
+                                                                                                                                         
+   {"clientRequestType":"conversation","messageType":"unifiedResponse","conversationId":"65eff142-088d-4d77-a719-160d3999caa6","messages"
+  :[{"senderTimestamp":"1778872042","messageType":"unifiedResponse","requestBodyTraceId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","data":{"
+  id":"a6cc83a9-cb6b-4a80-9ba6-ffa12bf28aa3","type":"output-message","subType":"unified_response","content":{"locale":"en-US","hideInputF
+  ield":true,"responses":[{"messageType":"COT","payload":{"message":{"text":"Finding great matches for you"},"configuration":{"hideMessag
+  eTimestamp":true,"hideFeedback":true}}}]},"correlationId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","encoding":"utf8"}}]}                 
+                                                                                                                                         
+   {"clientRequestType":"conversation","messageType":"unifiedResponse","conversationId":"65eff142-088d-4d77-a719-160d3999caa6","messages"
+  :[{"senderTimestamp":"1778872049","messageType":"unifiedResponse","requestBodyTraceId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","data":{"
+  id":"0228f212-400e-45ee-b069-e17f14d2ae96","type":"output-message","subType":"unified_response","content":{"locale":"en-US","hideInputF
+  ield":true,"responses":[{"messageType":"TEXT","payload":{"message":{"text":"<p>Since you're on the F-150 accessories page, here are    
+  some popular picks to outfit your truck:</p>"},"configuration":{"disappearOnSelect":false,"hideMessageTimestamp":true,"hideFeedback":tr
+  ue}}}]},"correlationId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","encoding":"utf8"}}]}                                                   
+                                                                                                                                         
+  AULT","hideMessageTimestamp":true,"hideFeedback":false,"hideCarouselArrows":true},"additionalCards":[]}}]},"correlationId":"3B9B28DC-0B
+  FF-4A05-BEBC-903ACBF7387F","encoding":"utf8"}}]}                                                                                       
+                                                                                                                                         
+                                                                                                                                         
+   {"clientRequestType":"conversation","messageType":"unifiedResponse","conversationId":"65eff142-088d-4d77-a719-160d3999caa6","messages"
+  :[{"senderTimestamp":"1778872053","messageType":"unifiedResponse","requestBodyTraceId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","data":{"
+  id":"649fed1b-c538-4c9f-93d1-be7f30effd6d","type":"output-message","subType":"unified_response","content":{"locale":"en-US","hideInputF
+  ield":true,"responses":[{"messageType":"TEXT_PILLS","payload":{"items":[{"title":"Show soft roll-up tonneau                            
+  covers","id":"pill_1","postBack":{"text":"Show soft roll-up tonneau                                                                    
+  covers","metadata":{"suggestionChipSource":"planner_llm_generated_chip","queryValue":"Show soft roll-up tonneau                        
+  covers"},"actionType":"default"}},{"title":"Find F-150 bed liners","id":"pill_2","postBack":{"text":"Find F-150 bed                    
+  liners","metadata":{"suggestionChipSource":"planner_llm_generated_chip","queryValue":"Find F-150 bed                                   
+  liners"},"actionType":"default"}},{"title":"Search truck floor mats","id":"pill_3","postBack":{"text":"Search truck floor              
+  mats","metadata":{"suggestionChipSource":"planner_llm_generated_chip","queryValue":"Search truck floor                                 
+  mats"},"actionType":"default"}},{"title":"Compare hard vs soft tonneau covers","id":"pill_4","postBack":{"text":"Compare hard vs soft  
+  tonneau covers","metadata":{"suggestionChipSource":"planner_llm_generated_chip","queryValue":"Compare hard vs soft tonneau             
+  covers"},"actionType":"default"}}],"configuration":{"disappearOnSelect":true,"hideMessageTimestamp":true,"hideFeedback":true,"layout":"
+  HORIZONTAL","alignment":"LEFT"}}}]},"correlationId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","encoding":"utf8"}}]}                       
+                                                                                                                                         
+   {"clientRequestType":"conversation","messageType":"unifiedResponse","conversationId":"65eff142-088d-4d77-a719-160d3999caa6","messages"
+  :[{"senderTimestamp":"1778872053","messageType":"unifiedResponse","requestBodyTraceId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","data":{"
+  id":"edc3061a-4f62-416d-b044-81793d176e18","type":"output-message","subType":"unified_response","content":{"locale":"en-US","hideInputF
+  ield":true,"responses":[{"messageType":"FEEDBACK"}]},"correlationId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","encoding":"utf8"}}]}      
+                                                                                                                                         
+   {"clientRequestType":"conversation","messageType":"unifiedResponse","conversationId":"65eff142-088d-4d77-a719-160d3999caa6","messages"
+  :[{"senderTimestamp":"1778872053","messageType":"unifiedResponse","requestBodyTraceId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","data":{"
+  id":"891ac745-1a93-43fb-acfa-b285fa7edeb3","type":"output-message","subType":"unified_response","content":{"locale":"en-US","hideInputF
+  ield":true,"responses":[]},"correlationId":"3B9B28DC-0BFF-4A05-BEBC-903ACBF7387F","encoding":"utf8"}}]}                                
+

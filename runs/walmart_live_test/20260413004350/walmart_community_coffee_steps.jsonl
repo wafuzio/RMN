@@ -1,0 +1,28 @@
+{"ts": 1776059030.239625, "t": 0.0, "event": "run_start", "run_id": "1776059030239-2190", "keyword": "community coffee", "preflight": {"base_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_live_test/20260413004350", "profile_dir": "/Users/dan.maguire/Documents/Amazon_Scrape/profiles/walmart"}, "debug": {"break_on_px": false, "break_on_blocked": false, "line_trace": false, "pdb_on_exception": true}}
+{"ts": 1776059030.239996, "t": 0.0, "event": "milestone", "run_id": "1776059030239-2190", "name": "preflight_ok", "ok": true, "note": ""}
+{"ts": 1776059030.949543, "t": 0.71, "event": "step_start", "name": "launch_context"}
+{"ts": 1776059036.0176551, "t": 5.778, "event": "page_title_set", "title": "SCRAPER (DO NOT TOUCH)"}
+{"ts": 1776059036.157312, "t": 5.918, "event": "stealth_skipped", "reason": "px_detection_risk"}
+{"ts": 1776059036.157852, "t": 5.918, "event": "milestone", "run_id": "1776059030239-2190", "name": "launch_context", "ok": true, "note": ""}
+{"ts": 1776059036.158039, "t": 5.918, "event": "step_end", "name": "launch_context", "dur": 5.208}
+{"ts": 1776059036.158526, "t": 5.919, "event": "profile_health", "Cookies": {"exists": true, "size": 77824}, "Network Persistent State": {"exists": true, "size": 7044}, "Preferences": {"exists": true, "size": 11401}}
+{"ts": 1776059036.1677089, "t": 5.928, "event": "cookies_pre", "count": 45, "names": ["AID", "CID", "SPID", "_intlbu", "_lat", "_m", "_msit", "_px3"]}
+{"ts": 1776059036.1679869, "t": 5.928, "event": "cookie_suspicious", "names": ["adblocked", "ak_bmsc", "bm_mi", "bm_sv"]}
+{"ts": 1776059036.16831, "t": 5.929, "event": "log", "level": "warn", "msg": "[walmart] ⚠️  Suspicious cookies present: ['adblocked', 'ak_bmsc', 'bm_mi', 'bm_sv']"}
+{"ts": 1776059036.226057, "t": 5.986, "event": "bot_cookies_cleared", "cleared": ["adblocked", "ak_bmsc", "bm_mi", "bm_sv"], "preserved": 70}
+{"ts": 1776059036.226282, "t": 5.987, "event": "log", "level": "info", "msg": "[walmart] 🧹 Auto-cleared 4 poisoned bot-detection cookies"}
+{"ts": 1776059036.226364, "t": 5.987, "event": "cookie_persistence", "status": "COOKIES_PRESENT", "note": "Profile working - 45 cookies persisted from previous run"}
+{"ts": 1776059036.226474, "t": 5.987, "event": "log", "level": "info", "msg": "[walmart] Establishing session (human-like pattern)"}
+{"ts": 1776059036.3529139, "t": 6.113, "event": "nav_headers", "url": "https://www.walmart.com/", "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"", "sec-ch-ua-mobile": "?0", "sec-ch-ua-platform": "\"macOS\"", "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}
+{"ts": 1776059036.607689, "t": 6.368, "event": "resp_doc", "url": "https://www.walmart.com/", "status": 307, "method": "GET", "fromCache": false}
+{"ts": 1776059036.626805, "t": 6.387, "event": "px_trip", "reason": "nav_to_blocked", "stack": [{"file": "_impl_to_api_mapping.py", "line": 123, "func": "wrapper_func", "code": "return handler("}, {"file": "asyncio.py", "line": 79, "func": "_emit_run", "code": "coro: Any = f(*args, **kwargs)"}, {"file": "base.py", "line": 196, "func": "_call_handlers", "code": "self._emit_run(f, args, kwargs)"}]}
+{"ts": 1776059036.650248, "t": 6.411, "event": "resp_doc", "url": "https://www.walmart.com/blocked?url=Lw==&uuid=a40554a0-36fb-11f1-a23b-7558b1a35530&vid=37268e9a-2d50-11f1-8060-94a728d2a1ad&g=b", "status": 200, "method": "GET", "fromCache": false}
+{"ts": 1776059036.65726, "t": 6.418, "event": "nav", "url": "https://www.walmart.com/blocked?url=Lw==&uuid=a40554a0-36fb-11f1-a23b-7558b1a35530&vid=37268e9a-2d50-11f1-8060-94a728d2a1ad&g=b", "name": ""}
+{"ts": 1776059036.9863691, "t": 6.747, "event": "home_goto_phase", "phase": "domcontentloaded"}
+{"ts": 1776059036.986644, "t": 6.747, "event": "home_goto_phase_final", "phase": "domcontentloaded"}
+{"ts": 1776059036.986746, "t": 6.747, "event": "hard_block", "where": "initial_home", "url": "https://www.walmart.com/blocked?url=Lw==&uuid=a40554a0-36fb-11f1-a23b-7558b1a35530&vid=37268e9a-2d50-11f1-8060-94a728d2a1ad&g=b", "reason": "blocked_on_first_nav"}
+{"ts": 1776059036.986876, "t": 6.747, "event": "log", "level": "warn", "msg": "[walmart] Hard blocked on first nav"}
+{"ts": 1776059036.986958, "t": 6.747, "event": "log", "level": "warn", "msg": "[walmart] Attempting warm session recovery via opensteer"}
+{"ts": 1776059036.9870589, "t": 6.747, "event": "log", "level": "info", "msg": "[opensteer] Cloning scraper profile → workspace walmart-warm-20260413004356 ..."}
+{"ts": 1776059045.318534, "t": 15.079, "event": "log", "level": "info", "msg": "[opensteer] Opening headed browser — navigate past the block, then confirm here"}
+{"ts": 1776059067.2611682, "t": 37.022, "event": "opensteer_title_set", "ws": "walmart-warm-20260413004356", "title": "OPENSTEER WARM SESSION (USE THIS WINDOW)"}

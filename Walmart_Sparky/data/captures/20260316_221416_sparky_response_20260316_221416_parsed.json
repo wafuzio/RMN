@@ -1,0 +1,118 @@
+{
+  "query_metadata": {
+    "query_text": "sparky response 20260316 221416",
+    "timestamp": "2026-03-16T22:14:16.432654",
+    "conversation_title": "Toddler Outfits"
+  },
+  "response_classification": {
+    "response_mode": "product_carousel",
+    "intent_name": "open_dialog",
+    "has_products": true,
+    "has_editorial": true,
+    "has_google_grounding": false
+  },
+  "product_metrics": {
+    "total_products": 5,
+    "garanimals_count": 0,
+    "garanimals_positions": [],
+    "garanimals_share": 0.0,
+    "brands": [
+      "Caqnni",
+      "UAYOTSE",
+      "Rciityk",
+      "NIEWTR"
+    ],
+    "avg_garanimals_price": 0.0,
+    "avg_competitor_price": 6.988000000000001,
+    "seller_breakdown": {
+      "1P": 0,
+      "3P": 5
+    },
+    "badge_distribution": {
+      "best_seller": 2,
+      "clearance": 1,
+      "other": 0
+    },
+    "products": [
+      {
+        "position": 1,
+        "name": "NIEWTR Toddler Boys Clothes 3T Toddler Boys Summer 2PCS Outfits Letter Print Short Sleeve Shirt Top Shorts Set Yellow For 18-24 Months 2t 3t 4t 5t 6t Children's Day Gift 2PCS Set ,18-24 Months",
+        "brand": "NIEWTR",
+        "price": 3.99,
+        "seller": "guangzhouzhouyongmaoyiyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Clearance"
+        ]
+      },
+      {
+        "position": 2,
+        "name": "Rciityk Purple Baby Girls Rompers Newborn Toddler Girl Clothes Gift Set Infant Adjustable Straps Summer Bodysuit Tops Outfits (0-18Month)",
+        "brand": "Rciityk",
+        "price": 4.98,
+        "seller": "guangzhouwanruomandianziyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 3,
+        "name": "NIEWTR Toddler Baby Boy Summer Clothes Embroidered Farm Tractor Shirt and Short Set 2-Piece Outfits for Boys For 18-24 Months 2t 3t 4t 5t 6t Children's Day Gift 2PCS Set ,3-4 Years",
+        "brand": "NIEWTR",
+        "price": 9.99,
+        "seller": "guangzhouzhouyongmaoyiyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      },
+      {
+        "position": 4,
+        "name": "UAYOTSE Summer Clothes For Toddler Girls Baby Girl Gifts Toddler Baby Girls Summer Clothes Outfits Tank Top Shirt Cute Shorts Set,Sizes 12-18 Months",
+        "brand": "UAYOTSE",
+        "price": 6.99,
+        "seller": "guangzhoushipuluofengdianzishangwuyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": []
+      },
+      {
+        "position": 5,
+        "name": "Caqnni Baby Girl Fall Clothes Toddler Fall Outfit Girl Fall Winter Contrast Color Sweatshirt Shirt Pants Winter Outfit Toddler Gift 3 6 12 18 24 Months 2T 3T Outfits,18-24 Months",
+        "brand": "Caqnni",
+        "price": 8.99,
+        "seller": "guangzhouzhouyongmaoyiyouxiangongsi",
+        "is_garanimals": false,
+        "rating": null,
+        "review_count": null,
+        "badges": [
+          "Best seller"
+        ]
+      }
+    ]
+  },
+  "editorial_metrics": {
+    "garanimals_mentioned": false,
+    "preamble": "Here are a few toddler outfits that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:",
+    "followup": "These outfits offer various styles and materials suitable for different seasons and occasions. \n\nAre you looking for clothes for a specific season or activity?",
+    "full_response": "Here are a few toddler outfits that you might like. Keep in mind that the product info here comes from manufacturers and suppliers and I can't necessarily verify it:\n\nSparky's Picks:[Product Name: NIEWTR Toddler Boys Clothes 3T Toddler Boys Summer 2PCS Outfits Letter Print Short Sleeve Shirt Top Shorts Set Yellow For 18-24 Months 2t 3t 4t 5t 6t Children's Day Gift 2PCS Set ,18-24 Months Price: $3.99 Rating:  Badge_Label: [\"Clearance\"]\nProduct Name: Rciityk Purple Baby Girls Rompers Newborn Toddler Girl Clothes Gift Set Infant Adjustable Straps Summer Bodysuit Tops Outfits (0-18Month) Price: $4.98 Rating: 4.8 Badge_Label: []\nProduct Name: NIEWTR Toddler Baby Boy Summer Clothes Embroidered Farm Tractor Shirt and Short Set 2-Piece Outfits for Boys For 18-24 Months 2t 3t 4t 5t 6t Children's Day Gift 2PCS Set ,3-4 Years Price: $9.99 Rating:  Badge_Label: [\"Best seller\"]\nProduct Name: UAYOTSE Summer Clothes For Toddler Girls Baby Girl Gifts Toddler Baby Girls Summer Clothes Outfits Tank Top Shirt Cute Shorts Set,Sizes 12-18 Months Price: $6.99 Rating:  Badge_Label: []\nProduct Name: Caqnni Baby Girl Fall Clothes Toddler Fall Outfit Girl Fall Winter Contrast Color Sweatshirt Shirt Pants Winter Outfit Toddler Gift 3 6 12 18 24 Months 2T 3T Outfits,18-24 Months Price: $8.99 Rating: 4.8 Badge_Label: [\"Best seller\"]]\nOther Options:[]\n\nThese outfits offer various styles and materials suitable for different seasons and occasions. \n\nAre you looking for clothes for a specific season or activity?",
+    "source_domains": [],
+    "source_count": 0
+  },
+  "ad_infrastructure": {
+    "max_ads": 4,
+    "ads_active": false,
+    "specificity": "narrow",
+    "brands_targeted": []
+  },
+  "search_query_reformulation": {
+    "original": "sparky response 20260316 221416",
+    "reformulated": "cute toddler clothes, gift"
+  }
+}

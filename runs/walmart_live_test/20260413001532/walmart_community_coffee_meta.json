@@ -1,0 +1,21 @@
+{
+  "links": [],
+  "videos": [],
+  "gallery_cards": [
+    {
+      "index": 1,
+      "advertiser": "Keurig",
+      "headline": null,
+      "subheadline": null,
+      "cta": "Shop now",
+      "logo_url": "https://advertising.walmart.com/thunder/assets/template-build-service/release/campaigns/advertising.walmart.com/fb4b5a22-29f6-4531-8591-b2ef830af053/7940e663-d3ae-40e4-9d2d-9f46e01e2009/creatives/20260303T204212.778Z/optimizedPhotos/5876ed20-9b22-4534-afe3-82c4827c103f.jpg",
+      "hero_image_url": "https://advertising.walmart.com/thunder/assets/template-build-service/release/campaigns/advertising.walmart.com/fb4b5a22-29f6-4531-8591-b2ef830af053/7940e663-d3ae-40e4-9d2d-9f46e01e2009/creatives/20260303T204212.778Z/brandBoxFix/024c632a-ae15-4337-8d52-c1d8c2ca13a6.jpg",
+      "screenshot": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_live_test/Gallery_Cards/walmart__keurig__gallery_card__walmart_live_test__community_coffee__D2026-04-13_T00-15.32_1.png",
+      "card_format": "banner",
+      "dimensions": {
+        "width": 1232,
+        "height": 178
+      }
+    }
+  ]
+}

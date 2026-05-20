@@ -1,0 +1,21 @@
+{
+  "links": [],
+  "videos": [],
+  "gallery_cards": [
+    {
+      "index": 1,
+      "advertiser": "Nespresso",
+      "headline": null,
+      "subheadline": null,
+      "cta": "Shop now",
+      "logo_url": "https://advertising.walmart.com/thunder/assets/template-build-service/release/campaigns/advertising.walmart.com/bb80527b-9046-447c-b8a6-810b17958e56/3ddd9ab4-09cc-4e6f-a23a-a4a85df699c0/creatives/20260330T230354.245Z/optimizedPhotos/fb932fbd-5509-42a2-9f58-c7fa6090642f.jpg",
+      "hero_image_url": "https://advertising.walmart.com/thunder/assets/template-build-service/release/campaigns/advertising.walmart.com/bb80527b-9046-447c-b8a6-810b17958e56/3ddd9ab4-09cc-4e6f-a23a-a4a85df699c0/creatives/20260330T230354.245Z/brandBoxFix/70778772-fd37-4df3-a3e1-1bccb42cdac3.jpg",
+      "screenshot": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_live_test/Gallery_Cards/walmart__nespresso__gallery_card__walmart_live_test__community_coffee__D2026-04-13_T01-00.09_1.png",
+      "card_format": "banner",
+      "dimensions": {
+        "width": 1232,
+        "height": 178
+      }
+    }
+  ]
+}

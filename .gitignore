@@ -55,3 +55,10 @@ web/libs/
 
 # Local Netlify folder
 .netlify
+*.bak
+*.sqlite
+.opensteer/
+TL-WR702N_V1_UG.pdf
+experiments/kroger_initial_state.json
+CLI-Anything-WEB/
+experimental/obscura/

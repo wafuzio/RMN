@@ -1,0 +1,21 @@
+{
+  "links": [],
+  "videos": [],
+  "gallery_cards": [
+    {
+      "index": 1,
+      "advertiser": "Delight, And Silk",
+      "headline": null,
+      "subheadline": null,
+      "cta": "Shop now",
+      "logo_url": "https://advertising.walmart.com/thunder/assets/template-build-service/release/campaigns/advertising.walmart.com/e150eed3-83f6-4385-81b7-87433e95a721/97451363-942b-48fe-92a0-be2859a28fc9/creatives/20260326T225325.571Z/optimizedPhotos/42e75dd5-37f1-4676-a2d0-dacd0ba7aa04.jpg",
+      "hero_image_url": "https://advertising.walmart.com/thunder/assets/template-build-service/release/campaigns/advertising.walmart.com/e150eed3-83f6-4385-81b7-87433e95a721/97451363-942b-48fe-92a0-be2859a28fc9/creatives/20260326T225325.571Z/brandBoxFix/428e85dc-10b3-4396-a062-93d65905907a.jpg",
+      "screenshot": "/Users/dan.maguire/Documents/Amazon_Scrape/runs/walmart_live_test/Gallery_Cards/walmart__delight_and_silk__gallery_card__walmart_live_test__community_coffee__D2026-04-12_T17-40.08_1.png",
+      "card_format": "banner",
+      "dimensions": {
+        "width": 1232,
+        "height": 178
+      }
+    }
+  ]
+}

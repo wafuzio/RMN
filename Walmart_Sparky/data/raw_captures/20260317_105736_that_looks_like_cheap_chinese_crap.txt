@@ -1,0 +1,48 @@
+curl 'https://www.walmart.com/api-proxy/service/iot/converse-adapter/v1/talk/sparky_assistant' \
+  -H 'WM_CONSUMER.ID: d37f3820-d41b-4106-9028-43141ec13b11' \
+  -H 'x-o-platform-version: 26.6.1' \
+  -H 'tenant-id: elh9ie' \
+  -H 'DEVICE_PROFILE_REF_ID: E0109B4C-D98D-42A8-8926-631BFEE7F4C1' \
+  -H 'x-enable-server-timing: 1' \
+  -H 'x-wm-sid: D8E2F41C-5BBF-459E-8BDC-E55A21D0FF01' \
+  -H 'X-PX-OS: iOS' \
+  -H 'x-o-fuzzy-install-date: 1662400000000' \
+  -H 'Accept: */*' \
+  -H 'SPID: MDYyMTYyMDI1KTXLUjoBBmeGUFMXy27wlqYvrSRpf2lEasm53aAtk2TuGU60iHmCiZv68CX2gFXbsSiEujnHkowVq2jpL7TQIFTvgZsA1QdGXBw_XQ' \
+  -H 'User-Agent: WMT1H/26.6.1 iOS/26.3.1' \
+  -H 'Cookie: WLM=1; xpwqd=1; TS01a90220=0164a2b3bdf23aa4e0dbf8b19eba337e312998f9dc746e8199c3c52dc520feadc60a86d11251c089bc99a20236477195c754fdccec; bstc=aHnqNXlkgBspFTtBAp0yGo; exp-ck=0AGg0129q1P145qL014VMKV17vndH18DevZ18EYrX5AZGNn1BUdWQ1BeW7m1Bkcm_2FabNH1H9OCD7J0vGj2J3nmz1KKNMr2LBNZe1MBrEo8OOxSI1O_ZeO3Q1JFY1QlXU91RSQuN2SBtTZ1VxBQH1_Iuy-1aSd_h5aogFV1csqh91dGKF71emmlu1hPyA14hof3A1kNHBv2o-2M61pQHTk1pxz7E1rGojv3uYWMg1x7cEm1yIL-05; vtc=foa6BcKs2FKX55QpNHcrXQ; xpa=-5-yD|-AHpp|0AGg0|0lZ3h|1lQUN|29q1P|45qL0|4VMKV|6QfYV|6TymO|7vndH|8DevZ|8EYrX|9Xsvk|AZGNn|BSWyF|BUdWQ|BeW7m|Bkcm_|EhL__|FabNH|G3C5M|H9OCD|IoDQX|J0vGj|J3nmz|KKNMr|LBNZe|MBrEo|OOxSI|O_ZeO|Q1JFY|QlXU9|RSQuN|SBtTZ|Sueml|T-HPO|TDkIu|VxBQH|Wqk0P|_Iuy-|aSd_h|aogFV|bzdLb|csqh9|dGKF7|dO29g|dYU83|e19gT|emmlu|gtLmE|hPyA1|hlw6T|hof3A|k4Uzu|kNHBv|n0-x7|o-2M6|odCOl|pQHTk|pxz7E|qzVKu|rGojv|uYWMg|x7cEm|yIL-0|yhCX4|zR-nl; xpm=1%2B1773714954%2B6A345B93-8603-43FC-B67C-297157A1A52D~f0be2a20-d3b9-71d3-e043-5bd20f0a654d%2B5; xptc=_m%2B9~_s%2BFz90B%2CzIgNX%3A1773714953373~assortmentStoreId%2B4554; xpth=x-o-mart%2BB2C~x-o-mverified%2Bfalse; TS012768cf=0164a2b3bdf23aa4e0dbf8b19eba337e312998f9dc746e8199c3c52dc520feadc60a86d11251c089bc99a20236477195c754fdccec; abqme=true; com.wm.reflector="reflectorid:222222222281A3056EAFC0F39F6AF753AC06F2D08A6_14069003552_202077872@lastupd:1773716782000@firstcreate:1769840072000"; xptwg=1057704637:12A1673F49D2930:2D1CDFB:9E7F3A18:B59BE0EA:1F00329:; akavpau_p4=1773717382~id=94929bd5942c2d44a8b8ceedcdd78da0; _m=9; _mc=XRLlijWpMrzaut%2Btq7kSENI%2FK95aUeCPFWKaVk%2Fgo7w%3D; _met=1755319700671; _msit=MDYyMTYyMDI1HSL8DJRmmARtxWfXbhv_cgYfGMmijzj1gotuYCnPV9E7SIRC9X0; _tsc=MTQyODYyMDIyU0ogPQWATNCcj0nq7B%2BHJBEFEEmmH4fugpD%2FDwWUXtps0Kc1xwupZPVGr2ARiPL%2BCAf1Bq620UoiU5WRZYrv1YkEOwcW2JhQvgzrCC0KgImJOU8G%2B3dfc6VuVFPH2SvNoCVA%2BwOBC6JwdfW08eCUy6yODv5%2FlTVwzkCjVulAplPyxRL5v8lyAMOZwz4zqDfGiTMCjRBtFesCrfQhyftHTt3KpdKbvWWE3GLCtE3hVMKtvyDz0QQFYZ9uzYmJqCVGfjHeAAGincIpZWSA2AeH6OB3%2BsP2w0oPIsYrOwJ8ZhrHclfmXbG%2B8ck%2FYVl6ih%2Bu7gONcqmBDawIe%2FoUOcD%2Bk2ZLtZ1INfwWFIZz7fxX; _vc=G6vbMHEEpMJabw19VTDlSMJQmQZm2WnRHY3QbYzMKXk%3D; auth=MTAyOTYyMDE4dzyuJ8AJdT5cCAGf8gVIydMslPeg6j9aTxsRYmOXrzVK4hhbEKZLSZ2T0guvOdJz7VA8RrLgBFeCr9SXnH%2Fo9fRyqQBJx6T21nW1%2F%2F44nhbrbT8ds4GeYs2XJDQNvz%2FfRMvR4vpAGLQJj3IgMhxayq%2Blc0h%2BewM7Lks1m5k9fi1S%2BgmUs1WcpASk0bTkSpyVEckkC%2B0ggrgDhrr4QY%2BXzgZ132AUVyT4gjl99r5IyLJwTPguqH4L%2FVZhBPUJoxIlR5kcXUiD1cWCWEb7iR20%2FN0H1eFxZhsrAOBjrlyBJjUTBLi9fSki9sP2zNDR96%2BZR2ARBirl6ZVgpILoKAVWDCwSoOGw6wUvgB%2BIoLsFTy1zpJGxuGMewdKxffWQlhX1; xptwj=uz:f646049d09ca9a9f96e1:TMt/u+WIMd4z4y8Nt63bj1OdMJYrpJWEYvRD2MIH5hQyhW4CW6/2vfLL7r1IByTFSpGkqeVgoJYO53ziRw5+bJKVCw13BgwNAEwgYxKHGKH/XjdkmgjczTOAHDVxAnKkFzoaIWue8nR6glAnCxoajgUBN9oWdqhrNif5zXvCNofjOI4SeRDVl4ScHLksxIdQuPo109wIUSnj6MtYl8lkS+Gw3Y7QmcxQeSuqRmYbLR7TaYhvkkNa; _intlbu=false; _lat=MDYyMTYyMDI1H8leqDzecW0DyaK7gTlyPF3a4_xW27BuVdQV9HESpuUKikVzpHKKNWQ; _shcc=US; akavpau_p1=1773717380~id=9db5a6fae8f72aad90287f1e010f061e; akavpau_p2=1773717380~id=9db5a6fae8f72aad90287f1e010f061e; assortmentStoreId=4554; hasLocData=1; isoLoc=US_TX_t3; ak_bmsc=058D12E0AA2924607BC00B6BEB5E2CA3~000000000000000000000000000000~YAAQziXAF/XpivicAQAAK1mm+R9XpQzCySfiuF6xIRUKDAuw+Kjq6hwUNAyvfZOqf7MvnCyTU6ToxLq1Heh4Nm0gDFP5ZplhYwAVwoONU+d/SXqdHFg7r91R+erUPMXTEtphgpHHHWn5a2VrtwcBUY+WSZ4whAB276Za08vXLzGbL3YBayY1LJZrE4K7BvZ9pQ4t6Nl/5AtIl9xwo8gpFaCKGM0ss9pCRM5E3FgvvEUWAX3tNkGqF/RyNmehvZSqkeIzlzTIlGgQhYfNEvVattUYlNZEmYns7IlhUe5sMFYUchSjMpLd07L0yCDU3DPQ4e+mn5MD9E/ji+Zsk+Y3ir5ZbdL+VBGiJJDeX3rWbm19TDL64kyD1ePa2j+/Oe8iQZAA6dIpsudWAHxBYg==; _s=Fz90B%2CzIgNX%3A1773714953373; _sc=3y6SqiY9B7lfOqf6wPfB%2FGUX%2BF62W9XmxrriQsZXVK0%3D; _tpl=80; _tplc=PmuTbXPyK%2FndN4Yqvg6OwhlBu3XOixRX21EIfuxJpl0%3D; srcreflectid=reflectorid:222222222281A3056EAFC0F39F6AF753AC06F2D08A6_14069003552_202077872@firstcreate:1769840072000; ACID=85ed2089-9a9c-4fd7-bb74-a3865e2a42d6; CID=f0be2a20-d3b9-71d3-e043-5bd20f0a654d; SPID=MDYyMTYyMDI1KTXLUjoBBmeGUFMXy27wlqYvrSRpf2lEasm53aAtk2TuGU60iHmCiZv68CX2gFXbsSiEujnHkowVq2jpL7TQIFTvgZsA1QdGXBw_XQ; customer=%7B%22firstName%22%3A%22Katherine%22%2C%22lastNameInitial%22%3A%22R%22%2C%22ceid%22%3A%22100c48895cf034d14a83d016f860beae5dbab7c156348334577d2c880bdd2939%22%7D; hasCID=1; type=REGISTERED; wm_accept_language=en-US' \
+  -H 'WM_SVC.ENV: prod:1.0.0' \
+  -H 'x-o-mart: B2C' \
+  -H 'x-o-segment: oaoh' \
+  -H 'WM_SVC.NAME: IOT-CONVERSE-ADAPTER' \
+  -H 'CORRELATION_ID: 1A78626E-747D-4E25-A3A4-6B5E04296D31' \
+  -H 'X-PX-MOBILE-SDK-VERSION: 3.2.6' \
+  -H 'X-PX-DEVICE-FP: BCCEA5DF-9B55-4141-B503-2C2C2A4A4CCA' \
+  -H 'vid: 6A345B93-8603-43FC-B67C-297157A1A52D' \
+  -H 'x-wm-vid: 6A345B93-8603-43FC-B67C-297157A1A52D' \
+  -H 'x-o-bu: WALMART-US' \
+  -H 'x-latency-trace: 1' \
+  -H 'WM_CONSUMER.ACCOUNT_ID: f0be2a20-d3b9-71d3-e043-5bd20f0a654d' \
+  -H 'Message-Encoding-Type: text/url_encoded' \
+  -H 'Accept-Language: en-US' \
+  -H 'CHANNEL_ID: SPARKY_ASSISTANT_IOS_APP' \
+  -H 'X-PX-VID: c7ba5d86-2936-11ed-8347-ad4621f9b4a9' \
+  -H 'X-PX-AUTHORIZATION: 3:35ea7d0d54c5d08636f75a839cd0ce2072e79562d37021958daeb3a754cf9d10:YxYntrDWjF7OA/3Ez7GgFK/jaeU3e1DelkrJNSMTFujO4Y6omvtJDwMRrHuPCRsXGGCD6FXHwwNu0+wNO+V6Jg==:1000:Ck8oz1fpZKV9IW5+fM3Cck7hgPhQLL00ZwIJfihImgUMUC39LKQ1oECMVUSDECeCpuBgQilG0vAE7AV8Arq0jITSCrNzwyDUU9/nfWpI3aVSngIkAxgTOA+rNqiRmbkpiBzv9w1A3OZQHdAhswc1bQrO8jtjA69VwSnwer8WKv+8+eF4nxvN84zVYju10axDYNsI5oIV6+yWgKsDCaHcWNTBYmd32qPGXJaNuw8SnrIw+4UxR1oWjABfEYvpcxHDZ6lM9dD5qDD+qlyzhvt0Wfy2Coejl7dq55p8lVVli6Q1ttl4vNn5sM7megJX1NAfQ9+IruYQyk5Wz+QZLgYWWjpD8Isn+RhK9WXjIHkCRmg=' \
+  -H 'WM_MP: true' \
+  -H 'x-o-platform: ios' \
+  -H 'X-PX-UUID: 451470a0-21ae-11f1-9abc-1d1212c3cd47' \
+  -H 'X-PX-OS-VERSION: 26.3.1' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'traceparent: 00-189d822186cdf1523af1f7dd394c8c6b-b4e8c8b14f2071b4-00' \
+  -H 'X-PX-DEVICE-MODEL: iPhone 14 Pro Max' \
+  -H 'x-o-device: iPhone15,3' \
+  -H 'x-wm-client-name: glass' \
+  -H 'x-o-tp-phase: tp5' \
+  -H 'x-o-device-id: B2EE6D65-AE24-4803-8B5B-47D476987768' \
+  -H 'APP_VERSION: 2625' \
+  -H 'baggage: deviceType=ios,requestTs=1773716908762,tpid=00-189d822186cdf1523af1f7dd394c8c6b-b4e8c8b14f2071b4-00,trafficType=release' \
+  --data-raw '{"channelId":"SPARKY_ASSISTANT_IOS_APP","verticalId":"sparky_assistant","metadata":{"isUEPClick":false,"greetingMessageGeneration":false,"sessionId":"D8E2F41C-5BBF-459E-8BDC-E55A21D0FF01","walmartPlusStatus":"EXPIRED","itemIds":["16341452092","5468037432","16305414843","19334309161","17521019267"],"client":"IOS","userInputType":"TEXT","isAssociate":false,"showAds":false,"supportHtmlTags":true,"loginStatus":"LOGGED_IN"},"requestAttributes":{"experimentGroups":{"expKeyName":"events-shopping-planner","expName":"enabled"},"experimentFlags":{"recipeAgent":"enabled","autoCareCenterAgent":"enabled"},"saveQuery":true},"appContextStack":[{"screen":"shop"}],"conversationId":"0483DA37-9346-4C12-8B2B-C1A9F77217CD","message":{"query":"that%20looks%20like%20cheap%20chinese%20crap","type":"TEXT"}}' \
+  --compressed
+
+  {"intentName":"out_of_domain_intent","entities":{"fallback_category":["inappropriate"]},"responseType":"TERMINAL","responseMessage":{"messageType":"SPARKY_ASSISTANT","shortText":"I can't help with that, but I can answer most shopping-related questions. I'm clearing our conversation so that we can start over. What can I find for you?","preamble":"I can't help with that, but I can answer most shopping-related questions. I'm clearing our conversation so that we can start over. What can I find for you?","rawResponse":[],"displayFeedback":true,"sourcesResponse":{"itemPage":{},"reviews":{},"google":{"text":null,"sources":[],"searchSuggestions":[]}},"interactionBar":{"displayFeedback":true,"sourceInfo":null,"sources":null},"unifiedResponseOrderedList":["preamble"]},"unifiedResponse":{"locale":"en","responses":[{"payload":{"message":{"text":"<p>I can't help with that, but I can answer most shopping-related questions. I'm clearing our conversation so that we can start over. What can I find for you?</p>"},"configuration":{"hideMessageTimestamp":true}},"messageType":"TEXT"}]}}
