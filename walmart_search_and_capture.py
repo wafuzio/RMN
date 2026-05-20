@@ -4598,6 +4598,45 @@ def search_and_capture(
                                             if ip_match:
                                                 brand = ip_match.group(1).replace('-', ' ').replace('_', ' ')
                                                 advertiser = brand.strip().title()
+
+                                    # Collect raw product titles for storage (used for post-hoc inference)
+                                    sbv_product_titles = []
+                                    for prod in products[:6]:
+                                        pt = prod.locator('[data-automation-id="product-title"]').first
+                                        if pt.count() > 0:
+                                            t = pt.inner_text().strip()
+                                            if t:
+                                                sbv_product_titles.append(t)
+                            except:
+                                pass
+
+                        # Method 1b: link-identifier on <a> tags inside SBV (new Walmart structure)
+                        # Product names appear as link-identifier="PanOxyl 10% Benzoyl Peroxide..." on tracking links
+                        if not advertiser:
+                            try:
+                                li_links = mod.locator('a[link-identifier]').all()
+                                for li in li_links[:6]:
+                                    li_text = (li.get_attribute('link-identifier') or '').strip()
+                                    # Skip bare numeric IDs
+                                    if li_text and not li_text.isdigit() and len(li_text) > 5:
+                                        sbv_product_titles = getattr(sbv_product_titles, '__iter__', lambda: iter([]))
+                                        if not isinstance(sbv_product_titles, list):
+                                            sbv_product_titles = []
+                                        sbv_product_titles.append(li_text)
+                                        if not advertiser:
+                                            # Try lexicon first
+                                            if canonicalize_brand:
+                                                canonical = canonicalize_brand(li_text)
+                                                if canonical:
+                                                    advertiser = canonical
+                                                    if SL: SL.log("sbv_brand_link_identifier", brand=advertiser, title=li_text[:50])
+                                                    break
+                                            # Fallback to title extraction
+                                            extracted = _extract_brand_from_title(li_text)
+                                            if extracted:
+                                                advertiser = extracted
+                                                if SL: SL.log("sbv_brand_link_identifier_extract", brand=advertiser, title=li_text[:50])
+                                                break
                             except:
                                 pass
                         
@@ -4693,6 +4732,10 @@ def search_and_capture(
                                 except Exception:
                                     pass
                                 continue
+
+                            # Store product titles for post-hoc brand inference
+                            if sbv_product_titles:
+                                ad_obj["products"] = [{"title": t} for t in sbv_product_titles]
                             
                             # Add video overlay metadata if captured
                             if video_overlay:

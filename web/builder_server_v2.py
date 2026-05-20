@@ -552,7 +552,8 @@ def brand_slug(name: str) -> str:
 # Patterns that indicate brand-free taglines — canonicalize will spuriously match these
 _TAGLINE_PREFIXES = re.compile(
     r'^(?:shop|get|buy|try|save|find|discover|introducing|experience|celebrate|'
-    r'power|boost|give|make|fuel|love|hit|live|big|real|same|special|works|a |the )',
+    r'power|boost|give|make|fuel|love|hit|live|big|real|same|special|works|'
+    r'refresh|glow|feel|taste|meet|see|go |be |it\'s|a |the )',
     re.IGNORECASE,
 )
 
@@ -666,16 +667,42 @@ def _infer_brand_from_ad(
             f"href:{href_path}" if href_path and len(href_path) > 12 else None,
         ]:
             if fp_key and fp_key in fp_index:
-                return fp_index[fp_key]
+                val = fp_index[fp_key]
+                if val and val.lower() != "unknown":
+                    return val
 
     # ------------------------------------------------------------------
-    # Tier 2: Title-based lexicon matching
+    # Tier 1.5: Product titles (SBV carousel products, stored at scrape time)
     # ------------------------------------------------------------------
-    title = (ad.get("title") or ad.get("message") or ad.get("headline") or "").strip()
-    if title:
+    for product in (ad.get("products") or []):
+        prod_title = (product.get("title") or "").strip()
+        if not prod_title:
+            continue
+        candidate = _exact_canon(prod_title)
+        if candidate and not candidate.endswith("(?)"):
+            return candidate
+        # Also try first 1-3 words as a brand prefix
+        words = prod_title.split()
+        for n in (2, 3, 1):
+            if len(words) >= n:
+                c2 = _exact_canon(" ".join(words[:n]))
+                if c2 and not c2.endswith("(?)"):
+                    return c2
+
+    # ------------------------------------------------------------------
+    # Tier 2: Title / subheadline / description lexicon matching
+    # ------------------------------------------------------------------
+    title_field  = (ad.get("title") or ad.get("message") or ad.get("headline") or "").strip()
+    extra_fields = [
+        (ad.get("subheadline") or ad.get("sub_headline") or "").strip(),
+        (ad.get("description") or "").strip(),
+    ]
+
+    # --- 2a: title field (full-text canonicalize allowed, guarded by tagline prefix list) ---
+    if title_field:
         prefix_m = re.match(
             r'^(?:by|shop|from|introducing|brought to you by)\s+(.+)',
-            title,
+            title_field,
             re.IGNORECASE,
         )
         if prefix_m:
@@ -683,8 +710,44 @@ def _infer_brand_from_ad(
             if candidate and not candidate.endswith("(?)"):
                 return candidate
 
-        if not _TAGLINE_PREFIXES.match(title):
-            candidate = _exact_canon(title)
+        # Full-text canonicalize: only attempt on short titles (≤ 4 words).
+        # Longer strings are almost certainly taglines, not brand names, and the
+        # fuzzy matcher generates false positives (e.g. "spots" → "Sports").
+        if not _TAGLINE_PREFIXES.match(title_field) and len(title_field.split()) <= 4:
+            candidate = _exact_canon(title_field)
+            if candidate and not candidate.endswith("(?)"):
+                return candidate
+
+    # --- 2b: subheadline / description — only use targeted structural patterns,
+    #         never raw full-text (too many fuzzy false-positives on taglines) ---
+    for text in extra_fields:
+        if not text:
+            continue
+
+        # "by Mederma", "from Starface" at start of string
+        prefix_m = re.match(
+            r'^(?:by|from|introducing|brought to you by)\s+(.+)',
+            text,
+            re.IGNORECASE,
+        )
+        if prefix_m:
+            candidate = _exact_canon(prefix_m.group(1).strip())
+            if candidate and not candidate.endswith("(?)"):
+                return candidate
+
+        # embedded "… from Starface." / "patches from Starface"
+        embedded_m = re.search(
+            r"\bfrom\s+([A-Za-z][A-Za-z0-9 &']{1,30}?)(?:\s*[.,!]|'s\b|\s*$)",
+            text,
+        )
+        if embedded_m:
+            candidate = _exact_canon(embedded_m.group(1).strip())
+            if candidate and not candidate.endswith("(?)"):
+                return candidate
+
+        # possessive "mederma's" → "mederma" (case-insensitive brand capture)
+        for pm in re.finditer(r"\b([A-Za-z][A-Za-z0-9]{2,})'s\b", text):
+            candidate = _exact_canon(pm.group(1))
             if candidate and not candidate.endswith("(?)"):
                 return candidate
 

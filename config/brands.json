@@ -2238,7 +2238,9 @@
   },
   {
     "name": "Focus Factor",
-    "synonyms": [],
+    "synonyms": [
+      "Focus"
+    ],
     "verified": true
   },
   {
@@ -2331,7 +2333,9 @@
   },
   {
     "name": "Functional Formularies",
-    "synonyms": [],
+    "synonyms": [
+      "Functional"
+    ],
     "verified": true
   },
   {
@@ -3968,6 +3972,13 @@
     "name": "Mdrn-Life",
     "synonyms": [
       "•Mdrn-Life"
+    ],
+    "verified": true
+  },
+  {
+    "name": "Mederma",
+    "synonyms": [
+      "Merz Pharmaceuticals"
     ],
     "verified": true
   },
@@ -6095,6 +6106,11 @@
   },
   {
     "name": "So Delicious",
+    "synonyms": [],
+    "verified": true
+  },
+  {
+    "name": "Sofia Vergara",
     "synonyms": [],
     "verified": true
   },
