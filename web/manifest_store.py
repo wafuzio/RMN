@@ -74,6 +74,20 @@ def unknown_ad_counts_by_client() -> Dict[str, Dict[str, int]]:
     return _load().get("unknown_ad_counts_by_client", {})
 
 
+def creative_fingerprints() -> Dict[str, str]:
+    """Get creative fingerprint index for brand propagation.
+
+    Maps fingerprint keys (logo UUID, image UUID, normalized href) to the
+    canonical brand name identified for that creative asset.  Used by the
+    server to recover the brand for null-brand ads that share a CDN asset or
+    href with a previously-identified ad.
+
+    Returns: {"logo:<uuid>": "BrandName", "img:<uuid>": "BrandName",
+              "href:<path>": "BrandName", ...}
+    """
+    return _load().get("creative_fingerprints", {})
+
+
 def built_at() -> str | None:
     """Get manifest build timestamp."""
     return _load().get("built_at")

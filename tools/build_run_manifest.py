@@ -69,6 +69,18 @@ def count_ads_in_doc(doc: dict) -> int:
     return total
 
 
+def _first_uuid(url: str | None) -> str | None:
+    """Extract the first UUID from a CDN URL, used as a creative fingerprint."""
+    if not url:
+        return None
+    m = re.search(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        url,
+        re.IGNORECASE,
+    )
+    return m.group(0).lower() if m else None
+
+
 def extract_brands_from_doc(doc: dict) -> list[str]:
     """Extract all brand names from ads in a document."""
     brands = []
@@ -92,6 +104,41 @@ def extract_brands_from_doc(doc: dict) -> list[str]:
                 brands.append(adv)
     
     return brands
+
+
+def extract_fingerprints_from_doc(doc: dict) -> list[tuple[str, str]]:
+    """Return (fingerprint_key, brand) pairs for ads that have an identified brand.
+
+    Fingerprints are keyed by CDN asset UUIDs (logo_url, image_url) and
+    normalized href paths.  They let us propagate known brand names to
+    structurally identical ads scraped later where the brand field is null.
+    """
+    pairs: list[tuple[str, str]] = []
+    ads = doc.get("ads", [])
+    if not ads:
+        for blk in doc.get("results", []):
+            ads.extend(blk.get("ads", []))
+
+    for ad in ads:
+        brand = ad.get("brand") or ad.get("advertiser") or ""
+        if not brand or brand == "Unknown" or is_blacklisted(brand):
+            continue
+
+        canonical = canonicalize_brand(brand) or brand
+
+        logo_uuid = _first_uuid(ad.get("logo_url"))
+        if logo_uuid:
+            pairs.append((f"logo:{logo_uuid}", canonical))
+
+        img_uuid = _first_uuid(ad.get("image_url"))
+        if img_uuid:
+            pairs.append((f"img:{img_uuid}", canonical))
+
+        href_raw = (ad.get("href") or "").split("?")[0].strip("/").lower()
+        if href_raw and len(href_raw) > 12:
+            pairs.append((f"href:{href_raw}", canonical))
+
+    return pairs
 
 
 def extract_brands_by_type(doc: dict) -> dict[str, list[str]]:
@@ -257,6 +304,20 @@ def build_manifest(full: bool = False):
         json_files = all_json_files
         print(f"📁 Found {len(json_files)} files to process (full rebuild)")
 
+    # Creative fingerprint accumulator: fp_key → canonical_brand.
+    # Built incrementally as we scan files; merged into the manifest at the end.
+    # On incremental rebuilds the existing manifest's fingerprints seed this dict
+    # so previously-indexed fingerprints are preserved.
+    _pending_fingerprints: dict[str, str] = {}
+    if not full:
+        existing_manifest = MANIFEST if MANIFEST.exists() else None
+        if existing_manifest:
+            try:
+                old_mf = json.loads(existing_manifest.read_text(encoding="utf-8"))
+                _pending_fingerprints.update(old_mf.get("creative_fingerprints", {}))
+            except Exception:
+                pass
+
     for jf in json_files:
         try:
             doc = json.loads(jf.read_text(encoding="utf-8"))
@@ -290,7 +351,15 @@ def build_manifest(full: bool = False):
                 cb = canonicalize_brand(b) or b
                 if cb and cb != "Unknown":
                     canonical_brands_by_type[ad_type].append(cb)
-        
+
+        # Collect creative fingerprints (CDN UUIDs / hrefs → brand) for propagation.
+        # These are accumulated into the global index built after all files are scanned.
+        for fp_key, fp_brand in extract_fingerprints_from_doc(doc):
+            # First writer wins — older runs set the canonical brand; newer ones
+            # may have null brand and will benefit from the lookup.
+            if fp_key not in _pending_fingerprints:
+                _pending_fingerprints[fp_key] = fp_brand
+
         rel = str(jf.relative_to(OUTPUT))
         existing_rows[rel] = {
             "retailer": retailer,
@@ -361,6 +430,7 @@ def build_manifest(full: bool = False):
         "brands_by_client": brands_by_client, # Pre-computed brand counts per retailer+client
         "unknown_ad_counts": unknown_ad_counts,
         "unknown_ad_counts_by_client": unknown_ad_counts_by_client,
+        "creative_fingerprints": _pending_fingerprints,  # {fp_key: canonical_brand}
     }
     
     MANIFEST_TMP.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
@@ -374,7 +444,9 @@ def build_manifest(full: bool = False):
     retailers = len(set(r["retailer"] for r in rows))
     clients = len(set((r["retailer"], r["client"]) for r in rows))
     total_brands = len(brand_display)
+    fp_count = len(_pending_fingerprints)
     print(f"📊 Stats: {total_ads} ads, {total_brands} brands across {retailers} retailers, {clients} clients")
+    print(f"🔮 Creative fingerprints indexed: {fp_count}")
 
 
 if __name__ == "__main__":

@@ -51,6 +51,7 @@ try:
         raise ImportError("DB not reachable")
     def mf_unknown_ad_counts(): return {}
     def mf_unknown_ad_counts_by_client(): return {}
+    def mf_creative_fingerprints(): return {}
 except Exception as _db_err:
     print(f"⚠️  Database store unavailable ({_db_err}), falling back to manifest_store")
     from web.manifest_store import (
@@ -58,6 +59,7 @@ except Exception as _db_err:
         brands as mf_brands, brands_by_client as mf_brands_by_client,
         unknown_ad_counts as mf_unknown_ad_counts,
         unknown_ad_counts_by_client as mf_unknown_ad_counts_by_client,
+        creative_fingerprints as mf_creative_fingerprints,
     )
 
 # ============================================================================
@@ -554,25 +556,123 @@ _TAGLINE_PREFIXES = re.compile(
     re.IGNORECASE,
 )
 
+# ---------------------------------------------------------------------------
+# LLM inference cache (persistent, keyed by creative fingerprint hash)
+# ---------------------------------------------------------------------------
+import hashlib
 
-def _infer_brand_from_ad(ad: dict) -> str | None:
+PROJECT_ROOT_SRV = Path(__file__).resolve().parents[1]
+_LLM_CACHE_PATH = PROJECT_ROOT_SRV / "cache" / "brand_inference_cache.json"
+_llm_cache: dict[str, str] = {}          # fp_hash → canonical_brand
+_llm_cache_mtime: float = 0.0
+
+
+def _load_llm_cache() -> dict[str, str]:
+    """Load LLM brand inference cache with mtime-based invalidation."""
+    global _llm_cache, _llm_cache_mtime
+    if _LLM_CACHE_PATH.exists():
+        mt = _LLM_CACHE_PATH.stat().st_mtime
+        if mt != _llm_cache_mtime:
+            try:
+                _llm_cache = json.loads(_LLM_CACHE_PATH.read_text(encoding="utf-8"))
+                _llm_cache_mtime = mt
+            except Exception:
+                pass
+    return _llm_cache
+
+
+def _save_llm_cache() -> None:
+    """Persist LLM inference cache to disk."""
+    try:
+        _LLM_CACHE_PATH.write_text(json.dumps(_llm_cache, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _ad_fingerprint_key(ad: dict) -> str | None:
+    """Derive a stable fingerprint string from observable ad signals."""
+    logo_uuid = _first_uuid_from_url(ad.get("logo_url"))
+    img_uuid  = _first_uuid_from_url(ad.get("image_url"))
+    href_path = (ad.get("href") or "").split("?")[0].strip("/").lower()
+    parts = []
+    if logo_uuid:
+        parts.append(f"logo:{logo_uuid}")
+    if img_uuid:
+        parts.append(f"img:{img_uuid}")
+    if href_path and len(href_path) > 12:
+        parts.append(f"href:{href_path}")
+    return "|".join(parts) if parts else None
+
+
+def _first_uuid_from_url(url: str | None) -> str | None:
+    """Extract first UUID from a CDN URL (same logic as in build_run_manifest)."""
+    if not url:
+        return None
+    m = re.search(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        url, re.IGNORECASE,
+    )
+    return m.group(0).lower() if m else None
+
+
+def _infer_brand_from_ad(
+    ad: dict,
+    *,
+    context: dict | None = None,
+) -> str | None:
     """Attempt to recover a brand name from ad fields when the brand field is null.
 
-    Strategies (in priority order):
-    1. "By / Shop / From X" pattern in title — extract X and canonicalize.
-    2. Canonicalize the full title if it isn't a generic tagline and a known brand
-       is found without fuzzy ambiguity.
-    3. Tile_Takeover: parse ``povid`` URL parameter whose first ``_``-separated
-       segment sometimes encodes the brand name.
+    Resolution tiers (cheapest first):
+
+    Tier 1 — Creative fingerprint propagation (free, zero false positives):
+        Match logo CDN UUID / image CDN UUID / href path against the index of
+        known-brand ads built during manifest rebuild.  "We saw this exact
+        creative before and it was Brand X."
+
+    Tier 2 — Lexicon / title rules (fast, low false-positive rate):
+        "By/Shop/From X" prefix extraction + full-title canonicalize (guarded
+        by tagline-prefix rejection).
+
+    Tier 3 — Tile_Takeover povid URL parsing.
+
+    Tier 4 — LLM inference cache lookup (results pre-computed by
+        ``tools/infer_unknown_brands.py``).  Only used if the cache has an
+        entry for this creative.  The cache is populated by running that
+        tool separately; this function never calls the relay at serve-time so
+        card rendering is never blocked.
+
     Returns None when no confident match is found.
+
+    Args:
+        ad: Ad dict with fields like brand, title, href, logo_url, image_url.
+        context: Optional dict with surrounding signals:
+            {retailer, client, keyword, run_brands: [str]}
+            Passed to error logging; not used at serve time (LLM runs offline).
     """
-    # Use core.brands.canonicalize which returns None on no match (unlike the
-    # server's canonicalize_brand which falls back to the raw input string).
     from core.brands import canonicalize as _exact_canon
 
+    # ------------------------------------------------------------------
+    # Tier 1: Creative fingerprint propagation
+    # ------------------------------------------------------------------
+    fp_index = mf_creative_fingerprints()
+    if fp_index:
+        logo_uuid = _first_uuid_from_url(ad.get("logo_url"))
+        img_uuid  = _first_uuid_from_url(ad.get("image_url"))
+        href_path = (ad.get("href") or "").split("?")[0].strip("/").lower()
+
+        for fp_key in [
+            f"logo:{logo_uuid}" if logo_uuid else None,
+            f"img:{img_uuid}"   if img_uuid  else None,
+            f"href:{href_path}" if href_path and len(href_path) > 12 else None,
+        ]:
+            if fp_key and fp_key in fp_index:
+                return fp_index[fp_key]
+
+    # ------------------------------------------------------------------
+    # Tier 2: Title-based lexicon matching
+    # ------------------------------------------------------------------
     title = (ad.get("title") or ad.get("message") or ad.get("headline") or "").strip()
     if title:
-        # Strategy 1: "By/Shop/From/Introducing X" prefix
         prefix_m = re.match(
             r'^(?:by|shop|from|introducing|brought to you by)\s+(.+)',
             title,
@@ -583,24 +683,36 @@ def _infer_brand_from_ad(ad: dict) -> str | None:
             if candidate and not candidate.endswith("(?)"):
                 return candidate
 
-        # Strategy 2: full-title canonicalize, but reject obvious taglines
         if not _TAGLINE_PREFIXES.match(title):
             candidate = _exact_canon(title)
             if candidate and not candidate.endswith("(?)"):
                 return candidate
 
-    # Strategy 3: Tile_Takeover / Marquee_Banner — read povid first segment
+    # ------------------------------------------------------------------
+    # Tier 3: Tile_Takeover / Marquee_Banner — povid URL segment
+    # ------------------------------------------------------------------
     href = ad.get("href") or ""
     if href:
         povid_m = re.search(r'[?&]povid=([^&]+)', href)
         if povid_m:
             segs = povid_m.group(1).split('_')
-            # Skip numeric-only segments (category IDs)
-            first_word = next((s for s in segs if s and not s.isdigit() and len(s) > 2), None)
+            first_word = next(
+                (s for s in segs if s and not s.isdigit() and len(s) > 2), None
+            )
             if first_word:
                 candidate = _exact_canon(first_word.replace('-', ' '))
                 if candidate and not candidate.endswith("(?)"):
                     return candidate
+
+    # ------------------------------------------------------------------
+    # Tier 4: LLM inference cache (populated offline by infer_unknown_brands.py)
+    # ------------------------------------------------------------------
+    fp_key = _ad_fingerprint_key(ad)
+    if fp_key:
+        llm_cache = _load_llm_cache()
+        fp_hash = hashlib.md5(fp_key.encode()).hexdigest()
+        if fp_hash in llm_cache:
+            return llm_cache[fp_hash] or None   # empty string → confirmed unknown
 
     return None
 
