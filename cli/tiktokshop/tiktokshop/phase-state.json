@@ -1,0 +1,28 @@
+{
+  "app_dir": "/Users/dan.maguire/My project/tiktokshop/agent-harness/tiktokshop",
+  "created_at": "2026-05-19T23:11:45.022066+00:00",
+  "phases": {
+    "capture": {
+      "status": "pending"
+    },
+    "methodology": {
+      "status": "done",
+      "completed_at": "2026-05-19T23:11:45.022519+00:00",
+      "output": "tiktokshop/agent-harness/",
+      "notes": null
+    },
+    "testing": {
+      "status": "done",
+      "completed_at": "2026-05-19T23:17:02.263249+00:00",
+      "output": "/Users/dan.maguire/My project/tiktokshop/agent-harness/cli_web/tiktokshop/tests/TEST.md",
+      "notes": null
+    },
+    "standards": {
+      "status": "done",
+      "completed_at": "2026-05-19T23:32:59.563722+00:00",
+      "output": null,
+      "notes": null
+    }
+  },
+  "updated_at": "2026-05-19T23:32:59.563752+00:00"
+}

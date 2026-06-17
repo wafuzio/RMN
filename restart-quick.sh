@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Retail Ad Monitor - Quick Server Restart Script
-# Safely kills and restarts Flask API, ngrok, and Vite dev server
+# Safely kills and restarts Flask API, ngrok (API + Vite), and Vite dev server
 # Skips catalog/index/logo rebuild steps for faster restarts
 
 set -e  # Exit on error
@@ -39,7 +39,7 @@ if pgrep -f "ngrok" > /dev/null 2>&1; then
 fi
 
 # --- Kill anything on our ports (catches processes we didn't start) ---
-for PORT in 5006 3000 3001 4040; do
+for PORT in 5006 3000 3001 4040 4041; do
     if lsof -ti:$PORT > /dev/null 2>&1; then
         echo "  - Killing processes on port $PORT..."
         lsof -ti:$PORT | xargs kill -9 2>/dev/null || true
@@ -107,7 +107,7 @@ echo -e "${YELLOW}[3/3] Starting servers...${NC}"
 # Start Flask API
 echo "  - Starting Flask API..."
 cd "$SCRAPER_DIR"
-nohup "$PYTHON" web/builder_server_v2.py > logs/flask.log 2>&1 &
+nohup "$PYTHON" web/builder_server_v2.py > "$SCRAPER_DIR/logs/flask.log" 2>&1 &
 FLASK_PID=$!
 sleep 2
 
@@ -119,29 +119,29 @@ else
     exit 1
 fi
 
-# Start ngrok
-echo "  - Starting ngrok tunnel..."
-nohup ngrok http 5006 > logs/ngrok.log 2>&1 &
-NGROK_PID=$!
+# Start ngrok for Flask API
+echo "  - Starting ngrok tunnel for Flask API..."
+nohup ngrok http 5006 > "$SCRAPER_DIR/logs/ngrok-api.log" 2>&1 &
+NGROK_API_PID=$!
 sleep 3
 
-# Verify ngrok started
-if ps -p $NGROK_PID > /dev/null; then
-    echo -e "    ${GREEN}✓ ngrok started (PID: $NGROK_PID)${NC}"
-    # Get ngrok URL
-    NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o 'https://[^"]*ngrok[^"]*' | head -1)
-    if [ -n "$NGROK_URL" ]; then
-        echo -e "    ${GREEN}  URL: $NGROK_URL${NC}"
+# Verify ngrok API started
+if ps -p $NGROK_API_PID > /dev/null; then
+    echo -e "    ${GREEN}✓ ngrok API started (PID: $NGROK_API_PID)${NC}"
+    # Get ngrok API URL
+    NGROK_API_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o 'https://[^"]*ngrok[^"]*' | head -1)
+    if [ -n "$NGROK_API_URL" ]; then
+        echo -e "    ${GREEN}  URL: $NGROK_API_URL${NC}"
     fi
 else
-    echo -e "    ${RED}✗ ngrok failed to start. Check logs/ngrok.log${NC}"
+    echo -e "    ${RED}✗ ngrok API failed to start. Check logs/ngrok-api.log${NC}"
     exit 1
 fi
 
 # Start Vite
 echo "  - Starting Vite dev server..."
 cd "$VITE_DIR"
-nohup npm run dev > ../logs/vite.log 2>&1 &
+nohup pnpm dev > "$SCRAPER_DIR/logs/vite.log" 2>&1 &
 VITE_PID=$!
 sleep 3
 
@@ -150,6 +150,26 @@ if ps -p $VITE_PID > /dev/null; then
     echo -e "    ${GREEN}✓ Vite started (PID: $VITE_PID)${NC}"
 else
     echo -e "    ${RED}✗ Vite failed to start. Check logs/vite.log${NC}"
+    exit 1
+fi
+
+# Start ngrok for Vite dashboard
+echo "  - Starting ngrok tunnel for Vite dashboard..."
+cd "$SCRAPER_DIR"
+nohup ngrok http 3000 > "$SCRAPER_DIR/logs/ngrok-vite.log" 2>&1 &
+NGROK_VITE_PID=$!
+sleep 3
+
+# Verify ngrok Vite started
+if ps -p $NGROK_VITE_PID > /dev/null; then
+    echo -e "    ${GREEN}✓ ngrok Vite started (PID: $NGROK_VITE_PID)${NC}"
+    # Get ngrok Vite URL
+    NGROK_VITE_URL=$(curl -s http://localhost:4041/api/tunnels | grep -o 'https://[^"]*ngrok[^"]*' | head -1)
+    if [ -n "$NGROK_VITE_URL" ]; then
+        echo -e "    ${GREEN}  URL: $NGROK_VITE_URL${NC}"
+    fi
+else
+    echo -e "    ${RED}✗ ngrok Vite failed to start. Check logs/ngrok-vite.log${NC}"
     exit 1
 fi
 
@@ -164,13 +184,15 @@ echo "=============================================="
 echo ""
 echo "📊 Server Status:"
 echo "  • Flask API:     http://localhost:5006 (PID: $FLASK_PID)"
-echo "  • ngrok:         $NGROK_URL (PID: $NGROK_PID)"
+echo "  • ngrok API:     $NGROK_API_URL (PID: $NGROK_API_PID)"
 echo "  • Vite:          http://localhost:3000 (PID: $VITE_PID)"
+echo "  • ngrok Vite:    $NGROK_VITE_URL (PID: $NGROK_VITE_PID)"
 echo ""
 echo "📝 Logs:"
-echo "  • Flask:  $SCRAPER_DIR/logs/flask.log"
-echo "  • ngrok:  $SCRAPER_DIR/logs/ngrok.log"
-echo "  • Vite:   $SCRAPER_DIR/logs/vite.log"
+echo "  • Flask:      $SCRAPER_DIR/logs/flask.log"
+echo "  • ngrok API:  $SCRAPER_DIR/logs/ngrok-api.log"
+echo "  • Vite:       $SCRAPER_DIR/logs/vite.log"
+echo "  • ngrok Vite: $SCRAPER_DIR/logs/ngrok-vite.log"
 echo ""
 echo "🌐 Open your dashboard:"
 echo "  http://localhost:3000"

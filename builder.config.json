@@ -1,5 +1,5 @@
 {
-  "serverUrl": "http://localhost:3000",
+  "serverUrl": "https://vite-dashboard.ngrok.io",
   "authenticateProxy": false,
   "commitMode": "commits",
   "autoDetectDevServer": false
