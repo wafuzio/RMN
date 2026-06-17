@@ -20,6 +20,15 @@ import { handleVideoProxy } from "./routes/video";
 import { handleListSnapshots, handleGetSnapshot, handleGetCarouselData, handleGetCarouselSlide } from "./routes/snapshots";
 import { handleStatsSummary } from "./routes/stats-summary";
 import { handleFlagReview } from "./routes/flag-review";
+import {
+  handleGetReviewQueue,
+  handleUpdateAdBrand,
+  handleUpdateAdType,
+  handleUpdateAdVideoOverlay,
+  handleDeleteAd,
+  handleResolveFlag,
+  handleDismissFlag,
+} from "./routes/review-queue";
 
 // Wrapper for regex route to extract ID from path
 const handlePlaceholderAdRegex: RequestHandler = (req, res, next) => {
@@ -96,6 +105,13 @@ export function createServer() {
   app.get("/api/stats/summary", handleStatsSummary);
   app.get("/api/brand-details", handleBrandDetails);
   app.post("/api/flag-review", handleFlagReview);
+  app.get("/api/review-queue", handleGetReviewQueue);
+  app.patch("/api/ads/:ad_id/brand", handleUpdateAdBrand);
+  app.patch("/api/ads/:ad_id/ad-type", handleUpdateAdType);
+  app.patch("/api/ads/:ad_id/video-overlay", handleUpdateAdVideoOverlay);
+  app.delete("/api/ads/:ad_id", handleDeleteAd);
+  app.post("/api/review-queue/:flag_id/resolve", handleResolveFlag);
+  app.post("/api/review-queue/:flag_id/dismiss", handleDismissFlag);
   app.get("/api/timeline", handleTimeline);
 
   // Snapshots API routes

@@ -925,6 +925,7 @@ export default function Index() {
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => navigate("/brands")} className="px-3 py-2 rounded-md bg-white/10 text-white border border-white/30 hover:bg-white/20 focus-visible:ring-2" aria-label="View brand gallery">Brand Gallery</button>
             <button onClick={() => navigate("/retail-snapshot")} className="px-3 py-2 rounded-md bg-white/10 text-white border border-white/30 hover:bg-white/20 focus-visible:ring-2" aria-label="View retail snapshots">Retail Snapshot</button>
+            <button onClick={() => navigate("/review-queue")} className="px-3 py-2 rounded-md bg-amber-500/80 text-white border border-amber-400/50 hover:bg-amber-500 focus-visible:ring-2" aria-label="View review queue">Review Queue</button>
             <button onClick={()=>{ setCompareMode(v=>{ const next = !v; if (next) { setLeftFilters({ ...filters }); setRightFilters({ ...filters }); } return next; }); }} className="px-3 py-2 rounded-md bg-white/10 text-white border border-white/30 hover:bg-white/20 focus-visible:ring-2" aria-pressed={compareMode} aria-label="Toggle compare mode">Compare Mode</button>
             <button onClick={downloadCSV} className="px-3 py-2 rounded-md bg-white text-[#111827] hover:bg-gray-50 focus-visible:ring-2" aria-label="Download CSV">Download CSV</button>
             <button onClick={()=>{

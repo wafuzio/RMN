@@ -12,9 +12,11 @@ import { PerformanceCard } from "@/components/PerformanceCard";
 import Index from "./pages/Index";
 import Brands from "./pages/Brands";
 import RetailSnapshot from "./pages/RetailSnapshot";
+import Gopuff from "./pages/Gopuff";
 import { TemporalVisualMapPage } from "./pages/TemporalVisualMapPage";
 import VideoOverlayTest from "./pages/VideoOverlayTest";
 import Experiments from "./pages/Experiments";
+import ReviewQueue from "./pages/ReviewQueue";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,9 +45,11 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/brands" element={<Brands />} />
           <Route path="/retail-snapshot" element={<RetailSnapshot />} />
+          <Route path="/gopuff" element={<Gopuff />} />
           <Route path="/temporal-visual-map" element={<TemporalVisualMapPage />} />
           <Route path="/experiments" element={<Experiments />} />
           <Route path="/video-overlay-test" element={<VideoOverlayTest />} />
+          <Route path="/review-queue" element={<ReviewQueue />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
