@@ -1,5 +1,5 @@
 {
-  "serverUrl": "https://vite-dashboard.ngrok-free.dev",
+  "serverUrl": "https://vite-dashboard.ngrok.io",
   "authenticateProxy": false,
   "commitMode": "commits",
   "autoDetectDevServer": false

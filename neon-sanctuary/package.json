@@ -7,7 +7,7 @@
       "command": "echo 'Server already running'",
       "port": 3000,
       "directory": "neon-sanctuary",
-      "url": "https://vite-dashboard.ngrok-free.dev"
+      "url": "https://vite-dashboard.ngrok.io"
     }
   },
   "pkg": {

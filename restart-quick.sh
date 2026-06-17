@@ -121,7 +121,7 @@ fi
 
 # Start ngrok for Flask API
 echo "  - Starting ngrok tunnel for Flask API..."
-nohup ngrok http 5006 --subdomain=api-server > "$SCRAPER_DIR/logs/ngrok-api.log" 2>&1 &
+nohup ngrok http 5006 > "$SCRAPER_DIR/logs/ngrok-api.log" 2>&1 &
 NGROK_API_PID=$!
 sleep 3
 
@@ -156,7 +156,7 @@ fi
 # Start ngrok for Vite dashboard
 echo "  - Starting ngrok tunnel for Vite dashboard..."
 cd "$SCRAPER_DIR"
-nohup ngrok http 3000 --subdomain=vite-dashboard > "$SCRAPER_DIR/logs/ngrok-vite.log" 2>&1 &
+nohup ngrok http 3000 > "$SCRAPER_DIR/logs/ngrok-vite.log" 2>&1 &
 NGROK_VITE_PID=$!
 sleep 3
 
